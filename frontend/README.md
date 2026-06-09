@@ -1,73 +1,48 @@
-# React + TypeScript + Vite
+# Workspace Hub — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Vite + React + TypeScript + Tailwind + React Router + TanStack Query + axios + react-hot-toast.
 
-Currently, two official plugins are available:
+> 📖 **Setup đầy đủ (kèm backend):** xem [`../docs/SETUP.md`](../docs/SETUP.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Quick start
 
-## React Compiler
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+```
+Cần **backend chạy ở http://localhost:5118** (xem `../backend/README.md`). FE proxy `/api` → BE nên dev không lo CORS.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Scripts
 
-## Expanding the ESLint configuration
+| Lệnh | Tác dụng |
+|---|---|
+| `npm run dev` | dev server (HMR) |
+| `npm run build` | build production (`tsc` + `vite build` → `dist/`) |
+| `npm run preview` | xem thử bản build |
+| `npm run lint` | ESLint |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Cấu trúc
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+  pages/        # *Page.tsx — Login, Register, Inbox
+  components/   # AppLayout (shell), ProtectedRoute (token guard)
+  lib/api.ts    # axios instance + JWT interceptor + 401 → /login
+  App.tsx       # Router + QueryClient + Toaster
+  main.tsx
+vite.config.ts  # proxy /api → backend
+tailwind.config.js
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Quy ước
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- Page đặt trong `src/pages/`, hậu tố `Page`. Component tái dùng trong `src/components/`.
+- Gọi API qua `api` từ `lib/api.ts` (đã gắn JWT + xử lý 401). **Không** `fetch` thủ công.
+- Server state dùng **TanStack Query** (`useQuery`/`useMutation`). Client state dùng `useState`.
+- Style bằng **Tailwind** utility classes. Toast qua `react-hot-toast`.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Config
+
+- Dev: không cần `.env` (proxy lo). 
+- Prod: set `VITE_API_URL` trỏ backend đã deploy (xem `.env.example`).

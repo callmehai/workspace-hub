@@ -1,0 +1,18 @@
+{
+  "//": "COPY file này thành appsettings.Development.json rồi sửa connection string theo máy bạn.",
+  "//connectionStringExamples": {
+    "Windows - SQL Server LocalDB": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
+    "Windows - SQL Server Express": "Server=localhost\\SQLEXPRESS;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
+    "Windows - SQL Server default instance": "Server=localhost;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
+    "Docker (Mac/Linux/Windows) - SQL auth": "Server=localhost,1433;Database=WorkspaceHub;User Id=sa;Password=Workspace#2026Dev;TrustServerCertificate=True"
+  },
+  "ConnectionStrings": {
+    "Default": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
