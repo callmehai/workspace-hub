@@ -17,7 +17,7 @@ backend/**/.vs/
 backend/**/*.user
 backend/**/*.suo
 backend/**/*.userprefs
-backend/**/Properties/launchSettings.json
+# launchSettings.json: GIỮ trong repo để cả team đồng nhất port dev (5118/7010) — không chứa secret.
 
 # Env / secrets
 backend/**/appsettings.Development.json
