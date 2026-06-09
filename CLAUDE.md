@@ -30,10 +30,10 @@ Nếu một task có vẻ cần webhook hoặc ghi ngược, **dừng lại và 
 
 ## Tech Stack
 
-<!-- CHỐT GIÚP: điền nốt Frontend + Deploy rồi xoá comment này -->
+<!-- CHỐT GIÚP: điền nốt Deploy rồi xoá comment này -->
 - **Backend:** ASP.NET Core Web API (.NET 8), Entity Framework Core
 - **Database:** SQL Server (EF Core `UseSqlServer`). JSON lưu `nvarchar(max)`, datetime lưu `datetime2` (UTC). Dev + prod cùng SQL Server.
-- **Frontend:** <!-- CHỐT: React / Next.js / ASP.NET MVC? -->
+- **Frontend:** Vite + React + TypeScript + Tailwind + React Router + TanStack Query + axios + react-hot-toast (SPA gọi REST).
 - **Auth:** JWT Bearer
 - **Token encryption:** ASP.NET Data Protection (`IDataProtectionProvider`) — KHÔNG tự viết AES, KHÔNG lưu key trong DB
 - **Deploy:** <!-- CHỐT: Render / Vercel / Azure? -->
