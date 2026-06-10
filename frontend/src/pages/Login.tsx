@@ -20,8 +20,8 @@ export const Login = () => {
       // Connect to real backend API
       const response = await api.post('/auth/login', { email, password });
       
-      const { token, user } = response.data;
-      login(token, user);
+      const { accessToken, user } = response.data;
+      login(accessToken, user);
       
       toast.success('Đăng nhập thành công!');
       navigate('/', { replace: true });
