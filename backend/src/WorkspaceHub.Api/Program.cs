@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application;
 using WorkspaceHub.Infrastructure;
 
@@ -20,6 +21,9 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+
+// Exception handler phải là middleware đầu tiên để bắt lỗi từ tất cả layer.
+app.UseMiddleware<ExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
