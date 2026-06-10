@@ -4,7 +4,7 @@ import { Header } from '../components/layout/Header';
 
 export const MainLayout = () => {
   return (
-    <div className="flex h-screen bg-dark-900 text-gray-200 font-sans overflow-hidden">
+    <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
       {/* Sidebar fixed ở bên trái */}
       <Sidebar />
 

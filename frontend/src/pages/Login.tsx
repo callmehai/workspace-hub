@@ -34,20 +34,20 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-dark-900 text-white font-sans">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900 font-sans">
       <div className="w-full max-w-md p-8">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-dark-800 rounded-xl flex items-center justify-center mb-6 shadow-lg border border-dark-600">
+          <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center mb-6 shadow-lg border border-gray-200">
             <Hexagon className="w-8 h-8 text-brand-500" />
             <span className="font-bold text-sm ml-1 hidden">Workspace<br/>Hub</span>
           </div>
           <h1 className="text-3xl font-semibold mb-2">Sign in to your hub</h1>
-          <p className="text-gray-400">Enter your details to access your workspace.</p>
+          <p className="text-gray-500">Enter your details to access your workspace.</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input 
               type="email" 
               value={email}
@@ -59,7 +59,7 @@ export const Login = () => {
           
           <div>
             <div className="flex justify-between items-center mb-1">
-              <label className="block text-sm font-medium text-gray-300">Password</label>
+              <label className="block text-sm font-medium text-gray-700">Password</label>
               <a href="#" className="text-sm text-brand-500 hover:text-brand-400">Forgot password?</a>
             </div>
             <input 
@@ -74,7 +74,7 @@ export const Login = () => {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full flex items-center justify-center py-2.5 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-900 focus:ring-brand-500 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center py-2.5 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-brand-500 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Signing in...' : 'Sign In'}
             {!loading && <LogIn className="w-4 h-4 ml-2" />}
@@ -82,13 +82,13 @@ export const Login = () => {
         </form>
 
         <div className="mt-6 flex items-center justify-center">
-          <div className="border-t border-dark-600 flex-grow"></div>
-          <span className="px-3 text-xs text-gray-400 font-semibold uppercase">OR</span>
-          <div className="border-t border-dark-600 flex-grow"></div>
+          <div className="border-t border-gray-200 flex-grow"></div>
+          <span className="px-3 text-xs text-gray-500 font-semibold uppercase">OR</span>
+          <div className="border-t border-gray-200 flex-grow"></div>
         </div>
 
         <div className="mt-6">
-          <button className="w-full flex items-center justify-center py-2.5 px-4 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-dark-800 border border-dark-600 hover:bg-dark-700 transition-colors focus:outline-none">
+          <button className="w-full flex items-center justify-center py-2.5 px-4 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 transition-colors focus:outline-none">
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -99,7 +99,7 @@ export const Login = () => {
           </button>
         </div>
 
-        <p className="mt-8 text-center text-sm text-gray-400">
+        <p className="mt-8 text-center text-sm text-gray-500">
           Don't have an account? <a href="#" className="text-brand-500 hover:text-brand-400 font-medium">Create an account</a>
         </p>
       </div>

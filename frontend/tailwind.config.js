@@ -7,16 +7,10 @@ export default {
         brand: {
           50: '#eff6ff',
           100: '#dbeafe',
-          500: '#5c6bc0',
-          600: '#4f5b93',
-          700: '#3f4870',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
         },
-        dark: {
-          900: '#111111', // Main background
-          800: '#18181b', // Sidebar / Panel background
-          700: '#27272a', // Input / Hover background
-          600: '#3f3f46', // Border
-        }
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

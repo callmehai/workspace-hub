@@ -15,19 +15,19 @@ import {
 
 export const Sidebar = () => {
   return (
-    <aside className="w-64 bg-dark-900 border-r border-dark-600 text-gray-300 flex flex-col h-full shrink-0">
+    <aside className="w-64 bg-gray-50 border-r border-gray-200 text-gray-700 flex flex-col h-full shrink-0">
       <div className="p-4 flex items-center space-x-3">
-        <div className="w-10 h-10 bg-brand-500 rounded-lg flex items-center justify-center text-white shadow-sm">
+        <div className="w-10 h-10 bg-brand-500 rounded-lg flex items-center justify-center text-gray-900 shadow-sm">
           <LayoutGrid className="w-5 h-5" />
         </div>
         <div>
-          <h2 className="text-white font-semibold leading-tight">Main Workspace</h2>
-          <p className="text-xs text-gray-400">Productivity Hub</p>
+          <h2 className="text-gray-900 font-semibold leading-tight">Main Workspace</h2>
+          <p className="text-xs text-gray-500">Productivity Hub</p>
         </div>
       </div>
 
       <div className="px-4 py-2">
-        <button className="w-full flex items-center justify-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white py-2 rounded-md font-medium transition-colors">
+        <button className="w-full flex items-center justify-center space-x-2 bg-brand-500 hover:bg-brand-600 text-gray-900 py-2 rounded-md font-medium transition-colors">
           <Plus className="w-4 h-4" />
           <span>New Project</span>
         </button>
@@ -39,7 +39,7 @@ export const Sidebar = () => {
             to="/"
             className={({ isActive }) =>
               `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${
-                isActive ? 'bg-dark-700 text-white' : 'text-gray-400 hover:text-white hover:bg-dark-800'
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
               }`
             }
           >
@@ -50,7 +50,7 @@ export const Sidebar = () => {
             to="/tasks"
             className={({ isActive }) =>
               `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${
-                isActive ? 'bg-dark-700 text-white' : 'text-gray-400 hover:text-white hover:bg-dark-800'
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
               }`
             }
           >
@@ -61,7 +61,7 @@ export const Sidebar = () => {
             to="/files"
             className={({ isActive }) =>
               `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${
-                isActive ? 'bg-dark-700 text-white' : 'text-gray-400 hover:text-white hover:bg-dark-800'
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
               }`
             }
           >
@@ -72,7 +72,7 @@ export const Sidebar = () => {
             to="/calendar"
             className={({ isActive }) =>
               `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${
-                isActive ? 'bg-dark-700 text-white' : 'text-gray-400 hover:text-white hover:bg-dark-800'
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
               }`
             }
           >
@@ -84,21 +84,21 @@ export const Sidebar = () => {
         <div className="px-3 mb-2">
           <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Integrations</h3>
           <div className="space-y-0.5">
-            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-md transition-colors">
+            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
               <div className="flex items-center space-x-3">
                 <Code className="w-4 h-4" />
                 <span>GitHub</span>
               </div>
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
             </button>
-            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-md transition-colors">
+            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
               <div className="flex items-center space-x-3">
                 <MessageSquare className="w-4 h-4" />
                 <span>Slack</span>
               </div>
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
             </button>
-            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-md transition-colors">
+            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
               <div className="flex items-center space-x-3">
                 <Briefcase className="w-4 h-4" />
                 <span>Jira</span>
@@ -109,12 +109,12 @@ export const Sidebar = () => {
         </div>
       </div>
 
-      <div className="p-3 border-t border-dark-600 space-y-0.5">
-        <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-md transition-colors">
+      <div className="p-3 border-t border-gray-200 space-y-0.5">
+        <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
           <Settings className="w-4 h-4" />
           <span>Settings</span>
         </button>
-        <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-md transition-colors">
+        <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
           <HelpCircle className="w-4 h-4" />
           <span>Help</span>
         </button>
