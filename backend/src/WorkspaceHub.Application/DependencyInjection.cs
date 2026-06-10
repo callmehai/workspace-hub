@@ -11,6 +11,7 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IHealthService, HealthService>();
+        services.AddScoped<IFolderService, FolderService>();
 
         // Quét toàn bộ validator trong assembly này (hiện chưa có — sẽ thêm từ SCRUM-9).
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
