@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,8 +20,15 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(opt => opt.UseSqlServer(connectionString));
 
+        services.AddDataProtection();
+        services.AddDistributedMemoryCache();
+
+        services.AddHttpClient("GoogleToken");
+
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IIntegrationRepository, IntegrationRepository>();
+        services.AddScoped<IOAuthConnectionRepository, OAuthConnectionRepository>();
 
         return services;
     }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -9,6 +10,7 @@ namespace WorkspaceHub.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class HealthController : ControllerBase
 {
     private readonly IHealthService _health;

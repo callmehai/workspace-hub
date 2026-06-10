@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using WorkspaceHub.Application.Interfaces.Services;
+using WorkspaceHub.Application.OAuth;
 using WorkspaceHub.Application.Services;
 
 namespace WorkspaceHub.Application;
@@ -11,6 +12,12 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IHealthService, HealthService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IConnectionsService, ConnectionsService>();
+
+        // Provider strategies — thêm provider mới: đăng ký thêm 1 dòng ở đây.
+        services.AddSingleton<IProviderStrategy, GoogleStrategy>();
+        services.AddSingleton<IProviderStrategy, JiraStrategy>();
 
         // Quét toàn bộ validator trong assembly này (hiện chưa có — sẽ thêm từ SCRUM-9).
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
