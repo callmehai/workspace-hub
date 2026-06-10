@@ -88,6 +88,14 @@ public class AuthService : IAuthService
         return new AuthResponse(token, expiresIn, MapToDto(user));
     }
 
+    public async Task<UserDto> GetMeAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(userId, ct)
+            ?? throw new NotFoundException($"User {userId} not found");
+
+        return MapToDto(user);
+    }
+
     // ── private helpers ──────────────────────────────────────────────
 
     private (string token, int expiresIn) GenerateJwtToken(User user)

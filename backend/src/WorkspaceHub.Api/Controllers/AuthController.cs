@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkspaceHub.Application.DTOs.Auth;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -5,11 +6,10 @@ using WorkspaceHub.Application.Interfaces.Services;
 namespace WorkspaceHub.Api.Controllers;
 
 /// <summary>
-/// Auth endpoints: register + login. Controller mỏng — business logic nằm trong AuthService.
+/// Auth endpoints: register + login + me. Controller mỏng — business logic nằm trong AuthService.
 /// </summary>
-[ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController : ApiControllerBase
 {
     private readonly IAuthService _auth;
 
@@ -35,4 +35,12 @@ public class AuthController : ControllerBase
     [ProducesResponseType(401)]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken ct)
         => Ok(await _auth.LoginAsync(request, ct));
+
+    /// <summary>GET /api/auth/me — returns the current authenticated user's profile.</summary>
+    [HttpGet("me")]
+    [Authorize]
+    [ProducesResponseType(typeof(UserDto), 200)]
+    [ProducesResponseType(401)]
+    public async Task<ActionResult<UserDto>> Me(CancellationToken ct)
+        => Ok(await _auth.GetMeAsync(CurrentUserId, ct));
 }
