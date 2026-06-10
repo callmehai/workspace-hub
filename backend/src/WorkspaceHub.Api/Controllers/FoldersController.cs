@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Routing.Attributes;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Services;
 
@@ -13,6 +14,7 @@ namespace WorkspaceHub.Api.Controllers;
 /// KHÔNG chứa business logic (xem CONVENTIONS.md).
 /// </summary>
 [Authorize]
+[ODataIgnored]
 public class FoldersController : BaseApiController
 {
     private readonly IFolderService _folderService;

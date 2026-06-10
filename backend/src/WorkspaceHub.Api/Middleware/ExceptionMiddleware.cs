@@ -41,6 +41,8 @@ public class ExceptionMiddleware
             ForbiddenException     => (HttpStatusCode.Forbidden,           "AuthorizationError"),
             ConflictException      => (HttpStatusCode.Conflict,            "ConflictError"),
             BusinessRuleException  => (HttpStatusCode.UnprocessableEntity, "BusinessRuleError"),
+            UnauthorizedException  => (HttpStatusCode.Unauthorized,         "UnauthorizedError"),
+            CsrfException          => (HttpStatusCode.BadRequest,           "CsrfError"),
             _                      => (HttpStatusCode.InternalServerError, "InternalError")
         };
 

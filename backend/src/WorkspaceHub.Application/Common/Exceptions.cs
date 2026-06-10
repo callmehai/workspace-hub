@@ -39,3 +39,22 @@ public class BusinessRuleException : Exception
 {
     public BusinessRuleException(string message) : base(message) { }
 }
+
+/// <summary>
+/// Lỗi 401 — Không có quyền truy cập hoặc credentials không đúng.
+/// Middleware sẽ map sang HTTP 401 Unauthorized.
+/// </summary>
+public class UnauthorizedException : Exception
+{
+    public UnauthorizedException(string message) : base(message) { }
+}
+
+/// <summary>
+/// Lỗi 400 — Sai lệch State (CSRF) trong luồng OAuth.
+/// Middleware sẽ map sang HTTP 400 Bad Request.
+/// </summary>
+public class CsrfException : Exception
+{
+    public CsrfException(string message) : base(message) { }
+}
+
