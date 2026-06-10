@@ -7,9 +7,10 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "Default": "Server=localhost;Database=WorkspaceHub;User ID=sa;Password=123;Encrypt=False;TrustServerCertificate=True"
+    "Default": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True"
   },
   "Jwt": {
+    "Secret": "workspace-hub-super-secret-key-change-in-production-32chars",
     "Issuer": "WorkspaceHub",
     "Audience": "WorkspaceHub",
     "ExpiresIn": 3600,
