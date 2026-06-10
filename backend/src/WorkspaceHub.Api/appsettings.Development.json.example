@@ -1,18 +1,32 @@
 {
-  "//": "COPY file này thành appsettings.Development.json rồi sửa connection string theo máy bạn.",
-  "//connectionStringExamples": {
-    "Windows - SQL Server LocalDB": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
-    "Windows - SQL Server Express": "Server=localhost\\SQLEXPRESS;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
-    "Windows - SQL Server default instance": "Server=localhost;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
-    "Docker (Mac/Linux/Windows) - SQL auth": "Server=localhost,1433;Database=WorkspaceHub;User Id=sa;Password=Workspace#2026Dev;TrustServerCertificate=True"
-  },
-  "ConnectionStrings": {
-    "Default": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True"
-  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",
       "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "Default": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True"
+  },
+  "Jwt": {
+    "Secret": "workspace-hub-super-secret-key-change-in-production-32chars",
+    "Issuer": "WorkspaceHub",
+    "Audience": "WorkspaceHub",
+    "ExpiresIn": 3600,
+    "Key": "YOUR_JWT_SECRET_KEY_MIN_32_CHARS_LONG"
+  },
+  "Google": {
+    "RedirectUri": "http://localhost:5173/oauth/callback"
+  },
+  "Dev": {
+    "google": {
+      "ClientId": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+      "ClientSecret": "YOUR_GOOGLE_CLIENT_SECRET"
+    },
+    "jira": {
+      "ClientId": "YOUR_ATLASSIAN_CLIENT_ID",
+      "ClientSecret": "YOUR_ATLASSIAN_CLIENT_SECRET"
     }
   }
 }
