@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using FluentValidation;
 using WorkspaceHub.Application.Common;
 
 namespace WorkspaceHub.Api.Middleware;
@@ -14,6 +15,7 @@ public class ExceptionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionMiddleware> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger)
     {
@@ -35,6 +37,29 @@ public class ExceptionMiddleware
 
     private async Task HandleExceptionAsync(HttpContext context, Exception ex)
     {
+        if (ex is ValidationException valEx)
+        {
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+
+            var details = valEx.Errors.Select(e => new
+            {
+                field = e.PropertyName,
+                issue = e.ErrorMessage
+            });
+
+            var bodyObj = new
+            {
+                error = "ValidationError",
+                message = "One or more validation errors occurred",
+                details,
+                traceId = context.TraceIdentifier
+            };
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(bodyObj, JsonOptions));
+            return;
+        }
+
         var (statusCode, errorType) = ex switch
         {
             NotFoundException      => (HttpStatusCode.NotFound,            "NotFoundError"),
@@ -65,7 +90,6 @@ public class ExceptionMiddleware
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)statusCode;
 
-        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        await context.Response.WriteAsync(JsonSerializer.Serialize(body, options));
+        await context.Response.WriteAsync(JsonSerializer.Serialize(body, JsonOptions));
     }
 }
