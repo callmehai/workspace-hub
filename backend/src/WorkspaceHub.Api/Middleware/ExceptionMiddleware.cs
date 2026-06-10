@@ -32,10 +32,18 @@ public class ExceptionMiddleware
         {
             await WriteJson(ctx, StatusCodes.Status422UnprocessableEntity, "BusinessRuleError", ex.Message);
         }
+        catch (CsrfException ex)
+        {
+            await WriteJson(ctx, StatusCodes.Status400BadRequest, "CsrfError", ex.Message);
+        }
+        catch (ConflictException ex)
+        {
+            await WriteJson(ctx, StatusCodes.Status409Conflict, "ConflictError", ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception");
-            await WriteJson(ctx, StatusCodes.Status500InternalServerError, "InternalServerError", "Đã có lỗi xảy ra");
+            await WriteJson(ctx, StatusCodes.Status500InternalServerError, "InternalServerError", ex.ToString());
         }
     }
 
