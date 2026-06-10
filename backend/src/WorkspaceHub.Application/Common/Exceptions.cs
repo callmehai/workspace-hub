@@ -23,3 +23,9 @@ public class ConflictException : Exception
 {
     public ConflictException(string message) : base(message) { }
 }
+
+/// <summary>Ném khi đăng nhập sai hoặc token không hợp lệ. Controller map → 401.</summary>
+public class UnauthorizedException : Exception
+{
+    public UnauthorizedException(string message) : base(message) { }
+}

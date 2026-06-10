@@ -22,6 +22,7 @@ backend/**/*.userprefs
 # Env / secrets
 backend/**/appsettings.Development.json
 backend/**/appsettings.Local.json
+backend/**/appsettings.json
 backend/**/.env
 backend/**/.env.local
 
