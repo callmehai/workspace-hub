@@ -11,3 +11,15 @@ public class BusinessRuleException : Exception
 {
     public BusinessRuleException(string message) : base(message) { }
 }
+
+/// <summary>Ném khi CSRF state không hợp lệ hoặc hết hạn. Controller map → 400.</summary>
+public class CsrfException : Exception
+{
+    public CsrfException(string message) : base(message) { }
+}
+
+/// <summary>Ném khi resource đã tồn tại (duplicate). Controller map → 409.</summary>
+public class ConflictException : Exception
+{
+    public ConflictException(string message) : base(message) { }
+}

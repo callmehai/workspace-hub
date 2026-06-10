@@ -23,9 +23,12 @@ public static class DependencyInjection
         services.AddDataProtection();
         services.AddDistributedMemoryCache();
 
+        services.AddHttpClient("GoogleToken");
+
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
+        services.AddScoped<IOAuthConnectionRepository, OAuthConnectionRepository>();
 
         return services;
     }

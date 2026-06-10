@@ -15,6 +15,15 @@ public interface IConnectionsService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Verify CSRF state, exchange code → token, persist OAuthConnection + ServiceConnections.
+    /// </summary>
+    Task<CompleteConnectionResult> CompleteConnectionAsync(
+        string code,
+        string state,
+        Guid userId,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Encrypt clientId + clientSecret rồi lưu vào Integration.
     /// TODO: giới hạn [Authorize(Policy="AdminOnly")] sau khi JWT xong.
     /// </summary>

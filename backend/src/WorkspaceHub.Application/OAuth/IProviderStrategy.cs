@@ -3,6 +3,17 @@ namespace WorkspaceHub.Application.OAuth;
 /// <summary>Kết quả build auth URL — URL redirect + state CSRF. Dùng chung cho mọi provider.</summary>
 public record InitiateConnectionResult(string AuthorizationUrl, string State);
 
+/// <summary>Kết quả sau khi hoàn tất OAuth callback — trả về controller để map thành HTTP response.</summary>
+public record CompleteConnectionResult(
+    Guid Id,
+    string IntegrationKey,
+    string ProviderAccountId,
+    string Scopes,
+    string Status,
+    IReadOnlyList<ServiceConnectionResult> Services);
+
+public record ServiceConnectionResult(Guid Id, string ServiceType, bool IsEnabled);
+
 /// <summary>
 /// Strategy cho từng OAuth provider (Google, Jira, ...).
 /// Mỗi provider implement 1 class riêng — ConnectionsService dispatch theo integrationKey.

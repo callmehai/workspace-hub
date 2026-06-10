@@ -46,6 +46,34 @@ public class ConnectionsController : ControllerBase
     }
 
     /// <summary>
+    /// POST /api/connections/oauth/callback
+    /// Nhận code + state từ Google redirect, exchange token, lưu OAuthConnection + ServiceConnections.
+    /// userId tạm hardcode Guid.Empty — sẽ đọc từ JWT claim "sub" sau SCRUM-9.
+    /// </summary>
+    [HttpPost("oauth/callback")]
+    public async Task<IActionResult> CompleteConnection(
+        [FromBody] CompleteConnectionRequest request,
+        CancellationToken ct)
+    {
+        // TODO: thay bằng Guid.Parse(User.FindFirst("sub")!.Value) sau khi JWT sẵn sàng.
+        var userId = Guid.Empty;
+
+        var result = await _connections.CompleteConnectionAsync(request.Code, request.State, userId, ct);
+
+        var response = new CompleteConnectionResponse(
+            result.Id,
+            result.IntegrationKey,
+            result.ProviderAccountId,
+            result.Scopes,
+            result.Status,
+            result.Services
+                .Select(s => new ServiceConnectionItem(s.Id, s.ServiceType, s.IsEnabled))
+                .ToList());
+
+        return StatusCode(201, response);
+    }
+
+    /// <summary>
     /// PUT /api/connections/{key}/credentials
     /// Encrypt clientId + clientSecret rồi lưu DB.
     /// TODO: thêm [Authorize(Policy="AdminOnly")] sau khi JWT xong (SCRUM-9).
