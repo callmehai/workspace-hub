@@ -43,5 +43,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Security
+dp-keys/
+
 # Lock files conflict (keep package-lock.json on frontend)
 # (giữ frontend/package-lock.json)
