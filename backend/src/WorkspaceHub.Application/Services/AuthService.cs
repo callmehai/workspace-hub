@@ -90,6 +90,10 @@ public class AuthService : IAuthService
         if (user is null)
             throw new UnauthorizedException("Invalid credentials");
 
+        // Google-only users have no password — reject local login attempt
+        if (string.IsNullOrEmpty(user.PasswordHash))
+            throw new UnauthorizedException("Invalid credentials");
+
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedException("Invalid credentials");
 
@@ -187,8 +191,16 @@ public class AuthService : IAuthService
             throw new BusinessRuleException("Google rejected the authorization code");
         }
 
-        var tokenResponse = JsonSerializer.Deserialize<GoogleSignInTokenResponse>(json)
-            ?? throw new BusinessRuleException("Google rejected the authorization code");
+        GoogleSignInTokenResponse tokenResponse;
+        try
+        {
+            tokenResponse = JsonSerializer.Deserialize<GoogleSignInTokenResponse>(json)
+                ?? throw new BusinessRuleException("Google rejected the authorization code");
+        }
+        catch (JsonException)
+        {
+            throw new BusinessRuleException("Google rejected the authorization code");
+        }
 
         if (string.IsNullOrEmpty(tokenResponse.IdToken))
             throw new BusinessRuleException("Google did not return an id_token");
