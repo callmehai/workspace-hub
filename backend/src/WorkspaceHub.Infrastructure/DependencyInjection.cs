@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ public static class DependencyInjection
             .SetApplicationName("WorkspaceHub")
             .PersistKeysToFileSystem(new DirectoryInfo("dp-keys"));
         services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
+        services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 
         services.AddDistributedMemoryCache();
 
