@@ -5,16 +5,16 @@ namespace WorkspaceHub.Application.OAuth.Core;
 /// <summary>Kết quả build auth URL — URL redirect + state CSRF. Dùng chung cho mọi provider.</summary>
 public record InitiateConnectionResult(string AuthorizationUrl, string State);
 
-/// <summary>Kết quả sau khi hoàn tất OAuth callback — trả về controller để map thành HTTP response.</summary>
+/// <summary>
+/// Kết quả sau khi hoàn tất OAuth callback — trả về controller để map thành HTTP response.
+/// Mô hình B: 1 lần grant có thể tạo/refresh nhiều Connection (1 row mỗi service được cấp).
+/// </summary>
 public record CompleteConnectionResult(
-    Guid Id,
     string IntegrationKey,
     string ProviderAccountId,
-    string Scopes,
-    string Status,
-    IReadOnlyList<ServiceConnectionResult> Services);
+    IReadOnlyList<ConnectionResult> Connections);
 
-public record ServiceConnectionResult(Guid Id, string ServiceType, bool IsEnabled);
+public record ConnectionResult(Guid Id, string ServiceType, string Status);
 
 /// <summary>Dữ liệu đầu vào cho ExchangeCodeAsync — truyền từ ConnectionsService xuống strategy.</summary>
 public record CompleteContext(
@@ -25,7 +25,7 @@ public record CompleteContext(
     Domain.Entities.Integration Integration);
 
 /// <summary>
-/// Kết quả token exchange — trả về cho ConnectionsService để build OAuthConnection.
+/// Kết quả token exchange — trả về cho ConnectionsService để build Connection (mô hình B).
 /// GrantedServices: danh sách ServiceType được cấp phép — đã resolve từ raw scope string bởi strategy.
 /// </summary>
 public record TokenExchangeResult(

@@ -18,8 +18,7 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Integration> Integrations => Set<Integration>();
-    public DbSet<OAuthConnection> OAuthConnections => Set<OAuthConnection>();
-    public DbSet<ServiceConnection> ServiceConnections => Set<ServiceConnection>();
+    public DbSet<Connection> Connections => Set<Connection>();
     public DbSet<Item> Items => Set<Item>();
     public DbSet<Folder> Folders => Set<Folder>();
     public DbSet<FolderShare> FolderShares => Set<FolderShare>();
@@ -34,6 +33,7 @@ public class AppDbContext : DbContext
     {
         // Enum → string (HasConversion<string>) cho toàn bộ enum domain.
         cfg.Properties<UserRole>().HaveConversion<string>().HaveMaxLength(20);
+        cfg.Properties<ProviderType>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<ConnectionStatus>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<ServiceType>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<CursorType>().HaveConversion<string>().HaveMaxLength(20);
@@ -76,31 +76,23 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.Key).IsUnique();
         });
 
-        b.Entity<OAuthConnection>(e =>
+        // Mô hình B: mỗi service = 1 row Connections, token riêng.
+        b.Entity<Connection>(e =>
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.ProviderAccountId).HasMaxLength(256).IsRequired();
-            e.HasIndex(x => new { x.UserId, x.IntegrationId, x.ProviderAccountId }).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.Provider, x.ServiceType, x.ProviderAccountId }).IsUnique();
 
             e.HasOne(x => x.User)
-                .WithMany(u => u.OAuthConnections)
+                .WithMany(u => u.Connections)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Xoá provider KHÔNG nuốt connection của user — Admin chỉ disable, không delete.
             e.HasOne(x => x.Integration)
-                .WithMany(i => i.OAuthConnections)
+                .WithMany(i => i.Connections)
                 .HasForeignKey(x => x.IntegrationId)
                 .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        b.Entity<ServiceConnection>(e =>
-        {
-            e.HasKey(x => x.Id);
-            e.HasOne(x => x.OAuthConnection)
-                .WithMany(o => o.ServiceConnections)
-                .HasForeignKey(x => x.OAuthConnectionId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ---------- Nhóm 3: Core Workspace ----------
@@ -108,10 +100,11 @@ public class AppDbContext : DbContext
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.ExternalId).HasMaxLength(512);
+            e.Property(x => x.ETag).HasMaxLength(512);    // version provider cho write-back conflict
             e.Property(x => x.MetadataJson).IsRequired(); // nvarchar(max) (không set length)
 
             // Chống duplicate khi re-sync. Lọc NULL vì Note không có ExternalId.
-            e.HasIndex(x => new { x.ServiceConnectionId, x.ExternalId })
+            e.HasIndex(x => new { x.ConnectionId, x.ExternalId })
                 .IsUnique()
                 .HasFilter("[ExternalId] IS NOT NULL");
 
@@ -124,12 +117,12 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Xoá connection vẫn giữ Item history → ServiceConnectionId = NULL.
+            // Xoá connection vẫn giữ Item history → ConnectionId = NULL.
             // Để NoAction ở DB (tránh multiple-cascade-path của SQL Server); service disconnect
-            // set null các Item trước khi xoá ServiceConnection (xem SCRUM-14 / API 4.5).
-            e.HasOne(x => x.ServiceConnection)
-                .WithMany(s => s.Items)
-                .HasForeignKey(x => x.ServiceConnectionId)
+            // set null các Item trước khi xoá Connection (xem SCRUM-14 / API 4.5).
+            e.HasOne(x => x.Connection)
+                .WithMany(c => c.Items)
+                .HasForeignKey(x => x.ConnectionId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
 
@@ -233,9 +226,9 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Xoá connection có scheduled email Pending → NoAction (app xử lý trước).
-            e.HasOne(x => x.ServiceConnection)
-                .WithMany(s => s.ScheduledEmails)
-                .HasForeignKey(x => x.ServiceConnectionId)
+            e.HasOne(x => x.Connection)
+                .WithMany(c => c.ScheduledEmails)
+                .HasForeignKey(x => x.ConnectionId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
 
@@ -264,7 +257,6 @@ public class AppDbContext : DbContext
             ClientSecretEncrypted = "",
             AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
             TokenEndpoint = "https://oauth2.googleapis.com/token",
-            DefaultScopes = "gmail.readonly calendar.readonly drive.readonly",
             SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",
             IsEnabled = true
         });

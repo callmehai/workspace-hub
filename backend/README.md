@@ -42,8 +42,13 @@ dotnet ef migrations add <Tên> --project src/WorkspaceHub.Infrastructure --star
 dotnet ef database update       --project src/WorkspaceHub.Infrastructure --startup-project src/WorkspaceHub.Api
 ```
 
-## Trạng thái
+> Luôn kèm `--startup-project` (hoặc set env `WORKSPACEHUB_CONNECTION`) — không thì design-time factory rơi về fallback `Trusted_Connection` → lỗi Kerberos trên macOS.
 
-✅ SCRUM-5 (solution + clean architecture + health endpoint)
-✅ SCRUM-6 (13 entity + migration `InitialCreate` + seed Google)
-⏭️ Kế: SCRUM-9 (register/login/JWT)
+Migrations hiện có: `InitialCreate` → `UsersMultiAuth` → `ModelBConnections` (mô hình B: gộp OAuthConnections + ServiceConnections thành `Connections`, Items.ConnectionId + ETag).
+
+## Trạng thái (2026-06-11 — chi tiết: ../docs/SPRINTS.md)
+
+✅ SCRUM-5→13: solution, schema + migrations, Data Protection, auth (register/login/JWT/me/role), OAuth Google start + callback
+✅ SCRUM-18/19: Folder CRUD, Items list + filter + pagination + search
+✅ SCRUM-32/33/34: Users multi-auth, Google Sign-In, migration mô hình B
+⏭️ Kế: SCRUM-35/36 (OAuth per-service) → 37 (write-back) + 38 (conflict ETag) → 30/31 (scheduled email). Nợ: SCRUM-14 viết lại theo Connections.

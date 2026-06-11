@@ -18,7 +18,7 @@ namespace WorkspaceHub.Application.Services;
 public class ConnectionsService : IConnectionsService
 {
     private readonly IIntegrationRepository _integrations;
-    private readonly IOAuthConnectionRepository _oauthConnections;
+    private readonly IConnectionRepository _connections;
     private readonly ITokenProtector _tokenProtector;
     private readonly IDistributedCache _cache;
     private readonly IReadOnlyDictionary<string, IProviderStrategy> _strategies;
@@ -26,14 +26,14 @@ public class ConnectionsService : IConnectionsService
 
     public ConnectionsService(
         IIntegrationRepository integrations,
-        IOAuthConnectionRepository oauthConnections,
+        IConnectionRepository connections,
         ITokenProtector tokenProtector,
         IDistributedCache cache,
         IEnumerable<IProviderStrategy> strategies,
         IConfiguration config)
     {
         _integrations = integrations;
-        _oauthConnections = oauthConnections;
+        _connections = connections;
         _tokenProtector = tokenProtector;
         _cache = cache;
         _strategies = strategies.ToDictionary(s => s.ProviderKey, StringComparer.OrdinalIgnoreCase);
@@ -122,49 +122,66 @@ public class ConnectionsService : IConnectionsService
         var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration);
         var tokenResult = await strategy.ExchangeCodeAsync(context, ct);
 
-        // Step 5 — Check duplicate.
-        var existing = await _oauthConnections.GetByUniqueKeyAsync(
-            userId, integration.Id, tokenResult.ProviderAccountId, ct);
-        if (existing is not null)
-            throw new ConflictException($"Tài khoản {integrationKey} này đã được kết nối");
+        if (tokenResult.GrantedServices.Count == 0)
+            throw new BusinessRuleException("Provider không cấp quyền cho service nào");
 
-        // Step 6 — Encrypt tokens.
+        // Step 5 — Encrypt tokens.
+        // RefreshToken null/empty (provider không trả, vd Google khi re-consent) → lưu chuỗi rỗng,
+        // KHÔNG encrypt chuỗi rỗng. Convention: RefreshTokenEncrypted == "" nghĩa là "không có refresh token".
         var accessTokenEncrypted = _tokenProtector.Protect(tokenResult.AccessToken);
-        var refreshTokenEncrypted = _tokenProtector.Protect(tokenResult.RefreshToken ?? string.Empty);
+        var refreshTokenEncrypted = string.IsNullOrEmpty(tokenResult.RefreshToken)
+            ? string.Empty
+            : _tokenProtector.Protect(tokenResult.RefreshToken);
+        var expiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn);
+        var provider = Enum.Parse<ProviderType>(integration.Provider);
 
-        // Step 7 — Tạo OAuthConnection.
-        var connection = new OAuthConnection
+        // Step 6 — Mô hình B: upsert 1 row Connection cho mỗi service được cấp.
+        // Đã tồn tại (re-grant cùng account) → cập nhật token + reset Active, giữ cursor sync.
+        var results = new List<ConnectionResult>();
+        foreach (var serviceType in tokenResult.GrantedServices)
         {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            IntegrationId = integration.Id,
-            ProviderAccountId = tokenResult.ProviderAccountId,
-            AccessTokenEncrypted = accessTokenEncrypted,
-            RefreshTokenEncrypted = refreshTokenEncrypted,
-            ExpiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn),
-            Scopes = tokenResult.RawScopes,
-            Status = ConnectionStatus.Active,
-            LastRefreshedAt = null
-        };
+            var connection = await _connections.GetByUniqueKeyAsync(
+                userId, provider, serviceType, tokenResult.ProviderAccountId, ct);
 
-        // Step 8 — Populate ServiceConnections theo scope thực tế provider cấp.
-        ServiceConnectionSync.ApplyGrantedScopes(connection, tokenResult.GrantedServices);
+            if (connection is null)
+            {
+                connection = new Connection
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    IntegrationId = integration.Id,
+                    Provider = provider,
+                    ServiceType = serviceType,
+                    ProviderAccountId = tokenResult.ProviderAccountId,
+                    AccessTokenEncrypted = accessTokenEncrypted,
+                    RefreshTokenEncrypted = refreshTokenEncrypted,
+                    ExpiresAt = expiresAt,
+                    Status = ConnectionStatus.Active,
+                    CursorValue = null, // null = sync lần đầu
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _connections.AddAsync(connection, ct);
+            }
+            else
+            {
+                connection.AccessTokenEncrypted = accessTokenEncrypted;
+                // Re-grant thường KHÔNG trả refresh_token mới — chỉ ghi đè khi có, giữ token cũ khi rỗng.
+                if (refreshTokenEncrypted.Length > 0)
+                    connection.RefreshTokenEncrypted = refreshTokenEncrypted;
+                connection.ExpiresAt = expiresAt;
+                connection.Status = ConnectionStatus.Active;
+                connection.LastError = null;
+                _connections.Update(connection);
+            }
 
-        // Step 9 — Lưu DB.
-        await _oauthConnections.AddAsync(connection, ct);
-        await _oauthConnections.SaveChangesAsync(ct);
+            results.Add(new ConnectionResult(
+                connection.Id, connection.ServiceType.ToString(), connection.Status.ToString()));
+        }
 
-        var services = connection.ServiceConnections
-            .Select(sc => new ServiceConnectionResult(sc.Id, sc.ServiceType.ToString(), sc.IsEnabled))
-            .ToList();
+        // Step 7 — Lưu DB.
+        await _connections.SaveChangesAsync(ct);
 
-        return new CompleteConnectionResult(
-            connection.Id,
-            integrationKey,
-            tokenResult.ProviderAccountId,
-            connection.Scopes,
-            connection.Status.ToString(),
-            services);
+        return new CompleteConnectionResult(integrationKey, tokenResult.ProviderAccountId, results);
     }
 
     public async Task SetCredentialsAsync(
