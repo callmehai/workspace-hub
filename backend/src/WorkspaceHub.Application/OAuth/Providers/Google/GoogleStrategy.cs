@@ -2,8 +2,6 @@ using System.Text.Json;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.OAuth.Core;
-using WorkspaceHub.Domain.Enums;
-
 namespace WorkspaceHub.Application.OAuth.Providers.Google;
 
 /// <summary>Strategy Google — build URL với service scopes (Gmail/GCal/Drive) + include_granted_scopes.</summary>
@@ -22,13 +20,8 @@ public class GoogleStrategy : IProviderStrategy
         ProviderStrategyContext ctx,
         CancellationToken ct = default)
     {
-        var scopes = string.Join(' ',
-            GoogleScopes.ForService(ServiceType.Gmail),
-            GoogleScopes.ForService(ServiceType.GCal),
-            GoogleScopes.ForService(ServiceType.Drive));
-
         var builder = new GoogleAuthUrlBuilder(ctx.ClientId, ctx.RedirectUri);
-        var url = builder.BuildForService(scopes, ctx.State);
+        var url = builder.BuildForService(string.Join(' ', GoogleScopes.Required), ctx.State);
 
         return Task.FromResult(new InitiateConnectionResult(url, ctx.State));
     }
@@ -63,7 +56,7 @@ public class GoogleStrategy : IProviderStrategy
             ? IdTokenParser.ExtractProviderAccountId(googleToken.IdToken)
             : "dev-placeholder@gmail.com";
 
-        var grantedServices = GoogleScopes.ServicesFromGrantedScopes(googleToken.Scope);
+        var grantedServices = GoogleScopes.ValidateAndExtract(googleToken.Scope);
 
         return new TokenExchangeResult(
             googleToken.AccessToken,

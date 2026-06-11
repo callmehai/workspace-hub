@@ -85,7 +85,7 @@ public class JiraStrategy(
             ?? throw new BusinessRuleException("Không lấy được accountId từ Atlassian");
 
         // Step 3: map scopes → ServiceType list
-        var grantedServices = JiraScopes.ServicesFromGrantedScopes(token.Scope);
+        var grantedServices = JiraScopes.ValidateAndExtract(token.Scope);
 
         return new TokenExchangeResult(
             token.AccessToken,

@@ -48,3 +48,4 @@ dp-keys/
 
 # Lock files conflict (keep package-lock.json on frontend)
 # (giữ frontend/package-lock.json)
+docs/PLAN-ConnectionModelB-Refactor.md

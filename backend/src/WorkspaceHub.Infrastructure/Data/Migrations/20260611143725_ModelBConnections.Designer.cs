@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WorkspaceHub.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using WorkspaceHub.Infrastructure.Data;
 namespace WorkspaceHub.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260611143725_ModelBConnections")]
+    partial class ModelBConnections
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,6 +24,75 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("WorkspaceHub.Domain.Entities.Connection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccessTokenEncrypted")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CursorType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CursorValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("IntegrationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LastSyncedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ProviderAccountId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("RefreshTokenEncrypted")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ServiceType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IntegrationId");
+
+                    b.HasIndex("UserId", "Provider", "ServiceType", "ProviderAccountId")
+                        .IsUnique();
+
+                    b.ToTable("Connections");
+                });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Folder", b =>
                 {
@@ -54,7 +126,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.HasIndex("OwnerId");
 
-                    b.ToTable("Folders", (string)null);
+                    b.ToTable("Folders");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.FolderShare", b =>
@@ -92,7 +164,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.HasIndex("FolderId", "SharedWithUserId")
                         .IsUnique();
 
-                    b.ToTable("FolderShares", (string)null);
+                    b.ToTable("FolderShares");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.ImportantContact", b =>
@@ -123,7 +195,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.HasIndex("UserId", "Type", "Identifier")
                         .IsUnique();
 
-                    b.ToTable("ImportantContacts", (string)null);
+                    b.ToTable("ImportantContacts");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Integration", b =>
@@ -141,10 +213,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ClientSecretEncrypted")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DefaultScopes")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -185,7 +253,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.HasIndex("Key")
                         .IsUnique();
 
-                    b.ToTable("Integrations", (string)null);
+                    b.ToTable("Integrations");
 
                     b.HasData(
                         new
@@ -194,7 +262,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                             AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
                             ClientIdEncrypted = "",
                             ClientSecretEncrypted = "",
-                            DefaultScopes = "gmail.readonly calendar.readonly drive.readonly",
                             Description = "Gmail · Calendar · Drive",
                             DisplayName = "Google Workspace",
                             IconUrl = "https://www.google.com/favicon.ico",
@@ -212,8 +279,15 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ConnectionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("DueAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ETag")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("ExternalId")
                         .HasMaxLength(512)
@@ -231,9 +305,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("ServiceConnectionId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Snippet")
                         .IsRequired()
@@ -258,14 +329,14 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ServiceConnectionId", "ExternalId")
+                    b.HasIndex("ConnectionId", "ExternalId")
                         .IsUnique()
                         .HasFilter("[ExternalId] IS NOT NULL");
 
                     b.HasIndex("UserId", "Status", "OccurredAt")
                         .HasDatabaseName("IX_Items_User_Status_OccurredAt");
 
-                    b.ToTable("Items", (string)null);
+                    b.ToTable("Items");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.ItemFolder", b =>
@@ -286,7 +357,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.HasIndex("FolderId");
 
-                    b.ToTable("ItemFolders", (string)null);
+                    b.ToTable("ItemFolders");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Notification", b =>
@@ -327,57 +398,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.HasIndex("UserId", "IsRead", "CreatedAt")
                         .HasDatabaseName("IX_Notifications_User_IsRead_CreatedAt");
 
-                    b.ToTable("Notifications", (string)null);
-                });
-
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.OAuthConnection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AccessTokenEncrypted")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("IntegrationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("LastRefreshedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ProviderAccountId")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("RefreshTokenEncrypted")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Scopes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IntegrationId");
-
-                    b.HasIndex("UserId", "IntegrationId", "ProviderAccountId")
-                        .IsUnique();
-
-                    b.ToTable("OAuthConnections", (string)null);
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.ScheduledEmail", b =>
@@ -398,6 +419,9 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid>("ConnectionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("LastError")
                         .HasColumnType("nvarchar(max)");
 
@@ -409,9 +433,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<Guid>("ServiceConnectionId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -432,7 +453,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ServiceConnectionId");
+                    b.HasIndex("ConnectionId");
 
                     b.HasIndex("UserId");
 
@@ -440,47 +461,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasDatabaseName("IX_ScheduledEmails_Pending_SendAt")
                         .HasFilter("[Status] = 'Pending'");
 
-                    b.ToTable("ScheduledEmails", (string)null);
-                });
-
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.ServiceConnection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("CursorType")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("CursorValue")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DisplayName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("LastError")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("LastSyncedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("OAuthConnectionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ServiceType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OAuthConnectionId");
-
-                    b.ToTable("ServiceConnections", (string)null);
+                    b.ToTable("ScheduledEmails");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Tag", b =>
@@ -505,7 +486,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Tags", (string)null);
+                    b.ToTable("Tags");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.TagAssignment", b =>
@@ -523,7 +504,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.HasIndex("ItemId");
 
-                    b.ToTable("TagAssignments", (string)null);
+                    b.ToTable("TagAssignments");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.User", b =>
@@ -531,6 +512,11 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AuthProvider")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("AvatarUrl")
                         .HasColumnType("nvarchar(max)");
@@ -548,6 +534,10 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("GoogleSub")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -558,7 +548,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Role")
@@ -571,7 +560,31 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.HasIndex("GoogleSub")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_GoogleSub")
+                        .HasFilter("[GoogleSub] IS NOT NULL");
+
+                    b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("WorkspaceHub.Domain.Entities.Connection", b =>
+                {
+                    b.HasOne("WorkspaceHub.Domain.Entities.Integration", "Integration")
+                        .WithMany("Connections")
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WorkspaceHub.Domain.Entities.User", "User")
+                        .WithMany("Connections")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Integration");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Folder", b =>
@@ -625,9 +638,9 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Item", b =>
                 {
-                    b.HasOne("WorkspaceHub.Domain.Entities.ServiceConnection", "ServiceConnection")
+                    b.HasOne("WorkspaceHub.Domain.Entities.Connection", "Connection")
                         .WithMany("Items")
-                        .HasForeignKey("ServiceConnectionId")
+                        .HasForeignKey("ConnectionId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("WorkspaceHub.Domain.Entities.User", "User")
@@ -636,7 +649,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ServiceConnection");
+                    b.Navigation("Connection");
 
                     b.Navigation("User");
                 });
@@ -671,30 +684,11 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.OAuthConnection", b =>
-                {
-                    b.HasOne("WorkspaceHub.Domain.Entities.Integration", "Integration")
-                        .WithMany("OAuthConnections")
-                        .HasForeignKey("IntegrationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("WorkspaceHub.Domain.Entities.User", "User")
-                        .WithMany("OAuthConnections")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Integration");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.ScheduledEmail", b =>
                 {
-                    b.HasOne("WorkspaceHub.Domain.Entities.ServiceConnection", "ServiceConnection")
+                    b.HasOne("WorkspaceHub.Domain.Entities.Connection", "Connection")
                         .WithMany("ScheduledEmails")
-                        .HasForeignKey("ServiceConnectionId")
+                        .HasForeignKey("ConnectionId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
@@ -704,20 +698,9 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ServiceConnection");
+                    b.Navigation("Connection");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.ServiceConnection", b =>
-                {
-                    b.HasOne("WorkspaceHub.Domain.Entities.OAuthConnection", "OAuthConnection")
-                        .WithMany("ServiceConnections")
-                        .HasForeignKey("OAuthConnectionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("OAuthConnection");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Tag", b =>
@@ -750,6 +733,13 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Navigation("Tag");
                 });
 
+            modelBuilder.Entity("WorkspaceHub.Domain.Entities.Connection", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("ScheduledEmails");
+                });
+
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Folder", b =>
                 {
                     b.Navigation("FolderShares");
@@ -759,7 +749,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Integration", b =>
                 {
-                    b.Navigation("OAuthConnections");
+                    b.Navigation("Connections");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Item", b =>
@@ -769,18 +759,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Navigation("TagAssignments");
                 });
 
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.OAuthConnection", b =>
-                {
-                    b.Navigation("ServiceConnections");
-                });
-
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.ServiceConnection", b =>
-                {
-                    b.Navigation("Items");
-
-                    b.Navigation("ScheduledEmails");
-                });
-
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Tag", b =>
                 {
                     b.Navigation("TagAssignments");
@@ -788,6 +766,8 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.User", b =>
                 {
+                    b.Navigation("Connections");
+
                     b.Navigation("Folders");
 
                     b.Navigation("ImportantContacts");
@@ -795,8 +775,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Navigation("Items");
 
                     b.Navigation("Notifications");
-
-                    b.Navigation("OAuthConnections");
 
                     b.Navigation("ScheduledEmails");
 

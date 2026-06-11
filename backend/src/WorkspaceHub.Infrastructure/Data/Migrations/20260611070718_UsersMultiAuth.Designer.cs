@@ -12,8 +12,8 @@ using WorkspaceHub.Infrastructure.Data;
 namespace WorkspaceHub.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260611093248_UpdateOAuthScopesSeedData")]
-    partial class UpdateOAuthScopesSeedData
+    [Migration("20260611070718_UsersMultiAuth")]
+    partial class UsersMultiAuth
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -197,7 +197,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                             AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
                             ClientIdEncrypted = "",
                             ClientSecretEncrypted = "",
-                            DefaultScopes = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly",
+                            DefaultScopes = "gmail.readonly calendar.readonly drive.readonly",
                             Description = "Gmail · Calendar · Drive",
                             DisplayName = "Google Workspace",
                             IconUrl = "https://www.google.com/favicon.ico",
@@ -206,22 +206,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                             Provider = "Google",
                             SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",
                             TokenEndpoint = "https://oauth2.googleapis.com/token"
-                        },
-                        new
-                        {
-                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            AuthorizationEndpoint = "https://auth.atlassian.com/authorize",
-                            ClientIdEncrypted = "",
-                            ClientSecretEncrypted = "",
-                            DefaultScopes = "read:jira-work write:jira-work manage:jira-project read:jira-user offline_access",
-                            Description = "Jira issues & projects",
-                            DisplayName = "Jira Cloud",
-                            IconUrl = "https://www.atlassian.com/favicon.ico",
-                            IsEnabled = true,
-                            Key = "jira",
-                            Provider = "Atlassian",
-                            SupportedServices = "[\"Jira\"]",
-                            TokenEndpoint = "https://auth.atlassian.com/oauth/token"
                         });
                 });
 
@@ -551,6 +535,11 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AuthProvider")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("AvatarUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -567,6 +556,10 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("GoogleSub")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -577,7 +570,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Role")
@@ -589,6 +581,11 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("GoogleSub")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_GoogleSub")
+                        .HasFilter("[GoogleSub] IS NOT NULL");
 
                     b.ToTable("Users");
                 });
