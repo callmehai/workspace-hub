@@ -62,7 +62,7 @@ public class ConnectionsController : ApiControllerBase
 
     /// <summary>PUT /api/connections/{key}/credentials — Admin: encrypt + lưu OAuth credentials.</summary>
     [HttpPut("{key}/credentials")]
-    [AllowAnonymous]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SetCredentials(
         string key,
         [FromBody] SetCredentialsRequest request,

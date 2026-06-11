@@ -18,8 +18,8 @@ public static class DependencyInjection
         services.AddScoped<IConnectionsService, ConnectionsService>();
 
         // Provider strategies — thêm provider mới: đăng ký thêm 1 dòng ở đây.
-        services.AddSingleton<IProviderStrategy, GoogleStrategy>();
-        services.AddSingleton<IProviderStrategy, JiraStrategy>();
+        services.AddScoped<IProviderStrategy, GoogleStrategy>();
+        services.AddScoped<IProviderStrategy, JiraStrategy>();
 
         // Quét toàn bộ validator trong assembly này (hiện chưa có — sẽ thêm từ SCRUM-9).
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);

@@ -65,7 +65,7 @@ public class ConnectionsService : IConnectionsService
         var state = Guid.NewGuid().ToString("N");
 
         // Lưu cả integrationKey lẫn userId — callback xác minh đúng user tạo ra state này.
-        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId));
+        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId, redirectUri));
         var cacheOptions = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
@@ -98,6 +98,7 @@ public class ConnectionsService : IConnectionsService
             throw new CsrfException("State không hợp lệ hoặc đã hết hạn");
 
         var integrationKey = payload.IntegrationKey;
+        var redirectUri = payload.RedirectUri;
 
         // Step 2 — Resolve strategy.
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
@@ -112,13 +113,10 @@ public class ConnectionsService : IConnectionsService
             ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
         var clientSecret = _config[$"Dev:{integrationKey}:ClientSecret"]
             ?? throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
-        var redirectUri = _config[$"Dev:{integrationKey}:RedirectUri"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình RedirectUri cho '{integrationKey}'");
 
         // PRODUCTION:
         // var clientId     = _tokenProtector.Unprotect(integration.ClientIdEncrypted);
         // var clientSecret = _tokenProtector.Unprotect(integration.ClientSecretEncrypted);
-        // var redirectUri  = _config[$"{integrationKey}:RedirectUri"] ?? throw new ...;
 
         // Step 4 — Delegate provider-specific exchange to strategy.
         var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration);
