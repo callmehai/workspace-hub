@@ -3,8 +3,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Infrastructure.Data;
+using WorkspaceHub.Infrastructure.Http;
 using WorkspaceHub.Infrastructure.Repositories;
+using WorkspaceHub.Application.Security;
+using WorkspaceHub.Infrastructure.Security;
 
 namespace WorkspaceHub.Infrastructure;
 
@@ -18,6 +22,17 @@ public static class DependencyInjection
                 "Thiếu ConnectionStrings:Default. Set qua user-secrets/appsettings (xem docs/SETUP.md).");
 
         services.AddDbContext<AppDbContext>(opt => opt.UseSqlServer(connectionString));
+
+        // Data Protection: mã hoá / giải mã token OAuth trước khi lưu DB
+        services.AddDataProtection()
+            .SetApplicationName("WorkspaceHub")
+            .PersistKeysToFileSystem(new DirectoryInfo("dp-keys"));
+        services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
+
+        services.AddDistributedMemoryCache();
+
+        services.AddHttpClient("OAuthToken");
+        services.AddScoped<IOAuthTokenClient, HttpOAuthTokenClient>();
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();

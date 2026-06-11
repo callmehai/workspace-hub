@@ -1,7 +1,9 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using WorkspaceHub.Application.Interfaces.Services;
-using WorkspaceHub.Application.OAuth;
+using WorkspaceHub.Application.OAuth.Core;
+using WorkspaceHub.Application.OAuth.Providers.Google;
+using WorkspaceHub.Application.OAuth.Providers.Jira;
 using WorkspaceHub.Application.Services;
 
 namespace WorkspaceHub.Application;

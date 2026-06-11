@@ -1,4 +1,4 @@
-using WorkspaceHub.Application.OAuth;
+using WorkspaceHub.Application.OAuth.Core;
 
 namespace WorkspaceHub.Application.Interfaces.Services;
 
