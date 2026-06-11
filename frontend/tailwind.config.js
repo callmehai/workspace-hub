@@ -12,6 +12,9 @@ export default {
           700: '#1d4ed8',
         },
       },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+      },
     },
   },
   plugins: [],
