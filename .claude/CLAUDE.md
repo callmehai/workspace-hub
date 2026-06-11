@@ -22,9 +22,7 @@ Tech stack:
 ## Cấu trúc repo
 
 ```
-/                                # ← root (Netlify deploy static từ đây)
-├── index.html                   # Plan đầy đủ (12 sections) — doc, không phải app
-├── timeline.html / .css / .js   # Tracker 10 tuần drag-drop checklist (localStorage)
+/
 ├── CLAUDE.md                    # Context gốc (scope, phase, quy ước)
 ├── docs/                        # DATABASE / API / SPRINTS / CONVENTIONS / SETUP / CHANGELOG
 ├── backend/                     # ASP.NET Core 8 Web API — solution 4 project
@@ -99,8 +97,7 @@ npm run build && npm run lint
 2. **Máy không có .NET 8 SDK**, dùng .NET 10 SDK build target `net8.0` — works fine (SDK forward-compatible, có `global.json`).
 3. **SQL Server multiple cascade path:** FK `Items.ConnectionId` / `ScheduledEmails.ConnectionId` để NoAction ở DB; service layer set NULL/dọn trước khi xoá Connection.
 4. **OAuth dev credentials:** `ConnectionsService` đọc plaintext `Dev:google:ClientId/ClientSecret` từ `appsettings.Development.json` (prod mới decrypt từ DB).
-5. **Netlify chỉ deploy static ở root** (index/timeline). `backend/` + `frontend/` không build trên Netlify.
-6. **Plan vs App:** `timeline.html` = tracker, `index.html` = plan. App thật nằm trong `backend/` + `frontend/`. Mấy file html này theo plan CŨ (Nango/Outlook/Telegram) — **không phải scope hiện tại**, đừng lấy làm spec. (`prototype.html` mockup đã xoá.)
+5. **Static plan cũ đã xoá** (index/prototype/timeline.html + netlify.toml — plan theo scope CŨ Nango/Outlook/Telegram). Spec hiện hành là `CLAUDE.md` + `docs/`. Site Netlify cũ nếu còn sống thì là bản outdated.
 
 ---
 
