@@ -20,8 +20,8 @@ App gom **Gmail · Google Calendar · Google Drive** về 1 nơi, quản lý the
 | [`docs/SETUP.md`](docs/SETUP.md) | Chạy local, env, migration, OAuth setup |
 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | Lịch sử quyết định thiết kế |
 
-Plan/prototype cũ (deploy Netlify — tham khảo, **không phải spec hiện tại**):
-plan https://workspace-hub-plan.netlify.app/ · prototype `/prototype.html` · timeline `/timeline.html`
+Plan cũ (deploy Netlify — tham khảo, **không phải spec hiện tại**):
+plan https://workspace-hub-plan.netlify.app/ · timeline `/timeline.html`
 
 ---
 
@@ -29,7 +29,7 @@ plan https://workspace-hub-plan.netlify.app/ · prototype `/prototype.html` · t
 
 ```
 workspace-hub-plan/
-├── index.html, prototype.html, timeline.html   # Doc/plan cũ (Netlify deploy)
+├── index.html, timeline.html                   # Doc/plan cũ (Netlify deploy)
 ├── CLAUDE.md, docs/                            # Tài liệu hiện hành
 ├── backend/                                    # ASP.NET Core 8 Web API
 │   ├── WorkspaceHub.sln

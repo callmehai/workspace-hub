@@ -1,4 +1,4 @@
-# Netlify config — chỉ deploy static site (plan + prototype + timeline)
+# Netlify config — chỉ deploy static site (plan + timeline)
 # Không touch vào backend/ và frontend/ (đó là code project thực, deploy riêng)
 
 [build]
