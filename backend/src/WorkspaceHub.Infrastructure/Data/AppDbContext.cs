@@ -14,6 +14,9 @@ public class AppDbContext : DbContext
     /// <summary>Guid cố định cho seed integration Google (deterministic migration).</summary>
     public static readonly Guid GoogleIntegrationId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
+    /// <summary>Guid cố định cho seed integration Jira (deterministic migration).</summary>
+    public static readonly Guid JiraIntegrationId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<User> Users => Set<User>();
@@ -258,8 +261,25 @@ public class AppDbContext : DbContext
             ClientSecretEncrypted = "",
             AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
             TokenEndpoint = "https://oauth2.googleapis.com/token",
-            DefaultScopes = "gmail.readonly calendar.readonly drive.readonly",
+            DefaultScopes = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly",
             SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",
+            IsEnabled = true
+        });
+
+        b.Entity<Integration>().HasData(new Integration
+        {
+            Id = JiraIntegrationId,
+            Key = "jira",
+            DisplayName = "Jira Cloud",
+            IconUrl = "https://www.atlassian.com/favicon.ico",
+            Description = "Jira issues & projects",
+            Provider = "Atlassian",
+            ClientIdEncrypted = "",
+            ClientSecretEncrypted = "",
+            AuthorizationEndpoint = "https://auth.atlassian.com/authorize",
+            TokenEndpoint = "https://auth.atlassian.com/oauth/token",
+            DefaultScopes = "read:jira-work write:jira-work manage:jira-project read:jira-user offline_access",
+            SupportedServices = "[\"Jira\"]",
             IsEnabled = true
         });
     }

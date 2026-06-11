@@ -1,9 +1,9 @@
-using System.Web;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Web;
 using WorkspaceHub.Application.Common;
-using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.OAuth.Core;
-using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Application.OAuth.Providers.Jira;
 
@@ -12,9 +12,12 @@ namespace WorkspaceHub.Application.OAuth.Providers.Jira;
 /// Atlassian yêu cầu thêm param "audience" và scope string khác Google.
 /// Docs: https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/
 /// </summary>
-public class JiraStrategy : IProviderStrategy
+public class JiraStrategy(
+    Interfaces.Services.IOAuthTokenClient tokenClient,
+    IHttpClientFactory httpClientFactory) : IProviderStrategy
 {
     private const string AtlassianAudience = "api.atlassian.com";
+    private const string MeEndpoint = "https://api.atlassian.com/me";
 
     public string ProviderKey => "jira";
 
@@ -26,9 +29,9 @@ public class JiraStrategy : IProviderStrategy
         query["client_id"]     = ctx.ClientId;
         query["redirect_uri"]  = ctx.RedirectUri;
         query["response_type"] = "code";
-        query["scope"]         = ctx.Integration.DefaultScopes; // đọc từ DB seed
+        query["scope"]         = string.Join(' ', JiraScopes.All);
         query["state"]         = ctx.State;
-        query["audience"]      = AtlassianAudience;             // bắt buộc với Atlassian
+        query["audience"]      = AtlassianAudience;
         query["prompt"]        = "consent";
 
         var url = $"{ctx.Integration.AuthorizationEndpoint}?{query}";
@@ -36,15 +39,60 @@ public class JiraStrategy : IProviderStrategy
         return Task.FromResult(new InitiateConnectionResult(url, ctx.State));
     }
 
-    public Task<TokenExchangeResult> ExchangeCodeAsync(
+    public async Task<TokenExchangeResult> ExchangeCodeAsync(
         CompleteContext ctx,
         CancellationToken ct = default)
     {
-        // TODO: Jira token exchange (Atlassian OAuth 2.0 3LO).
-        // 1. POST to ctx.Integration.TokenEndpoint with code + credentials.
-        // 2. GET https://api.atlassian.com/me với access_token → ProviderAccountId = accountId field.
-        // 3. Map Jira-specific scopes → IReadOnlyList<ServiceType>.
-        // Docs: https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/
-        throw new NotImplementedException("Jira ExchangeCodeAsync chưa được triển khai");
+        // Step 1: exchange code → access_token + refresh_token
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"]    = "authorization_code",
+            ["client_id"]     = ctx.ClientId,
+            ["client_secret"] = ctx.ClientSecret,
+            ["code"]          = ctx.Code,
+            ["redirect_uri"]  = ctx.RedirectUri
+        };
+
+        string json;
+        try
+        {
+            json = await tokenClient.PostFormAsync(ctx.Integration.TokenEndpoint, formData, ct);
+        }
+        catch (HttpRequestException)
+        {
+            throw new BusinessRuleException("Atlassian từ chối code");
+        }
+
+        var token = JsonSerializer.Deserialize<JiraTokenResponse>(json)
+            ?? throw new BusinessRuleException("Atlassian từ chối code");
+
+        // Step 2: GET /me → account_id (không có id_token như Google)
+        var http = httpClientFactory.CreateClient("OAuthToken");
+        http.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+        JsonElement me;
+        try
+        {
+            me = await http.GetFromJsonAsync<JsonElement>(MeEndpoint, ct);
+        }
+        catch (HttpRequestException)
+        {
+            throw new BusinessRuleException("Không lấy được thông tin tài khoản từ Atlassian");
+        }
+
+        var accountId = me.GetProperty("account_id").GetString()
+            ?? throw new BusinessRuleException("Không lấy được accountId từ Atlassian");
+
+        // Step 3: map scopes → ServiceType list
+        var grantedServices = JiraScopes.ServicesFromGrantedScopes(token.Scope);
+
+        return new TokenExchangeResult(
+            token.AccessToken,
+            token.RefreshToken,
+            token.ExpiresIn,
+            token.Scope,
+            accountId,
+            grantedServices);
     }
 }

@@ -15,12 +15,13 @@ public enum ConnectionStatus
     Error
 }
 
-/// <summary>Sub-service bật được trên 1 grant Google.</summary>
+/// <summary>Sub-service bật được trên 1 grant OAuth.</summary>
 public enum ServiceType
 {
     Gmail,
     GCal,
-    Drive
+    Drive,
+    Jira
 }
 
 /// <summary>Loại cursor cho incremental sync, tuỳ provider.</summary>
