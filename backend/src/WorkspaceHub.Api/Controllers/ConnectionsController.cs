@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -5,12 +6,12 @@ using WorkspaceHub.Application.Interfaces.Services;
 namespace WorkspaceHub.Api.Controllers;
 
 /// <summary>
-/// Quản lý kết nối OAuth (Google).
-/// TODO: Thêm [Authorize] khi JWT được implement (SCRUM-9).
+/// Quản lý kết nối OAuth (Google, Jira).
 /// </summary>
 [ApiController]
 [Route("api/connections")]
-public class ConnectionsController : ControllerBase
+[Authorize]
+public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
 
@@ -21,16 +22,14 @@ public class ConnectionsController : ControllerBase
 
     /// <summary>
     /// POST /api/connections/oauth/start
-    /// Trả về Google authorization URL + state CSRF để FE redirect sang Google.
-    /// userId tạm hardcode Guid.Empty — sẽ đọc từ JWT claim "sub" sau SCRUM-9.
+    /// Trả về authorization URL + state CSRF để FE redirect sang Provider.
     /// </summary>
     [HttpPost("oauth/start")]
     public async Task<IActionResult> InitiateConnection(
         [FromBody] InitiateConnectionRequest request,
         CancellationToken ct)
     {
-        // TODO: thay bằng Guid.Parse(User.FindFirst("sub")!.Value) sau khi JWT sẵn sàng.
-        var userId = Guid.Empty;
+        var userId = CurrentUserId;
 
         var result = await _connections.InitiateConnectionAsync(
             request.IntegrationKey,
@@ -47,16 +46,14 @@ public class ConnectionsController : ControllerBase
 
     /// <summary>
     /// POST /api/connections/oauth/callback
-    /// Nhận code + state từ Google redirect, exchange token, lưu OAuthConnection + ServiceConnections.
-    /// userId tạm hardcode Guid.Empty — sẽ đọc từ JWT claim "sub" sau SCRUM-9.
+    /// Nhận code + state từ Provider redirect, exchange token, lưu OAuthConnection + ServiceConnections.
     /// </summary>
     [HttpPost("oauth/callback")]
     public async Task<IActionResult> CompleteConnection(
         [FromBody] CompleteConnectionRequest request,
         CancellationToken ct)
     {
-        // TODO: thay bằng Guid.Parse(User.FindFirst("sub")!.Value) sau khi JWT sẵn sàng.
-        var userId = Guid.Empty;
+        var userId = CurrentUserId;
 
         var result = await _connections.CompleteConnectionAsync(request.Code, request.State, userId, ct);
 
@@ -76,9 +73,9 @@ public class ConnectionsController : ControllerBase
     /// <summary>
     /// PUT /api/connections/{key}/credentials
     /// Encrypt clientId + clientSecret rồi lưu DB.
-    /// TODO: thêm [Authorize(Policy="AdminOnly")] sau khi JWT xong (SCRUM-9).
     /// </summary>
     [HttpPut("{key}/credentials")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SetCredentials(
         string key,
         [FromBody] SetCredentialsRequest request,
