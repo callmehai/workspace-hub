@@ -46,10 +46,18 @@ public class GoogleStrategy : IProviderStrategy
             ["grant_type"]    = "authorization_code"
         };
 
-        var json = await _tokenClient.PostFormAsync(ctx.Integration.TokenEndpoint, formData, ct);
+        string json;
+        try
+        {
+            json = await _tokenClient.PostFormAsync(ctx.Integration.TokenEndpoint, formData, ct);
+        }
+        catch (HttpRequestException)
+        {
+            throw new BusinessRuleException("Google từ chối code");
+        }
+
         var googleToken = JsonSerializer.Deserialize<GoogleTokenResponse>(json)
             ?? throw new BusinessRuleException("Google từ chối code");
-
         // TODO: bỏ fallback khi test thật với Google account.
         var providerAccountId = googleToken.IdToken is not null
             ? IdTokenParser.ExtractProviderAccountId(googleToken.IdToken)
