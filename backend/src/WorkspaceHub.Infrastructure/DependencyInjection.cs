@@ -4,7 +4,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Infrastructure.Data;
+using WorkspaceHub.Infrastructure.Http;
 using WorkspaceHub.Infrastructure.Repositories;
 using WorkspaceHub.Application.Security;
 using WorkspaceHub.Infrastructure.Security;
@@ -30,7 +32,8 @@ public static class DependencyInjection
 
         services.AddDistributedMemoryCache();
 
-        services.AddHttpClient("GoogleToken");
+        services.AddHttpClient("OAuthToken");
+        services.AddScoped<IOAuthTokenClient, HttpOAuthTokenClient>();
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();

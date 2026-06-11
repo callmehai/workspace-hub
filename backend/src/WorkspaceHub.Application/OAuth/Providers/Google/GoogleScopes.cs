@@ -1,8 +1,8 @@
 using WorkspaceHub.Domain.Enums;
 
-namespace WorkspaceHub.Application.OAuth;
+namespace WorkspaceHub.Application.OAuth.Providers.Google;
 
-public static class GoogleScopes
+internal static class GoogleScopes
 {
     public const string OpenId = "openid";
     public const string Email = "email";

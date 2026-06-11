@@ -1,4 +1,4 @@
-namespace WorkspaceHub.Application.OAuth;
+namespace WorkspaceHub.Application.OAuth.Core;
 
 /// <summary>
 /// Dữ liệu lưu cache phía server cho mỗi OAuth state token.
