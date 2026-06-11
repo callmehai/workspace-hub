@@ -1,67 +1,69 @@
 # Sprints & Tickets — Workspace Hub
 
-> Bản đồ ticket cho Claude Code biết phần nào thuộc ai và phụ thuộc nhau ra sao. Khi code một ticket, đọc dependency để biết cần gì trước.
+> Cập nhật 2026-06-11: status đồng bộ theo Jira. Đợt hiện tại (Sprint 4): mô hình B + write-back + Google Sign-In (SCRUM-32→38). Lịch sử quyết định: CHANGELOG.md.
+>
+> **Quy tắc:** sau khi hoàn thành task code nào, cập nhật status ticket đó trong file này (và các .md liên quan).
 
 ## Team
-| Tên | Vai trò chính |
+| Tên | Vai trò |
 |---|---|
-| Hải | Lead — foundation (solution, schema, Data Protection) |
-| Lộc | Auth + một phần connection/optimization |
-| Khánh | OAuth (start + callback) |
-| Vũ | Sync Gmail + scheduled email |
-| Huy | Folders / Items / filter / Admin |
-| Dũng | Frontend + sync stretch |
-
-## Critical path (chuỗi block — ưu tiên cao nhất)
-```
-SCRUM-5 (solution) → SCRUM-6 (schema) → mọi thứ
-SCRUM-6 → SCRUM-13 (OAuth callback) → SCRUM-15 → SCRUM-16 (sync)
-```
-SCRUM-6 (schema) phải xong sớm nhất vì chặn cả team.
+| Hải | Lead — foundation, schema/migration, optimize |
+| Lộc | Auth, conflict resolution, scheduled cron |
+| Khánh | OAuth flow, scope |
+| Vũ | Sync + write-back Google, scheduled email |
+| Huy | Folders/Items/filter/Admin |
+| Dũng | Frontend |
 
 ---
 
-## Sprint 1 (8–14 Jun) — Foundation & Auth
+## Phase 1 — Nền tảng (status thật theo Jira 2026-06-11)
 
-| Ticket | Mô tả | Assignee | Dependency |
+| Ticket | Việc | Assignee | Status |
 |---|---|---|---|
-| SCRUM-5 | Khởi tạo solution ASP.NET Core + layer architecture | Hải | — |
-| SCRUM-6 | EF Core schema + migrations toàn bộ MVP | Hải | SCRUM-5 |
-| SCRUM-7 | Setup Data Protection mã hoá token | Vũ | SCRUM-5 |
-| SCRUM-8 | GitHub repo, branching, README | Dũng | — |
-| SCRUM-9 | Register + login + BCrypt + JWT | Lộc | SCRUM-6 |
-| SCRUM-10 | JWT middleware + protected route + GET /me | Lộc | SCRUM-9 |
-| SCRUM-11 | Role-based authorization + logout | Khánh | SCRUM-10 |
-| SCRUM-12 | OAuth start flow + đăng ký app Google Cloud | Khánh | SCRUM-6 |
-| SCRUM-18 | Folder CRUD | Huy | SCRUM-6, SCRUM-10 |
-| SCRUM-19 | Items list + filter + pagination + search | Huy | SCRUM-6, SCRUM-10 |
-| SCRUM-21 | Frontend setup: routing, layout, protected route | Dũng | — |
+| SCRUM-5 | Khởi tạo solution ASP.NET Core + layer architecture | Hải | ✅ Done |
+| SCRUM-6 | EF Core schema + migrations toàn bộ MVP | Hải | ✅ Done |
+| SCRUM-7 | Setup Data Protection mã hoá token | Vũ | ✅ Done |
+| SCRUM-8 | GitHub repo, branching strategy, README | Hải | ✅ Done |
+| SCRUM-9 | Register + login + BCrypt + JWT | Lộc | ✅ Done |
+| SCRUM-10 | JWT middleware + protected route + GET /api/auth/me | Lộc | ✅ Done |
+| SCRUM-11 | Role-based authorization + logout | Khánh | ✅ Done |
+| SCRUM-12 | OAuth start flow + đăng ký app Google Cloud | Khánh | ✅ Done |
+| SCRUM-13 | OAuth callback + lưu token encrypted | Khánh | ✅ Done |
+| SCRUM-14 | List/disconnect/refresh connection | — | ⏳ Pending — **viết lại theo mô hình B** (Connections, không còn ServiceConnections) |
+| SCRUM-18 | Folder CRUD | Huy | ✅ Done |
+| SCRUM-19 | Items list + filter + pagination + search | Huy | ✅ Done |
+| SCRUM-21 | Frontend setup: routing, layout, protected route | Dũng | ✅ Done |
+| SCRUM-22 | Auth pages connected to API | Dũng | ⏳ Pending |
 
-## Sprint 2 (15–22 Jun) — OAuth & Sync
+> Các ticket phase 1 còn lại (15–17, 20, 23–29: sync Gmail, Kanban/Tag UI, Admin dashboard, ...) chưa done — xem Jira. Bản cũ của file này ghi "SCRUM-5→29 đã done" là **sai**, đã sửa theo Jira.
 
-| Ticket | Mô tả | Assignee | Dependency |
-|---|---|---|---|
-| SCRUM-13 | OAuth callback + lưu token encrypted | Khánh | SCRUM-12, SCRUM-7 |
-| SCRUM-14 | List / disconnect / refresh connection | Lộc | SCRUM-13 |
-| SCRUM-15 | Gmail client + lấy message → Item | Vũ | SCRUM-13 |
-| SCRUM-16 | Cron sync định kỳ + dedupe | Vũ | SCRUM-15 |
-| SCRUM-17 | Sync Calendar + Drive (stretch) | Dũng | SCRUM-16 |
-| SCRUM-20 | Kanban status + Note CRUD + ItemFolders | Huy | SCRUM-18, SCRUM-19 |
-| SCRUM-22 | Auth pages (login/register) nối API | Dũng | SCRUM-9, SCRUM-21 |
-| SCRUM-23 | Admin API: users + stats (stretch) | Huy | SCRUM-11 |
-| SCRUM-25 | Logging + optimize queries | Hải | SCRUM-19 |
+## Sprint 4 (đợt hiện tại) — Mô hình B + Write-back + Google Sign-In
 
-## Sprint 3 (22–29 Jun) — Optimization, Testing & Scheduled Email
+| Ticket | Việc | Assignee | Dependency | Status |
+|---|---|---|---|---|
+| SCRUM-32 | Migration: Users multi-auth (PasswordHash null, GoogleSub, AuthProvider) | Lộc | SCRUM-6 | ✅ Done |
+| SCRUM-33 | Google Sign-In (đăng nhập Google, auto-link) | Lộc | 32, 9 | ✅ Done |
+| SCRUM-34 | Migration mô hình B: gộp Connections, Items.ConnectionId + ETag | Hải | SCRUM-6 | ✅ Done 2026-06-11 — migration `ModelBConnections`, đã apply DB dev |
+| SCRUM-35 | OAuth start flow theo mô hình B (mỗi service 1 connection) | Khánh | 34 | ⏳ Not started |
+| SCRUM-36 | OAuth callback theo mô hình B (per-service) + scope read-write | Khánh | 35 | ⏳ Not started |
+| SCRUM-37 | Write-back Google: Email + Event + File (PATCH/POST/DELETE items) | Vũ | 36 | ⏳ Not started |
+| SCRUM-38 | Conflict detection (ETag → 409) cho mọi write-back | Lộc | 37 — **chốt interface `IWriteBackGuard` với Vũ trước khi code** | ⏳ Not started |
+| SCRUM-30 | Scheduled email tạo/list/cancel (đổi ConnectionId) | Vũ | 34, 36 | ⏳ Not started |
+| SCRUM-31 | Cron process-scheduled (token từ Connections) | Lộc | 30, 37 | ⏳ Not started |
 
-| Ticket | Mô tả | Assignee | Dependency |
-|---|---|---|---|
-| SCRUM-24 | Exception middleware + error format chuẩn | Lộc | endpoint chính |
-| SCRUM-26 | Refactor services + clean architecture | Khánh | feature ổn định |
-| SCRUM-27 | API testing + Postman collection | Huy | endpoint hoàn thành |
-| SCRUM-28 | README backend + setup guide | Dũng | cuối sprint |
-| SCRUM-29 | Unit test cho service chính (stretch) | Vũ | SCRUM-26 |
-| SCRUM-30 | Scheduled email: tạo / list / cancel | Vũ | SCRUM-13, SCRUM-6 |
-| SCRUM-31 | Cron process-scheduled: gửi qua Gmail | Lộc | SCRUM-30, SCRUM-15 |
+**Execution order:** 34 ✅ → 35 → 36 (Khánh) → 37 (Vũ) và 38 (Lộc) song song → rồi 30/31.
+**Phối hợp:** Vũ (37) + Lộc (38) thống nhất interface `IWriteBackGuard` trước khi code.
+**Lưu ý sau SCRUM-34:** response của `POST /api/connections/oauth/callback` đã đổi shape (trả list connections) — xem API.md; FE (Dũng) cập nhật khi wire.
+**Huy** đợt này: cập nhật GET /api/items trả ETag (phục vụ 37/38) + viết lại SCRUM-14 theo Connections, hoặc test write-back.
 
-## Stretch (cắt đầu tiên nếu thiếu thời gian)
-SCRUM-17 (Calendar/Drive sync), SCRUM-23 (Admin), SCRUM-29 (unit test).
+## Phase sau — BACKLOG, CHƯA LÀM (đừng code)
+| Ticket | Việc |
+|---|---|
+| SCRUM-39 | Webhook Gmail (watch + Pub/Sub) thay polling đọc |
+| SCRUM-40 | Webhook Calendar (events.watch) + renew |
+| SCRUM-41 | Bảng WebhookChannels + cron renew |
+| SCRUM-42 | Jira: Integration Atlassian + OAuth (cloudId) |
+| SCRUM-43 | Jira: sync issue → Item(Ticket) |
+| SCRUM-44 | Jira: write-back (transition/assign/comment) |
+| SCRUM-45 | Jira webhook (issue created/updated) |
+| SCRUM-46 | ImportantContacts: khôi phục JiraAccount |

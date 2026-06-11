@@ -1,20 +1,21 @@
 # Workspace Hub — Context cho Claude Code
 
-File này load tự động vào mọi Claude session khi mở repo. Mục đích: cho Claude tương lai biết project là gì, conventions, và task ưu tiên — đỡ phải explain lại.
+File này load tự động vào mọi Claude session khi mở repo. Bổ trợ cho `CLAUDE.md` (root) — root nói scope/phase/quy ước, file này nói cấu trúc repo thật, lệnh, và gotchas.
 
 ---
 
 ## TL;DR — project là gì
 
-**Đồ án Fullstack ASP.NET 10 tuần, nhóm 6 người (3 BE + 3 FE), 60/40 BE-FE.**
-App aggregator: gom Gmail / Outlook / GCal / Outlook Cal / Drive / OneDrive / Jira / Telegram về 1 nơi.
-Concept: `Item` (5 type: email/event/file/ticket/note) → kéo thả vào `Folder` (context) → Kanban 3 cột.
-Cộng thêm: **RBAC** (Admin/User) + **Folder Share** (Viewer-only) qua `IAuthorizationHandler`.
+**Đồ án PRN232 Fullstack ASP.NET, nhóm 6 người, 60/40 BE-FE.**
+App aggregator: gom **Gmail / Google Calendar / Drive** về 1 nơi (Jira ở phase sau).
+Concept: `Item` (Email/Event/File/Note) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
+Phase hiện tại (Sprint 4): **mô hình B** (mỗi service 1 Connection, token riêng — ✅ đã migrate, SCRUM-34) + **write-back 2 chiều lên Google** (⏳ SCRUM-35→38) + **Google Sign-In** (✅).
+
+Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (đồng bộ Jira).
 
 Tech stack:
-- BE: **ASP.NET Core 8** + EF Core 8 + JWT + FluentValidation + AutoMapper + Serilog + Swagger
-- FE: **Vite + React 19 + TypeScript** + Tailwind + Router + TanStack Query + axios + react-hot-toast
-- Integration (chưa làm): Nango Cloud (3 OAuth) + Telegram Bot + cron-job.org
+- BE: **ASP.NET Core 8** + EF Core 8 (SQL Server) + JWT + FluentValidation + Data Protection + Swagger
+- FE: **Vite + React + TypeScript** + Tailwind + React Router + TanStack Query + axios + react-hot-toast
 
 ---
 
@@ -22,83 +23,52 @@ Tech stack:
 
 ```
 /                                # ← root (Netlify deploy static từ đây)
-├── index.html                   # Plan đầy đủ (12 sections)
-├── prototype.html / .css / .js  # Clickable demo prototype
-├── timeline.html / .css / .js   # Tracker 10 tuần với drag-drop checklist
-├── script.js, styles.css        # CSS chung cho plan
-├── backend/                     # ASP.NET Core 8 Web API
-│   ├── WorkspaceHub.slnx
-│   └── WorkspaceHub.Api/
-│       ├── Controllers/         # HealthController.cs (hiện chỉ có 1)
-│       ├── Services/, Repositories/, DTOs/  # rỗng — tạo khi cần
-│       ├── Entities/            # User, Role, UserRole, RoleNames (static)
-│       ├── Data/AppDbContext.cs # EF Core context + seed 2 role
-│       ├── Middlewares/ExceptionMiddleware.cs
-│       ├── Validators/, Mappings/  # rỗng
-│       ├── Program.cs           # composition root (JWT + Policy + Swagger + ...)
-│       ├── appsettings.json
-│       └── WorkspaceHub.Api.csproj  # net8.0 target
+├── index.html                   # Plan đầy đủ (12 sections) — doc, không phải app
+├── prototype.html / .css / .js  # Clickable demo prototype (mock, không data thật)
+├── timeline.html / .css / .js   # Tracker 10 tuần drag-drop checklist (localStorage)
+├── CLAUDE.md                    # Context gốc (scope, phase, quy ước)
+├── docs/                        # DATABASE / API / SPRINTS / CONVENTIONS / SETUP / CHANGELOG
+├── backend/                     # ASP.NET Core 8 Web API — solution 4 project
+│   ├── WorkspaceHub.sln
+│   ├── src/
+│   │   ├── WorkspaceHub.Domain/          # Entities (User, Connection, Item, ...), Enums
+│   │   ├── WorkspaceHub.Application/     # Services, DTOs, interfaces, OAuth strategies, Validators
+│   │   ├── WorkspaceHub.Infrastructure/  # AppDbContext, EF config, Repositories, Data/Migrations
+│   │   └── WorkspaceHub.Api/             # Controllers, Program.cs, Middleware, appsettings
+│   └── tests/WorkspaceHub.Tests/
 └── frontend/                    # Vite React TS
-    ├── src/
-    │   ├── pages/{LoginPage,RegisterPage,InboxPage}.tsx
-    │   ├── components/{AppLayout,ProtectedRoute}.tsx
-    │   ├── lib/api.ts           # axios instance + JWT interceptor
-    │   ├── App.tsx              # router + QueryClient + Toaster
-    │   └── main.tsx
-    ├── tailwind.config.js       # brand colors
-    └── package.json
+    └── src/{pages, components, layouts, context, lib, services, types, router.tsx}
 ```
 
 ---
 
-## Conventions
+## Conventions (tóm tắt — đầy đủ ở docs/CONVENTIONS.md)
 
 ### Backend
-- Namespace: `WorkspaceHub.Api.{Controllers|Services|Entities|...}`
-- Route prefix: `/api/[controller]` (lowercase)
-- DTO: hậu tố `Dto` (LoginDto, ItemDto)
-- Validator: hậu tố `Validator` (LoginValidator inheriting `AbstractValidator<LoginDto>`)
-- Authorize: dùng `[Authorize]` (any logged-in) hoặc `[Authorize(Policy="AdminOnly")]` cho admin endpoint
-- Resource-based auth: `IAuthorizationHandler<FolderPermissionRequirement, Folder>` (chưa làm — Tuần 4)
-- Migration: dùng EF Core CLI, tạo trong `Data/Migrations/`
-- DB dev: SQLite (`workspacehub.db` ở root project). Prod: PostgreSQL — set connection string trong `appsettings.json`.
+- Layered: Controller → Service → Repository → DbContext. DTO tách Entity. DI mọi thứ.
+- Namespace `WorkspaceHub.{Domain|Application|Infrastructure|Api}.*`. Route `/api/...` lowercase.
+- Guid PK, enum lưu string, UTC `datetime2`, JSON `nvarchar(max)`.
+- **Mô hình B:** mỗi service = 1 row `Connections`. KHÔNG cột Scopes/Permission — scope suy từ ServiceType trong code. Đừng tạo lại OAuthConnections/ServiceConnections cũ.
+- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 3: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`.
+- DB dev: SQL Server chạy Docker container `wh-sqlserver` (xem docs/SETUP.md). KHÔNG phải SQLite/Postgres.
 
 ### Frontend
-- Page component đặt trong `src/pages/`, hậu tố `Page` (LoginPage, InboxPage)
-- Reusable component đặt trong `src/components/`, không hậu tố
-- API call gọi qua `api` instance từ `lib/api.ts` (đã có JWT interceptor + 401 redirect)
-- State server dùng **TanStack Query** (`useQuery`, `useMutation`). KHÔNG dùng `useEffect + fetch` thủ công.
-- State client (form, modal) dùng `useState` hoặc `react-hook-form` cho form phức tạp.
-- Style: **Tailwind utility classes**. Tránh inline style trừ giá trị dynamic.
-- Toast: `toast.success(...)` / `toast.error(...)` từ `react-hot-toast`.
+- Page trong `src/pages/` hậu tố `Page`; component tái dùng trong `src/components/`.
+- Server state: TanStack Query. KHÔNG `useEffect + fetch` thủ công. API qua axios instance (JWT interceptor).
+- Style: Tailwind utility. Toast: react-hot-toast.
 
 ### Git
-- Default branch: `develop` (Netlify deploy preview)
-- Production: `main`
-- Feature branch: `feature/<short-name>`, vd `feature/jwt-login`
-- Commit: prefix `feat:` / `fix:` / `refactor:` / `docs:` / `chore:`
-- PR review: ≥1 approval từ teammate, hoặc owner bypass nếu solo task
+- Default branch `develop`, production `main`. Feature branch `feature/SCRUM-x-mo-ta`.
+- Commit prefix `feat:` / `fix:` / `refactor:` / `docs:` / `chore:` (gắn mã ticket khi có: `SCRUM-37: ...`).
+- PR vào develop, ≥1 approval.
 
 ---
 
-## Tasks ưu tiên (status hiện tại — Tuần 3 init)
+## Status hiện tại (2026-06-11 — chi tiết: docs/SPRINTS.md)
 
-**Đã làm:**
-- ✅ BE skeleton compile được (`dotnet build` pass, `net8.0` target trên .NET 10 SDK)
-- ✅ Entity User/Role/UserRole + seed Admin/User role
-- ✅ JWT + Policy `AdminOnly` configured
-- ✅ ExceptionMiddleware, Swagger UI ở `/swagger`
-- ✅ `GET /api/health` để verify BE ↔ FE
-- ✅ FE Vite + Tailwind + Router + TanStack + axios với JWT interceptor
-- ✅ Login/Register/Inbox page placeholder (gọi `/api/auth/login` — chưa làm BE)
-
-**Việc kế (Tuần 3):**
-1. **BE-1**: `dotnet ef migrations add InitialCreate` → tạo migration đầu. Implement `POST /api/auth/register` (BCrypt hash, gán role User) và `POST /api/auth/login` (return JWT có claim `role`). Endpoint `/api/auth/me` cho FE check token.
-2. **BE-2**: Tạo Entity `IntegrationAccount`, `ServiceConnection`, `TelegramBinding` + migration thứ 2. Skeleton repository pattern (`IUserRepository`, `UserRepository`).
-3. **BE-3**: Setup Nango account + cấu hình 3 provider. Endpoint nhận callback từ FE: `POST /api/integrations/connect` lưu `connection_id`.
-4. **FE-1**: Login form đã wire vào `/api/auth/login` — chỉ cần BE ready là chạy.
-5. **FE-2**: Layout đã có skeleton — thêm navigation items khi có thêm pages.
-6. **FE-3**: Toast/loading state đã có — chờ feature mới để wire.
+- ✅ Done: SCRUM-5→13, 18, 19, 21 (nền tảng, auth, OAuth start/callback, Folder CRUD, Items filter, FE setup) + SCRUM-32/33 (multi-auth + Google Sign-In) + **SCRUM-34** (migration mô hình B).
+- ⏳ Kế tiếp: SCRUM-35/36 (OAuth per-service, Khánh) → SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc) → SCRUM-30/31 (scheduled email).
+- ⏳ Còn nợ phase 1: SCRUM-14 (list/disconnect/refresh — viết lại theo Connections), SCRUM-22 (auth pages wire API), và các ticket 15–17, 20, 23–29.
 
 ---
 
@@ -106,66 +76,42 @@ Tech stack:
 
 ### Backend
 ```bash
-cd backend/WorkspaceHub.Api
+cd backend
+dotnet build && dotnet test
+dotnet run --project src/WorkspaceHub.Api          # http://localhost:5118/swagger
 
-# Run dev
-dotnet run                       # https://localhost:5001
-
-# Migration
-dotnet ef migrations add <Name>
-dotnet ef database update
-dotnet ef migrations remove
-
-# Restore + build
-dotnet restore
-dotnet build
-
-# Test (chưa có project test — sẽ tạo Tuần 4)
-dotnet test
+# Migration (luôn kèm --startup-project, xem gotcha bên dưới)
+dotnet ef migrations add <Name> --project src/WorkspaceHub.Infrastructure --startup-project src/WorkspaceHub.Api
+dotnet ef database update       --project src/WorkspaceHub.Infrastructure --startup-project src/WorkspaceHub.Api
 ```
 
 ### Frontend
 ```bash
 cd frontend
-
-# Dev
 npm run dev                      # http://localhost:5173
-
-# Build
-npm run build
-npm run preview
-
-# Lint
-npm run lint
+npm run build && npm run lint
 ```
 
 ---
 
 ## Gotchas
 
-1. **`Roles` conflict**: ban đầu em đặt `public static class Roles` chứa hằng số, conflict với `DbSet<Role> Roles` trong DbContext. Đổi tên class thành `RoleNames` để tránh.
-2. **`.NET 8 SDK` không có máy**, dùng `.NET 10 SDK` build target `net8.0` — works fine vì SDK forward-compatible. Khi anh cài `.NET 8 SDK` thật thì không cần đổi gì.
-3. **AutoMapper 13.0.1 có CVE high severity** (`GHSA-rvv3-g6hj-g44x`). Đã upgrade lên 14.0.0.
-4. **Frontend gọi API qua HTTPS dev**: nếu cert chưa trust, chạy `dotnet dev-certs https --trust` 1 lần.
-5. **Netlify deploy**: chỉ deploy static file ở root (index/prototype/timeline). `backend/` và `frontend/` bị `netlify.toml` redirect 404 — không build trên Netlify. BE deploy Render free + PostgreSQL, FE deploy Vercel (Tuần 9).
-6. **Demo vs Plan**: `prototype.html` là clickable mockup (không có data thật), `timeline.html` là tool tracking ae điền tên + tick task, `index.html` là plan đầy đủ. Khác **app thật** đang code trong `backend/` + `frontend/`.
+1. **`dotnet ef` không có `--startup-project`** → design-time factory không thấy appsettings của Api, rơi về fallback `Trusted_Connection` → lỗi Kerberos trên macOS. Fix: luôn dùng `--startup-project src/WorkspaceHub.Api` hoặc set env `WORKSPACEHUB_CONNECTION`.
+2. **Máy không có .NET 8 SDK**, dùng .NET 10 SDK build target `net8.0` — works fine (SDK forward-compatible, có `global.json`).
+3. **SQL Server multiple cascade path:** FK `Items.ConnectionId` / `ScheduledEmails.ConnectionId` để NoAction ở DB; service layer set NULL/dọn trước khi xoá Connection.
+4. **OAuth dev credentials:** `ConnectionsService` đọc plaintext `Dev:google:ClientId/ClientSecret` từ `appsettings.Development.json` (prod mới decrypt từ DB).
+5. **Netlify chỉ deploy static ở root** (index/prototype/timeline). `backend/` + `frontend/` không build trên Netlify.
+6. **Demo vs Plan vs App:** `prototype.html` = mockup, `timeline.html` = tracker, `index.html` = plan. App thật nằm trong `backend/` + `frontend/`. Mấy file html này theo plan CŨ (Nango/Outlook/Telegram) — **không phải scope hiện tại**, đừng lấy làm spec.
 
 ---
 
 ## Khi user yêu cầu code
 
-- Nếu task có trong **timeline** (xem `timeline.js` → `COMPACT` array): note lại task ID/text để user tick.
-- Tuân thủ convention BE/FE ở trên (route prefix, namespace, Tailwind, TanStack Query, ...).
-- BE: implement theo pattern Controller → Service → Repository → DbContext.
-- FE: page → component → hook → axios call.
-- Test build sau mỗi nhóm thay đổi lớn (`dotnet build` cho BE, `npm run build` cho FE).
-- Commit message dùng prefix Vietnamese-friendly: `feat:` / `fix:` / `docs:` / ...
-
-## Khi user hỏi về plan / timeline
-
-- `index.html` = plan tổng thể, 12 sections, không sửa code thật chỉ doc.
-- `timeline.html` = tracker với 199 task có drag-drop, lưu localStorage.
-- `prototype.html` = mockup UI để show demo, không phải code thật.
+- Bám phase hiện tại (CLAUDE.md root). Webhook/Jira → hỏi trước.
+- Đối chiếu `docs/DATABASE.md` + `docs/API.md` trước khi tạo entity/endpoint.
+- BE: Controller → Service → Repository. FE: page → component → hook → axios.
+- Test build sau mỗi nhóm thay đổi lớn (`dotnet build` + `dotnet test` BE, `npm run build` FE).
+- **Sau khi xong task code: cập nhật các file .md liên quan để phản ánh status mới của ticket/feature** (tối thiểu `docs/SPRINTS.md`; schema → DATABASE.md; endpoint → API.md; quyết định lớn → CHANGELOG.md).
 
 ## Mở rộng skill
 

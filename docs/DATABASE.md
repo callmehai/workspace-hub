@@ -1,243 +1,152 @@
-# Database Schema — Workspace Hub (Sprint 1–3 scope)
+# Database Schema — Workspace Hub (Mô hình B)
 
-> Chỉ gồm các bảng trong scope hiện tại. Các bảng future (Friendships, AutomationRules, WebhookChannels...) KHÔNG nằm ở đây.
-> **DB: SQL Server** (dev + prod). JSON lưu `nvarchar(max)`; datetime lưu `datetime2` (luôn UTC). Parse JSON ở frontend.
+> Cập nhật 2026-06-11: bỏ tách OAuthConnections/ServiceConnections, gộp thành **Connections** (mỗi service 1 row, token riêng). Thêm Google Sign-In + write-back fields. Lịch sử: CHANGELOG.md.
+>
+> **Status:** ✅ schema này ĐÃ áp dụng vào code — migration `ModelBConnections` (SCRUM-34, sau `InitialCreate` + `UsersMultiAuth`). DB là **SQL Server**: JSON lưu `nvarchar(max)`, datetime `datetime2` UTC, enum lưu string.
 
 ## Quan hệ tổng quan
-
 ```
-Users 1──n OAuthConnections 1──n ServiceConnections 1──n Items
+Users 1──n Connections 1──n Items
 Users 1──n Folders 1──n ItemFolders n──1 Items
 Users 1──n Tags 1──n TagAssignments n──1 Items
 Users 1──n ImportantContacts
-Users 1──n ScheduledEmails ──n──1 ServiceConnections
+Users 1──n ScheduledEmails ──n──1 Connections
 Users 1──n Notifications
-Integrations 1──n OAuthConnections
-Folders 1──n FolderShares ──n──1 Users (SharedWithUserId / CreatedByUserId)
+Integrations 1──n Connections
+Folders 1──n FolderShares ──n──1 Users
 ```
 
-- Users là gốc của hầu hết bảng (1-n).
-- Items ↔ Folders: nhiều-nhiều qua ItemFolders.
-- Items ↔ Tags: nhiều-nhiều qua TagAssignments.
-- OAuthConnection → ServiceConnection: 1 grant Google bật nhiều service.
-- Item → ServiceConnection: n-1, nullable (Note không thuộc service nào).
-
 ---
 
-## Nhóm 1 — Auth & RBAC
-
-### Users
-Tài khoản local. Không lưu mật khẩu thật, chỉ BCrypt hash (cost 12).
-**1 user = 1 role** (không bảng junction). Role lưu thẳng cột string trên Users.
+## Users
+Đăng nhập bằng password HOẶC Google (auto-link nếu email trùng).
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
-| Email | string UNIQUE | dùng đăng nhập |
-| PasswordHash | string | BCrypt cost 12 |
+| Email | string UNIQUE | |
+| PasswordHash | string **null** | null nếu chỉ đăng nhập Google |
+| GoogleSub | string null UNIQUE | `sub` từ Google, định danh ổn định |
+| AuthProvider | enum string | Local / Google / Both |
 | FullName | string | |
 | AvatarUrl | string null | |
-| IsActive | bool | false = bị Admin khoá, không login được |
+| IsActive | bool | false = khoá |
 | LockedReason | string null | |
-| LastLoginAt | datetime2 null | |
-| Role | string | `Admin` / `User` — mặc định `User` khi register. Đẩy vào JWT claim `role` |
-| CreatedAt | datetime2 | |
+| LastLoginAt | datetime null | |
+| Role | string | |
+| CreatedAt | datetime | |
 
-> Không có bảng `Roles`/`UserRoles`. Phân quyền cấp trang qua claim `role` + `[Authorize(Roles="Admin")]`. Phân quyền cấp resource (folder) qua `FolderShares`.
+> UNIQUE filtered index cho GoogleSub (chỉ khi not null).
+
+## Role
+KHÔNG có bảng Roles/UserRoles (code thật dùng cột `Users.Role` string `Admin`/`User`, đẩy vào JWT claim `role`). 1 user = 1 role.
 
 ---
 
-## Nhóm 2 — Integration & OAuth
-
-### Integrations
-Catalog provider OAuth. Seed sẵn 1 row Google.
+## Integrations
+Catalog provider. Seed Google; thêm Atlassian ở phase Jira.
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
-| Key | string UNIQUE | slug route callback (vd `google`) |
-| DisplayName | string | "Google Workspace" |
-| IconUrl | string | |
-| Description | string | |
-| Provider | string | nhóm provider |
-| ClientIdEncrypted | string | Data Protection |
-| ClientSecretEncrypted | string | Data Protection |
-| AuthorizationEndpoint | string | |
-| TokenEndpoint | string | |
-| DefaultScopes | string | scope mặc định (readonly cho sync 1 chiều) |
-| SupportedServices | nvarchar(max) | `["Gmail","GCal","Drive"]` |
+| Key | string UNIQUE | google / atlassian |
+| DisplayName, IconUrl, Description | string | |
+| Provider | string | Google / Atlassian |
+| ClientIdEncrypted, ClientSecretEncrypted | string | Data Protection |
+| AuthorizationEndpoint, TokenEndpoint | string | |
+| SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` / `["Jira"]` |
 | IsEnabled | bool | |
 
-Seed: `{ Key:"google", DisplayName:"Google Workspace", Provider:"Google", DefaultScopes:"gmail.readonly calendar.readonly drive.readonly", SupportedServices:["Gmail","GCal","Drive"] }`
+> Bỏ cột DefaultScopes — scope suy từ ServiceType trong code (GoogleScopes.ForService).
 
-> Lưu ý scope: hiện tại readonly vì sync 1 chiều. Khi nào làm 2 chiều mới đổi sang gmail.modify/calendar/drive.file — KHÔNG đổi bây giờ.
+---
 
-### OAuthConnections
-1 grant OAuth thật của user vào Google.
+## Connections  ⭐ (thay OAuthConnections + ServiceConnections)
+Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, full scope.
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
 | UserId | uuid FK→Users | CASCADE |
 | IntegrationId | uuid FK→Integrations | |
-| ProviderAccountId | string | email/sub — phân biệt nhiều account |
+| Provider | enum string | Google / Atlassian |
+| ServiceType | enum string | Gmail / GCal / Drive / Jira |
+| ProviderAccountId | string | account nào (email/sub/cloudId) |
 | AccessTokenEncrypted | string | Data Protection |
 | RefreshTokenEncrypted | string | Data Protection |
-| ExpiresAt | datetime2 | refresh nếu còn < 5 phút |
-| Scopes | string | scope thực được cấp |
+| ExpiresAt | datetime | refresh nếu < 5 phút |
 | Status | enum string | Active / Disconnected / Error |
-| LastRefreshedAt | datetime2 null | |
-
-**Constraint:** UNIQUE(UserId, IntegrationId, ProviderAccountId)
-
-### ServiceConnections
-1 grant Google bật nhiều sub-service. Đã gộp SyncStates cũ vào đây (cursor incremental sync).
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| Id | uuid PK | |
-| OAuthConnectionId | uuid FK | CASCADE |
-| ServiceType | enum string | Gmail / GCal / Drive |
-| IsEnabled | bool | user toggle |
-| DisplayName | string null | |
-| CursorType | enum string null | HistoryId (Gmail) / PageToken (Drive) / SyncToken (GCal) |
-| CursorValue | string null | null = sync lần đầu (dùng list thay history.list) |
-| LastSyncedAt | datetime2 null | |
+| CursorType | enum string null | HistoryId / PageToken / SyncToken |
+| CursorValue | string null | null = sync lần đầu |
+| LastSyncedAt | datetime null | |
 | LastError | string null | |
+| CreatedAt | datetime | |
+
+**KHÔNG có:** cột Scopes (suy từ ServiceType), cột Permission (bật là full).
+**Constraint:** UNIQUE(UserId, Provider, ServiceType, ProviderAccountId).
+**Disconnect:** xoá đúng row → không ảnh hưởng service khác. Items giữ lại (ConnectionId = NULL).
+
+> Lưu ý implement: FK `Items.ConnectionId` và `ScheduledEmails.ConnectionId` để **NoAction ở DB** (SQL Server cấm multiple cascade path User→Items và User→Connections→Items). Semantics "set NULL khi disconnect" xử lý ở **service layer** trước khi xoá Connection — xem comment trong `AppDbContext`.
 
 ---
 
-## Nhóm 3 — Core Workspace
+## Folders / FolderShares / ItemFolders
+Không đổi so với bản trước. Folders (OwnerId, Name, Color, Icon, SortOrder, IsArchived). FolderShares (Viewer-only, metadata, không thấy body). ItemFolders (composite PK, Position).
 
-### Folders
-Container theo context. Mỗi folder có Kanban 3 cột.
+---
 
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| Id | uuid PK | |
-| OwnerId | uuid FK→Users | toàn quyền |
-| Name | string | |
-| Color | string | |
-| Icon | string | |
-| SortOrder | int | drag-drop |
-| IsArchived | bool | |
-
-### FolderShares
-Owner mời teammate xem folder. MVP chỉ Viewer (read-only metadata, KHÔNG thấy body).
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| Id | uuid PK | |
-| FolderId | uuid FK→Folders | CASCADE |
-| SharedWithUserId | uuid FK→Users | người được mời |
-| CreatedByUserId | uuid FK→Users | ai mời |
-| Permission | enum string | Viewer (MVP) |
-| AcceptedAt | datetime2 null | null = pending |
-| ExpiresAt | datetime2 null | |
-
-**Privacy:** Viewer chỉ thấy metadata Item (đã lưu DB), KHÔNG thấy body. Kiểm tra quyền ở mọi API có folderId.
-
-### Items
-Lõi app — 1 đơn vị thông tin. Đồng nhất 4 type về 1 model; field riêng lưu trong MetadataJson.
+## Items
+Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
 | UserId | uuid FK→Users | CASCADE |
-| Type | enum string | Email / Event / File / Note |
+| Type | enum string | Email / Event / File / Note / Ticket |
 | Title | string | |
-| Snippet | string | preview ~200 ký tự |
-| ExternalId | string null | ID gốc Google; NULL cho Note |
-| ServiceConnectionId | uuid FK null | NULL cho Note; SET NULL khi xoá connection |
+| Snippet | string | ~200 ký tự |
+| ExternalId | string null | ID gốc provider; NULL cho Note |
+| **ConnectionId** | uuid FK→Connections null | thay ServiceConnectionId; SET NULL khi xoá connection |
+| **ETag** | string null | version provider, cho conflict (409) |
 | Status | enum string | Inbox / Doing / Done |
-| OccurredAt | datetime2 | sort |
-| DueAt | datetime2 null | event start; null cho khác |
+| OccurredAt | datetime | sort |
+| DueAt | datetime null | event start |
 | IsImportant | bool | |
 | IsArchived | bool | |
-| MetadataJson | nvarchar(max) | field riêng từng type |
+| MetadataJson | nvarchar(max) (JSON) | field riêng từng type |
 
 **MetadataJson shape:**
-- Email: `{from, to[], threadId, labels[], hasAttachment, webUrl}`
+- Email: `{from, to[], threadId, labels[], hasAttachment, isUnread, isStarred, webUrl}`  ← thêm isUnread/isStarred cho 2 chiều
 - Event: `{start, end, location, attendees[], meetUrl}`
 - File: `{mimeType, size, webViewLink, iconLink}`
 - Note: `{contentMarkdown}`
+- Ticket (phase Jira): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`
 
-**Constraint:** UNIQUE(ServiceConnectionId, ExternalId) chống duplicate khi re-sync.
-**Index:** (UserId, Status, OccurredAt DESC)
-
-### ItemFolders (junction)
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| ItemId + FolderId | uuid + uuid | composite PK |
-| Position | int | thứ tự Kanban trong cùng folder + status |
-| AddedAt | datetime2 | |
-
-CASCADE cả 2 phía.
+**Constraint:** UNIQUE(ConnectionId, ExternalId). **Index:** (UserId, Status, OccurredAt DESC).
 
 ---
 
-## Nhóm 4 — Features
+## Tags / TagAssignments / ImportantContacts / Notifications
+Không đổi cấu trúc.
+- Tags (UserId, Name không unique toàn hệ thống, Color).
+- TagAssignments composite PK.
+- ImportantContacts (Type: Email; phase Jira thêm JiraAccount; UNIQUE(UserId,Type,Identifier)).
+- Notifications (Type: share_invite/important_email/sync_error/schedule_sent; phase sau thêm friend_request/automation_triggered nếu làm).
 
-### Tags
-Label user tự tạo, filter chéo. Private (không share).
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| Id | uuid PK | |
-| UserId | uuid FK→Users | |
-| Name | string | KHÔNG unique toàn hệ thống |
-| Color | string | |
-
-### TagAssignments (junction)
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| TagId + ItemId | uuid + uuid | composite PK |
-| AssignedAt | datetime2 | |
-
-### ImportantContacts
-Item sync về có `from` match list → tự set IsImportant=true.
+## ScheduledEmails
+Đổi tham chiếu sang Connections.
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
 | UserId | uuid FK→Users | |
-| Type | enum string | Email (MVP chỉ Email) |
-| Identifier | string | vd boss@company.com |
-| Label | string | vd "Sếp Tổng" |
-
-**Constraint:** UNIQUE(UserId, Type, Identifier) → 409 nếu trùng.
-
-### ScheduledEmails
-Email hẹn giờ. BE lưu Pending; cron ngoài gọi /process-scheduled mỗi 5 phút.
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| Id | uuid PK | |
-| UserId | uuid FK→Users | |
-| ServiceConnectionId | uuid FK | chỉ Gmail gửi được |
-| ToJson / CcJson / BccJson | nvarchar(max) | list recipient |
-| Subject | string | |
-| BodyHtml | string | |
-| SendAt | datetime2 | |
-| Status | enum string | Pending / Sent / Failed / Cancelled |
-| RetryCount | int | max 3 rồi Failed |
+| **ConnectionId** | uuid FK→Connections | thay ServiceConnectionId; phải là ServiceType=Gmail |
+| ToJson/CcJson/BccJson | nvarchar(max) (JSON) | |
+| Subject, BodyHtml | string | |
+| SendAt | datetime | |
+| Status | enum string | Pending/Sent/Failed/Cancelled |
+| RetryCount | int | max 3 |
 | LastError | string null | |
-| SentAt | datetime2 null | |
+| SentAt | datetime null | |
 
-**Index:** (Status, SendAt) WHERE Status='Pending'
-
-### Notifications
-Thông báo in-app.
-
-| Cột | Kiểu | Ghi chú |
-|---|---|---|
-| Id | uuid PK | |
-| UserId | uuid FK→Users | |
-| Type | enum string | share_invite / important_email / sync_error / schedule_sent |
-| Title | string | |
-| Body | string | |
-| LinkUrl | string | |
-| IsRead | bool | |
-| CreatedAt | datetime2 | |
-
-**Index:** (UserId, IsRead, CreatedAt DESC)
+**Index:** (Status, SendAt) WHERE Status='Pending'.
