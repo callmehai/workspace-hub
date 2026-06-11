@@ -73,7 +73,7 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 | ServiceType | enum string | Gmail / GCal / Drive / Jira |
 | ProviderAccountId | string | account nào (email/sub/cloudId) |
 | AccessTokenEncrypted | string | Data Protection |
-| RefreshTokenEncrypted | string | Data Protection |
+| RefreshTokenEncrypted | string | Data Protection; **chuỗi rỗng `""` = provider không trả refresh token** (vd Google re-consent) — check `IsNullOrEmpty`, không check null |
 | ExpiresAt | datetime | refresh nếu < 5 phút |
 | Status | enum string | Active / Disconnected / Error |
 | CursorType | enum string null | HistoryId / PageToken / SyncToken |

@@ -126,8 +126,12 @@ public class ConnectionsService : IConnectionsService
             throw new BusinessRuleException("Provider không cấp quyền cho service nào");
 
         // Step 5 — Encrypt tokens.
+        // RefreshToken null/empty (provider không trả, vd Google khi re-consent) → lưu chuỗi rỗng,
+        // KHÔNG encrypt chuỗi rỗng. Convention: RefreshTokenEncrypted == "" nghĩa là "không có refresh token".
         var accessTokenEncrypted = _tokenProtector.Protect(tokenResult.AccessToken);
-        var refreshTokenEncrypted = _tokenProtector.Protect(tokenResult.RefreshToken ?? string.Empty);
+        var refreshTokenEncrypted = string.IsNullOrEmpty(tokenResult.RefreshToken)
+            ? string.Empty
+            : _tokenProtector.Protect(tokenResult.RefreshToken);
         var expiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn);
         var provider = Enum.Parse<ProviderType>(integration.Provider);
 
@@ -161,7 +165,9 @@ public class ConnectionsService : IConnectionsService
             else
             {
                 connection.AccessTokenEncrypted = accessTokenEncrypted;
-                connection.RefreshTokenEncrypted = refreshTokenEncrypted;
+                // Re-grant thường KHÔNG trả refresh_token mới — chỉ ghi đè khi có, giữ token cũ khi rỗng.
+                if (refreshTokenEncrypted.Length > 0)
+                    connection.RefreshTokenEncrypted = refreshTokenEncrypted;
                 connection.ExpiresAt = expiresAt;
                 connection.Status = ConnectionStatus.Active;
                 connection.LastError = null;

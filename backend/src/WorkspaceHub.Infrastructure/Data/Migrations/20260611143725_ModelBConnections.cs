@@ -154,8 +154,9 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Best-effort rollback: tạo lại schema cũ nhưng KHÔNG khôi phục data connections
-            // (2 bảng cũ recreate rỗng → Items set NULL, ScheduledEmails xoá để FK hợp lệ).
+            // ⚠️ DESTRUCTIVE — best-effort rollback: tạo lại schema cũ nhưng KHÔNG khôi phục data.
+            // Down sẽ XOÁ toàn bộ Connections, set NULL mọi Items.ConnectionId và DELETE HẾT ScheduledEmails
+            // (2 bảng cũ recreate rỗng nên FK bắt buộc phải dọn). TUYỆT ĐỐI không chạy trên môi trường có data thật.
             migrationBuilder.DropForeignKey(
                 name: "FK_Items_Connections_ConnectionId",
                 table: "Items");

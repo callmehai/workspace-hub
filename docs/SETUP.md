@@ -45,6 +45,8 @@ dotnet run --project src/WorkspaceHub.Api
 
 > **OAuth dev:** `ConnectionsService` dev đọc credential plaintext từ `Dev:google:ClientId` / `Dev:google:ClientSecret` trong `appsettings.Development.json` để test nhanh (prod mới decrypt từ DB qua Data Protection).
 
+> **OAuth state cache:** state CSRF lưu bằng `AddDistributedMemoryCache` (in-memory) — **restart app giữa chừng flow OAuth sẽ mất state** → user nhận "State không hợp lệ", phải bấm connect lại. Chấp nhận được cho MVP single-instance; deploy nhiều instance thì phải đổi sang Redis.
+
 ## Biến môi trường / config cần thiết
 
 | Key | Mục đích |
