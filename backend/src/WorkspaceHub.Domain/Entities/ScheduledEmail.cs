@@ -7,7 +7,7 @@ public class ScheduledEmail
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
-    public Guid ServiceConnectionId { get; set; }    // chỉ Gmail gửi được
+    public Guid ConnectionId { get; set; }           // phải là Connection có ServiceType=Gmail
     public string ToJson { get; set; } = "[]";
     public string CcJson { get; set; } = "[]";
     public string BccJson { get; set; } = "[]";
@@ -21,5 +21,5 @@ public class ScheduledEmail
 
     // Navigation
     public User User { get; set; } = null!;
-    public ServiceConnection ServiceConnection { get; set; } = null!;
+    public Connection Connection { get; set; } = null!;
 }

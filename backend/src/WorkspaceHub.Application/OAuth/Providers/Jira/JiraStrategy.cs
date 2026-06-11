@@ -19,6 +19,10 @@ public class JiraStrategy(
     private const string AtlassianAudience = "api.atlassian.com";
     private const string MeEndpoint = "https://api.atlassian.com/me";
 
+    // Scope suy từ code, không lưu DB (mô hình B đã bỏ cột DefaultScopes).
+    // TODO SCRUM-42: chốt scope chính thức khi làm OAuth Atlassian.
+    private const string JiraScopes = "read:jira-work write:jira-work offline_access";
+
     public string ProviderKey => "jira";
 
     public Task<InitiateConnectionResult> BuildAuthUrlAsync(

@@ -15,7 +15,7 @@ public interface IConnectionsService
         CancellationToken ct = default);
 
     /// <summary>
-    /// Verify CSRF state, exchange code → token, persist OAuthConnection + ServiceConnections.
+    /// Verify CSRF state, exchange code → token, persist Connections (mô hình B: 1 row mỗi service được cấp).
     /// </summary>
     Task<CompleteConnectionResult> CompleteConnectionAsync(
         string code,
@@ -23,13 +23,14 @@ public interface IConnectionsService
         Guid userId,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Encrypt clientId + clientSecret rồi lưu vào Integration.
-    /// TODO: giới hạn [Authorize(Policy="AdminOnly")] sau khi JWT xong.
-    /// </summary>
+    /// <summary>Encrypt clientId + clientSecret rồi lưu vào Integration. (Admin-only — controller đã gắn [Authorize(Roles="Admin")].)</summary>
     Task SetCredentialsAsync(
         string integrationKey,
         string clientId,
         string clientSecret,
         CancellationToken ct = default);
+
+    // TODO SCRUM-14 (DisconnectAsync): FK Items/ScheduledEmails → Connections là NoAction ở DB,
+    // nên trước khi xoá Connection PHẢI: (1) UPDATE Items SET ConnectionId = NULL,
+    // (2) cancel/xoá ScheduledEmails Pending của connection đó — xoá thẳng sẽ FK violation.
 }
