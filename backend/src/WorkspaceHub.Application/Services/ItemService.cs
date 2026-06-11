@@ -31,8 +31,9 @@ public class ItemService : IItemService
         // Validate folder ownership
         if (request.FolderId.HasValue)
         {
-            var folder = await _folderRepo.GetByIdWithOwnerAsync(request.FolderId.Value, ct);
-            if (folder == null || folder.OwnerId != userId)
+            var isOwner = await _folderRepo.ExistsByOwnerAsync(request.FolderId.Value, userId, ct);
+            // TODO: khi shared folder được implement, mở rộng check này để include viewer access
+            if (!isOwner)
             {
                 // Return empty if folder doesn't exist or belongs to another user
                 return new PagedResult<ItemResponse>(new List<ItemResponse>().AsReadOnly(), 0, page, limit);

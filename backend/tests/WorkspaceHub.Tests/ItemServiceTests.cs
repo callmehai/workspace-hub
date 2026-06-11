@@ -170,11 +170,10 @@ public class ItemServiceTests
     {
         // Arrange
         var folderId = Guid.NewGuid();
-        var folder = new Folder { Id = folderId, OwnerId = _userId };
 
         _folderRepoMock
-            .Setup(r => r.GetByIdWithOwnerAsync(folderId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(folder);
+            .Setup(r => r.ExistsByOwnerAsync(folderId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         _repoMock
             .Setup(r => r.GetPagedAsync(
@@ -255,11 +254,10 @@ public class ItemServiceTests
     {
         // Arrange
         var folderId = Guid.NewGuid();
-        var folder = new Folder { Id = folderId, OwnerId = Guid.NewGuid() }; // Khác _userId
 
         _folderRepoMock
-            .Setup(r => r.GetByIdWithOwnerAsync(folderId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(folder);
+            .Setup(r => r.ExistsByOwnerAsync(folderId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
         var request = new GetItemsRequest(FolderId: folderId);
 
@@ -282,8 +280,8 @@ public class ItemServiceTests
         var folderId = Guid.NewGuid();
 
         _folderRepoMock
-            .Setup(r => r.GetByIdWithOwnerAsync(folderId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Folder?)null);
+            .Setup(r => r.ExistsByOwnerAsync(folderId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
         var request = new GetItemsRequest(FolderId: folderId);
 
