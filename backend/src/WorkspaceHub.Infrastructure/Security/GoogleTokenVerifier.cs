@@ -7,7 +7,7 @@ namespace WorkspaceHub.Infrastructure.Security;
 
 /// <summary>
 /// Verifies Google id_token using Google.Apis.Auth (signature + audience check).
-/// ClientId read from config: Google:ClientId (same as used for OAuth connection flow).
+/// ClientId read from config: Dev:google:ClientId (dev) or Google:ClientId (prod).
 /// </summary>
 public class GoogleTokenVerifier : IGoogleTokenVerifier
 {
