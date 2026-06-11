@@ -40,7 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
-        services.AddScoped<IOAuthConnectionRepository, OAuthConnectionRepository>();
+        services.AddScoped<IConnectionRepository, ConnectionRepository>();
         services.AddScoped<IItemRepository, ItemRepository>();
 
         return services;

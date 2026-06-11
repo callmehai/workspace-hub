@@ -15,7 +15,14 @@ public enum AuthProvider
     Both
 }
 
-/// <summary>Trạng thái 1 grant OAuth.</summary>
+/// <summary>Nhóm provider của 1 Connection. Atlassian dùng ở phase Jira.</summary>
+public enum ProviderType
+{
+    Google,
+    Atlassian
+}
+
+/// <summary>Trạng thái 1 connection.</summary>
 public enum ConnectionStatus
 {
     Active,
@@ -23,7 +30,7 @@ public enum ConnectionStatus
     Error
 }
 
-/// <summary>Sub-service bật được trên 1 grant Google.</summary>
+/// <summary>Service gắn với 1 Connection (mô hình B: mỗi service 1 connection riêng).</summary>
 public enum ServiceType
 {
     Gmail,

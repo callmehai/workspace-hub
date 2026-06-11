@@ -26,7 +26,7 @@ public class User
     public DateTime CreatedAt { get; set; }
 
     // Navigation
-    public ICollection<OAuthConnection> OAuthConnections { get; set; } = new List<OAuthConnection>();
+    public ICollection<Connection> Connections { get; set; } = new List<Connection>();
     public ICollection<Folder> Folders { get; set; } = new List<Folder>();
     public ICollection<Item> Items { get; set; } = new List<Item>();
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();

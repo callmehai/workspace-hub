@@ -15,7 +15,7 @@ public interface IConnectionsService
         CancellationToken ct = default);
 
     /// <summary>
-    /// Verify CSRF state, exchange code → token, persist OAuthConnection + ServiceConnections.
+    /// Verify CSRF state, exchange code → token, persist Connections (mô hình B: 1 row mỗi service được cấp).
     /// </summary>
     Task<CompleteConnectionResult> CompleteConnectionAsync(
         string code,

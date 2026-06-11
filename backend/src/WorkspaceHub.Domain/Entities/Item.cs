@@ -11,7 +11,8 @@ public class Item
     public string Title { get; set; } = null!;
     public string Snippet { get; set; } = null!;
     public string? ExternalId { get; set; }             // ID gốc provider; NULL cho Note
-    public Guid? ServiceConnectionId { get; set; }       // NULL cho Note; SET NULL khi xoá connection
+    public Guid? ConnectionId { get; set; }              // NULL cho Note; SET NULL khi xoá connection
+    public string? ETag { get; set; }                    // version provider, so trước khi write-back (lệch → 409)
     public ItemStatus Status { get; set; } = ItemStatus.Inbox;
     public DateTime OccurredAt { get; set; }
     public DateTime? DueAt { get; set; }
@@ -21,7 +22,7 @@ public class Item
 
     // Navigation
     public User User { get; set; } = null!;
-    public ServiceConnection? ServiceConnection { get; set; }
+    public Connection? Connection { get; set; }
     public ICollection<ItemFolder> ItemFolders { get; set; } = new List<ItemFolder>();
     public ICollection<TagAssignment> TagAssignments { get; set; } = new List<TagAssignment>();
 }

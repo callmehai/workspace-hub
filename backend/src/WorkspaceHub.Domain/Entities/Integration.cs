@@ -13,10 +13,9 @@ public class Integration
     public string ClientSecretEncrypted { get; set; } = null!;
     public string AuthorizationEndpoint { get; set; } = null!;
     public string TokenEndpoint { get; set; } = null!;
-    public string DefaultScopes { get; set; } = null!;
     public string SupportedServices { get; set; } = null!; // JSON: ["Gmail","GCal","Drive"]
     public bool IsEnabled { get; set; } = true;
 
     // Navigation
-    public ICollection<OAuthConnection> OAuthConnections { get; set; } = new List<OAuthConnection>();
+    public ICollection<Connection> Connections { get; set; } = new List<Connection>();
 }

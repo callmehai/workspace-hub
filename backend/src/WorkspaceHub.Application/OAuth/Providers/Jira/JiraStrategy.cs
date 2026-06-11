@@ -16,6 +16,10 @@ public class JiraStrategy : IProviderStrategy
 {
     private const string AtlassianAudience = "api.atlassian.com";
 
+    // Scope suy từ code, không lưu DB (mô hình B đã bỏ cột DefaultScopes).
+    // TODO SCRUM-42: chốt scope chính thức khi làm OAuth Atlassian.
+    private const string JiraScopes = "read:jira-work write:jira-work offline_access";
+
     public string ProviderKey => "jira";
 
     public Task<InitiateConnectionResult> BuildAuthUrlAsync(
@@ -26,7 +30,7 @@ public class JiraStrategy : IProviderStrategy
         query["client_id"]     = ctx.ClientId;
         query["redirect_uri"]  = ctx.RedirectUri;
         query["response_type"] = "code";
-        query["scope"]         = ctx.Integration.DefaultScopes; // đọc từ DB seed
+        query["scope"]         = JiraScopes;
         query["state"]         = ctx.State;
         query["audience"]      = AtlassianAudience;             // bắt buộc với Atlassian
         query["prompt"]        = "consent";
