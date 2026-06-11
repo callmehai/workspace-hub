@@ -12,12 +12,13 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IHealthService, HealthService>();
+        services.AddScoped<IFolderService, FolderService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IConnectionsService, ConnectionsService>();
 
-        // Provider strategies — thêm provider mới: đăng ký thêm 1 dòng ở đây.
-        services.AddSingleton<IProviderStrategy, GoogleStrategy>();
-        services.AddSingleton<IProviderStrategy, JiraStrategy>();
+        // Register OAuth Provider Strategies
+        services.AddScoped<IProviderStrategy, GoogleStrategy>();
+        services.AddScoped<IProviderStrategy, JiraStrategy>();
 
         // Quét toàn bộ validator trong assembly này (hiện chưa có — sẽ thêm từ SCRUM-9).
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
