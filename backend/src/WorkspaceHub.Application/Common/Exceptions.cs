@@ -1,31 +1,60 @@
 namespace WorkspaceHub.Application.Common;
 
-/// <summary>Ném khi không tìm thấy resource theo ID/Key. Controller map → 404.</summary>
+/// <summary>
+/// Lỗi 404 — resource không tồn tại.
+/// Middleware sẽ map sang HTTP 404 NotFound.
+/// </summary>
 public class NotFoundException : Exception
 {
     public NotFoundException(string message) : base(message) { }
+    public NotFoundException(string entityName, object key)
+        : base($"{entityName} with id '{key}' was not found.") { }
 }
 
-/// <summary>Ném khi vi phạm business rule (disabled, quota, ...). Controller map → 422.</summary>
-public class BusinessRuleException : Exception
+/// <summary>
+/// Lỗi 403 — user có token nhưng không đủ quyền (vd: không phải Owner của Folder).
+/// Middleware sẽ map sang HTTP 403 Forbidden.
+/// </summary>
+public class ForbiddenException : Exception
 {
-    public BusinessRuleException(string message) : base(message) { }
+    public ForbiddenException(string message) : base(message) { }
+    public ForbiddenException()
+        : base("You do not have permission to perform this action.") { }
 }
 
-/// <summary>Ném khi CSRF state không hợp lệ hoặc hết hạn. Controller map → 400.</summary>
-public class CsrfException : Exception
-{
-    public CsrfException(string message) : base(message) { }
-}
-
-/// <summary>Ném khi resource đã tồn tại (duplicate). Controller map → 409.</summary>
+/// <summary>
+/// Lỗi 409 — vi phạm unique constraint hoặc trùng lặp.
+/// Middleware sẽ map sang HTTP 409 Conflict.
+/// </summary>
 public class ConflictException : Exception
 {
     public ConflictException(string message) : base(message) { }
 }
 
-/// <summary>Ném khi đăng nhập sai hoặc token không hợp lệ. Controller map → 401.</summary>
+/// <summary>
+/// Lỗi 422 — vi phạm business rule (không phải validation input đơn thuần).
+/// Middleware sẽ map sang HTTP 422 Unprocessable Entity.
+/// </summary>
+public class BusinessRuleException : Exception
+{
+    public BusinessRuleException(string message) : base(message) { }
+}
+
+/// <summary>
+/// Lỗi 401 — Không có quyền truy cập hoặc credentials không đúng.
+/// Middleware sẽ map sang HTTP 401 Unauthorized.
+/// </summary>
 public class UnauthorizedException : Exception
 {
     public UnauthorizedException(string message) : base(message) { }
 }
+
+/// <summary>
+/// Lỗi 400 — Sai lệch State (CSRF) trong luồng OAuth.
+/// Middleware sẽ map sang HTTP 400 Bad Request.
+/// </summary>
+public class CsrfException : Exception
+{
+    public CsrfException(string message) : base(message) { }
+}
+

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,8 +36,13 @@ public static class DependencyInjection
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
         services.AddScoped<IOAuthConnectionRepository, OAuthConnectionRepository>();
+
+        // Register framework services needed by Application layer (OAuth / connections cache & http client)
+        services.AddDistributedMemoryCache();
+        services.AddHttpClient();
 
         return services;
     }

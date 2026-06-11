@@ -14,10 +14,11 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IHealthService, HealthService>();
+        services.AddScoped<IFolderService, FolderService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IConnectionsService, ConnectionsService>();
 
-        // Provider strategies — thêm provider mới: đăng ký thêm 1 dòng ở đây.
+        // Register OAuth Provider Strategies
         services.AddScoped<IProviderStrategy, GoogleStrategy>();
         services.AddScoped<IProviderStrategy, JiraStrategy>();
 

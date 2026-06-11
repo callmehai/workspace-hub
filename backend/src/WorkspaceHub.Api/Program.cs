@@ -3,42 +3,43 @@ using System.Text.Json.Serialization;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.OData;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OData.ModelBuilder;
 using Microsoft.OpenApi.Models;
 using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application;
+using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers + serialize enum dạng string (khớp cách lưu DB).
+// OData EDM model — expose FolderResponse cho $filter/$orderby/$select/$top/$skip/$count.
+var edmBuilder = new ODataConventionModelBuilder();
+edmBuilder.EntitySet<FolderResponse>("Folders");
+
+// Controllers + serialize enum dạng string (khớp cách lưu DB) + OData.
 builder.Services.AddControllers()
-    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
+    .AddOData(o => o
+        .SetMaxTop(100)
+        .Filter()
+        .OrderBy()
+        .Select()
+        .Expand()
+        .Count()
+        .SkipToken()
+        .AddRouteComponents("api", edmBuilder.GetEdmModel()));
 
-// JWT Bearer authentication.
-var jwtConfig = builder.Configuration.GetSection("Jwt");
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtConfig["Secret"]!)),
-            ValidateIssuer = true,
-            ValidIssuer = jwtConfig["Issuer"],
-            ValidateAudience = true,
-            ValidAudience = jwtConfig["Audience"],
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
-        };
-    });
-
-// Swagger + Bearer token support.
+// Swagger.
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
 {
     o.SwaggerDoc("v1", new() { Title = "Workspace Hub API", Version = "v1" });
+    // Giải quyết xung đột giữa OData convention route và attribute route của Controller
+    o.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
+
+    // Cấu hình Swagger hỗ trợ gửi JWT Bearer Token
     o.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -60,13 +61,38 @@ builder.Services.AddSwaggerGen(o =>
     });
 });
 
-// Tầng nghiệp vụ + hạ tầng (DI — không new trực tiếp trong controller).
+// Authentication & Authorization
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    var jwtSection = builder.Configuration.GetSection("Jwt");
+    var secret = jwtSection["Secret"];
+    var secretKey = string.IsNullOrEmpty(secret) ? "TemporaryDevSecretKeyForTestingPurposesOnly12345!" : secret;
+
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSection["Issuer"] ?? "WorkspaceHub",
+        ValidAudience = jwtSection["Audience"] ?? "WorkspaceHub",
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+// Register application and infrastructure services
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
-// Exception handler phải là middleware đầu tiên để bắt lỗi từ tất cả layer.
+// Exception middleware — bắt mọi lỗi → error format chuẩn (SCRUM-24 / CONVENTIONS.md).
 app.UseMiddleware<ExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -76,7 +102,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAuthentication();   // BEFORE UseAuthorization
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

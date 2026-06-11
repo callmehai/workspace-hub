@@ -16,7 +16,7 @@ public class ConnectionsController : ApiControllerBase
         _connections = connections;
     }
 
-    /// <summary>POST /api/connections/oauth/start — build Google authorization URL.</summary>
+    /// <summary>POST /api/connections/oauth/start — build authorization URL.</summary>
     [HttpPost("oauth/start")]
     public async Task<IActionResult> InitiateConnection(
         [FromBody] InitiateConnectionRequest request,
