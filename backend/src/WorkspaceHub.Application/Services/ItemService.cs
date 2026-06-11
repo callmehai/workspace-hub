@@ -12,10 +12,12 @@ namespace WorkspaceHub.Application.Services;
 public class ItemService : IItemService
 {
     private readonly IItemRepository _itemRepo;
+    private readonly IFolderRepository _folderRepo;
 
-    public ItemService(IItemRepository itemRepo)
+    public ItemService(IItemRepository itemRepo, IFolderRepository folderRepo)
     {
         _itemRepo = itemRepo;
+        _folderRepo = folderRepo;
     }
 
     /// <inheritdoc/>
@@ -25,6 +27,17 @@ public class ItemService : IItemService
         // Clamp page/limit to safe ranges (validator should catch, but defense-in-depth)
         var page = Math.Max(1, request.Page);
         var limit = Math.Clamp(request.Limit, 1, 100);
+
+        // Validate folder ownership
+        if (request.FolderId.HasValue)
+        {
+            var folder = await _folderRepo.GetByIdWithOwnerAsync(request.FolderId.Value, ct);
+            if (folder == null || folder.OwnerId != userId)
+            {
+                // Return empty if folder doesn't exist or belongs to another user
+                return new PagedResult<ItemResponse>(new List<ItemResponse>().AsReadOnly(), 0, page, limit);
+            }
+        }
 
         var (items, totalCount) = await _itemRepo.GetPagedAsync(
             userId,
@@ -55,8 +68,5 @@ public class ItemService : IItemService
         OccurredAt: item.OccurredAt,
         DueAt: item.DueAt,
         IsImportant: item.IsImportant,
-        IsArchived: item.IsArchived,
-        ExternalId: item.ExternalId,
-        ServiceConnectionId: item.ServiceConnectionId,
-        MetadataJson: item.MetadataJson);
+        ExternalId: item.ExternalId);
 }

@@ -32,9 +32,6 @@ public record ItemResponse(
     DateTime OccurredAt,
     DateTime? DueAt,
     bool IsImportant,
-    bool IsArchived,
-    string? ExternalId,
-    Guid? ServiceConnectionId,
-    string MetadataJson);
+    string? ExternalId);
 
 

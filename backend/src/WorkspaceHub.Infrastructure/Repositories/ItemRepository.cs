@@ -64,10 +64,9 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         // (dùng ToLower sẽ sinh LOWER() trong SQL → ngăn sử dụng index).
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchTerm = search.Trim();
             query = query.Where(i =>
-                i.Title.Contains(searchTerm) ||
-                i.Snippet.Contains(searchTerm));
+                i.Title.Contains(search) ||
+                i.Snippet.Contains(search));
         }
 
         // ── Count total (trước khi paging) ──

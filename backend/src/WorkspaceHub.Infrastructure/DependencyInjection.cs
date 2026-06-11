@@ -44,7 +44,6 @@ public static class DependencyInjection
         services.AddScoped<IItemRepository, ItemRepository>();
 
         // Register framework services needed by Application layer (OAuth / connections cache & http client)
-        services.AddDistributedMemoryCache();
         services.AddHttpClient();
 
         return services;

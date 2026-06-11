@@ -14,13 +14,15 @@ namespace WorkspaceHub.Tests;
 public class ItemServiceTests
 {
     private readonly Mock<IItemRepository> _repoMock;
+    private readonly Mock<IFolderRepository> _folderRepoMock;
     private readonly ItemService _sut; // System Under Test
     private readonly Guid _userId = Guid.NewGuid();
 
     public ItemServiceTests()
     {
         _repoMock = new Mock<IItemRepository>();
-        _sut = new ItemService(_repoMock.Object);
+        _folderRepoMock = new Mock<IFolderRepository>();
+        _sut = new ItemService(_repoMock.Object, _folderRepoMock.Object);
     }
 
     // ───────────── Helper ─────────────
@@ -168,6 +170,12 @@ public class ItemServiceTests
     {
         // Arrange
         var folderId = Guid.NewGuid();
+        var folder = new Folder { Id = folderId, OwnerId = _userId };
+
+        _folderRepoMock
+            .Setup(r => r.GetByIdWithOwnerAsync(folderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(folder);
+
         _repoMock
             .Setup(r => r.GetPagedAsync(
                 _userId, folderId, ItemStatus.Doing, ItemType.Email, true,
@@ -221,10 +229,8 @@ public class ItemServiceTests
         Assert.Equal("Note content preview", dto.Snippet);
         Assert.Equal(ItemStatus.Done, dto.Status);
         Assert.True(dto.IsImportant);
-        Assert.False(dto.IsArchived);
         Assert.Equal("ext-123", dto.ExternalId);
         Assert.Equal(new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc), dto.DueAt);
-        Assert.Equal("{}", dto.MetadataJson);
     }
 
     [Fact]
@@ -242,5 +248,54 @@ public class ItemServiceTests
         // Assert
         Assert.Empty(result.Items);
         Assert.Equal(0, result.Total);
+    }
+
+    [Fact]
+    public async Task GetItemsAsync_FolderIdBelongsToAnotherUser_ReturnsEmptyResult()
+    {
+        // Arrange
+        var folderId = Guid.NewGuid();
+        var folder = new Folder { Id = folderId, OwnerId = Guid.NewGuid() }; // Khác _userId
+
+        _folderRepoMock
+            .Setup(r => r.GetByIdWithOwnerAsync(folderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(folder);
+
+        var request = new GetItemsRequest(FolderId: folderId);
+
+        // Act
+        var result = await _sut.GetItemsAsync(_userId, request);
+
+        // Assert
+        Assert.Empty(result.Items);
+        Assert.Equal(0, result.Total);
+        _repoMock.Verify(r => r.GetPagedAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<ItemStatus?>(),
+            It.IsAny<ItemType?>(), It.IsAny<bool?>(), It.IsAny<string?>(),
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetItemsAsync_FolderIdNotFound_ReturnsEmptyResult()
+    {
+        // Arrange
+        var folderId = Guid.NewGuid();
+
+        _folderRepoMock
+            .Setup(r => r.GetByIdWithOwnerAsync(folderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Folder?)null);
+
+        var request = new GetItemsRequest(FolderId: folderId);
+
+        // Act
+        var result = await _sut.GetItemsAsync(_userId, request);
+
+        // Assert
+        Assert.Empty(result.Items);
+        Assert.Equal(0, result.Total);
+        _repoMock.Verify(r => r.GetPagedAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<ItemStatus?>(),
+            It.IsAny<ItemType?>(), It.IsAny<bool?>(), It.IsAny<string?>(),
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

@@ -106,6 +106,14 @@ public class GetItemsRequestValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.Search);
     }
 
+    [Fact]
+    public async Task Search_PaddedValid_ShouldNotHaveError()
+    {
+        var request = new GetItemsRequest(Search: "  " + new string('a', 200) + "  ");
+        var result = await _sut.TestValidateAsync(request);
+        result.ShouldNotHaveValidationErrorFor(x => x.Search);
+    }
+
     // ───────────── Default values ─────────────
 
     [Fact]
