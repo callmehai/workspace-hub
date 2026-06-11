@@ -18,9 +18,13 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            Review the pull request diff. Sử dụng công cụ GitHub để đăng nhận xét
-            trực tiếp lên PR (inline comments theo từng dòng + một review tổng kết).
+            Review the diff of PR #${{ github.event.pull_request.number }}.
             Tập trung: lỗi logic, bảo mật, hiệu năng, code không theo chuẩn.
-            Trả lời bằng tiếng Việt.
+
+            QUAN TRỌNG: Sau khi phân tích xong, BẮT BUỘC đăng kết quả review
+            lên PR bằng lệnh:
+              gh pr comment ${{ github.event.pull_request.number }} --body "<nội dung review của bạn>"
+            Viết nhận xét bằng tiếng Việt. Nếu không có vấn đề gì, vẫn phải
+            đăng một comment ngắn xác nhận đã review và không phát hiện lỗi.
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr review:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*)"
