@@ -1,8 +1,8 @@
 using System.Web;
 
-namespace WorkspaceHub.Application.OAuth;
+namespace WorkspaceHub.Application.OAuth.Providers.Google;
 
-public class GoogleAuthUrlBuilder
+internal class GoogleAuthUrlBuilder
 {
     private const string AuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private readonly string _clientId;

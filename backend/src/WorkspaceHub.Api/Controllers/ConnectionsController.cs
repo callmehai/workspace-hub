@@ -5,10 +5,6 @@ using WorkspaceHub.Application.Interfaces.Services;
 
 namespace WorkspaceHub.Api.Controllers;
 
-/// <summary>
-/// Quản lý kết nối OAuth (Google, Jira).
-/// </summary>
-[ApiController]
 [Route("api/connections")]
 [Authorize]
 public class ConnectionsController : ApiControllerBase
@@ -20,10 +16,7 @@ public class ConnectionsController : ApiControllerBase
         _connections = connections;
     }
 
-    /// <summary>
-    /// POST /api/connections/oauth/start
-    /// Trả về authorization URL + state CSRF để FE redirect sang Provider.
-    /// </summary>
+    /// <summary>POST /api/connections/oauth/start — build authorization URL.</summary>
     [HttpPost("oauth/start")]
     public async Task<IActionResult> InitiateConnection(
         [FromBody] InitiateConnectionRequest request,
@@ -44,10 +37,7 @@ public class ConnectionsController : ApiControllerBase
         });
     }
 
-    /// <summary>
-    /// POST /api/connections/oauth/callback
-    /// Nhận code + state từ Provider redirect, exchange token, lưu OAuthConnection + ServiceConnections.
-    /// </summary>
+    /// <summary>POST /api/connections/oauth/callback — exchange code, lưu OAuthConnection.</summary>
     [HttpPost("oauth/callback")]
     public async Task<IActionResult> CompleteConnection(
         [FromBody] CompleteConnectionRequest request,
@@ -70,10 +60,7 @@ public class ConnectionsController : ApiControllerBase
         return StatusCode(201, response);
     }
 
-    /// <summary>
-    /// PUT /api/connections/{key}/credentials
-    /// Encrypt clientId + clientSecret rồi lưu DB.
-    /// </summary>
+    /// <summary>PUT /api/connections/{key}/credentials — Admin: encrypt + lưu OAuth credentials.</summary>
     [HttpPut("{key}/credentials")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SetCredentials(

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using FluentValidation;
 using WorkspaceHub.Application.Common;
@@ -5,18 +6,16 @@ using WorkspaceHub.Application.Common;
 namespace WorkspaceHub.Api.Middleware;
 
 /// <summary>
-/// Global exception handler — map domain exception → HTTP status.
-/// RFC 7807-like error response with traceId.
+/// Middleware tập trung bắt exception → trả error format chuẩn + traceId.
+/// Mapping: NotFoundException→404, ForbiddenException→403, ConflictException→409,
+///          BusinessRuleException→422, còn lại→500.
+/// Xem API.md → Error format.
 /// </summary>
 public class ExceptionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionMiddleware> _logger;
-
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger)
     {
@@ -24,77 +23,73 @@ public class ExceptionMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext ctx)
+    public async Task InvokeAsync(HttpContext context)
     {
         try
         {
-            await _next(ctx);
-        }
-        catch (ConflictException ex)
-        {
-            await WriteJson(ctx, StatusCodes.Status409Conflict, "ConflictError", ex.Message);
-        }
-        catch (UnauthorizedException ex)
-        {
-            await WriteJson(ctx, StatusCodes.Status401Unauthorized, "AuthenticationError", ex.Message);
-        }
-        catch (NotFoundException ex)
-        {
-            await WriteJson(ctx, StatusCodes.Status404NotFound, "NotFoundError", ex.Message);
-        }
-        catch (BusinessRuleException ex)
-        {
-            await WriteJson(ctx, StatusCodes.Status422UnprocessableEntity, "BusinessRuleError", ex.Message);
-        }
-        catch (CsrfException ex)
-        {
-            await WriteJson(ctx, StatusCodes.Status400BadRequest, "ValidationError", ex.Message);
-        }
-        catch (ValidationException ex)
-        {
-            await WriteValidationJson(ctx, ex);
+            await _next(context);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception");
-            await WriteJson(ctx, StatusCodes.Status500InternalServerError, "InternalError", "An unexpected error occurred");
+            await HandleExceptionAsync(context, ex);
         }
     }
 
-    private static Task WriteJson(HttpContext ctx, int statusCode, string error, string message)
+    private async Task HandleExceptionAsync(HttpContext context, Exception ex)
     {
-        ctx.Response.StatusCode = statusCode;
-        ctx.Response.ContentType = "application/json";
-
-        var body = JsonSerializer.Serialize(new
+        if (ex is ValidationException valEx)
         {
-            error,
-            message,
-            traceId = ctx.TraceIdentifier
-        }, JsonOpts);
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
 
-        return ctx.Response.WriteAsync(body);
-    }
+            var details = valEx.Errors.Select(e => new
+            {
+                field = e.PropertyName,
+                issue = e.ErrorMessage
+            });
 
-    private static Task WriteValidationJson(HttpContext ctx, ValidationException ex)
-    {
-        ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-        ctx.Response.ContentType = "application/json";
+            var bodyObj = new
+            {
+                error = "ValidationError",
+                message = "One or more validation errors occurred",
+                details,
+                traceId = context.TraceIdentifier
+            };
 
-        var details = ex.Errors.Select(e => new
+            await context.Response.WriteAsync(JsonSerializer.Serialize(bodyObj, JsonOptions));
+            return;
+        }
+
+        var (statusCode, errorType) = ex switch
         {
-            field = e.PropertyName,
-            issue = e.ErrorMessage
-        });
+            NotFoundException      => (HttpStatusCode.NotFound,            "NotFoundError"),
+            ForbiddenException     => (HttpStatusCode.Forbidden,           "AuthorizationError"),
+            ConflictException      => (HttpStatusCode.Conflict,            "ConflictError"),
+            BusinessRuleException  => (HttpStatusCode.UnprocessableEntity, "BusinessRuleError"),
+            UnauthorizedException  => (HttpStatusCode.Unauthorized,         "UnauthorizedError"),
+            CsrfException          => (HttpStatusCode.BadRequest,           "CsrfError"),
+            _                      => (HttpStatusCode.InternalServerError, "InternalError")
+        };
 
-        var body = JsonSerializer.Serialize(new
+        // Log — stack trace chỉ ghi log, KHÔNG trả ra client (bảo mật).
+        if (statusCode == HttpStatusCode.InternalServerError)
+            _logger.LogError(ex, "Unhandled exception");
+        else
+            _logger.LogWarning(ex, "Handled domain exception: {ErrorType}", errorType);
+
+        var traceId = context.TraceIdentifier;
+        var body = new
         {
-            error = "ValidationError",
-            message = "One or more validation errors occurred",
-            details,
-            traceId = ctx.TraceIdentifier
-        }, JsonOpts);
+            error = errorType,
+            message = statusCode == HttpStatusCode.InternalServerError
+                ? "An unexpected error occurred."   // Không lộ message nội bộ ra client
+                : ex.Message,
+            traceId
+        };
 
-        return ctx.Response.WriteAsync(body);
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = (int)statusCode;
+
+        await context.Response.WriteAsync(JsonSerializer.Serialize(body, JsonOptions));
     }
 }
