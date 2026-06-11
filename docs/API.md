@@ -86,6 +86,7 @@ Loại: ValidationError(400) · AuthenticationError(401) · AuthorizationError(4
 
 ## Items
 - `GET /api/items?folderId=&status=&type=&isImportant=&search=&page=&limit=` — Bearer → envelope. **Phần search/filter/pagination chính**
+  - *Lưu ý: Trường `snippet` trong response được lưu trữ trực tiếp trong DB (tạo lúc tạo/cập nhật item), server không thực hiện truncate on-the-fly.*
 - `GET /api/items/{id}/detail` — Bearer → metadata + body live từ provider. (403 Viewer không xem body, 502 provider lỗi)
 - `PATCH /api/items/{id}/status` — Bearer → {status} (Kanban)
 - `POST /api/items/note` — Bearer → {title, contentMarkdown, folderId?, tagIds?}

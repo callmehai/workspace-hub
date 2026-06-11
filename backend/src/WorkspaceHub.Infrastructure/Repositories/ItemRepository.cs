@@ -58,13 +58,16 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             query = query.Where(i => i.IsImportant == isImportant.Value);
         }
 
-        // ── Search: Title hoặc Snippet (case-insensitive LIKE) ──
+        // ── Search: Title hoặc Snippet ──
+        // SQL Server dùng collation CI (Case-Insensitive) mặc định,
+        // nên LIKE '%...%' đã case-insensitive sẵn, KHÔNG cần .ToLower()
+        // (dùng ToLower sẽ sinh LOWER() trong SQL → ngăn sử dụng index).
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchTerm = search.ToLower();
+            var searchTerm = search.Trim();
             query = query.Where(i =>
-                i.Title.ToLower().Contains(searchTerm) ||
-                i.Snippet.ToLower().Contains(searchTerm));
+                i.Title.Contains(searchTerm) ||
+                i.Snippet.Contains(searchTerm));
         }
 
         // ── Count total (trước khi paging) ──
