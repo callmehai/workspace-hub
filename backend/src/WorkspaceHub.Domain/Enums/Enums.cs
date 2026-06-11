@@ -7,6 +7,14 @@ public enum UserRole
     Admin
 }
 
+/// <summary>How the user authenticates. Local = password only, Google = Google OAuth only, Both = both methods linked.</summary>
+public enum AuthProvider
+{
+    Local,
+    Google,
+    Both
+}
+
 /// <summary>Trạng thái 1 grant OAuth.</summary>
 public enum ConnectionStatus
 {

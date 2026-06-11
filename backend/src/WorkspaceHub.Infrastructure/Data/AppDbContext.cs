@@ -43,6 +43,7 @@ public class AppDbContext : DbContext
         cfg.Properties<ScheduledEmailStatus>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<ImportantContactType>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<NotificationType>().HaveConversion<string>().HaveMaxLength(30);
+        cfg.Properties<AuthProvider>().HaveConversion<string>().HaveMaxLength(10);
 
         // DateTime → luôn UTC.
         cfg.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
@@ -60,6 +61,11 @@ public class AppDbContext : DbContext
             e.Property(x => x.Email).HasMaxLength(256).IsRequired();
             e.HasIndex(x => x.Email).IsUnique();
             e.Property(x => x.FullName).HasMaxLength(200).IsRequired();
+            e.Property(x => x.GoogleSub).HasMaxLength(256);
+            e.HasIndex(x => x.GoogleSub)
+                .IsUnique()
+                .HasFilter("[GoogleSub] IS NOT NULL")
+                .HasDatabaseName("IX_Users_GoogleSub");
         });
 
         // ---------- Nhóm 2: Integration & OAuth ----------

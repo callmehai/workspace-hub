@@ -29,6 +29,7 @@ public static class DependencyInjection
             .SetApplicationName("WorkspaceHub")
             .PersistKeysToFileSystem(new DirectoryInfo("dp-keys"));
         services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
+        services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 
         services.AddDistributedMemoryCache();
 
