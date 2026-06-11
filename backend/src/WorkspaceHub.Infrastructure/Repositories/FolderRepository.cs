@@ -63,4 +63,10 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
             .Where(f => f.OwnerId == userId)
             .MaxAsync(f => f.SortOrder, ct);
     }
+
+    /// <inheritdoc/>
+    public async Task<bool> ExistsByOwnerAsync(Guid folderId, Guid userId, CancellationToken ct = default)
+    {
+        return await Set.AnyAsync(f => f.Id == folderId && f.OwnerId == userId, ct);
+    }
 }

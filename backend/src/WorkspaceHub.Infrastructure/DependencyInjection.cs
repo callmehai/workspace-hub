@@ -41,10 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
         services.AddScoped<IOAuthConnectionRepository, OAuthConnectionRepository>();
-
-        // Register framework services needed by Application layer (OAuth / connections cache & http client)
-        services.AddDistributedMemoryCache();
-        services.AddHttpClient();
+        services.AddScoped<IItemRepository, ItemRepository>();
 
         return services;
     }
