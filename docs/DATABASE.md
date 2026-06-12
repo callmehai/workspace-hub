@@ -52,7 +52,6 @@ Catalog provider. Seed Google; thêm Atlassian ở phase Jira.
 | Key | string UNIQUE | google / atlassian |
 | DisplayName, IconUrl, Description | string | |
 | Provider | string | Google / Atlassian |
-| ClientIdEncrypted, ClientSecretEncrypted | string | Data Protection |
 | AuthorizationEndpoint, TokenEndpoint | string | |
 | SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` / `["Jira"]` |
 | IsEnabled | bool | |

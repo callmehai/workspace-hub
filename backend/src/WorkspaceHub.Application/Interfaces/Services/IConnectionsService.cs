@@ -25,13 +25,6 @@ public interface IConnectionsService
         Guid userId,
         CancellationToken ct = default);
 
-    /// <summary>Encrypt clientId + clientSecret rồi lưu vào Integration. (Admin-only — controller đã gắn [Authorize(Roles="Admin")].)</summary>
-    Task SetCredentialsAsync(
-        string integrationKey,
-        string clientId,
-        string clientSecret,
-        CancellationToken ct = default);
-
     // TODO SCRUM-14 (DisconnectAsync): FK Items/ScheduledEmails → Connections là NoAction ở DB,
     // nên trước khi xoá Connection PHẢI: (1) UPDATE Items SET ConnectionId = NULL,
     // (2) cancel/xoá ScheduledEmails Pending của connection đó — xoá thẳng sẽ FK violation.
