@@ -26,6 +26,7 @@ public class ConnectionsController : ApiControllerBase
 
         var result = await _connections.InitiateConnectionAsync(
             request.IntegrationKey,
+            request.ServiceType,
             request.RedirectUri,
             userId,
             ct);

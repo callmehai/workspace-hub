@@ -33,10 +33,8 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 ## Connections ⭐ (thay OAuth Connections + Service Connections)
 Mô hình B: mỗi service authorize riêng, tạo 1 Connection.
 
-> **Trạng thái transitional (sau SCRUM-34, trước SCRUM-35/36):** DB đã là mô hình B, nhưng endpoint hiện tại vẫn là `POST /api/connections/oauth/start` nhận `{integrationKey, redirectUri}` (chưa per-service) và `POST /api/connections/oauth/callback` **upsert 1 row Connection cho mỗi service được cấp**, response 201 trả `{integrationKey, providerAccountId, connections: [{id, serviceType, status}]}`. SCRUM-35/36 sẽ chuyển sang per-service đúng spec dưới đây — FE wire theo shape mới này.
-
-- `POST /api/connections/start` — {provider, serviceType} → {authorizationUrl, state}. Scope = full của service đó (dev quyết). (404 integration, 422 disabled)
-- `POST /api/connections/callback` — {code, state} → 201 tạo **1** Connection. (400 CSRF, 422 provider từ chối, 409 trùng service+account)
+- `POST /api/connections/oauth/start` — `{integrationKey, serviceType, redirectUri}` → `{authorizationUrl, state}`. Scope = full của service đó (dev quyết). Mỗi lần chỉ connect 1 service. (400 serviceType không hợp lệ, 400 provider không hỗ trợ serviceType đó, 404 integration, 422 disabled)
+- `POST /api/connections/oauth/callback` — `{code, state}` → 201 tạo **1** Connection row. Response: `{integrationKey, providerAccountId, connections: [{id, serviceType, status}]}`. (400 CSRF, 400 provider từ chối/scope thiếu, 409 trùng service+account)
 - `GET /api/connections` — array (token mask). Mỗi row = 1 service.
 - `POST /api/connections/{id}/refresh` — refresh token. (422 invalid→Error)
 - `DELETE /api/connections/{id}` — 204, xoá đúng service đó. Items giữ lại (ConnectionId=NULL). KHÔNG ảnh hưởng login hay service khác.

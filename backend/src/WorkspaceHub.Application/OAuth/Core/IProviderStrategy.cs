@@ -16,13 +16,17 @@ public record CompleteConnectionResult(
 
 public record ConnectionResult(Guid Id, string ServiceType, string Status);
 
-/// <summary>Dữ liệu đầu vào cho ExchangeCodeAsync — truyền từ ConnectionsService xuống strategy.</summary>
+/// <summary>
+/// Dữ liệu đầu vào cho ExchangeCodeAsync — truyền từ ConnectionsService xuống strategy.
+/// ServiceType (string) để strategy biết cần validate scope của service nào.
+/// </summary>
 public record CompleteContext(
     string Code,
     string ClientId,
     string ClientSecret,
     string RedirectUri,
-    Domain.Entities.Integration Integration);
+    Domain.Entities.Integration Integration,
+    string ServiceType);
 
 /// <summary>
 /// Kết quả token exchange — trả về cho ConnectionsService để build Connection (mô hình B).
@@ -59,9 +63,13 @@ public interface IProviderStrategy
         CancellationToken ct = default);
 }
 
-/// <summary>Dữ liệu đầu vào chung cho mọi strategy — truyền từ ConnectionsService xuống.</summary>
+/// <summary>
+/// Dữ liệu đầu vào chung cho mọi strategy — truyền từ ConnectionsService xuống.
+/// ServiceType (string) để strategy biết cần build URL scope cho service nào.
+/// </summary>
 public record ProviderStrategyContext(
     string ClientId,
     string RedirectUri,
     string State,
-    Domain.Entities.Integration Integration);
+    Domain.Entities.Integration Integration,
+    string ServiceType);

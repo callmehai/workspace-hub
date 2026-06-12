@@ -19,9 +19,6 @@ public class JiraStrategy(
     private const string AtlassianAudience = "api.atlassian.com";
     private const string MeEndpoint = "https://api.atlassian.com/me";
 
-    // Scope suy từ code, không lưu DB (mô hình B đã bỏ cột DefaultScopes).
-    // TODO SCRUM-42: chốt scope chính thức khi làm OAuth Atlassian.
-    private const string JiraScopes = "read:jira-work write:jira-work offline_access";
 
     public string ProviderKey => "jira";
 
@@ -33,6 +30,7 @@ public class JiraStrategy(
         query["client_id"]     = ctx.ClientId;
         query["redirect_uri"]  = ctx.RedirectUri;
         query["response_type"] = "code";
+        // TODO SCRUM-42: chốt scope chính thức khi làm OAuth Atlassian.
         query["scope"]         = string.Join(' ', JiraScopes.All);
         query["state"]         = ctx.State;
         query["audience"]      = AtlassianAudience;
@@ -88,7 +86,7 @@ public class JiraStrategy(
         var accountId = me.GetProperty("account_id").GetString()
             ?? throw new BusinessRuleException("Không lấy được accountId từ Atlassian");
 
-        // Step 3: map scopes → ServiceType list
+        // Step 3: validate scopes — Jira all-or-nothing, không phụ thuộc ServiceType được request.
         var grantedServices = JiraScopes.ValidateAndExtract(token.Scope);
 
         return new TokenExchangeResult(

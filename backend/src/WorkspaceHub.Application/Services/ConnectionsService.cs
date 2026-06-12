@@ -42,10 +42,15 @@ public class ConnectionsService : IConnectionsService
 
     public async Task<InitiateConnectionResult> InitiateConnectionAsync(
         string integrationKey,
+        string serviceType,
         string redirectUri,
         Guid userId,
         CancellationToken ct = default)
     {
+        // Validate serviceType sớm — fail fast trước khi hit DB hay cache.
+        if (!Enum.TryParse<ServiceType>(serviceType, ignoreCase: true, out _))
+            throw new BusinessRuleException($"ServiceType '{serviceType}' không hợp lệ");
+
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
@@ -64,15 +69,15 @@ public class ConnectionsService : IConnectionsService
 
         var state = Guid.NewGuid().ToString("N");
 
-        // Lưu cả integrationKey lẫn userId — callback xác minh đúng user tạo ra state này.
-        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId, redirectUri));
+        // Cache integrationKey + userId + serviceType — callback xác minh đúng user và service.
+        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId, redirectUri, serviceType));
         var cacheOptions = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
         };
         await _cache.SetStringAsync($"oauth:state:{state}", payload, cacheOptions, ct);
 
-        var context = new ProviderStrategyContext(clientId, redirectUri, state, integration);
+        var context = new ProviderStrategyContext(clientId, redirectUri, state, integration, serviceType);
         return await strategy.BuildAuthUrlAsync(context, ct);
     }
 
@@ -119,7 +124,7 @@ public class ConnectionsService : IConnectionsService
         // var clientSecret = _tokenProtector.Unprotect(integration.ClientSecretEncrypted);
 
         // Step 4 — Delegate provider-specific exchange to strategy.
-        var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration);
+        var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
         var tokenResult = await strategy.ExchangeCodeAsync(context, ct);
 
         if (tokenResult.GrantedServices.Count == 0)

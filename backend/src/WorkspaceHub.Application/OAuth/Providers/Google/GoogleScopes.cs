@@ -8,7 +8,7 @@ internal static class GoogleScopes
     public const string OpenId = "openid";
     public const string Email = "email";
     public const string Profile = "profile";
-    public static readonly string[] Login = { OpenId, Email, Profile };
+    public static readonly string[] Login = [OpenId, Email, Profile];
 
     public const string GmailReadonly    = "https://www.googleapis.com/auth/gmail.readonly";
     public const string GmailSend        = "https://www.googleapis.com/auth/gmail.send";
@@ -17,7 +17,7 @@ internal static class GoogleScopes
     public const string DriveReadonly    = "https://www.googleapis.com/auth/drive.readonly";
     public const string DriveWrite       = "https://www.googleapis.com/auth/drive";
 
-    // Toàn bộ scope bắt buộc — user phải grant đủ hết, thiếu 1 là reject.
+    // Toàn bộ scope bắt buộc — dùng làm reference, không dùng trực tiếp trong BuildForService nữa.
     public static readonly string[] Required =
     [
         GmailReadonly, GmailSend,
@@ -25,30 +25,36 @@ internal static class GoogleScopes
         DriveReadonly, DriveWrite,
     ];
 
+    // Map ServiceType → scopes cần request cho service đó (Google services only).
+    public static readonly IReadOnlyDictionary<ServiceType, string[]> ServiceScopes =
+        new Dictionary<ServiceType, string[]>
+        {
+            [ServiceType.Gmail] = [GmailReadonly, GmailSend],
+            [ServiceType.GCal]  = [CalendarReadonly, CalendarWrite],
+            [ServiceType.Drive] = [DriveReadonly, DriveWrite],
+        };
+
     /// <summary>
-    /// Kiểm tra scope Google trả về sau consent. Thiếu bất kỳ scope nào → throw BusinessRuleException.
-    /// Đủ hết → trả danh sách ServiceType đã được kích hoạt.
+    /// Kiểm tra scope Google trả về sau consent cho 1 service cụ thể.
+    /// Đủ scope của <paramref name="requested"/> → trả về <paramref name="requested"/>.
+    /// Thiếu → throw BusinessRuleException.
     /// </summary>
-    public static IReadOnlyList<ServiceType> ValidateAndExtract(string grantedScopes)
+    public static ServiceType ValidateAndExtract(string grantedScopes, ServiceType requested)
     {
+        if (!ServiceScopes.TryGetValue(requested, out var requiredScopes))
+            throw new BusinessRuleException($"Service '{requested}' không phải Google service");
+
         if (string.IsNullOrWhiteSpace(grantedScopes))
-            throw new BusinessRuleException("Bạn cần cấp đầy đủ quyền cho: Gmail, Google Calendar, Google Drive");
+            throw new BusinessRuleException($"Bạn cần cấp đầy đủ quyền cho: {requested}");
 
         var set = grantedScopes
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var missing = new List<string>();
-        if (!set.Contains(GmailReadonly) || !set.Contains(GmailSend))
-            missing.Add("Gmail");
-        if (!set.Contains(CalendarReadonly) || !set.Contains(CalendarWrite))
-            missing.Add("Google Calendar");
-        if (!set.Contains(DriveReadonly) || !set.Contains(DriveWrite))
-            missing.Add("Google Drive");
-
+        var missing = requiredScopes.Where(s => !set.Contains(s)).ToList();
         if (missing.Count > 0)
-            throw new BusinessRuleException($"Bạn cần cấp đầy đủ quyền cho: {string.Join(", ", missing)}");
+            throw new BusinessRuleException($"Bạn cần cấp đầy đủ quyền cho: {requested}");
 
-        return [ServiceType.Gmail, ServiceType.GCal, ServiceType.Drive];
+        return requested;
     }
 }

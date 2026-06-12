@@ -7,9 +7,11 @@ public interface IConnectionsService
 {
     /// <summary>
     /// Tra Integration, decrypt ClientId, dispatch sang đúng IProviderStrategy, cache CSRF state.
+    /// serviceType: tên ServiceType enum ("Gmail"/"GCal"/"Drive"/"Jira") — mỗi lần chỉ connect 1 service.
     /// </summary>
     Task<InitiateConnectionResult> InitiateConnectionAsync(
         string integrationKey,
+        string serviceType,
         string redirectUri,
         Guid userId,
         CancellationToken ct = default);
