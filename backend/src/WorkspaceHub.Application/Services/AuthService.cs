@@ -97,14 +97,7 @@ public class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedException("Invalid credentials");
 
-        if (!user.IsActive)
-            throw new UnauthorizedException("Account is locked");
-
-        user.LastLoginAt = DateTime.UtcNow;
-        await _users.SaveChangesAsync(ct);
-
-        var (token, expiresIn) = GenerateJwtToken(user);
-        return new AuthResponse(token, expiresIn, MapToDto(user));
+        return await SignInAsync(user, ct);
     }
 
     public async Task<UserDto> GetMeAsync(Guid userId, CancellationToken ct = default)
@@ -211,31 +204,18 @@ public class AuthService : IAuthService
         // Step 5 — Lookup user by GoogleSub, then by email
         var user = await _users.GetByGoogleSubAsync(sub, ct);
         if (user is not null)
-        {
-            if (!user.IsActive)
-                throw new UnauthorizedException("Account is locked");
-
-            user.LastLoginAt = DateTime.UtcNow;
-            await _users.SaveChangesAsync(ct);
-            var (t, e) = GenerateJwtToken(user);
-            return new AuthResponse(t, e, MapToDto(user));
-        }
+            return await SignInAsync(user, ct);
 
         user = await _users.GetByEmailAsync(email, ct);
         if (user is not null)
         {
-            if (!user.IsActive)
-                throw new UnauthorizedException("Account is locked");
-
-            // Link Google account to existing local user
+            // Link Google account to existing local user.
+            // Account bị khoá: SignInAsync throw TRƯỚC SaveChanges → thay đổi dưới đây không được lưu.
             user.GoogleSub = sub;
             user.AuthProvider = user.AuthProvider == AuthProvider.Local
                 ? AuthProvider.Both
                 : user.AuthProvider;
-            user.LastLoginAt = DateTime.UtcNow;
-            await _users.SaveChangesAsync(ct);
-            var (t, e) = GenerateJwtToken(user);
-            return new AuthResponse(t, e, MapToDto(user));
+            return await SignInAsync(user, ct);
         }
 
         // Step 6 — Create new Google-only user
@@ -261,6 +241,22 @@ public class AuthService : IAuthService
     }
 
     // ── private helpers ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Hoàn tất đăng nhập cho user đã tồn tại: chặn account bị khoá,
+    /// cập nhật LastLoginAt, phát JWT. Dùng chung cho login local + Google Sign-In.
+    /// </summary>
+    private async Task<AuthResponse> SignInAsync(User user, CancellationToken ct)
+    {
+        if (!user.IsActive)
+            throw new UnauthorizedException("Account is locked");
+
+        user.LastLoginAt = DateTime.UtcNow;
+        await _users.SaveChangesAsync(ct);
+
+        var (token, expiresIn) = GenerateJwtToken(user);
+        return new AuthResponse(token, expiresIn, MapToDto(user));
+    }
 
     private (string token, int expiresIn) GenerateJwtToken(User user)
     {

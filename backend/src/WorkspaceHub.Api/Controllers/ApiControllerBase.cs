@@ -5,16 +5,19 @@ using WorkspaceHub.Application.Common;
 namespace WorkspaceHub.Api.Controllers;
 
 /// <summary>
-/// Base controller cho mọi endpoint cần auth.
-/// Cung cấp CurrentUserId (từ JWT claim "sub") và CurrentUserRole.
+/// Base controller duy nhất cho mọi feature controller.
+/// Cung cấp route convention "api/[controller]" và helper lấy UserId/Role từ JWT claim.
+/// CONVENTIONS.md: "Lấy UserId từ JWT claim qua một base controller / helper,
+/// không tin tham số client gửi."
 /// </summary>
 [ApiController]
+[Route("api/[controller]")]
 public abstract class ApiControllerBase : ControllerBase
 {
     /// <summary>
-    /// Extracts UserId from JWT claim "sub".
-    /// Throws UnauthorizedException if the claim is missing or invalid.
-    /// Only call this from endpoints decorated with [Authorize].
+    /// Lấy UserId (Guid) từ JWT claim "sub".
+    /// Throw UnauthorizedException (middleware map → 401) nếu claim thiếu/sai —
+    /// chỉ xảy ra khi [Authorize] bị bỏ sót.
     /// </summary>
     protected Guid CurrentUserId
     {

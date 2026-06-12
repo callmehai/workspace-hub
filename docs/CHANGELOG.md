@@ -2,6 +2,18 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-06-12] Code cleanup — thống nhất pattern sau review
+
+Đợt dọn code do nhiều người viết song song tạo ra 2 phiên bản của cùng một thứ. Quy ước mới đã ghi vào `docs/CONVENTIONS.md`:
+
+- **FE: hợp nhất 2 axios instance** — xoá `src/services/api.ts` (token key `'token'`), giữ `src/lib/api.ts` (`tokenStore`, key `wh_token`) làm instance duy nhất. Trước đó Login và Register dùng 2 instance với 2 token key khác nhau → đăng nhập/đăng ký xong các request sau mất JWT.
+- **FE: auth chuyển sang TanStack Query** — `AuthContext` bỏ `useEffect + fetch` thủ công, Login dùng `useMutation` (đồng bộ với Register). `useAuth` tách ra `src/hooks/useAuth.ts` (fix lint react-refresh). Thêm route `/register`, sửa type `AuthResponse` khớp BE (`accessToken`).
+- **BE: merge 2 base controller** — `BaseApiController` + `ApiControllerBase` (2 dev viết song song) gộp thành một `ApiControllerBase` duy nhất: route `api/[controller]`, `CurrentUserId`, throw `UnauthorizedException` (map 401 qua middleware thay vì `UnauthorizedAccessException` → 500).
+- **BE: thống nhất validation** — Folders/Items bỏ block tự format lỗi, dùng `ValidateAndThrowAsync` → `ExceptionMiddleware` format 400 chuẩn (cùng đường với Auth).
+- **BE: bỏ fallback JWT secret hardcode** trong `Program.cs` — thiếu `Jwt:Secret` thì fail lúc startup. ⚠️ Dev local phải có section `Jwt` trong `appsettings.Development.json` (copy từ `.example`).
+- **BE: `/api/health` đổi `[Authorize]` → `[AllowAnonymous]`** — load balancer/monitoring gọi được không cần JWT.
+- Dedupe nhỏ: `AuthService.SignInAsync` helper (3 chỗ lặp check IsActive + phát JWT), `ConnectionsService.GetDevCredential` helper, bỏ null-forgiving trong `FolderService.CreateAsync`. FE xoá dead code `AppLayout.tsx`, thêm `QueryClient` defaultOptions.
+
 ## [Phase 2 — đang làm] Mô hình B + Write-back Google + Google Sign-In
 
 ### Connection: chuyển từ mô hình A sang mô hình B
