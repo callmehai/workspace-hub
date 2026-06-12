@@ -209,12 +209,12 @@ public class AuthService : IAuthService
         user = await _users.GetByEmailAsync(email, ct);
         if (user is not null)
         {
-            // Link Google account to existing local user.
-            // Account bị khoá: SignInAsync throw TRƯỚC SaveChanges → thay đổi dưới đây không được lưu.
+            // Link Google account to existing local user
             user.GoogleSub = sub;
             user.AuthProvider = user.AuthProvider == AuthProvider.Local
                 ? AuthProvider.Both
                 : user.AuthProvider;
+            // Nếu account bị khoá, SignInAsync throw trước SaveChanges → GoogleSub không được lưu (đúng ý).
             return await SignInAsync(user, ct);
         }
 
