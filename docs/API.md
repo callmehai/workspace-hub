@@ -33,7 +33,7 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 ## Connections ⭐ (thay OAuth Connections + Service Connections)
 Mô hình B: mỗi service authorize riêng, tạo 1 Connection.
 
-- `POST /api/connections/oauth/start` — `{integrationKey, serviceType, redirectUri}` → `{authorizationUrl, state}`. Scope = full của service đó (dev quyết). Mỗi lần chỉ connect 1 service. (400 serviceType không hợp lệ, 400 provider không hỗ trợ serviceType đó, 404 integration, 422 disabled)
+- `POST /api/connections/oauth/start` — `{integrationKey, serviceType, redirectUri}` → `{authorizationUrl, state}`. Scope = full của service đó (dev quyết). Mỗi lần chỉ connect 1 service. (404 integration không tồn tại, 422 serviceType không hợp lệ / provider không hỗ trợ serviceType / integration disabled)
 - `POST /api/connections/oauth/callback` — `{code, state}` → 201 tạo **1** Connection row. Response: `{integrationKey, providerAccountId, connections: [{id, serviceType, status}]}`. (400 CSRF, 400 provider từ chối/scope thiếu, 409 trùng service+account)
 - `GET /api/connections` — array (token mask). Mỗi row = 1 service.
 - `POST /api/connections/{id}/refresh` — refresh token. (422 invalid→Error)

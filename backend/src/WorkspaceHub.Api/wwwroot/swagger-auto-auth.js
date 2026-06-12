@@ -33,8 +33,8 @@
     };
 
     // Auto-login khi Swagger UI sẵn sàng.
-    const DEV_EMAIL = "phamgiakhanh0709@gmail.com";
-    const DEV_PASSWORD = "12345678";
+    const DEV_EMAIL = "";
+    const DEV_PASSWORD = "";
 
     function autoLogin() {
         fetch("/api/auth/login", {
