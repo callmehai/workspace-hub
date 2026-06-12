@@ -26,6 +26,9 @@ public class JiraStrategy(
         ProviderStrategyContext ctx,
         CancellationToken ct = default)
     {
+        if (!Enum.TryParse<Domain.Enums.ServiceType>(ctx.ServiceType, ignoreCase: true, out var st) || st != Domain.Enums.ServiceType.Jira)
+            throw new BusinessRuleException($"JiraStrategy chỉ hỗ trợ ServiceType 'Jira', nhận được '{ctx.ServiceType}'");
+
         var query = HttpUtility.ParseQueryString(string.Empty);
         query["client_id"]     = ctx.ClientId;
         query["redirect_uri"]  = ctx.RedirectUri;

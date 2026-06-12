@@ -140,44 +140,34 @@ public class ConnectionsService : IConnectionsService
         var expiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn);
         var provider = Enum.Parse<ProviderType>(integration.Provider);
 
-        // Step 6 — Mô hình B: upsert 1 row Connection cho mỗi service được cấp.
-        // Đã tồn tại (re-grant cùng account) → cập nhật token + reset Active, giữ cursor sync.
+        // Step 6 — Mô hình B: mỗi service 1 Connection độc lập.
+        // Đã tồn tại → 409 (user phải disconnect trước rồi mới connect lại).
         var results = new List<ConnectionResult>();
         foreach (var serviceType in tokenResult.GrantedServices)
         {
-            var connection = await _connections.GetByUniqueKeyAsync(
+            var existing = await _connections.GetByUniqueKeyAsync(
                 userId, provider, serviceType, tokenResult.ProviderAccountId, ct);
 
-            if (connection is null)
+            if (existing is not null)
+                throw new ConflictException(
+                    $"Bạn đã kết nối {serviceType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
+
+            var connection = new Connection
             {
-                connection = new Connection
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    IntegrationId = integration.Id,
-                    Provider = provider,
-                    ServiceType = serviceType,
-                    ProviderAccountId = tokenResult.ProviderAccountId,
-                    AccessTokenEncrypted = accessTokenEncrypted,
-                    RefreshTokenEncrypted = refreshTokenEncrypted,
-                    ExpiresAt = expiresAt,
-                    Status = ConnectionStatus.Active,
-                    CursorValue = null, // null = sync lần đầu
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _connections.AddAsync(connection, ct);
-            }
-            else
-            {
-                connection.AccessTokenEncrypted = accessTokenEncrypted;
-                // Re-grant thường KHÔNG trả refresh_token mới — chỉ ghi đè khi có, giữ token cũ khi rỗng.
-                if (refreshTokenEncrypted.Length > 0)
-                    connection.RefreshTokenEncrypted = refreshTokenEncrypted;
-                connection.ExpiresAt = expiresAt;
-                connection.Status = ConnectionStatus.Active;
-                connection.LastError = null;
-                _connections.Update(connection);
-            }
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                IntegrationId = integration.Id,
+                Provider = provider,
+                ServiceType = serviceType,
+                ProviderAccountId = tokenResult.ProviderAccountId,
+                AccessTokenEncrypted = accessTokenEncrypted,
+                RefreshTokenEncrypted = refreshTokenEncrypted,
+                ExpiresAt = expiresAt,
+                Status = ConnectionStatus.Active,
+                CursorValue = null,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _connections.AddAsync(connection, ct);
 
             results.Add(new ConnectionResult(
                 connection.Id, connection.ServiceType.ToString(), connection.Status.ToString()));

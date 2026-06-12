@@ -30,9 +30,13 @@ internal static class GoogleScopes
         new Dictionary<ServiceType, string[]>
         {
             [ServiceType.Gmail] = [GmailReadonly, GmailSend],
-            [ServiceType.GCal]  = [CalendarReadonly, CalendarWrite],
-            [ServiceType.Drive] = [DriveReadonly, DriveWrite],
+            [ServiceType.GCal]  = [CalendarWrite],
+            [ServiceType.Drive] = [DriveWrite],
         };
+
+    /// <summary>Scopes request khi build auth URL — thêm openid+email để Google trả id_token (lấy email user).</summary>
+    public static string[] BuildRequestScopes(ServiceType serviceType)
+        => [OpenId, Email, .. ServiceScopes[serviceType]];
 
     /// <summary>
     /// Kiểm tra scope Google trả về sau consent cho 1 service cụ thể.

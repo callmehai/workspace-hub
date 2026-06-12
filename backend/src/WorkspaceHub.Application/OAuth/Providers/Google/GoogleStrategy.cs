@@ -23,11 +23,11 @@ public class GoogleStrategy : IProviderStrategy
         CancellationToken ct = default)
     {
         if (!Enum.TryParse<ServiceType>(ctx.ServiceType, ignoreCase: true, out var serviceType)
-            || !GoogleScopes.ServiceScopes.TryGetValue(serviceType, out var scopes))
+            || !GoogleScopes.ServiceScopes.ContainsKey(serviceType))
             throw new BusinessRuleException($"Service '{ctx.ServiceType}' không phải Google service");
 
         var builder = new GoogleAuthUrlBuilder(ctx.ClientId, ctx.RedirectUri);
-        var url = builder.BuildForService(string.Join(' ', scopes), ctx.State);
+        var url = builder.BuildForService(string.Join(' ', GoogleScopes.BuildRequestScopes(serviceType)), ctx.State);
 
         return Task.FromResult(new InitiateConnectionResult(url, ctx.State));
     }
