@@ -17,7 +17,9 @@ PascalCase (class/method/property), camelCase (local/param), `I` prefix (interfa
 
 ## Controller / Service / Repository
 - Controller mỏng, trả ActionResult<T> + status đúng. UserId từ JWT claim.
-- Service chứa business logic + validation, nhận/trả DTO, throw custom exception.
+- **Base controller duy nhất: `ApiControllerBase`** — cung cấp route `api/[controller]`, `CurrentUserId`, `CurrentUserRole`. KHÔNG tạo base controller thứ hai, KHÔNG khai báo lại `[Route]` trên controller con (trừ khi route khác convention).
+- **Validation:** gọi `ValidateAndThrowAsync` (FluentValidation) — `ExceptionMiddleware` format lỗi 400 chuẩn. KHÔNG tự format validation error trong controller.
+- Service chứa business logic, nhận/trả DTO, throw custom exception (middleware map status code).
 - Repository chỉ data access, async, AsNoTracking cho read, tránh N+1.
 
 ## EF Core
@@ -42,7 +44,13 @@ PascalCase (class/method/property), camelCase (local/param), `I` prefix (interfa
 
 ## Bảo mật
 - Token encrypt qua Data Protection (không tự viết AES). Token response luôn mask.
-- BCrypt cost 12. Không hardcode secret (config/env/user-secrets).
+- BCrypt cost 12. Không hardcode secret (config/env/user-secrets) — kể cả fallback "dev only": thiếu `Jwt:Secret` thì app phải fail lúc startup.
+
+## Frontend
+- **1 axios instance duy nhất: `src/lib/api.ts`** (JWT interceptor + xử lý 401 tập trung). Token đọc/ghi qua `tokenStore` (key `wh_token`) — KHÔNG gọi `localStorage` trực tiếp, KHÔNG tạo instance thứ hai.
+- Server state qua TanStack Query (`useQuery`/`useMutation`) — KHÔNG `useEffect + fetch/axios` thủ công, KHÔNG `useState loading` tự quản.
+- `useAuth` import từ `src/hooks/useAuth`; context khai báo ở `src/context/auth-context.ts`, provider ở `src/context/AuthContext.tsx`.
+- Type API response khai báo trong `src/types/` và phải khớp DTO backend (vd `AuthResponse.accessToken`).
 
 ## Git
 - Branch: main / develop / feature/SCRUM-x-mo-ta.

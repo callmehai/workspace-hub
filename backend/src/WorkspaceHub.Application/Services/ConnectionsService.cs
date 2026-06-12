@@ -55,12 +55,7 @@ public class ConnectionsService : IConnectionsService
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
             throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
 
-        // DEV: đọc plaintext từ appsettings.Development.json để test nhanh không cần encrypt DB.
-        var clientId = _config[$"Dev:{integrationKey}:ClientId"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
-
-        // PRODUCTION: decrypt từ DB bằng ITokenProtector.
-        // var clientId = _tokenProtector.Unprotect(integration.ClientIdEncrypted);
+        var clientId = GetDevCredential(integrationKey, "ClientId");
 
         var state = Guid.NewGuid().ToString("N");
 
@@ -108,15 +103,8 @@ public class ConnectionsService : IConnectionsService
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
-        // DEV: đọc plaintext từ config; PROD: bỏ comment block bên dưới.
-        var clientId = _config[$"Dev:{integrationKey}:ClientId"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
-        var clientSecret = _config[$"Dev:{integrationKey}:ClientSecret"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
-
-        // PRODUCTION:
-        // var clientId     = _tokenProtector.Unprotect(integration.ClientIdEncrypted);
-        // var clientSecret = _tokenProtector.Unprotect(integration.ClientSecretEncrypted);
+        var clientId = GetDevCredential(integrationKey, "ClientId");
+        var clientSecret = GetDevCredential(integrationKey, "ClientSecret");
 
         // Step 4 — Delegate provider-specific exchange to strategy.
         var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration);
@@ -199,4 +187,13 @@ public class ConnectionsService : IConnectionsService
         _integrations.Update(integration);
         await _integrations.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// DEV: đọc plaintext OAuth credential từ appsettings.Development.json để test nhanh không cần encrypt DB.
+    /// PRODUCTION: thay bằng decrypt từ Integration qua ITokenProtector:
+    ///   _tokenProtector.Unprotect(integration.ClientIdEncrypted / ClientSecretEncrypted)
+    /// </summary>
+    private string GetDevCredential(string integrationKey, string field)
+        => _config[$"Dev:{integrationKey}:{field}"]
+            ?? throw new BusinessRuleException($"Chưa cấu hình {field} cho '{integrationKey}'");
 }

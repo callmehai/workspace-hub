@@ -34,7 +34,7 @@ Tech stack:
 │   │   └── WorkspaceHub.Api/             # Controllers, Program.cs, Middleware, appsettings
 │   └── tests/WorkspaceHub.Tests/
 └── frontend/                    # Vite React TS
-    └── src/{pages, components, layouts, context, lib, services, types, router.tsx}
+    └── src/{pages, components, layouts, context, hooks, lib, types, router.tsx}
 ```
 
 ---

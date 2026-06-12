@@ -7,10 +7,11 @@ namespace WorkspaceHub.Api.Controllers;
 
 /// <summary>
 /// Endpoint health-check mặc định. Controller mỏng: chỉ gọi service, không chứa business logic.
+/// AllowAnonymous: load balancer / monitoring cần gọi được mà không có JWT.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[AllowAnonymous]
 public class HealthController : ControllerBase
 {
     private readonly IHealthService _health;

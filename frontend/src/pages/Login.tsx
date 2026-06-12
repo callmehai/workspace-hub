@@ -1,37 +1,34 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
-import { Hexagon, LogIn } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
+import { Hexagon, LogIn } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import api from '../lib/api';
+import type { AuthResponse } from '../types/auth';
 
 export const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('user@example.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      // Connect to real backend API
-      const response = await api.post('/auth/login', { email, password });
-      
-      const { accessToken, user } = response.data;
-      login(accessToken, user);
-      
+  const loginMutation = useMutation({
+    mutationFn: async () =>
+      (await api.post<AuthResponse>('/auth/login', { email, password })).data,
+    onSuccess: (data) => {
+      login(data.accessToken, data.user);
       toast.success('Đăng nhập thành công!');
       navigate('/', { replace: true });
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      toast.error(error.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    onError: (error) => {
+      const message = isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message
+        : undefined;
+      toast.error(message ?? 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+    },
+  });
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900 font-sans">
@@ -45,39 +42,42 @@ export const Login = () => {
           <p className="text-gray-500">Enter your details to access your workspace.</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-5">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            loginMutation.mutate();
+          }}
+          className="space-y-5"
+        >
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input 
-              type="email" 
+            <input
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500" 
-              required 
-            />
-          </div>
-          
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-sm font-medium text-gray-700">Password</label>
-              <a href="#" className="text-sm text-brand-500 hover:text-brand-400">Forgot password?</a>
-            </div>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500" 
-              required 
+              className="w-full px-4 py-2.5 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+              required
             />
           </div>
 
-          <button 
-            type="submit" 
-            disabled={loading}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loginMutation.isPending}
             className="w-full flex items-center justify-center py-2.5 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-brand-500 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
-            {!loading && <LogIn className="w-4 h-4 ml-2" />}
+            {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
+            {!loginMutation.isPending && <LogIn className="w-4 h-4 ml-2" />}
           </button>
         </form>
 
@@ -100,7 +100,10 @@ export const Login = () => {
         </div>
 
         <p className="mt-8 text-center text-sm text-gray-500">
-          Don't have an account? <a href="#" className="text-brand-500 hover:text-brand-400 font-medium">Create an account</a>
+          Don't have an account?{' '}
+          <Link to="/register" className="text-brand-500 hover:text-brand-400 font-medium">
+            Create an account
+          </Link>
         </p>
       </div>
     </div>
