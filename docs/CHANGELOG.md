@@ -2,6 +2,12 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-06-12] Integrations: bỏ credentials trong DB, dùng config/env (chốt scope admin)
+
+- **Quyết định:** OAuth client credentials (ClientId/ClientSecret của app với Google) đọc từ **config/env duy nhất** cho cả dev lẫn prod. Drop 2 cột `Integrations.ClientIdEncrypted/ClientSecretEncrypted` + xoá endpoint `PUT /api/connections/{key}/credentials` (một phần SCRUM-13). Ticket: SCRUM-47 (xem SPRINTS.md).
+- **Lý do:** scope "admin quản lý tích hợp" được chốt lại = **bật/tắt integration** (`IsEnabled` — user không dùng được tính năng của integration bị tắt), KHÔNG bao gồm nhập/đổi credentials lúc runtime. Đường DB-credentials vì vậy mất lý do tồn tại, và đang dở dang (mới có nửa ghi, nửa đọc chưa viết). Env/config là cách chuẩn (12-factor) cho app có số provider cố định.
+- **Không đổi:** Data Protection vẫn mã hoá access/refresh token của user trong `Connections` (chỗ này mới quan trọng). JWT secret, connection string vẫn ở env/config như cũ.
+
 ## [2026-06-12] Code cleanup — thống nhất pattern sau review
 
 Đợt dọn code do nhiều người viết song song tạo ra 2 phiên bản của cùng một thứ. Quy ước mới đã ghi vào `docs/CONVENTIONS.md`:

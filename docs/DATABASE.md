@@ -52,7 +52,7 @@ Catalog provider. Seed Google; thêm Atlassian ở phase Jira.
 | Key | string UNIQUE | google / atlassian |
 | DisplayName, IconUrl, Description | string | |
 | Provider | string | Google / Atlassian |
-| ClientIdEncrypted, ClientSecretEncrypted | string | Data Protection |
+| ClientIdEncrypted, ClientSecretEncrypted | string | ⚠️ Sẽ DROP ở SCRUM-47 — credentials chuyển hẳn sang config/env (xem CHANGELOG 2026-06-12) |
 | AuthorizationEndpoint, TokenEndpoint | string | |
 | SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` / `["Jira"]` |
 | IsEnabled | bool | |

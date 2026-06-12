@@ -56,6 +56,15 @@
 **Lưu ý sau SCRUM-34:** response của `POST /api/connections/oauth/callback` đã đổi shape (trả list connections) — xem API.md; FE (Dũng) cập nhật khi wire.
 **Huy** đợt này: cập nhật GET /api/items trả ETag (phục vụ 37/38) + viết lại SCRUM-14 theo Connections, hoặc test write-back.
 
+## Cleanup / tech-debt (chốt 2026-06-12 — xem CHANGELOG)
+
+| Ticket | Việc | Assignee | Dependency | Status |
+|---|---|---|---|---|
+| SCRUM-47* | Bỏ DB credentials cho Integrations: drop 2 cột encrypted, xoá PUT /credentials, đổi section config `Dev:` → `OAuth:` | đề xuất Hải (migration) | làm SAU SCRUM-36 (cùng đụng ConnectionsService với Khánh) | ⏳ Chưa tạo Jira |
+| SCRUM-48* | Admin toggle integration: PATCH /api/admin/integrations/{key}/enable | đề xuất Huy (Admin) | 47 | ⏳ Chưa tạo Jira |
+
+\* Số ticket tạm — sửa lại theo số Jira cấp khi tạo issue.
+
 ## Phase sau — BACKLOG, CHƯA LÀM (đừng code)
 | Ticket | Việc |
 |---|---|
