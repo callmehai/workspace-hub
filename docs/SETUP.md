@@ -29,8 +29,8 @@ dotnet restore
 dotnet user-secrets init --project src/WorkspaceHub.Api
 dotnet user-secrets set "ConnectionStrings:Default" "<connection-string>" --project src/WorkspaceHub.Api
 dotnet user-secrets set "Jwt:Secret" "<random-32+-chars>" --project src/WorkspaceHub.Api
-dotnet user-secrets set "Google:ClientId" "<client-id>" --project src/WorkspaceHub.Api
-dotnet user-secrets set "Google:ClientSecret" "<client-secret>" --project src/WorkspaceHub.Api
+dotnet user-secrets set "OAuth:google:ClientId" "<client-id>" --project src/WorkspaceHub.Api
+dotnet user-secrets set "OAuth:google:ClientSecret" "<client-secret>" --project src/WorkspaceHub.Api
 dotnet user-secrets set "Cron:Secret" "<cron-secret>" --project src/WorkspaceHub.Api
 
 # 3. Apply migrations (tạo DB) — hiện có 3 migration: InitialCreate, UsersMultiAuth, ModelBConnections
@@ -43,7 +43,7 @@ dotnet run --project src/WorkspaceHub.Api
 
 > **Gotcha `dotnet ef`:** design-time factory đọc connection string theo thứ tự env `WORKSPACEHUB_CONNECTION` → appsettings của thư mục hiện tại. Nếu chạy `dotnet ef` từ thư mục Infrastructure (không có `--startup-project`), nó không thấy appsettings của Api và rơi về fallback `Trusted_Connection` (lỗi Kerberos trên macOS). Cách chắc nhất: luôn dùng `--startup-project src/WorkspaceHub.Api`, hoặc set env `WORKSPACEHUB_CONNECTION`.
 
-> **OAuth dev:** `ConnectionsService` dev đọc credential plaintext từ `Dev:google:ClientId` / `Dev:google:ClientSecret` trong `appsettings.Development.json` để test nhanh (prod mới decrypt từ DB qua Data Protection).
+> **OAuth credentials:** đọc từ section `OAuth:{provider}:ClientId` / `ClientSecret` trong config (appsettings / user-secrets / env var). Prod set qua env var `OAuth__google__ClientId` / `OAuth__google__ClientSecret` (ASP.NET dùng `__` thay `:` trong env). Không còn section `Dev:` riêng — đây là đường chính thức cho cả dev lẫn prod.
 
 > **OAuth state cache:** state CSRF lưu bằng `AddDistributedMemoryCache` (in-memory) — **restart app giữa chừng flow OAuth sẽ mất state** → user nhận "State không hợp lệ", phải bấm connect lại. Chấp nhận được cho MVP single-instance; deploy nhiều instance thì phải đổi sang Redis.
 
@@ -54,7 +54,8 @@ dotnet run --project src/WorkspaceHub.Api
 | `ConnectionStrings:Default` | DB connection |
 | `Jwt:Secret` | ký JWT (≥32 ký tự) |
 | `Jwt:ExpiresIn` | mặc định 3600s |
-| `Google:ClientId` / `Google:ClientSecret` | OAuth Google |
+| `OAuth:google:ClientId` / `OAuth:google:ClientSecret` | OAuth Google (prod: env var `OAuth__google__ClientId`) |
+| `OAuth:jira:ClientId` / `OAuth:jira:ClientSecret` | OAuth Jira (tương tự) |
 | `Google:RedirectUri` | callback URL |
 | `Cron:Secret` | bảo vệ /api/internal/process-scheduled (X-Cron-Secret) |
 

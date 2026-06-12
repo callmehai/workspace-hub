@@ -7,9 +7,11 @@ public interface IConnectionsService
 {
     /// <summary>
     /// Tra Integration, decrypt ClientId, dispatch sang đúng IProviderStrategy, cache CSRF state.
+    /// serviceType: tên ServiceType enum ("Gmail"/"GCal"/"Drive"/"Jira") — mỗi lần chỉ connect 1 service.
     /// </summary>
     Task<InitiateConnectionResult> InitiateConnectionAsync(
         string integrationKey,
+        string serviceType,
         string redirectUri,
         Guid userId,
         CancellationToken ct = default);
@@ -21,13 +23,6 @@ public interface IConnectionsService
         string code,
         string state,
         Guid userId,
-        CancellationToken ct = default);
-
-    /// <summary>Encrypt clientId + clientSecret rồi lưu vào Integration. (Admin-only — controller đã gắn [Authorize(Roles="Admin")].)</summary>
-    Task SetCredentialsAsync(
-        string integrationKey,
-        string clientId,
-        string clientSecret,
         CancellationToken ct = default);
 
     // TODO SCRUM-14 (DisconnectAsync): FK Items/ScheduledEmails → Connections là NoAction ở DB,

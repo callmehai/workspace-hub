@@ -42,10 +42,15 @@ public class ConnectionsService : IConnectionsService
 
     public async Task<InitiateConnectionResult> InitiateConnectionAsync(
         string integrationKey,
+        string serviceType,
         string redirectUri,
         Guid userId,
         CancellationToken ct = default)
     {
+        // Validate serviceType sớm — fail fast trước khi hit DB hay cache.
+        if (!Enum.TryParse<ServiceType>(serviceType, ignoreCase: true, out _))
+            throw new BusinessRuleException($"ServiceType '{serviceType}' không hợp lệ");
+
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
@@ -55,19 +60,20 @@ public class ConnectionsService : IConnectionsService
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
             throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
 
-        var clientId = GetDevCredential(integrationKey, "ClientId");
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
+            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
 
         var state = Guid.NewGuid().ToString("N");
 
-        // Lưu cả integrationKey lẫn userId — callback xác minh đúng user tạo ra state này.
-        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId, redirectUri));
+        // Cache integrationKey + userId + serviceType — callback xác minh đúng user và service.
+        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId, redirectUri, serviceType));
         var cacheOptions = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
         };
         await _cache.SetStringAsync($"oauth:state:{state}", payload, cacheOptions, ct);
 
-        var context = new ProviderStrategyContext(clientId, redirectUri, state, integration);
+        var context = new ProviderStrategyContext(clientId, redirectUri, state, integration, serviceType);
         return await strategy.BuildAuthUrlAsync(context, ct);
     }
 
@@ -103,11 +109,13 @@ public class ConnectionsService : IConnectionsService
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
-        var clientId = GetDevCredential(integrationKey, "ClientId");
-        var clientSecret = GetDevCredential(integrationKey, "ClientSecret");
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
+            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
+        var clientSecret = _config[$"OAuth:{integrationKey}:ClientSecret"]
+            ?? throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
 
         // Step 4 — Delegate provider-specific exchange to strategy.
-        var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration);
+        var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
         var tokenResult = await strategy.ExchangeCodeAsync(context, ct);
 
         if (tokenResult.GrantedServices.Count == 0)
@@ -123,44 +131,34 @@ public class ConnectionsService : IConnectionsService
         var expiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn);
         var provider = Enum.Parse<ProviderType>(integration.Provider);
 
-        // Step 6 — Mô hình B: upsert 1 row Connection cho mỗi service được cấp.
-        // Đã tồn tại (re-grant cùng account) → cập nhật token + reset Active, giữ cursor sync.
+        // Step 6 — Mô hình B: mỗi service 1 Connection độc lập.
+        // Đã tồn tại → 409 (user phải disconnect trước rồi mới connect lại).
         var results = new List<ConnectionResult>();
         foreach (var serviceType in tokenResult.GrantedServices)
         {
-            var connection = await _connections.GetByUniqueKeyAsync(
+            var existing = await _connections.GetByUniqueKeyAsync(
                 userId, provider, serviceType, tokenResult.ProviderAccountId, ct);
 
-            if (connection is null)
+            if (existing is not null)
+                throw new ConflictException(
+                    $"Bạn đã kết nối {serviceType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
+
+            var connection = new Connection
             {
-                connection = new Connection
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    IntegrationId = integration.Id,
-                    Provider = provider,
-                    ServiceType = serviceType,
-                    ProviderAccountId = tokenResult.ProviderAccountId,
-                    AccessTokenEncrypted = accessTokenEncrypted,
-                    RefreshTokenEncrypted = refreshTokenEncrypted,
-                    ExpiresAt = expiresAt,
-                    Status = ConnectionStatus.Active,
-                    CursorValue = null, // null = sync lần đầu
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _connections.AddAsync(connection, ct);
-            }
-            else
-            {
-                connection.AccessTokenEncrypted = accessTokenEncrypted;
-                // Re-grant thường KHÔNG trả refresh_token mới — chỉ ghi đè khi có, giữ token cũ khi rỗng.
-                if (refreshTokenEncrypted.Length > 0)
-                    connection.RefreshTokenEncrypted = refreshTokenEncrypted;
-                connection.ExpiresAt = expiresAt;
-                connection.Status = ConnectionStatus.Active;
-                connection.LastError = null;
-                _connections.Update(connection);
-            }
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                IntegrationId = integration.Id,
+                Provider = provider,
+                ServiceType = serviceType,
+                ProviderAccountId = tokenResult.ProviderAccountId,
+                AccessTokenEncrypted = accessTokenEncrypted,
+                RefreshTokenEncrypted = refreshTokenEncrypted,
+                ExpiresAt = expiresAt,
+                Status = ConnectionStatus.Active,
+                CursorValue = null,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _connections.AddAsync(connection, ct);
 
             results.Add(new ConnectionResult(
                 connection.Id, connection.ServiceType.ToString(), connection.Status.ToString()));
@@ -172,28 +170,4 @@ public class ConnectionsService : IConnectionsService
         return new CompleteConnectionResult(integrationKey, tokenResult.ProviderAccountId, results);
     }
 
-    public async Task SetCredentialsAsync(
-        string integrationKey,
-        string clientId,
-        string clientSecret,
-        CancellationToken ct = default)
-    {
-        var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
-            ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
-
-        integration.ClientIdEncrypted = _tokenProtector.Protect(clientId);
-        integration.ClientSecretEncrypted = _tokenProtector.Protect(clientSecret);
-
-        _integrations.Update(integration);
-        await _integrations.SaveChangesAsync(ct);
-    }
-
-    /// <summary>
-    /// DEV: đọc plaintext OAuth credential từ appsettings.Development.json để test nhanh không cần encrypt DB.
-    /// PRODUCTION: thay bằng decrypt từ Integration qua ITokenProtector:
-    ///   _tokenProtector.Unprotect(integration.ClientIdEncrypted / ClientSecretEncrypted)
-    /// </summary>
-    private string GetDevCredential(string integrationKey, string field)
-        => _config[$"Dev:{integrationKey}:{field}"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình {field} cho '{integrationKey}'");
 }

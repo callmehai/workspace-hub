@@ -7,7 +7,7 @@ namespace WorkspaceHub.Infrastructure.Security;
 
 /// <summary>
 /// Verifies Google id_token using Google.Apis.Auth (signature + audience check).
-/// ClientId read from config: Dev:google:ClientId (dev) or Google:ClientId (prod).
+/// ClientId read from config: OAuth:google:ClientId (primary) or Google:ClientId (fallback).
 /// </summary>
 public class GoogleTokenVerifier : IGoogleTokenVerifier
 {
@@ -15,7 +15,7 @@ public class GoogleTokenVerifier : IGoogleTokenVerifier
 
     public GoogleTokenVerifier(IConfiguration config)
     {
-        _clientId = config["Dev:google:ClientId"]
+        _clientId = config["OAuth:google:ClientId"]
                     ?? config["Google:ClientId"]
                     ?? throw new InvalidOperationException("Google ClientId is not configured.");
     }

@@ -110,7 +110,7 @@ public class AuthService : IAuthService
 
     public async Task<GoogleAuthStartResponse> GoogleStartAsync(CancellationToken ct = default)
     {
-        var clientId = _config["Dev:google:ClientId"]
+        var clientId = _config["OAuth:google:ClientId"]
                        ?? _config["Google:ClientId"]
                        ?? throw new InvalidOperationException("Google ClientId is not configured.");
 
@@ -152,11 +152,11 @@ public class AuthService : IAuthService
         await _cache.RemoveAsync(cacheKey, ct);
 
         // Step 2 — Read Google credentials from config
-        var clientId = _config["Dev:google:ClientId"]
+        var clientId = _config["OAuth:google:ClientId"]
                        ?? _config["Google:ClientId"]
                        ?? throw new InvalidOperationException("Google ClientId is not configured.");
 
-        var clientSecret = _config["Dev:google:ClientSecret"]
+        var clientSecret = _config["OAuth:google:ClientSecret"]
                            ?? _config["Google:ClientSecret"]
                            ?? throw new InvalidOperationException("Google ClientSecret is not configured.");
 

@@ -253,8 +253,6 @@ public class AppDbContext : DbContext
             IconUrl = "https://www.google.com/favicon.ico",
             Description = "Gmail · Calendar · Drive",
             Provider = "Google",
-            ClientIdEncrypted = "",     // Admin nhập + encrypt ở SCRUM-13
-            ClientSecretEncrypted = "",
             AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
             TokenEndpoint = "https://oauth2.googleapis.com/token",
             SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",

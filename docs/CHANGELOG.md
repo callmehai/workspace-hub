@@ -46,6 +46,12 @@
 - **Auto-link:** email Google trùng user đã đăng ký password → gắn GoogleSub, AuthProvider=Both.
 - **DB:** Users.PasswordHash nullable, thêm GoogleSub + AuthProvider.
 
+### Đổi section config OAuth credentials từ `Dev:` → `OAuth:`
+- **Trước:** credentials đọc từ `Dev:{provider}:ClientId/ClientSecret` (tên ngụ ý "chỉ dùng dev", prod có comment placeholder decrypt DB).
+- **Sau:** credentials đọc từ `OAuth:{provider}:ClientId/ClientSecret` cho cả dev lẫn prod. Prod set qua env var `OAuth__google__ClientId` / `OAuth__google__ClientSecret` (ASP.NET `__` thay `:`).
+- **Lý do:** section `Dev:` gây nhầm lẫn — đây là đường cấu hình chính thức, không phải "đường tắt". Bỏ hẳn comment "PRODUCTION: decrypt từ DB" và bỏ cột `ClientIdEncrypted`/`ClientSecretEncrypted` khỏi bảng `Integrations` (SCRUM-13 encrypt DB không còn trong plan — credentials quản lý qua config/env, không lưu DB).
+- **Tác động:** `appsettings.Development.json` đổi key; `appsettings.json` thêm template `OAuth` rỗng; `GoogleTokenVerifier`, `AuthService`, `ConnectionsService` đổi `_config["Dev:..."]` → `_config["OAuth:..."]`. Fallback `Google:ClientId` cho Sign-In vẫn còn.
+
 ### Ticket liên quan
 SCRUM-32 (migration multi-auth), 33 (Google Sign-In), 34 (migration mô hình B), 35 (OAuth flow B), 36 (scope read-write), 37 (write-back Email+Event+File), 38 (conflict resolution). SCRUM-30/31 (scheduled email) viết lại theo Connections, làm sau 38.
 

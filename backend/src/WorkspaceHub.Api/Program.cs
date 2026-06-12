@@ -99,8 +99,9 @@ app.UseMiddleware<ExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
+    app.UseStaticFiles();
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(o => o.InjectJavascript("/swagger-auto-auth.js"));
 }
 
 app.UseHttpsRedirection();

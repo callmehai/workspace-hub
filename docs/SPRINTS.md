@@ -44,8 +44,8 @@
 | SCRUM-32 | Migration: Users multi-auth (PasswordHash null, GoogleSub, AuthProvider) | Lộc | SCRUM-6 | ✅ Done |
 | SCRUM-33 | Google Sign-In (đăng nhập Google, auto-link) | Lộc | 32, 9 | ✅ Done |
 | SCRUM-34 | Migration mô hình B: gộp Connections, Items.ConnectionId + ETag | Hải | SCRUM-6 | ✅ Done 2026-06-11 — migration `ModelBConnections`, đã apply DB dev |
-| SCRUM-35 | OAuth start flow theo mô hình B (mỗi service 1 connection) | Khánh | 34 | ⏳ Not started |
-| SCRUM-36 | OAuth callback theo mô hình B (per-service) + scope read-write | Khánh | 35 | ⏳ Not started |
+| SCRUM-35 | OAuth start flow theo mô hình B (mỗi service 1 connection) | Khánh | 34 | ✅ Done 2026-06-12 — `InitiateConnectionAsync` nhận `serviceType`, cache vào state; `ProviderStrategyContext` + `BuildAuthUrlAsync` per-service |
+| SCRUM-36 | OAuth callback theo mô hình B (per-service) + scope read-write | Khánh | 35 | ✅ Done 2026-06-12 — `CompleteConnectionAsync` đọc `serviceType` từ state, `ValidateAndExtract` chỉ check scope của service đó; scope đã là read-write (gmail.modify+send, calendar, drive) |
 | SCRUM-37 | Write-back Google: Email + Event + File (PATCH/POST/DELETE items) | Vũ | 36 | ⏳ Not started |
 | SCRUM-38 | Conflict detection (ETag → 409) cho mọi write-back | Lộc | 37 — **chốt interface `IWriteBackGuard` với Vũ trước khi code** | ⏳ Not started |
 | SCRUM-30 | Scheduled email tạo/list/cancel (đổi ConnectionId) | Vũ | 34, 36 | ⏳ Not started |

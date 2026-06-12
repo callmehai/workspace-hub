@@ -25,6 +25,7 @@ public class ConnectionsController : ApiControllerBase
 
         var result = await _connections.InitiateConnectionAsync(
             request.IntegrationKey,
+            request.ServiceType,
             request.RedirectUri,
             userId,
             ct);
@@ -56,15 +57,4 @@ public class ConnectionsController : ApiControllerBase
         return StatusCode(201, response);
     }
 
-    /// <summary>PUT /api/connections/{key}/credentials — Admin: encrypt + lưu OAuth credentials.</summary>
-    [HttpPut("{key}/credentials")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> SetCredentials(
-        string key,
-        [FromBody] SetCredentialsRequest request,
-        CancellationToken ct)
-    {
-        await _connections.SetCredentialsAsync(key, request.ClientId, request.ClientSecret, ct);
-        return NoContent();
-    }
 }

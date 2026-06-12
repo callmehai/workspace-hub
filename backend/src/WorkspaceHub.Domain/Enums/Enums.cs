@@ -35,7 +35,8 @@ public enum ServiceType
 {
     Gmail,
     GCal,
-    Drive
+    Drive,
+    Jira
 }
 
 /// <summary>Loại cursor cho incremental sync, tuỳ provider.</summary>
