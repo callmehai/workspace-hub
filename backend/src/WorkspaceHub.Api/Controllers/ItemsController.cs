@@ -14,7 +14,7 @@ namespace WorkspaceHub.Api.Controllers;
 /// </summary>
 [Authorize]
 [ODataIgnored]
-public class ItemsController : BaseApiController
+public class ItemsController : ApiControllerBase
 {
     private readonly IItemService _itemService;
     private readonly IValidator<GetItemsRequest> _validator;
@@ -37,21 +37,10 @@ public class ItemsController : BaseApiController
         [FromQuery] GetItemsRequest request,
         CancellationToken ct = default)
     {
-        // Validate query parameters qua FluentValidation
-        var validation = await _validator.ValidateAsync(request, ct);
-        if (!validation.IsValid)
-        {
-            var errors = validation.Errors
-                .Select(e => new { field = e.PropertyName, issue = e.ErrorMessage });
-            return BadRequest(new
-            {
-                error = "ValidationError",
-                message = "Validation failed.",
-                details = errors
-            });
-        }
+        // Validate qua FluentValidation — ValidationException được ExceptionMiddleware format thành 400 chuẩn.
+        await _validator.ValidateAndThrowAsync(request, ct);
 
-        var result = await _itemService.GetItemsAsync(UserId, request, ct);
+        var result = await _itemService.GetItemsAsync(CurrentUserId, request, ct);
         return Ok(result);
     }
 }

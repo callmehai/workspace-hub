@@ -27,8 +27,10 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 ## Admin — không đổi
 `GET /api/admin/users`, `/users/{id}`, `PATCH /users/{id}/lock`, `GET /api/admin/stats`, `DELETE /api/admin/connections/{id}`.
 
-## Integrations — không đổi
-`GET /api/integrations`, `POST/PUT/PATCH /api/admin/integrations/...`.
+## Integrations
+- `GET /api/integrations` — catalog cho user.
+- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (422). ⏳ SCRUM-48.
+- ~~`PUT /api/connections/{key}/credentials`~~ — **sẽ xoá ở SCRUM-47**: admin không quản lý credentials nữa, ClientId/Secret đọc từ config/env (CHANGELOG 2026-06-12).
 
 ## Connections ⭐ (thay OAuth Connections + Service Connections)
 Mô hình B: mỗi service authorize riêng, tạo 1 Connection.

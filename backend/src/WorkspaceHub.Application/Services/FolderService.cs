@@ -76,8 +76,9 @@ public class FolderService : IFolderService
         await _folderRepo.SaveChangesAsync(ct);
 
         // Reload with Owner navigation for response mapping
-        var created = await _folderRepo.GetByIdWithOwnerAsync(folder.Id, ct);
-        return MapToResponse(created!, userId);
+        var created = await _folderRepo.GetByIdWithOwnerAsync(folder.Id, ct)
+            ?? throw new InvalidOperationException($"Folder {folder.Id} vừa tạo nhưng không reload được.");
+        return MapToResponse(created, userId);
     }
 
     /// <inheritdoc/>

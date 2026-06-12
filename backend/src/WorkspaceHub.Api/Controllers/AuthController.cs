@@ -8,7 +8,6 @@ namespace WorkspaceHub.Api.Controllers;
 /// <summary>
 /// Auth endpoints: register + login + me. Controller mỏng — business logic nằm trong AuthService.
 /// </summary>
-[Route("api/[controller]")]
 public class AuthController : ApiControllerBase
 {
     private readonly IAuthService _auth;
