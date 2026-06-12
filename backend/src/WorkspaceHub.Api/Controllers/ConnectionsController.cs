@@ -5,7 +5,6 @@ using WorkspaceHub.Application.Interfaces.Services;
 
 namespace WorkspaceHub.Api.Controllers;
 
-[Route("api/connections")]
 [Authorize]
 public class ConnectionsController : ApiControllerBase
 {

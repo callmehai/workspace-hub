@@ -3,11 +3,11 @@ export interface UserDto {
   email: string;
   fullName: string;
   role: string;
-  createdAt: string;
 }
 
+/** Khớp AuthResponse của backend: { accessToken, expiresIn, user }. */
 export interface AuthResponse {
-  token: string;
+  accessToken: string;
   expiresIn: number;
   user: UserDto;
 }
