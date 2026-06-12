@@ -11,6 +11,7 @@ internal static class GoogleScopes
     public static readonly string[] Login = [OpenId, Email, Profile];
 
     public const string GmailReadonly    = "https://www.googleapis.com/auth/gmail.readonly";
+    public const string GmailModify      = "https://www.googleapis.com/auth/gmail.modify";
     public const string GmailSend        = "https://www.googleapis.com/auth/gmail.send";
     public const string CalendarReadonly = "https://www.googleapis.com/auth/calendar.readonly";
     public const string CalendarWrite    = "https://www.googleapis.com/auth/calendar";
@@ -20,7 +21,7 @@ internal static class GoogleScopes
     // Toàn bộ scope bắt buộc — dùng làm reference, không dùng trực tiếp trong BuildForService nữa.
     public static readonly string[] Required =
     [
-        GmailReadonly, GmailSend,
+        GmailModify, GmailSend,
         CalendarReadonly, CalendarWrite,
         DriveReadonly, DriveWrite,
     ];
@@ -29,7 +30,7 @@ internal static class GoogleScopes
     public static readonly IReadOnlyDictionary<ServiceType, string[]> ServiceScopes =
         new Dictionary<ServiceType, string[]>
         {
-            [ServiceType.Gmail] = [GmailReadonly, GmailSend],
+            [ServiceType.Gmail] = [GmailModify, GmailSend],
             [ServiceType.GCal]  = [CalendarWrite],
             [ServiceType.Drive] = [DriveWrite],
         };

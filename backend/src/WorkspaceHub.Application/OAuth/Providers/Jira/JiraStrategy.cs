@@ -81,12 +81,15 @@ public class JiraStrategy(
         {
             me = await http.GetFromJsonAsync<JsonElement>(MeEndpoint, ct);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
             throw new BusinessRuleException("Không lấy được thông tin tài khoản từ Atlassian");
         }
 
-        var accountId = me.GetProperty("account_id").GetString()
+        if (!me.TryGetProperty("account_id", out var accountIdEl))
+            throw new BusinessRuleException("Không lấy được accountId từ Atlassian");
+
+        var accountId = accountIdEl.GetString()
             ?? throw new BusinessRuleException("Không lấy được accountId từ Atlassian");
 
         // Step 3: validate scopes — Jira all-or-nothing, không phụ thuộc ServiceType được request.
