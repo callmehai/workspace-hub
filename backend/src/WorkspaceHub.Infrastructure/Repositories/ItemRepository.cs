@@ -81,4 +81,10 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
 
         return (items.AsReadOnly(), totalCount);
     }
+
+    /// <inheritdoc/>
+    public async Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default)
+    {
+        return await Set.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
+    }
 }

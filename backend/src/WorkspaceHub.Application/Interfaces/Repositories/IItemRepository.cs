@@ -24,4 +24,10 @@ public interface IItemRepository : IGenericRepository<Item>
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Tìm Item theo ID và User, dùng để check ownership trước khi update/delete.
+    /// </summary>
+    Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 }
+

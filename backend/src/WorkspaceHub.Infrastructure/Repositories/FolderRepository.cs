@@ -69,4 +69,36 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
     {
         return await Set.AnyAsync(f => f.Id == folderId && f.OwnerId == userId, ct);
     }
+
+    /// <inheritdoc/>
+    public async Task<bool> ItemFolderExistsAsync(Guid itemId, Guid folderId, CancellationToken ct = default)
+    {
+        return await Db.ItemFolders.AnyAsync(ifj => ifj.ItemId == itemId && ifj.FolderId == folderId, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<int> GetMaxItemPositionAsync(Guid folderId, CancellationToken ct = default)
+    {
+        var hasItems = await Db.ItemFolders.AnyAsync(ifj => ifj.FolderId == folderId, ct);
+        if (!hasItems) return 0;
+        return await Db.ItemFolders.Where(ifj => ifj.FolderId == folderId).MaxAsync(ifj => ifj.Position, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<ItemFolder?> GetItemFolderAsync(Guid itemId, Guid folderId, CancellationToken ct = default)
+    {
+        return await Db.ItemFolders.FirstOrDefaultAsync(ifj => ifj.ItemId == itemId && ifj.FolderId == folderId, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task AddItemFolderAsync(ItemFolder itemFolder, CancellationToken ct = default)
+    {
+        await Db.ItemFolders.AddAsync(itemFolder, ct);
+    }
+
+    /// <inheritdoc/>
+    public void RemoveItemFolder(ItemFolder itemFolder)
+    {
+        Db.ItemFolders.Remove(itemFolder);
+    }
 }

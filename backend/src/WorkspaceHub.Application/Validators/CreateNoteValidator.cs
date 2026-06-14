@@ -1,0 +1,24 @@
+using FluentValidation;
+using WorkspaceHub.Application.DTOs;
+
+namespace WorkspaceHub.Application.Validators;
+
+public class CreateNoteValidator : AbstractValidator<CreateNoteRequest>
+{
+    public CreateNoteValidator()
+    {
+        RuleFor(x => x.Title)
+            .NotEmpty().WithMessage("Title is required.")
+            .MaximumLength(200).WithMessage("Title cannot exceed 200 characters.");
+
+        RuleFor(x => x.ContentMarkdown)
+            .NotEmpty().WithMessage("ContentMarkdown is required.");
+
+        RuleFor(x => x.FolderId)
+            .NotEqual(Guid.Empty).When(x => x.FolderId.HasValue).WithMessage("FolderId cannot be empty GUID.");
+
+        RuleFor(x => x.TagIds)
+            .Must(tags => tags == null || tags.Count <= 20)
+            .WithMessage("Cannot attach more than 20 tags to a note.");
+    }
+}

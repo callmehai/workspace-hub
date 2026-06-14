@@ -122,6 +122,54 @@ public class FolderService : IFolderService
         await _folderRepo.SaveChangesAsync(ct);
     }
 
+    /// <inheritdoc/>
+    public async Task<ItemFolderResponse> AddItemToFolderAsync(
+        Guid userId, Guid folderId, AddItemToFolderRequest request, CancellationToken ct = default)
+    {
+        var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
+        if (!isOwner)
+            throw new ForbiddenException("Only the folder owner can add items to this folder.");
+
+        var exists = await _folderRepo.ItemFolderExistsAsync(request.ItemId, folderId, ct);
+        if (exists)
+            throw new ConflictException("Item is already in this folder.");
+
+        var maxPos = await _folderRepo.GetMaxItemPositionAsync(folderId, ct);
+
+        var itemFolder = new ItemFolder
+        {
+            ItemId = request.ItemId,
+            FolderId = folderId,
+            Position = maxPos + 1,
+            AddedAt = DateTime.UtcNow
+        };
+
+        await _folderRepo.AddItemFolderAsync(itemFolder, ct);
+        await _folderRepo.SaveChangesAsync(ct);
+
+        return new ItemFolderResponse(
+            ItemId: itemFolder.ItemId,
+            FolderId: itemFolder.FolderId,
+            Position: itemFolder.Position,
+            AddedAt: itemFolder.AddedAt
+        );
+    }
+
+    /// <inheritdoc/>
+    public async Task RemoveItemFromFolderAsync(
+        Guid userId, Guid folderId, Guid itemId, CancellationToken ct = default)
+    {
+        var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
+        if (!isOwner)
+            throw new ForbiddenException("Only the folder owner can remove items from this folder.");
+
+        var itemFolder = await _folderRepo.GetItemFolderAsync(itemId, folderId, ct)
+            ?? throw new NotFoundException($"Item {itemId} is not in folder {folderId}.");
+
+        _folderRepo.RemoveItemFolder(itemFolder);
+        await _folderRepo.SaveChangesAsync(ct);
+    }
+
     // ───────────────────────── Private helpers ─────────────────────────
 
     /// <summary>

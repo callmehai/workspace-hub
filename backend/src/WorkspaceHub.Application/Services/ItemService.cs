@@ -1,7 +1,9 @@
+using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Application.Services;
 
@@ -57,6 +59,72 @@ public class ItemService : IItemService
         return new PagedResult<ItemResponse>(dtos, totalCount, page, limit);
     }
 
+    /// <inheritdoc/>
+    public async Task<ItemResponse> UpdateStatusAsync(
+        Guid userId, Guid itemId, UpdateItemStatusRequest request, CancellationToken ct = default)
+    {
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
+            ?? throw new NotFoundException(nameof(Item), itemId);
+
+        item.Status = request.Status;
+
+        _itemRepo.Update(item);
+        await _itemRepo.SaveChangesAsync(ct);
+
+        return MapToResponse(item);
+    }
+
+    /// <inheritdoc/>
+    public async Task<ItemResponse> CreateNoteAsync(
+        Guid userId, CreateNoteRequest request, CancellationToken ct = default)
+    {
+        var snippet = request.ContentMarkdown.Length > 200 
+            ? request.ContentMarkdown.Substring(0, 197) + "..." 
+            : request.ContentMarkdown;
+
+        var metadata = System.Text.Json.JsonSerializer.Serialize(new { contentMarkdown = request.ContentMarkdown });
+
+        var item = new Item
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            ConnectionId = null,
+            ExternalId = null,
+            Type = ItemType.Note,
+            Title = request.Title,
+            Snippet = snippet,
+            MetadataJson = metadata,
+            OccurredAt = DateTime.UtcNow,
+            Status = ItemStatus.Inbox,
+            IsImportant = false,
+            IsArchived = false
+        };
+
+        await _itemRepo.AddAsync(item, ct);
+
+        if (request.FolderId.HasValue)
+        {
+            var folderId = request.FolderId.Value;
+            var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
+            if (!isOwner)
+                throw new ForbiddenException("Only the folder owner can add items to this folder.");
+
+            var maxPos = await _folderRepo.GetMaxItemPositionAsync(folderId, ct);
+            var itemFolder = new ItemFolder
+            {
+                ItemId = item.Id,
+                FolderId = folderId,
+                Position = maxPos + 1,
+                AddedAt = DateTime.UtcNow
+            };
+            await _folderRepo.AddItemFolderAsync(itemFolder, ct);
+        }
+
+        await _itemRepo.SaveChangesAsync(ct);
+
+        return MapToResponse(item);
+    }
+
     // ───────────────────────── Private helpers ─────────────────────────
 
     /// <summary>Map Item entity → ItemResponse DTO.</summary>
@@ -69,5 +137,6 @@ public class ItemService : IItemService
         OccurredAt: item.OccurredAt,
         DueAt: item.DueAt,
         IsImportant: item.IsImportant,
-        ExternalId: item.ExternalId);
+        ExternalId: item.ExternalId,
+        MetadataJson: item.MetadataJson);
 }

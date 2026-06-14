@@ -17,6 +17,22 @@ public record GetItemsRequest(
     int Page = 1,
     int Limit = 20);
 
+// ───────────────────────── Command Request ─────────────────────────
+
+/// <summary>
+/// PATCH /api/items/{id}/status — body chỉ có status mới
+/// </summary>
+public record UpdateItemStatusRequest(ItemStatus Status);
+
+/// <summary>
+/// POST /api/items/note — tạo Note mới
+/// </summary>
+public record CreateNoteRequest(
+    string Title,
+    string ContentMarkdown,
+    Guid? FolderId = null,
+    List<Guid>? TagIds = null);
+
 // ───────────────────────── Response DTO ─────────────────────────
 
 /// <summary>
@@ -32,6 +48,7 @@ public record ItemResponse(
     DateTime OccurredAt,
     DateTime? DueAt,
     bool IsImportant,
-    string? ExternalId);
+    string? ExternalId,
+    string? MetadataJson);
 
 
