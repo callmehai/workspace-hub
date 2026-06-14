@@ -19,7 +19,7 @@
   "Google": {
     "RedirectUri": "http://localhost:5173/oauth/callback"
   },
-  "Dev": {
+  "OAuth": {
     "google": {
       "ClientId": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
       "ClientSecret": "YOUR_GOOGLE_CLIENT_SECRET"
