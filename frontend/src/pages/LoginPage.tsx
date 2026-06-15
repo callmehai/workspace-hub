@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api, { tokenStore } from '../lib/api'
@@ -24,16 +25,29 @@ export default function LoginPage() {
       toast.success(`Chào ${data.user.fullName}`)
       navigate('/inbox', { replace: true })
     },
-    onError: () => toast.error('Email hoặc mật khẩu không đúng'),
+    onError: (error) => {
+      const msg = isAxiosError(error) ? error.response?.data?.message : undefined
+      toast.error(msg || 'Email hoặc mật khẩu không đúng')
+    },
   })
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      toast.error('Email không hợp lệ')
+      return
+    }
+    if (password.length < 8) {
+      toast.error('Mật khẩu phải từ 8 ký tự trở lên')
+      return
+    }
+    login.mutate()
+  }
 
   return (
     <div className="flex h-full items-center justify-center bg-gray-50">
       <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          login.mutate()
-        }}
+        onSubmit={handleLogin}
         className="w-80 space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
       >
         <h1 className="text-xl font-bold text-gray-900">Đăng nhập</h1>
