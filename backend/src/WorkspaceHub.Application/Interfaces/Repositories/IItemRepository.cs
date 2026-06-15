@@ -24,4 +24,7 @@ public interface IItemRepository : IGenericRepository<Item>
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);
+
+    Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default);
+    Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default);
 }

@@ -81,4 +81,19 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
 
         return (items.AsReadOnly(), totalCount);
     }
+
+    public async Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        var ids = await Set.AsNoTracking()
+            .Where(i => i.ConnectionId == connectionId && i.ExternalId != null)
+            .Select(i => i.ExternalId!)
+            .ToListAsync(ct);
+            
+        return new HashSet<string>(ids);
+    }
+
+    public async Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default)
+    {
+        await Set.AddRangeAsync(items, ct);
+    }
 }
