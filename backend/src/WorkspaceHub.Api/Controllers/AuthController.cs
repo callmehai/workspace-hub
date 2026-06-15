@@ -43,6 +43,15 @@ public class AuthController : ApiControllerBase
     public async Task<ActionResult<UserDto>> Me(CancellationToken ct)
         => Ok(await _auth.GetMeAsync(CurrentUserId, ct));
 
+    /// <summary>POST /api/auth/logout — stateless logout MVP (client tự xoá token).</summary>
+    [HttpPost("logout")]
+    [Authorize]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(401)]
+    public IActionResult Logout()
+    {
+        return NoContent();
+    }
     /// <summary>POST /api/auth/google/start — returns Google Sign-In authorization URL.</summary>
     [HttpPost("google/start")]
     [AllowAnonymous]
