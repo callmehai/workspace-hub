@@ -29,7 +29,7 @@
 | SCRUM-11 | Role-based authorization + logout | Khánh | ✅ Done |
 | SCRUM-12 | OAuth start flow + đăng ký app Google Cloud | Khánh | ✅ Done |
 | SCRUM-13 | OAuth callback + lưu token encrypted | Khánh | ✅ Done |
-| SCRUM-14 | List/disconnect/refresh connection | — | ⏳ Pending — **viết lại theo mô hình B** (Connections, không còn ServiceConnections) |
+| SCRUM-14 | List/disconnect/refresh connection | Antigravity | ✅ Done 2026-06-15 — `GET /api/connections` (masked token), `DELETE /api/connections/{id}` (cascade + Items.ConnectionId=NULL), `POST /api/connections/{id}/refresh` (422 invalid→Error) |
 | SCRUM-18 | Folder CRUD | Huy | ✅ Done |
 | SCRUM-19 | Items list + filter + pagination + search | Huy | ✅ Done |
 | SCRUM-21 | Frontend setup: routing, layout, protected route | Dũng | ✅ Done |

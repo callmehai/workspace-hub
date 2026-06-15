@@ -17,25 +17,34 @@ public class ConnectionsService : IConnectionsService
 {
     private readonly IIntegrationRepository _integrations;
     private readonly IConnectionRepository _connections;
+    private readonly IItemRepository _items;
     private readonly ITokenProtector _tokenProtector;
     private readonly IDistributedCache _cache;
     private readonly IReadOnlyDictionary<string, IProviderStrategy> _strategies;
     private readonly IConfiguration _config;
+    private readonly IOAuthTokenClient _tokenClient;
+    private readonly IGenericRepository<ScheduledEmail> _scheduledEmails;
 
     public ConnectionsService(
         IIntegrationRepository integrations,
         IConnectionRepository connections,
+        IItemRepository items,
         ITokenProtector tokenProtector,
         IDistributedCache cache,
         IEnumerable<IProviderStrategy> strategies,
-        IConfiguration config)
+        IConfiguration config,
+        IOAuthTokenClient tokenClient,
+        IGenericRepository<ScheduledEmail> scheduledEmails)
     {
         _integrations = integrations;
         _connections = connections;
+        _items = items;
         _tokenProtector = tokenProtector;
         _cache = cache;
         _strategies = strategies.ToDictionary(s => s.ProviderKey, StringComparer.OrdinalIgnoreCase);
         _config = config;
+        _tokenClient = tokenClient;
+        _scheduledEmails = scheduledEmails;
     }
 
     public async Task<InitiateConnectionResult> InitiateConnectionAsync(
@@ -129,14 +138,14 @@ public class ConnectionsService : IConnectionsService
 
         // Bước 6 — Tạo một Connection riêng cho mỗi service được cấp quyền.
         var results = new List<ConnectionResult>();
-        foreach (var serviceType in tokenResult.GrantedServices)
+        foreach (var svcType in tokenResult.GrantedServices)
         {
             var existing = await _connections.GetByUniqueKeyAsync(
-                userId, provider, serviceType, tokenResult.ProviderAccountId, ct);
+                userId, provider, svcType, tokenResult.ProviderAccountId, ct);
 
             if (existing is not null)
                 throw new ConflictException(
-                    $"Bạn đã kết nối {serviceType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
+                    $"Bạn đã kết nối {svcType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
 
             var connection = new Connection
             {
@@ -144,7 +153,7 @@ public class ConnectionsService : IConnectionsService
                 UserId = userId,
                 IntegrationId = integration.Id,
                 Provider = provider,
-                ServiceType = serviceType,
+                ServiceType = svcType,
                 ProviderAccountId = tokenResult.ProviderAccountId,
                 AccessTokenEncrypted = accessTokenEncrypted,
                 RefreshTokenEncrypted = refreshTokenEncrypted,
@@ -177,4 +186,177 @@ public class ConnectionsService : IConnectionsService
         return new IntegrationResponse(integration.Id, integration.Key, integration.DisplayName, integration.IsEnabled);
     }
 
+    // ───────────── SCRUM-14: List / Disconnect / Refresh ─────────────
+
+    public async Task<IReadOnlyList<ConnectionDto>> GetConnectionsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var connections = await _connections.GetByUserIdAsync(userId, ct);
+
+        return connections.Select(c => new ConnectionDto
+        {
+            Id = c.Id,
+            Provider = c.Provider.ToString(),
+            ServiceType = c.ServiceType.ToString(),
+            ProviderAccountId = c.ProviderAccountId,
+            MaskedToken = MaskToken(c.AccessTokenEncrypted),
+            Status = c.Status.ToString(),
+            ExpiresAt = c.ExpiresAt,
+            LastSyncedAt = c.LastSyncedAt,
+            CreatedAt = c.CreatedAt
+        }).ToList().AsReadOnly();
+    }
+
+    public async Task DisconnectAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var connection = await _connections.GetByIdTrackedAsync(connectionId, ct)
+            ?? throw new NotFoundException("Connection", connectionId);
+
+        if (connection.UserId != userId)
+            throw new ForbiddenException("You do not have permission to disconnect this connection.");
+
+        // FK NoAction ở DB → phải xử lý ở service layer trước khi xoá Connection:
+        // (1) Items.ConnectionId SET NULL
+        await _items.NullifyConnectionIdAsync(connectionId, ct);
+
+        // (2) Xoá ScheduledEmails Pending (hoặc cancel) — tránh FK violation
+        var scheduledEmails = (await _scheduledEmails.ListAsync(ct))
+            .Where(se => se.ConnectionId == connectionId)
+            .ToList();
+        foreach (var se in scheduledEmails)
+        {
+            _scheduledEmails.Remove(se);
+        }
+
+        // (3) Xoá Connection
+        _connections.Remove(connection);
+        await _connections.SaveChangesAsync(ct);
+    }
+
+    public async Task<RefreshConnectionResponse> RefreshConnectionAsync(
+        Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var connection = await _connections.GetByIdTrackedAsync(connectionId, ct)
+            ?? throw new NotFoundException("Connection", connectionId);
+
+        if (connection.UserId != userId)
+            throw new ForbiddenException("You do not have permission to refresh this connection.");
+
+        // Lấy refresh token đã mã hoá → giải mã
+        if (string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
+        {
+            connection.Status = ConnectionStatus.Error;
+            connection.LastError = "No refresh token available";
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+            throw new BusinessRuleException("Refresh token is not available. Please reconnect.");
+        }
+
+        string refreshToken;
+        try
+        {
+            refreshToken = _tokenProtector.Unprotect(connection.RefreshTokenEncrypted);
+        }
+        catch
+        {
+            connection.Status = ConnectionStatus.Error;
+            connection.LastError = "Failed to decrypt refresh token";
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+            throw new BusinessRuleException("Refresh token is invalid. Please reconnect.");
+        }
+
+        // Lấy integration để biết token endpoint
+        var integration = await _integrations.GetByIdAsync(connection.IntegrationId, ct)
+            ?? throw new NotFoundException("Integration", connection.IntegrationId);
+
+        var clientId = _config[$"OAuth:{integration.Key}:ClientId"]
+            ?? throw new BusinessRuleException($"Missing ClientId config for '{integration.Key}'");
+        var clientSecret = _config[$"OAuth:{integration.Key}:ClientSecret"]
+            ?? throw new BusinessRuleException($"Missing ClientSecret config for '{integration.Key}'");
+
+        // Gọi provider để refresh token
+        try
+        {
+            var formData = new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = refreshToken,
+                ["client_id"] = clientId,
+                ["client_secret"] = clientSecret
+            };
+
+            var responseJson = await _tokenClient.PostFormAsync(integration.TokenEndpoint, formData, ct);
+            var tokenResponse = JsonSerializer.Deserialize<JsonElement>(responseJson);
+
+            // Parse access_token và expires_in từ response
+            if (!tokenResponse.TryGetProperty("access_token", out var accessTokenEl))
+            {
+                // Provider trả lỗi → set Status = Error, throw 422
+                connection.Status = ConnectionStatus.Error;
+                connection.LastError = "Provider did not return a new access token";
+                _connections.Update(connection);
+                await _connections.SaveChangesAsync(ct);
+                throw new BusinessRuleException("Refresh token is invalid. Please reconnect.");
+            }
+
+            var newAccessToken = accessTokenEl.GetString()!;
+            var expiresIn = tokenResponse.TryGetProperty("expires_in", out var expiresInEl)
+                ? expiresInEl.GetInt32()
+                : 3600;
+
+            // Cập nhật connection
+            connection.AccessTokenEncrypted = _tokenProtector.Protect(newAccessToken);
+            connection.ExpiresAt = DateTime.UtcNow.AddSeconds(expiresIn);
+            connection.Status = ConnectionStatus.Active;
+            connection.LastError = null;
+
+            // Nếu provider trả refresh_token mới (rotation), cập nhật luôn
+            if (tokenResponse.TryGetProperty("refresh_token", out var newRefreshEl))
+            {
+                var newRefresh = newRefreshEl.GetString();
+                if (!string.IsNullOrEmpty(newRefresh))
+                {
+                    connection.RefreshTokenEncrypted = _tokenProtector.Protect(newRefresh);
+                }
+            }
+
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+
+            return new RefreshConnectionResponse
+            {
+                ConnectionId = connection.Id,
+                ExpiresAt = connection.ExpiresAt,
+                Status = connection.Status.ToString()
+            };
+        }
+        catch (BusinessRuleException)
+        {
+            throw; // re-throw our own exceptions
+        }
+        catch (Exception ex)
+        {
+            // Provider lỗi → set Status = Error, throw 422
+            connection.Status = ConnectionStatus.Error;
+            connection.LastError = ex.Message;
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+            throw new BusinessRuleException("Refresh token is invalid. Please reconnect.");
+        }
+    }
+
+    // ───────────── Helpers ─────────────
+
+    /// <summary>
+    /// Mask token: chỉ hiện 4 ký tự cuối, phần còn lại thay bằng ****
+    /// CONVENTIONS.md: "Token response luôn mask"
+    /// </summary>
+    private static string MaskToken(string encryptedToken)
+    {
+        if (string.IsNullOrEmpty(encryptedToken) || encryptedToken.Length <= 4)
+            return "****";
+
+        return "****" + encryptedToken[^4..];
+    }
 }
+

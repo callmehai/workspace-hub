@@ -19,6 +19,8 @@ public class ConnectionsController : ApiControllerBase
         _syncService = syncService;
     }
 
+    // ───────────── OAuth flow ─────────────
+
     /// <summary>POST /api/connections/oauth/start — build authorization URL.</summary>
     [HttpPost("oauth/start")]
     public async Task<IActionResult> InitiateConnection(
@@ -61,6 +63,34 @@ public class ConnectionsController : ApiControllerBase
         return StatusCode(201, response);
     }
 
+    // ───────────── SCRUM-14: List / Disconnect / Refresh ─────────────
+
+    /// <summary>GET /api/connections — array of current user's connections (token masked).</summary>
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<ConnectionDto>>> GetConnections(CancellationToken ct)
+    {
+        var connections = await _connections.GetConnectionsAsync(CurrentUserId, ct);
+        return Ok(connections);
+    }
+
+    /// <summary>DELETE /api/connections/{id} — disconnect, CASCADE ServiceConnections, Items.ConnectionId = NULL.</summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Disconnect(Guid id, CancellationToken ct)
+    {
+        await _connections.DisconnectAsync(id, CurrentUserId, ct);
+        return NoContent();
+    }
+
+    /// <summary>POST /api/connections/{id}/refresh — refresh token, returns new expiresAt. 422 if invalid.</summary>
+    [HttpPost("{id:guid}/refresh")]
+    public async Task<ActionResult<RefreshConnectionResponse>> RefreshConnection(Guid id, CancellationToken ct)
+    {
+        var result = await _connections.RefreshConnectionAsync(id, CurrentUserId, ct);
+        return Ok(result);
+    }
+
+    // ───────────── Gmail helpers ─────────────
+
     [HttpGet("{id:guid}/gmail-profile")]
     public async Task<IActionResult> GetGmailProfile(Guid id, CancellationToken ct)
     {
@@ -79,3 +109,4 @@ public class ConnectionsController : ApiControllerBase
         return Ok(await _syncService.SyncAsync(id, CurrentUserId, 50, ct));
     }
 }
+
