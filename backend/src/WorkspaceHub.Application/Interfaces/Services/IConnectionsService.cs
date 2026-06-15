@@ -1,3 +1,4 @@
+using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.OAuth.Core;
 
 namespace WorkspaceHub.Application.Interfaces.Services;
@@ -24,6 +25,8 @@ public interface IConnectionsService
         string state,
         Guid userId,
         CancellationToken ct = default);
+
+    Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default);
 
     // TODO SCRUM-14 (DisconnectAsync): FK Items/ScheduledEmails → Connections là NoAction ở DB,
     // nên trước khi xoá Connection PHẢI: (1) UPDATE Items SET ConnectionId = NULL,

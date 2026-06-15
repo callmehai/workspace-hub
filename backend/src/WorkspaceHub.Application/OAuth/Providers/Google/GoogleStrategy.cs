@@ -19,36 +19,36 @@ public class GoogleStrategy : IProviderStrategy
     public string ProviderKey => "google";
 
     public Task<InitiateConnectionResult> BuildAuthUrlAsync(
-        ProviderStrategyContext ctx,
+        BuildAuthUrlRequest request,
         CancellationToken ct = default)
     {
-        if (!Enum.TryParse<ServiceType>(ctx.ServiceType, ignoreCase: true, out var serviceType)
+        if (!Enum.TryParse<ServiceType>(request.ServiceType, ignoreCase: true, out var serviceType)
             || !GoogleScopes.ServiceScopes.ContainsKey(serviceType))
-            throw new BusinessRuleException($"Service '{ctx.ServiceType}' không phải Google service");
+            throw new BusinessRuleException($"Service '{request.ServiceType}' không phải Google service");
 
-        var builder = new GoogleAuthUrlBuilder(ctx.ClientId, ctx.RedirectUri);
-        var url = builder.BuildForService(string.Join(' ', GoogleScopes.BuildRequestScopes(serviceType)), ctx.State);
+        var builder = new GoogleAuthUrlBuilder(request.ClientId, request.RedirectUri);
+        var url = builder.BuildForService(string.Join(' ', GoogleScopes.BuildRequestScopes(serviceType)), request.State);
 
-        return Task.FromResult(new InitiateConnectionResult(url, ctx.State));
+        return Task.FromResult(new InitiateConnectionResult(url, request.State));
     }
 
     public async Task<TokenExchangeResult> ExchangeCodeAsync(
-        CompleteContext ctx,
+        ExchangeCodeRequest request,
         CancellationToken ct = default)
     {
         var formData = new Dictionary<string, string>
         {
-            ["code"] = ctx.Code,
-            ["client_id"] = ctx.ClientId,
-            ["client_secret"] = ctx.ClientSecret,
-            ["redirect_uri"] = ctx.RedirectUri,
+            ["code"] = request.Code,
+            ["client_id"] = request.ClientId,
+            ["client_secret"] = request.ClientSecret,
+            ["redirect_uri"] = request.RedirectUri,
             ["grant_type"] = "authorization_code"
         };
 
         string json;
         try
         {
-            json = await _tokenClient.PostFormAsync(ctx.Integration.TokenEndpoint, formData, ct);
+            json = await _tokenClient.PostFormAsync(request.Integration.TokenEndpoint, formData, ct);
         }
         catch (HttpRequestException)
         {
@@ -62,8 +62,8 @@ public class GoogleStrategy : IProviderStrategy
             ? IdTokenParser.ExtractProviderAccountId(googleToken.IdToken)
             : "dev-placeholder@gmail.com";
 
-        if (!Enum.TryParse<ServiceType>(ctx.ServiceType, ignoreCase: true, out var requestedService))
-            throw new BusinessRuleException($"Service '{ctx.ServiceType}' không hợp lệ");
+        if (!Enum.TryParse<ServiceType>(request.ServiceType, ignoreCase: true, out var requestedService))
+            throw new BusinessRuleException($"Service '{request.ServiceType}' không hợp lệ");
 
         var grantedService = GoogleScopes.ValidateAndExtract(googleToken.Scope, requestedService);
 
