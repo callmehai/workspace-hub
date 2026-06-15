@@ -27,4 +27,9 @@ public interface IItemRepository : IGenericRepository<Item>
 
     Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default);
     Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tìm Item theo ID và User, dùng để check ownership trước khi update/delete.
+    /// </summary>
+    Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 }

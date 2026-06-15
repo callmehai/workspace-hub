@@ -58,3 +58,12 @@ public class CsrfException : Exception
     public CsrfException(string message) : base(message) { }
 }
 
+/// <summary>
+/// Lỗi 400 — Yêu cầu không hợp lệ.
+/// Middleware sẽ map sang HTTP 400 Bad Request.
+/// </summary>
+public class BadRequestException : Exception
+{
+    public BadRequestException(string message) : base(message) { }
+}
+

@@ -9,22 +9,13 @@ namespace WorkspaceHub.Api.Controllers;
 public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
-    private readonly WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository _connectionRepository;
-    private readonly WorkspaceHub.Application.Abstractions.IGmailGateway _gmailGateway;
-    private readonly WorkspaceHub.Application.Mapping.IGmailItemMapper _mapper;
-    private readonly WorkspaceHub.Application.Interfaces.Services.IGmailSyncService _syncService;
+    private readonly IGmailSyncService _syncService;
 
     public ConnectionsController(
         IConnectionsService connections,
-        WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository connectionRepository,
-        WorkspaceHub.Application.Abstractions.IGmailGateway gmailGateway,
-        WorkspaceHub.Application.Mapping.IGmailItemMapper mapper,
-        WorkspaceHub.Application.Interfaces.Services.IGmailSyncService syncService)
+        IGmailSyncService syncService)
     {
         _connections = connections;
-        _connectionRepository = connectionRepository;
-        _gmailGateway = gmailGateway;
-        _mapper = mapper;
         _syncService = syncService;
     }
 
@@ -73,53 +64,18 @@ public class ConnectionsController : ApiControllerBase
     [HttpGet("{id:guid}/gmail-profile")]
     public async Task<IActionResult> GetGmailProfile(Guid id, CancellationToken ct)
     {
-        var conn = await _connectionRepository.GetByIdAsync(id, ct);
-        if (conn is null) return NotFound();
-
-        if (conn.UserId != CurrentUserId) return Forbid();
-
-        if (conn.ServiceType != WorkspaceHub.Domain.Enums.ServiceType.Gmail)
-            return BadRequest(new { message = "Kết nối này không phải Gmail" });
-
-        var profile = await _gmailGateway.GetProfileAsync(conn, ct);
-        return Ok(profile);
+        return Ok(await _syncService.GetProfileAsync(id, CurrentUserId, ct));
     }
 
     [HttpGet("{id:guid}/gmail-sample")]
     public async Task<IActionResult> GetGmailSample(Guid id, CancellationToken ct)
     {
-        var conn = await _connectionRepository.GetByIdAsync(id, ct);
-        if (conn is null) return NotFound();
-
-        if (conn.UserId != CurrentUserId) return Forbid();
-
-        if (conn.ServiceType != WorkspaceHub.Domain.Enums.ServiceType.Gmail)
-            return BadRequest(new { message = "Kết nối này không phải Gmail" });
-
-        var list = await _gmailGateway.ListMessageIdsAsync(conn, null, 1, ct);
-        if (list.MessageIds.Count == 0)
-        {
-            return Ok(new { message = "Hộp thư trống, không có email để map" });
-        }
-
-        var msg = await _gmailGateway.GetMessageAsync(conn, list.MessageIds[0], ct);
-        var item = _mapper.ToItem(msg, conn.UserId, conn.Id, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-        
-        return Ok(item);
+        return Ok(await _syncService.GetSampleAsync(id, CurrentUserId, ct));
     }
 
     [HttpPost("{id:guid}/sync")]
     public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
     {
-        var conn = await _connectionRepository.GetByIdAsync(id, ct);
-        if (conn is null) return NotFound();
-
-        if (conn.UserId != CurrentUserId) return Forbid();
-
-        if (conn.ServiceType != WorkspaceHub.Domain.Enums.ServiceType.Gmail)
-            return BadRequest(new { message = "Kết nối này không phải Gmail" });
-
-        var result = await _syncService.SyncConnectionAsync(conn, 50, ct);
-        return Ok(result);
+        return Ok(await _syncService.SyncAsync(id, CurrentUserId, 50, ct));
     }
 }

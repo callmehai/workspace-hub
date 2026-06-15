@@ -29,6 +29,52 @@ public class GmailSyncService : IGmailSyncService
         _connections = connections;
     }
 
+    private async Task<Connection> GetValidConnectionAsync(Guid connectionId, Guid userId, CancellationToken ct)
+    {
+        var conn = await _connections.GetByIdAsync(connectionId, ct);
+        if (conn is null) throw new WorkspaceHub.Application.Common.NotFoundException("Connection", connectionId);
+        if (conn.UserId != userId) throw new WorkspaceHub.Application.Common.NotFoundException("Connection", connectionId);
+
+        if (conn.ServiceType != WorkspaceHub.Domain.Enums.ServiceType.Gmail)
+            throw new WorkspaceHub.Application.Common.BadRequestException("Kết nối này không phải Gmail");
+
+        return conn;
+    }
+
+    public async Task<GmailProfile> GetProfileAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var conn = await GetValidConnectionAsync(connectionId, userId, ct);
+        return await _gmailGateway.GetProfileAsync(conn, ct);
+    }
+
+    public async Task<GmailSampleDto> GetSampleAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var conn = await GetValidConnectionAsync(connectionId, userId, ct);
+        var list = await _gmailGateway.ListMessageIdsAsync(conn, null, 1, ct);
+        if (list.MessageIds.Count == 0)
+        {
+            throw new WorkspaceHub.Application.Common.NotFoundException("Hộp thư trống, không có email để map");
+        }
+
+        var msg = await _gmailGateway.GetMessageAsync(conn, list.MessageIds[0], ct);
+        var item = _mapper.ToItem(msg, conn.UserId, conn.Id, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        return new GmailSampleDto(
+            item.ExternalId,
+            item.Type.ToString(),
+            item.Title,
+            item.Snippet,
+            item.IsImportant,
+            item.OccurredAt,
+            item.MetadataJson);
+    }
+
+    public async Task<SyncResult> SyncAsync(Guid connectionId, Guid userId, int maxMessages = 50, CancellationToken ct = default)
+    {
+        var conn = await GetValidConnectionAsync(connectionId, userId, ct);
+        return await SyncConnectionAsync(conn, maxMessages, ct);
+    }
+
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, int maxMessages = 50, CancellationToken ct = default)
     {
         var importantList = await _importantContacts.GetIdentifiersAsync(connection.UserId, ImportantContactType.Email, ct);
