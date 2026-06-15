@@ -25,6 +25,9 @@ public interface IItemRepository : IGenericRepository<Item>
         int limit = 20,
         CancellationToken ct = default);
 
+    Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default);
+    Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default);
+
     /// <summary>
     /// Tìm Item theo ID và User, dùng để check ownership trước khi update/delete.
     /// </summary>

@@ -9,10 +9,14 @@ namespace WorkspaceHub.Api.Controllers;
 public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
+    private readonly IGmailSyncService _syncService;
 
-    public ConnectionsController(IConnectionsService connections)
+    public ConnectionsController(
+        IConnectionsService connections,
+        IGmailSyncService syncService)
     {
         _connections = connections;
+        _syncService = syncService;
     }
 
     /// <summary>POST /api/connections/oauth/start — build authorization URL.</summary>
@@ -57,4 +61,21 @@ public class ConnectionsController : ApiControllerBase
         return StatusCode(201, response);
     }
 
+    [HttpGet("{id:guid}/gmail-profile")]
+    public async Task<IActionResult> GetGmailProfile(Guid id, CancellationToken ct)
+    {
+        return Ok(await _syncService.GetProfileAsync(id, CurrentUserId, ct));
+    }
+
+    [HttpGet("{id:guid}/gmail-sample")]
+    public async Task<IActionResult> GetGmailSample(Guid id, CancellationToken ct)
+    {
+        return Ok(await _syncService.GetSampleAsync(id, CurrentUserId, ct));
+    }
+
+    [HttpPost("{id:guid}/sync")]
+    public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
+    {
+        return Ok(await _syncService.SyncAsync(id, CurrentUserId, 50, ct));
+    }
 }
