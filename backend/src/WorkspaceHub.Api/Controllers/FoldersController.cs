@@ -15,20 +15,23 @@ namespace WorkspaceHub.Api.Controllers;
 /// </summary>
 [Authorize]
 [ODataIgnored]
-public class FoldersController : BaseApiController
+public class FoldersController : ApiControllerBase
 {
     private readonly IFolderService _folderService;
     private readonly IValidator<CreateFolderRequest> _createValidator;
     private readonly IValidator<UpdateFolderRequest> _updateValidator;
+    private readonly IValidator<AddItemToFolderRequest> _addItemValidator;
 
     public FoldersController(
         IFolderService folderService,
         IValidator<CreateFolderRequest> createValidator,
-        IValidator<UpdateFolderRequest> updateValidator)
+        IValidator<UpdateFolderRequest> updateValidator,
+        IValidator<AddItemToFolderRequest> addItemValidator)
     {
         _folderService = folderService;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
+        _addItemValidator = addItemValidator;
     }
 
     /// <summary>
@@ -42,7 +45,7 @@ public class FoldersController : BaseApiController
         [FromQuery] bool includeShared = false,
         CancellationToken ct = default)
     {
-        var folders = await _folderService.GetFoldersAsync(UserId, includeShared, ct);
+        var folders = await _folderService.GetFoldersAsync(CurrentUserId, includeShared, ct);
         return Ok(folders);
     }
 
@@ -55,16 +58,10 @@ public class FoldersController : BaseApiController
         [FromBody] CreateFolderRequest request,
         CancellationToken ct = default)
     {
-        // Validate input qua FluentValidation
-        var validation = await _createValidator.ValidateAsync(request, ct);
-        if (!validation.IsValid)
-        {
-            var errors = validation.Errors
-                .Select(e => new { field = e.PropertyName, issue = e.ErrorMessage });
-            return BadRequest(new { error = "ValidationError", message = "Validation failed.", details = errors });
-        }
+        // Validate qua FluentValidation — ValidationException được ExceptionMiddleware format thành 400 chuẩn.
+        await _createValidator.ValidateAndThrowAsync(request, ct);
 
-        var created = await _folderService.CreateAsync(UserId, request, ct);
+        var created = await _folderService.CreateAsync(CurrentUserId, request, ct);
         return CreatedAtAction(nameof(GetFolders), null, created);
     }
 
@@ -78,16 +75,10 @@ public class FoldersController : BaseApiController
         [FromBody] UpdateFolderRequest request,
         CancellationToken ct = default)
     {
-        // Validate input qua FluentValidation
-        var validation = await _updateValidator.ValidateAsync(request, ct);
-        if (!validation.IsValid)
-        {
-            var errors = validation.Errors
-                .Select(e => new { field = e.PropertyName, issue = e.ErrorMessage });
-            return BadRequest(new { error = "ValidationError", message = "Validation failed.", details = errors });
-        }
+        // Validate qua FluentValidation — ValidationException được ExceptionMiddleware format thành 400 chuẩn.
+        await _updateValidator.ValidateAndThrowAsync(request, ct);
 
-        var updated = await _folderService.UpdateAsync(UserId, id, request, ct);
+        var updated = await _folderService.UpdateAsync(CurrentUserId, id, request, ct);
         return Ok(updated);
     }
 
@@ -102,7 +93,34 @@ public class FoldersController : BaseApiController
         Guid id,
         CancellationToken ct = default)
     {
-        await _folderService.DeleteAsync(UserId, id, ct);
+        await _folderService.DeleteAsync(CurrentUserId, id, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// POST /api/folders/{id}/items — gắn item vào folder.
+    /// </summary>
+    [HttpPost("{id:guid}/items")]
+    public async Task<ActionResult<ItemFolderResponse>> AddItemToFolder(
+        Guid id,
+        [FromBody] AddItemToFolderRequest request,
+        CancellationToken ct = default)
+    {
+        await _addItemValidator.ValidateAndThrowAsync(request, ct);
+        var result = await _folderService.AddItemToFolderAsync(CurrentUserId, id, request, ct);
+        return StatusCode(201, result);
+    }
+
+    /// <summary>
+    /// DELETE /api/folders/{id}/items/{itemId} — gỡ item khỏi folder.
+    /// </summary>
+    [HttpDelete("{id:guid}/items/{itemId:guid}")]
+    public async Task<IActionResult> RemoveItemFromFolder(
+        Guid id,
+        Guid itemId,
+        CancellationToken ct = default)
+    {
+        await _folderService.RemoveItemFromFolderAsync(CurrentUserId, id, itemId, ct);
         return NoContent();
     }
 }

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../lib/api'
 
-export default function RegisterPage() {
+export const RegisterPage = () => {
   const navigate = useNavigate()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -18,7 +19,12 @@ export default function RegisterPage() {
       toast.success('Đăng ký thành công, mời đăng nhập')
       navigate('/login', { replace: true })
     },
-    onError: () => toast.error('Đăng ký thất bại (email có thể đã dùng)'),
+    onError: (error) => {
+      const message = isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message
+        : undefined
+      toast.error(message ?? 'Đăng ký thất bại (email có thể đã dùng)')
+    },
   })
 
   return (

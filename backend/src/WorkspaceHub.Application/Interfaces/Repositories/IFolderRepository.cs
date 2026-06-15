@@ -20,4 +20,24 @@ public interface IFolderRepository : IGenericRepository<Folder>
 
     /// <summary>Max SortOrder hiện tại của user — dùng khi tạo folder mới auto-increment.</summary>
     Task<int> GetMaxSortOrderAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Kiểm tra xem folder có thuộc sở hữu của user không — dùng cho ItemService list endpoint (nhẹ, tránh load entity).</summary>
+    Task<bool> ExistsByOwnerAsync(Guid folderId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>Kiểm tra item đã tồn tại trong folder chưa.</summary>
+    Task<bool> ItemFolderExistsAsync(Guid itemId, Guid folderId, CancellationToken ct = default);
+
+    /// <summary>Lấy position lớn nhất trong folder để assign cho item mới.</summary>
+    Task<int> GetMaxItemPositionAsync(Guid folderId, CancellationToken ct = default);
+
+    /// <summary>Lấy ItemFolder junction để remove.</summary>
+    Task<ItemFolder?> GetItemFolderAsync(Guid itemId, Guid folderId, CancellationToken ct = default);
+
+    /// <summary>Thêm Item vào Folder.</summary>
+    Task AddItemFolderAsync(ItemFolder itemFolder, CancellationToken ct = default);
+
+    /// <summary>Gỡ Item khỏi Folder.</summary>
+    void RemoveItemFolder(ItemFolder itemFolder);
 }
+
+

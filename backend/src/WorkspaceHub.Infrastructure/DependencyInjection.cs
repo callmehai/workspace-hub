@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ public static class DependencyInjection
             .SetApplicationName("WorkspaceHub")
             .PersistKeysToFileSystem(new DirectoryInfo("dp-keys"));
         services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
+        services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 
         services.AddDistributedMemoryCache();
 
@@ -38,11 +40,8 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
-        services.AddScoped<IOAuthConnectionRepository, OAuthConnectionRepository>();
-
-        // Register framework services needed by Application layer (OAuth / connections cache & http client)
-        services.AddDistributedMemoryCache();
-        services.AddHttpClient();
+        services.AddScoped<IConnectionRepository, ConnectionRepository>();
+        services.AddScoped<IItemRepository, ItemRepository>();
 
         return services;
     }

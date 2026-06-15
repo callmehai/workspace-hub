@@ -18,7 +18,7 @@ internal class GoogleAuthUrlBuilder
         => Build(GoogleScopes.Login, state, includeGrantedScopes: false);
 
     public string BuildForService(string serviceScope, string state)
-        => Build(new[] { serviceScope }, state, includeGrantedScopes: true);
+        => Build(new[] { serviceScope }, state, includeGrantedScopes: false);
 
     private string Build(IEnumerable<string> scopes, string state, bool includeGrantedScopes)
     {

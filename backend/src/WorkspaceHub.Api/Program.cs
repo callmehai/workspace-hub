@@ -70,8 +70,10 @@ builder.Services.AddAuthentication(options =>
 .AddJwtBearer(options =>
 {
     var jwtSection = builder.Configuration.GetSection("Jwt");
-    var secret = jwtSection["Secret"];
-    var secretKey = string.IsNullOrEmpty(secret) ? "TemporaryDevSecretKeyForTestingPurposesOnly12345!" : secret;
+    // Không fallback secret mặc định — thiếu config thì fail ngay lúc startup (CLAUDE.md: không hardcode secret).
+    var secretKey = jwtSection["Secret"];
+    if (string.IsNullOrEmpty(secretKey))
+        throw new InvalidOperationException("Jwt:Secret is not configured. Set it in appsettings or user-secrets.");
 
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -97,8 +99,9 @@ app.UseMiddleware<ExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
+    app.UseStaticFiles();
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(o => o.InjectJavascript("/swagger-auto-auth.js"));
 }
 
 app.UseHttpsRedirection();

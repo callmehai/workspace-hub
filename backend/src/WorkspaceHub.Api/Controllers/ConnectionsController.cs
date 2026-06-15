@@ -5,7 +5,6 @@ using WorkspaceHub.Application.Interfaces.Services;
 
 namespace WorkspaceHub.Api.Controllers;
 
-[Route("api/connections")]
 [Authorize]
 public class ConnectionsController : ApiControllerBase
 {
@@ -26,6 +25,7 @@ public class ConnectionsController : ApiControllerBase
 
         var result = await _connections.InitiateConnectionAsync(
             request.IntegrationKey,
+            request.ServiceType,
             request.RedirectUri,
             userId,
             ct);
@@ -37,7 +37,7 @@ public class ConnectionsController : ApiControllerBase
         });
     }
 
-    /// <summary>POST /api/connections/oauth/callback — exchange code, lưu OAuthConnection.</summary>
+    /// <summary>POST /api/connections/oauth/callback — exchange code, lưu Connections (mô hình B).</summary>
     [HttpPost("oauth/callback")]
     public async Task<IActionResult> CompleteConnection(
         [FromBody] CompleteConnectionRequest request,
@@ -48,27 +48,13 @@ public class ConnectionsController : ApiControllerBase
         var result = await _connections.CompleteConnectionAsync(request.Code, request.State, userId, ct);
 
         var response = new CompleteConnectionResponse(
-            result.Id,
             result.IntegrationKey,
             result.ProviderAccountId,
-            result.Scopes,
-            result.Status,
-            result.Services
-                .Select(s => new ServiceConnectionItem(s.Id, s.ServiceType, s.IsEnabled))
+            result.Connections
+                .Select(c => new ConnectionItem(c.Id, c.ServiceType, c.Status))
                 .ToList());
 
         return StatusCode(201, response);
     }
 
-    /// <summary>PUT /api/connections/{key}/credentials — Admin: encrypt + lưu OAuth credentials.</summary>
-    [HttpPut("{key}/credentials")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> SetCredentials(
-        string key,
-        [FromBody] SetCredentialsRequest request,
-        CancellationToken ct)
-    {
-        await _connections.SetCredentialsAsync(key, request.ClientId, request.ClientSecret, ct);
-        return NoContent();
-    }
 }
