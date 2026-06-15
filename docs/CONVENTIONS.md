@@ -1,84 +1,69 @@
 # Coding Conventions — Workspace Hub
 
-## Kiến trúc layered
+> Cập nhật ghi chú mô hình B + write-back. Phần naming/layer/git giữ nguyên.
 
+## Kiến trúc layered
 ```
 src/
-  WorkspaceHub.Api/          # Controllers, middleware, Program.cs, DI
-  WorkspaceHub.Application/   # Services, DTOs, interfaces, validation
-  WorkspaceHub.Domain/        # Entities, enums
-  WorkspaceHub.Infrastructure/# DbContext, repositories, EF config, migrations, external clients (Gmail...)
+  WorkspaceHub.Api/            # Controllers, middleware, Program.cs, DI
+  WorkspaceHub.Application/     # Services, DTOs, interfaces, validation, OAuth, Sync, WriteBack
+  WorkspaceHub.Domain/          # Entities, enums, metadata models
+  WorkspaceHub.Infrastructure/  # DbContext, repos, EF config, migrations, provider clients
 ```
-> Chốt: **clean architecture 4 project** dưới `src/`. SCRUM-5 dựng đúng 4 project này.
-
-**Luồng phụ thuộc:** Api → Application → Domain; Infrastructure → Application/Domain. Domain không phụ thuộc gì.
+Luồng: Api → Application → Domain; Infrastructure → Application/Domain.
 
 ## Naming
+PascalCase (class/method/property), camelCase (local/param), `I` prefix (interface), `Async` suffix, DTO/Request/Response suffix. Entity số ít, DbSet số nhiều.
 
-- **Class/Method/Property:** PascalCase.
-- **Local var/param:** camelCase.
-- **Interface:** tiền tố `I` (`IItemService`, `IUserRepository`).
-- **Async method:** hậu tố `Async` (`GetByIdAsync`).
-- **DTO:** hậu tố `Dto`/`Request`/`Response` (`CreateFolderRequest`, `ItemResponse`).
-- **Entity = số ít** (`Item`, `Folder`); **DbSet = số nhiều** (`Items`, `Folders`).
-
-## Controller
-
-- Mỏng: nhận request → gọi service → trả kết quả. KHÔNG business logic.
-- Trả `ActionResult<T>` với status code đúng (xem API.md).
-- Lấy UserId từ JWT claim qua một base controller / helper, không tin tham số client gửi.
-- `[Authorize]` cho route cần auth; `[Authorize(Roles="Admin")]` cho admin.
-
-## Service
-
-- Chứa toàn bộ business logic + validation rule.
-- Nhận/trả DTO, không trả entity ra ngoài.
-- Throw custom exception (vd `NotFoundException`, `ConflictException`, `BusinessRuleException`) → middleware map sang status code.
-
-## Repository
-
-- Chỉ data access. Async toàn bộ.
-- `AsNoTracking()` cho query read-only.
-- Tránh N+1: dùng `Include`/projection hợp lý.
-
-## DTO & Validation
-
-- Mọi input qua DTO + validate (FluentValidation hoặc DataAnnotations).
-- KHÔNG bind thẳng entity từ request body.
-- Validate: email format, password ≥ 8, required field, enum hợp lệ.
+## Controller / Service / Repository
+- Controller mỏng, trả ActionResult<T> + status đúng. UserId từ JWT claim.
+- **Base controller duy nhất: `ApiControllerBase`** — cung cấp route `api/[controller]`, `CurrentUserId`, `CurrentUserRole`. KHÔNG tạo base controller thứ hai, KHÔNG khai báo lại `[Route]` trên controller con (trừ khi route khác convention).
+- **Validation:** gọi `ValidateAndThrowAsync` (FluentValidation) — `ExceptionMiddleware` format lỗi 400 chuẩn. KHÔNG tự format validation error trong controller.
+- Service chứa business logic, nhận/trả DTO, throw custom exception (middleware map status code).
+- Repository chỉ data access, async, AsNoTracking cho read, tránh N+1.
 
 ## EF Core
+- Enum string, Guid PK, UTC (`datetime2`), JSON lưu `nvarchar(max)` (SQL Server) cho MetadataJson/ToJson/SupportedServices.
+- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit.
+- Composite PK junction.
 
-- Enum: `.HasConversion<string>()`.
-- Guid PK cho mọi entity. Role lưu cột string trên `Users` (1 user 1 role), không bảng `Roles`/`UserRoles`.
-- UTC: cấu hình `DateTimeKind.Utc` cho mọi datetime (`datetime2`).
-- `nvarchar(max)` (SQL Server) cho MetadataJson, ToJson...
-- Mỗi thay đổi schema = một migration mới, đặt tên có nghĩa (`AddScheduledEmails`).
-- Composite PK cho junction qua `HasKey(x => new { x.A, x.B })`.
+## Mô hình B — Connections (quan trọng)
+- Mỗi service = 1 row Connections, token riêng. KHÔNG còn OAuthConnection→ServiceConnection.
+- Scope KHÔNG lưu DB — suy từ ServiceType qua `GoogleScopes.ForService()`. Một nguồn scope duy nhất trong code.
+- KHÔNG thêm cột Permission/AccessLevel — bật service là full quyền.
+- Disconnect = xoá đúng row Connection, Items.ConnectionId SET NULL.
 
-## Error handling
+## Auth — 2 luồng tách biệt
+- **Google Sign-In:** verify id_token (`GoogleJsonWebSignature.ValidateAsync`, KHÔNG tự decode), không tạo Connection, chỉ User + JWT. Auto-link theo email.
+- **Connect service:** tạo Connection, full scope. Khác hẳn login.
 
-- Một exception middleware tập trung (SCRUM-24) bắt mọi lỗi → error format chuẩn + traceId.
-- KHÔNG để stack trace lộ ra client ở production.
-- KHÔNG nuốt exception im lặng — log lại.
+## Write-back (2 chiều)
+- PATCH /api/items/{id} phân nhánh theo Type. Email KHÔNG sửa nội dung (reject field ngoài label/read/star/trash).
+- Mọi write-back đi qua `IWriteBackGuard` (so ETag) trước khi ghi provider. Lệch → ConflictException → 409.
+- Thiếu scope → 403 + gợi ý reconnect. Provider lỗi → 502.
 
 ## Bảo mật
+- Token encrypt qua Data Protection (không tự viết AES). Token response luôn mask.
+- BCrypt cost 12. Không hardcode secret (config/env/user-secrets) — kể cả fallback "dev only": thiếu `Jwt:Secret` thì app phải fail lúc startup.
 
-- Token OAuth: encrypt qua Data Protection trước khi lưu. KHÔNG tự viết AES.
-- KHÔNG hardcode secret/connection string — đọc từ config/env/user-secrets.
-- Token trong response luôn mask.
-- BCrypt cost 12 cho password.
+## Frontend
+- **1 axios instance duy nhất: `src/lib/api.ts`** (JWT interceptor + xử lý 401 tập trung). Token đọc/ghi qua `tokenStore` (key `wh_token`) — KHÔNG gọi `localStorage` trực tiếp, KHÔNG tạo instance thứ hai.
+- Server state qua TanStack Query (`useQuery`/`useMutation`) — KHÔNG `useEffect + fetch/axios` thủ công, KHÔNG `useState loading` tự quản.
+- `useAuth` import từ `src/hooks/useAuth`; context khai báo ở `src/context/auth-context.ts`, provider ở `src/context/AuthContext.tsx`.
+- Type API response khai báo trong `src/types/` và phải khớp DTO backend (vd `AuthResponse.accessToken`).
 
 ## Git
+- Branch: main / develop / feature/SCRUM-x-mo-ta.
+- Commit gắn mã ticket: `SCRUM-37: add email write-back`.
+- PR vào develop, ≥1 review. Không commit secret/bin/obj.
 
-- **Branch:** `main` (ổn định), `develop` (tích hợp), `feature/SCRUM-x-mo-ta`.
-- **Commit:** gắn mã ticket. VD: `SCRUM-9: add register endpoint with BCrypt`.
-- **PR:** vào develop, cần ≥1 review trước merge. Mô tả PR nêu ticket + tóm tắt thay đổi.
-- KHÔNG commit secret, `appsettings.*.json` chứa key, `bin/`, `obj/`.
+## Cập nhật tài liệu (BẮT BUỘC)
+
+> **Sau khi hoàn thành bất kỳ task code nào, cập nhật các file .md liên quan để phản ánh trạng thái hoàn thành hiện tại của ticket/feature đó** — tối thiểu: status ticket trong `docs/SPRINTS.md`; nếu đổi schema → `docs/DATABASE.md`; đổi endpoint/response → `docs/API.md`; quyết định thiết kế lớn → `docs/CHANGELOG.md`.
 
 ## Khi Claude Code làm việc
-
-- Bám scope Sprint 1–3 (xem CLAUDE.md). Không thêm webhook/2 chiều/Jira/social/AI.
-- Trước khi tạo entity/endpoint mới, đối chiếu DATABASE.md và API.md — đã có sẵn spec, theo đúng đó.
-- Khi sửa schema, tạo migration, đừng sửa migration cũ đã commit.
-- Không chắc thuộc scope → hỏi.
+- Bám phase hiện tại (CLAUDE.md). Phase sau (webhook/Jira) → hỏi.
+- Đối chiếu DATABASE.md + API.md trước khi tạo entity/endpoint.
+- Mô hình B: đừng tạo lại ServiceConnections cũ.
+- Xong task → cập nhật .md theo rule trên.
+- Không chắc → hỏi.

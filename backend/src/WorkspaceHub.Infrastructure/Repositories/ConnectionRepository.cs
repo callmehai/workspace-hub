@@ -1,0 +1,25 @@
+using Microsoft.EntityFrameworkCore;
+using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Domain.Enums;
+using WorkspaceHub.Infrastructure.Data;
+
+namespace WorkspaceHub.Infrastructure.Repositories;
+
+/// <summary>EF Core implementation của IConnectionRepository (mô hình B).</summary>
+public class ConnectionRepository : GenericRepository<Connection>, IConnectionRepository
+{
+    public ConnectionRepository(AppDbContext db) : base(db) { }
+
+    public async Task<Connection?> GetByUniqueKeyAsync(
+        Guid userId,
+        ProviderType provider,
+        ServiceType serviceType,
+        string providerAccountId,
+        CancellationToken ct = default)
+        => await Set.FirstOrDefaultAsync(c =>
+                c.UserId == userId &&
+                c.Provider == provider &&
+                c.ServiceType == serviceType &&
+                c.ProviderAccountId == providerAccountId, ct);
+}

@@ -7,7 +7,22 @@ public enum UserRole
     Admin
 }
 
-/// <summary>Trạng thái 1 grant OAuth.</summary>
+/// <summary>How the user authenticates. Local = password only, Google = Google OAuth only, Both = both methods linked.</summary>
+public enum AuthProvider
+{
+    Local,
+    Google,
+    Both
+}
+
+/// <summary>Nhóm provider của 1 Connection. Atlassian dùng ở phase Jira.</summary>
+public enum ProviderType
+{
+    Google,
+    Atlassian
+}
+
+/// <summary>Trạng thái 1 connection.</summary>
 public enum ConnectionStatus
 {
     Active,
@@ -15,12 +30,13 @@ public enum ConnectionStatus
     Error
 }
 
-/// <summary>Sub-service bật được trên 1 grant Google.</summary>
+/// <summary>Service gắn với 1 Connection (mô hình B: mỗi service 1 connection riêng).</summary>
 public enum ServiceType
 {
     Gmail,
     GCal,
-    Drive
+    Drive,
+    Jira
 }
 
 /// <summary>Loại cursor cho incremental sync, tuỳ provider.</summary>
