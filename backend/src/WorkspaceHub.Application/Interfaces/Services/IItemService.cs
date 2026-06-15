@@ -14,4 +14,21 @@ public interface IItemService
     /// </summary>
     Task<PagedResult<ItemResponse>> GetItemsAsync(
         Guid userId, GetItemsRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cập nhật trạng thái Kanban cho Item.
+    /// </summary>
+    Task<ItemResponse> UpdateStatusAsync(
+        Guid userId, Guid itemId, UpdateItemStatusRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tạo ghi chú nội bộ (Note) mới.
+    /// </summary>
+    Task<ItemResponse> CreateNoteAsync(
+        Guid userId, CreateNoteRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy chi tiết một Item theo ID.
+    /// </summary>
+    Task<ItemResponse> GetItemByIdAsync(Guid userId, Guid itemId, CancellationToken ct = default);
 }

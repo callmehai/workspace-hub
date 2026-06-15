@@ -58,6 +58,17 @@ export const Sidebar = () => {
             <span>Tasks</span>
           </NavLink>
           <NavLink
+            to="/kanban"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
+              }`
+            }
+          >
+            <LayoutGrid className="w-4 h-4" />
+            <span>Kanban Board</span>
+          </NavLink>
+          <NavLink
             to="/files"
             className={({ isActive }) =>
               `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${

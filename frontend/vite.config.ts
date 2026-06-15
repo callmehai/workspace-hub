@@ -9,7 +9,7 @@ export default defineConfig({
     // Dev: proxy /api → backend ASP.NET (tránh CORS). Prod: set VITE_API_URL.
     proxy: {
       '/api': {
-        target: 'https://localhost:7010',
+        target: 'http://localhost:5118',
         changeOrigin: true,
         secure: false,
       },

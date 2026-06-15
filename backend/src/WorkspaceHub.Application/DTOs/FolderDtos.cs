@@ -15,6 +15,9 @@ public record UpdateFolderRequest(
     string Icon,
     int SortOrder);
 
+/// <summary>POST /api/folders/{folderId}/items — gắn item vào folder</summary>
+public record AddItemToFolderRequest(Guid ItemId);
+
 // ───────────────────────── Response DTO ─────────────────────────
 
 /// <summary>
@@ -32,3 +35,10 @@ public record FolderResponse(
     bool IsOwner,
     string Permission,
     string OwnerName);
+
+/// <summary>Response cho ItemFolder operations</summary>
+public record ItemFolderResponse(
+    Guid ItemId, 
+    Guid FolderId, 
+    int Position, 
+    DateTime AddedAt);

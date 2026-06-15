@@ -18,13 +18,19 @@ public class ItemsController : ApiControllerBase
 {
     private readonly IItemService _itemService;
     private readonly IValidator<GetItemsRequest> _validator;
+    private readonly IValidator<UpdateItemStatusRequest> _updateStatusValidator;
+    private readonly IValidator<CreateNoteRequest> _createNoteValidator;
 
     public ItemsController(
         IItemService itemService,
-        IValidator<GetItemsRequest> validator)
+        IValidator<GetItemsRequest> validator,
+        IValidator<UpdateItemStatusRequest> updateStatusValidator,
+        IValidator<CreateNoteRequest> createNoteValidator)
     {
         _itemService = itemService;
         _validator = validator;
+        _updateStatusValidator = updateStatusValidator;
+        _createNoteValidator = createNoteValidator;
     }
 
     /// <summary>
@@ -42,5 +48,45 @@ public class ItemsController : ApiControllerBase
 
         var result = await _itemService.GetItemsAsync(CurrentUserId, request, ct);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// PATCH /api/items/{id}/status — đổi trạng thái Kanban.
+    /// </summary>
+    [HttpPatch("{id:guid}/status")]
+    public async Task<ActionResult<ItemResponse>> UpdateStatus(
+        Guid id,
+        [FromBody] UpdateItemStatusRequest request,
+        CancellationToken ct = default)
+    {
+        await _updateStatusValidator.ValidateAndThrowAsync(request, ct);
+        var updated = await _itemService.UpdateStatusAsync(CurrentUserId, id, request, ct);
+        return Ok(updated);
+    }
+
+    /// <summary>
+    /// GET /api/items/{id} — lấy chi tiết một item.
+    /// </summary>
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<ItemResponse>> GetItemById(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var item = await _itemService.GetItemByIdAsync(CurrentUserId, id, ct);
+        return Ok(item);
+    }
+
+    /// <summary>
+    /// POST /api/items/note — tạo ghi chú nội bộ (Note) mới.
+    /// </summary>
+    [HttpPost("note")]
+    public async Task<ActionResult<ItemResponse>> CreateNote(
+        [FromBody] CreateNoteRequest request,
+        CancellationToken ct = default)
+    {
+        await _createNoteValidator.ValidateAndThrowAsync(request, ct);
+        var created = await _itemService.CreateNoteAsync(CurrentUserId, request, ct);
+        // Trả 201 trỏ về GetItemById
+        return CreatedAtAction(nameof(GetItemById), new { id = created.Id }, created);
     }
 }

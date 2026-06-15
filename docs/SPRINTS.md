@@ -33,9 +33,10 @@
 | SCRUM-18 | Folder CRUD | Huy | ✅ Done |
 | SCRUM-19 | Items list + filter + pagination + search | Huy | ✅ Done |
 | SCRUM-21 | Frontend setup: routing, layout, protected route | Dũng | ✅ Done |
+| SCRUM-20 | Kanban Status + Note CRUD + ItemFolders (Backend & UI) | Antigravity | SCRUM-18, 19 | ✅ Done |
 | SCRUM-22 | Auth pages connected to API | Dũng | ⏳ Pending |
 
-> Các ticket phase 1 còn lại (15–17, 20, 23–29: sync Gmail, Kanban/Tag UI, Admin dashboard, ...) chưa done — xem Jira. Bản cũ của file này ghi "SCRUM-5→29 đã done" là **sai**, đã sửa theo Jira.
+> Các ticket phase 1 còn lại (15–17, 23–29: sync Gmail, Admin dashboard, ...) chưa done — xem Jira. Bản cũ của file này ghi "SCRUM-5→29 đã done" là **sai**, đã sửa theo Jira.
 
 ## Sprint 4 (đợt hiện tại) — Mô hình B + Write-back + Google Sign-In
 
