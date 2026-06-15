@@ -102,4 +102,12 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     {
         return await Set.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
     }
+
+    /// <inheritdoc/>
+    public async Task NullifyConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        await Set
+            .Where(i => i.ConnectionId == connectionId)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.ConnectionId, (Guid?)null), ct);
+    }
 }

@@ -41,8 +41,8 @@ public class GoogleSignInTests
             ["Jwt:Issuer"] = "WorkspaceHub",
             ["Jwt:Audience"] = "WorkspaceHub",
             ["Jwt:ExpiresIn"] = "3600",
-            ["Dev:google:ClientId"] = "test-client-id.apps.googleusercontent.com",
-            ["Dev:google:ClientSecret"] = "test-client-secret",
+            ["OAuth:google:ClientId"] = "test-client-id.apps.googleusercontent.com",
+            ["OAuth:google:ClientSecret"] = "test-client-secret",
             ["Google:RedirectUri"] = "http://localhost:5173/auth/google/callback"
         };
         return new ConfigurationBuilder()

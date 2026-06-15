@@ -30,4 +30,23 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
     public virtual void Remove(T entity) => Set.Remove(entity);
 
     public Task<int> SaveChangesAsync(CancellationToken ct = default) => Db.SaveChangesAsync(ct);
+
+    public async Task ExecuteInTransactionAsync(Func<Task> action, CancellationToken ct = default)
+    {
+        var strategy = Db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await Db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                await action();
+                await tx.CommitAsync(ct);
+            }
+            catch
+            {
+                await tx.RollbackAsync(ct);
+                throw;
+            }
+        });
+    }
 }

@@ -32,5 +32,11 @@ public interface IItemRepository : IGenericRepository<Item>
     /// Tìm Item theo ID và User, dùng để check ownership trước khi update/delete.
     /// </summary>
     Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Set ConnectionId = NULL cho tất cả Items đang trỏ vào connectionId.
+    /// Dùng khi disconnect connection (SCRUM-14) — Items giữ lại nhưng mất liên kết.
+    /// </summary>
+    Task NullifyConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
 }
 
