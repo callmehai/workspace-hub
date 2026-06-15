@@ -1,5 +1,9 @@
 import { Search, Bell, Settings } from 'lucide-react';
+<<<<<<< HEAD
 import { useAuth } from '../../context/AuthContext';
+=======
+import { useAuth } from '../../hooks/useAuth';
+>>>>>>> bf126b6ce92ddd724c2438e9d963105f3b70e1b9
 
 export const Header = () => {
   const { user } = useAuth();

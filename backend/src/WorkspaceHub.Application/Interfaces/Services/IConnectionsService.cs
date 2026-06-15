@@ -1,4 +1,5 @@
-using WorkspaceHub.Application.OAuth;
+using WorkspaceHub.Application.DTOs.Connections;
+using WorkspaceHub.Application.OAuth.Core;
 
 namespace WorkspaceHub.Application.Interfaces.Services;
 
@@ -7,15 +8,17 @@ public interface IConnectionsService
 {
     /// <summary>
     /// Tra Integration, decrypt ClientId, dispatch sang đúng IProviderStrategy, cache CSRF state.
+    /// serviceType: tên ServiceType enum ("Gmail"/"GCal"/"Drive"/"Jira") — mỗi lần chỉ connect 1 service.
     /// </summary>
     Task<InitiateConnectionResult> InitiateConnectionAsync(
         string integrationKey,
+        string serviceType,
         string redirectUri,
         Guid userId,
         CancellationToken ct = default);
 
     /// <summary>
-    /// Verify CSRF state, exchange code → token, persist OAuthConnection + ServiceConnections.
+    /// Verify CSRF state, exchange code → token, persist Connections (mô hình B: 1 row mỗi service được cấp).
     /// </summary>
     Task<CompleteConnectionResult> CompleteConnectionAsync(
         string code,
@@ -23,13 +26,9 @@ public interface IConnectionsService
         Guid userId,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Encrypt clientId + clientSecret rồi lưu vào Integration.
-    /// TODO: giới hạn [Authorize(Policy="AdminOnly")] sau khi JWT xong.
-    /// </summary>
-    Task SetCredentialsAsync(
-        string integrationKey,
-        string clientId,
-        string clientSecret,
-        CancellationToken ct = default);
+    Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default);
+
+    // TODO SCRUM-14 (DisconnectAsync): FK Items/ScheduledEmails → Connections là NoAction ở DB,
+    // nên trước khi xoá Connection PHẢI: (1) UPDATE Items SET ConnectionId = NULL,
+    // (2) cancel/xoá ScheduledEmails Pending của connection đó — xoá thẳng sẽ FK violation.
 }

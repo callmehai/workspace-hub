@@ -1,13 +1,25 @@
 import { useState } from 'react';
+<<<<<<< HEAD
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { Hexagon, LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
+=======
+import { Link, useNavigate } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
+import toast from 'react-hot-toast';
+import { Hexagon, LogIn } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import api from '../lib/api';
+import type { AuthResponse } from '../types/auth';
+>>>>>>> bf126b6ce92ddd724c2438e9d963105f3b70e1b9
 
 export const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+<<<<<<< HEAD
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('user@example.com');
   const [password, setPassword] = useState('password');
@@ -32,6 +44,26 @@ export const Login = () => {
       setLoading(false);
     }
   };
+=======
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const loginMutation = useMutation({
+    mutationFn: async () =>
+      (await api.post<AuthResponse>('/auth/login', { email, password })).data,
+    onSuccess: (data) => {
+      login(data.accessToken, data.user);
+      toast.success('Đăng nhập thành công!');
+      navigate('/', { replace: true });
+    },
+    onError: (error) => {
+      const message = isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message
+        : undefined;
+      toast.error(message ?? 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+    },
+  });
+>>>>>>> bf126b6ce92ddd724c2438e9d963105f3b70e1b9
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900 font-sans">
@@ -45,6 +77,7 @@ export const Login = () => {
           <p className="text-gray-500">Enter your details to access your workspace.</p>
         </div>
 
+<<<<<<< HEAD
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -78,6 +111,44 @@ export const Login = () => {
           >
             {loading ? 'Signing in...' : 'Sign In'}
             {!loading && <LogIn className="w-4 h-4 ml-2" />}
+=======
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            loginMutation.mutate();
+          }}
+          className="space-y-5"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loginMutation.isPending}
+            className="w-full flex items-center justify-center py-2.5 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-brand-500 disabled:opacity-50 transition-colors"
+          >
+            {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
+            {!loginMutation.isPending && <LogIn className="w-4 h-4 ml-2" />}
+>>>>>>> bf126b6ce92ddd724c2438e9d963105f3b70e1b9
           </button>
         </form>
 
@@ -100,7 +171,14 @@ export const Login = () => {
         </div>
 
         <p className="mt-8 text-center text-sm text-gray-500">
+<<<<<<< HEAD
           Don't have an account? <a href="#" className="text-brand-500 hover:text-brand-400 font-medium">Create an account</a>
+=======
+          Don't have an account?{' '}
+          <Link to="/register" className="text-brand-500 hover:text-brand-400 font-medium">
+            Create an account
+          </Link>
+>>>>>>> bf126b6ce92ddd724c2438e9d963105f3b70e1b9
         </p>
       </div>
     </div>

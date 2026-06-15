@@ -4,8 +4,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Infrastructure.Data;
+using WorkspaceHub.Infrastructure.Http;
 using WorkspaceHub.Infrastructure.Repositories;
+using WorkspaceHub.Application.Security;
+using WorkspaceHub.Infrastructure.Security;
 
 namespace WorkspaceHub.Infrastructure;
 
@@ -20,15 +24,24 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(opt => opt.UseSqlServer(connectionString));
 
-        services.AddDataProtection();
+        // Data Protection: mã hoá / giải mã token OAuth trước khi lưu DB
+        services.AddDataProtection()
+            .SetApplicationName("WorkspaceHub")
+            .PersistKeysToFileSystem(new DirectoryInfo("dp-keys"));
+        services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
+        services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
+
         services.AddDistributedMemoryCache();
 
-        services.AddHttpClient("GoogleToken");
+        services.AddHttpClient("OAuthToken");
+        services.AddScoped<IOAuthTokenClient, HttpOAuthTokenClient>();
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
-        services.AddScoped<IOAuthConnectionRepository, OAuthConnectionRepository>();
+        services.AddScoped<IConnectionRepository, ConnectionRepository>();
+        services.AddScoped<IItemRepository, ItemRepository>();
 
         return services;
     }

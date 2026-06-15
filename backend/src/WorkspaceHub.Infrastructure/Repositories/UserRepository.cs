@@ -18,4 +18,7 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
     public Task<int> CountAsync(CancellationToken ct = default)
         => Set.CountAsync(ct);
+
+    public Task<User?> GetByGoogleSubAsync(string googleSub, CancellationToken ct = default)
+        => Set.FirstOrDefaultAsync(u => u.GoogleSub == googleSub, ct);
 }

@@ -8,7 +8,6 @@ namespace WorkspaceHub.Api.Controllers;
 /// <summary>
 /// Auth endpoints: register + login + me. Controller mỏng — business logic nằm trong AuthService.
 /// </summary>
-[Route("api/[controller]")]
 public class AuthController : ApiControllerBase
 {
     private readonly IAuthService _auth;
@@ -43,4 +42,22 @@ public class AuthController : ApiControllerBase
     [ProducesResponseType(401)]
     public async Task<ActionResult<UserDto>> Me(CancellationToken ct)
         => Ok(await _auth.GetMeAsync(CurrentUserId, ct));
+
+    /// <summary>POST /api/auth/google/start — returns Google Sign-In authorization URL.</summary>
+    [HttpPost("google/start")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(GoogleAuthStartResponse), 200)]
+    public async Task<ActionResult<GoogleAuthStartResponse>> GoogleStart(CancellationToken ct)
+        => Ok(await _auth.GoogleStartAsync(ct));
+
+    /// <summary>POST /api/auth/google/callback — exchange code, verify, find/create user, issue JWT.</summary>
+    [HttpPost("google/callback")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(AuthResponse), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(401)]
+    public async Task<ActionResult<AuthResponse>> GoogleCallback(
+        [FromBody] GoogleCallbackRequest request,
+        CancellationToken ct)
+        => Ok(await _auth.GoogleCallbackAsync(request.Code, request.State, ct));
 }

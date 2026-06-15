@@ -1,56 +1,54 @@
-using System.Net.Http;
-using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
-using WorkspaceHub.Application.OAuth;
+using WorkspaceHub.Application.OAuth.Core;
+using WorkspaceHub.Application.Security;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Application.Services;
 
-/// <summary>
-/// Dispatcher — nhận request từ controller, resolve đúng IProviderStrategy theo integrationKey,
-/// delegate việc build URL xuống strategy. Thêm provider mới = thêm strategy + đăng ký DI, không sửa file này.
-/// </summary>
+/// <summary>Chọn đúng strategy theo provider, rồi để việc thực thi xuống strategy đó.</summary>
 public class ConnectionsService : IConnectionsService
 {
     private readonly IIntegrationRepository _integrations;
-    private readonly IOAuthConnectionRepository _oauthConnections;
-    private readonly IDataProtectionProvider _dataProtection;
+    private readonly IConnectionRepository _connections;
+    private readonly ITokenProtector _tokenProtector;
     private readonly IDistributedCache _cache;
     private readonly IReadOnlyDictionary<string, IProviderStrategy> _strategies;
     private readonly IConfiguration _config;
-    private readonly IHttpClientFactory _httpClientFactory;
 
     public ConnectionsService(
         IIntegrationRepository integrations,
-        IOAuthConnectionRepository oauthConnections,
-        IDataProtectionProvider dataProtection,
+        IConnectionRepository connections,
+        ITokenProtector tokenProtector,
         IDistributedCache cache,
         IEnumerable<IProviderStrategy> strategies,
-        IConfiguration config,
-        IHttpClientFactory httpClientFactory)
+        IConfiguration config)
     {
         _integrations = integrations;
-        _oauthConnections = oauthConnections;
-        _dataProtection = dataProtection;
+        _connections = connections;
+        _tokenProtector = tokenProtector;
         _cache = cache;
         _strategies = strategies.ToDictionary(s => s.ProviderKey, StringComparer.OrdinalIgnoreCase);
         _config = config;
-        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<InitiateConnectionResult> InitiateConnectionAsync(
         string integrationKey,
+        string serviceType,
         string redirectUri,
         Guid userId,
         CancellationToken ct = default)
     {
+        // Kiểm tra serviceType hợp lệ trước khi làm gì khác.
+        if (!Enum.TryParse<ServiceType>(serviceType, ignoreCase: true, out _))
+            throw new BusinessRuleException($"ServiceType '{serviceType}' không hợp lệ");
+
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
@@ -60,27 +58,21 @@ public class ConnectionsService : IConnectionsService
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
             throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
 
-        // TODO: xóa env fallback và bỏ comment block bên dưới khi chạy production.
-        // DEV: đọc plaintext từ appsettings.Development.json để test nhanh không cần encrypt DB.
-        var clientId = _config[$"Dev:{integrationKey}:ClientId"]
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
             ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
-
-        // PRODUCTION: decrypt từ DB thay cho env ở trên.
-        // var protector = _dataProtection.CreateProtector("OAuthCredentials");
-        // var clientId = protector.Unprotect(integration.ClientIdEncrypted);
 
         var state = Guid.NewGuid().ToString("N");
 
-        // Lưu cả integrationKey lẫn userId — callback xác minh đúng user tạo ra state này.
-        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId));
+        // Lưu thông tin phiên kết nối vào cache — dùng để xác minh khi Google redirect về.
+        var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId, redirectUri, serviceType));
         var cacheOptions = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
         };
         await _cache.SetStringAsync($"oauth:state:{state}", payload, cacheOptions, ct);
 
-        var context = new ProviderStrategyContext(clientId, redirectUri, state, integration);
-        return await strategy.BuildAuthUrlAsync(context, ct);
+        var request = new BuildAuthUrlRequest(clientId, redirectUri, state, integration, serviceType);
+        return await strategy.BuildAuthUrlAsync(request, ct);
     }
 
     public async Task<CompleteConnectionResult> CompleteConnectionAsync(
@@ -89,7 +81,7 @@ public class ConnectionsService : IConnectionsService
         Guid userId,
         CancellationToken ct = default)
     {
-        // Step 1 — Verify + xoá state (one-time use).
+        // Bước 1 — Kiểm tra state còn hợp lệ, xoá ngay để không dùng lại được.
         var cacheKey = $"oauth:state:{state}";
         var cached = await _cache.GetStringAsync(cacheKey, ct);
         if (cached is null)
@@ -100,114 +92,89 @@ public class ConnectionsService : IConnectionsService
         var payload = JsonSerializer.Deserialize<OAuthStatePayload>(cached)
             ?? throw new CsrfException("State không hợp lệ hoặc đã hết hạn");
 
-        var integrationKey = payload.IntegrationKey;
+        // Đảm bảo state này đúng là do user hiện tại tạo ra.
+        if (payload.UserId != userId)
+            throw new CsrfException("State không hợp lệ hoặc đã hết hạn");
 
-        // Step 2 — Load Integration + decrypt credentials.
+        var integrationKey = payload.IntegrationKey;
+        var redirectUri = payload.RedirectUri;
+
+        // Bước 2 — Tìm strategy phù hợp với provider.
+        if (!_strategies.TryGetValue(integrationKey, out var strategy))
+            throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
+
+        // Bước 3 — Lấy thông tin integration và credentials từ config.
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
-        // DEV: đọc plaintext từ config; PROD: bỏ comment block bên dưới.
-        var clientId     = _config[$"Dev:{integrationKey}:ClientId"]
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
             ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
-        var clientSecret = _config[$"Dev:{integrationKey}:ClientSecret"]
+        var clientSecret = _config[$"OAuth:{integrationKey}:ClientSecret"]
             ?? throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
 
-        // PRODUCTION:
-        // var protector    = _dataProtection.CreateProtector("OAuthCredentials");
-        // var clientId     = protector.Unprotect(integration.ClientIdEncrypted);
-        // var clientSecret = protector.Unprotect(integration.ClientSecretEncrypted);
+        // Bước 4 — Đổi code lấy token (logic riêng của từng provider).
+        var request = new ExchangeCodeRequest(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
+        var tokenResult = await strategy.ExchangeCodeAsync(request, ct);
 
-        var redirectUri = _config["Google:RedirectUri"]
-            ?? throw new BusinessRuleException("Chưa cấu hình Google:RedirectUri");
+        if (tokenResult.GrantedServices.Count == 0)
+            throw new BusinessRuleException("Provider không cấp quyền cho service nào");
 
-        // Step 3 — Exchange code → token.
-        var http = _httpClientFactory.CreateClient("GoogleToken");
-        var formData = new Dictionary<string, string>
+        // Bước 5 — Mã hoá token trước khi lưu. RefreshToken rỗng thì giữ nguyên chuỗi rỗng.
+        var accessTokenEncrypted = _tokenProtector.Protect(tokenResult.AccessToken);
+        var refreshTokenEncrypted = string.IsNullOrEmpty(tokenResult.RefreshToken)
+            ? string.Empty
+            : _tokenProtector.Protect(tokenResult.RefreshToken);
+        var expiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn);
+        var provider = Enum.Parse<ProviderType>(integration.Provider);
+
+        // Bước 6 — Tạo một Connection riêng cho mỗi service được cấp quyền.
+        var results = new List<ConnectionResult>();
+        foreach (var serviceType in tokenResult.GrantedServices)
         {
-            ["code"]          = code,
-            ["client_id"]     = clientId,
-            ["client_secret"] = clientSecret,
-            ["redirect_uri"]  = redirectUri,
-            ["grant_type"]    = "authorization_code"
-        };
+            var existing = await _connections.GetByUniqueKeyAsync(
+                userId, provider, serviceType, tokenResult.ProviderAccountId, ct);
 
-        var tokenResponse = await http.PostAsync(
-            integration.TokenEndpoint,
-            new FormUrlEncodedContent(formData), ct);
+            if (existing is not null)
+                throw new ConflictException(
+                    $"Bạn đã kết nối {serviceType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
 
-        if (!tokenResponse.IsSuccessStatusCode)
-            throw new BusinessRuleException("Google từ chối code");
+            var connection = new Connection
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                IntegrationId = integration.Id,
+                Provider = provider,
+                ServiceType = serviceType,
+                ProviderAccountId = tokenResult.ProviderAccountId,
+                AccessTokenEncrypted = accessTokenEncrypted,
+                RefreshTokenEncrypted = refreshTokenEncrypted,
+                ExpiresAt = expiresAt,
+                Status = ConnectionStatus.Active,
+                CursorValue = null,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _connections.AddAsync(connection, ct);
 
-        var googleToken = await tokenResponse.Content.ReadFromJsonAsync<GoogleTokenResponse>(ct)
-            ?? throw new BusinessRuleException("Google từ chối code");
+            results.Add(new ConnectionResult(
+                connection.Id, connection.ServiceType.ToString(), connection.Status.ToString()));
+        }
 
-        // Step 4 — Extract ProviderAccountId từ id_token.
-        // TODO: bỏ comment dòng dưới khi test thật với Google account.
-        // var providerAccountId = IdTokenParser.ExtractProviderAccountId(googleToken.IdToken);
-        var providerAccountId = googleToken.IdToken is not null
-            ? IdTokenParser.ExtractProviderAccountId(googleToken.IdToken)
-            : "dev-placeholder@gmail.com";
+        // Bước 7 — Lưu tất cả vào DB.
+        await _connections.SaveChangesAsync(ct);
 
-        // Step 5 — Check duplicate.
-        var existing = await _oauthConnections.GetByUniqueKeyAsync(
-            userId, integration.Id, providerAccountId, ct);
-        if (existing is not null)
-            throw new ConflictException("Tài khoản Google này đã được kết nối");
-
-        // Step 6 — Encrypt tokens.
-        var protector = _dataProtection.CreateProtector("OAuthCredentials");
-        var accessTokenEncrypted  = protector.Protect(googleToken.AccessToken);
-        var refreshTokenEncrypted = protector.Protect(googleToken.RefreshToken ?? string.Empty);
-
-        // Step 7 — Tạo OAuthConnection.
-        var connection = new OAuthConnection
-        {
-            Id                    = Guid.NewGuid(),
-            UserId                = userId,
-            IntegrationId         = integration.Id,
-            ProviderAccountId     = providerAccountId,
-            AccessTokenEncrypted  = accessTokenEncrypted,
-            RefreshTokenEncrypted = refreshTokenEncrypted,
-            ExpiresAt             = DateTime.UtcNow.AddSeconds(googleToken.ExpiresIn),
-            Scopes                = googleToken.Scope,
-            Status                = ConnectionStatus.Active,
-            LastRefreshedAt       = null
-        };
-
-        // Step 8 — Populate ServiceConnections theo scope thực tế Google cấp.
-        ServiceConnectionSync.ApplyGrantedScopes(connection, googleToken.Scope);
-
-        // Step 9 — Lưu DB.
-        await _oauthConnections.AddAsync(connection, ct);
-        await _oauthConnections.SaveChangesAsync(ct);
-
-        var services = connection.ServiceConnections
-            .Select(sc => new ServiceConnectionResult(sc.Id, sc.ServiceType.ToString(), sc.IsEnabled))
-            .ToList();
-
-        return new CompleteConnectionResult(
-            connection.Id,
-            integrationKey,
-            providerAccountId,
-            connection.Scopes,
-            connection.Status.ToString(),
-            services);
+        return new CompleteConnectionResult(integrationKey, tokenResult.ProviderAccountId, results);
     }
 
-    public async Task SetCredentialsAsync(
-        string integrationKey,
-        string clientId,
-        string clientSecret,
-        CancellationToken ct = default)
+    public async Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default)
     {
-        var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
-            ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
+        var integration = await _integrations.GetByKeyAsync(key, ct)
+            ?? throw new NotFoundException($"Integration '{key}' không tồn tại");
 
-        var protector = _dataProtection.CreateProtector("OAuthCredentials");
-        integration.ClientIdEncrypted = protector.Protect(clientId);
-        integration.ClientSecretEncrypted = protector.Protect(clientSecret);
-
+        integration.IsEnabled = isEnabled;
         _integrations.Update(integration);
         await _integrations.SaveChangesAsync(ct);
+
+        return new IntegrationResponse(integration.Id, integration.Key, integration.DisplayName, integration.IsEnabled);
     }
+
 }

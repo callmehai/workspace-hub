@@ -1,123 +1,74 @@
-# API Design — Workspace Hub (Sprint 1–3 scope)
+# API Design — Workspace Hub (Mô hình B + 2 chiều)
+
+> Cập nhật 2026-06-11: thêm Google Sign-In, write-back (PATCH items), Connections thay OAuthConnection/ServiceConnection. Lịch sử: CHANGELOG.md.
+>
+> File này là **spec target**. Status implement: Auth + Google Sign-In ✅ · Connections đang transitional (xem mục Connections) · Items GET/filter ✅, write-back ⏳ (SCRUM-37) · Scheduled ⏳ (SCRUM-30/31).
 
 ## Quy ước chung
+- Auth: JWT Bearer. Claim: sub, email, role.
+- DateTime ISO 8601 UTC. Pagination ?page&limit (default 20, max 100).
+- Collection lớn → envelope `{items,total,page,limit}`; nhỏ → array.
 
-- **Auth:** JWT Bearer, header `Authorization: Bearer <token>`. Claim: sub (UserId), email, role.
-- **Content-Type:** application/json (trừ upload).
-- **DateTime:** ISO 8601 UTC (`2026-05-25T14:30:00Z`).
-- **Pagination:** `?page=1&limit=20`. Default 20, max 100.
-- **Response collection:**
-  - List lớn (items, users, notifications, scheduled-emails) → envelope `{ items, total, page, limit }`
-  - List nhỏ (integrations, connections, folders, tags, shares) → array thẳng `[...]`
+## Status code (bổ sung cho write-back)
+Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409** conflict ETag · **502** provider lỗi khi ghi/đọc live.
 
-## Status code
-
-| Code | Khi nào |
-|---|---|
-| 200 | GET/PUT/PATCH OK |
-| 201 | POST tạo mới |
-| 202 | Nhận xử lý bất đồng bộ (trigger sync) |
-| 204 | DELETE OK, no body |
-| 400 | Body sai, validation fail |
-| 401 | Thiếu/hết hạn token |
-| 403 | Có token nhưng không đủ quyền |
-| 404 | Không tồn tại |
-| 409 | Vi phạm unique constraint |
-| 422 | Business rule fail |
-| 429 | Rate limit |
-| 500 | Lỗi BE |
-| 502 | Provider thứ ba lỗi (khi gọi live) |
-
-## Error format
-```json
-{
-  "error": "ValidationError",
-  "message": "...",
-  "details": [{ "field": "email", "issue": "..." }],
-  "traceId": "req_abc123"
-}
-```
-Loại: ValidationError(400) · AuthenticationError(401) · AuthorizationError(403) · NotFoundError(404) · ConflictError(409) · BusinessRuleError(422) · RateLimitError(429) · InternalError(500) · UpstreamError(502)
+> Connection migrate từ mô hình A (SCRUM-34 copy data) vẫn giữ token scope readonly cũ → user phải **reconnect** để có scope ghi (gmail.modify+send / calendar / drive.file) trước khi dùng write-back.
 
 ---
 
-## Auth
-- `POST /api/auth/register` — {email, password, fullName} → 201. (400 email sai/pw<8, 409 trùng)
-- `POST /api/auth/login` — {email, password} → 200 {accessToken, expiresIn, user}. (401 sai/khoá)
-- `GET /api/auth/me` — Bearer → 200 user info
-- `POST /api/auth/logout` — Bearer → 204 (stateless, FE xoá token)
+## Auth (email/password) — không đổi
+- `POST /api/auth/register` · `POST /api/auth/login` · `GET /api/auth/me` · `POST /api/auth/logout`
 
-## Admin
-- `GET /api/admin/users?search=&page=&limit=` — Admin → envelope
-- `GET /api/admin/users/{id}` — Admin → chi tiết + connections[]
-- `PATCH /api/admin/users/{id}/lock` — Admin → {isActive, reason}
-- `GET /api/admin/stats` — Admin → {totalUsers, activeUsers, lockedUsers, totalConnections, connectionsByStatus, totalItems, syncErrorsLast24h}
+## Auth Google Sign-In ⭐ mới
+- `POST /api/auth/google/start` — AllowAnonymous → {authorizationUrl, state}. Scope chỉ openid/email/profile.
+- `POST /api/auth/google/callback` — {code, state} → verify id_token, tìm/tạo/link user, phát JWT. (400 CSRF, 401 token invalid / user khoá)
+> KHÔNG tạo Connection. Chỉ tạo/tìm User. Auto-link nếu email trùng.
+
+## Admin — không đổi
+`GET /api/admin/users`, `/users/{id}`, `PATCH /users/{id}/lock`, `GET /api/admin/stats`, `DELETE /api/admin/connections/{id}`.
 
 ## Integrations
-- `GET /api/integrations` — Bearer → array (kèm myConnectionId)
-- `POST /api/admin/integrations` — Admin → tạo (clientSecret mask). 409 key trùng
-- `PUT /api/admin/integrations/{id}` — Admin partial
-- `PATCH /api/admin/integrations/{id}/disable` — Admin
+- `GET /api/integrations` — catalog cho user.
+- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (422). ✅ SCRUM-48.
+  - Request: `{ "isEnabled": true | false }`
+  - Response 200: `{ "id", "key", "displayName", "isEnabled" }`
+  - 404 key không tồn tại · 403 không phải Admin
+- ~~`PUT /api/connections/{key}/credentials`~~ — **sẽ xoá ở SCRUM-47**: admin không quản lý credentials nữa, ClientId/Secret đọc từ config/env (CHANGELOG 2026-06-12).
 
-## OAuth Connections
-- `POST /api/connections/oauth/start` — Bearer → {authorizationUrl, state}. (404 integration, 422 disabled)
-- `POST /api/connections/oauth/callback` — Bearer → {code, state} → 201 connection + services[]. (400 CSRF, 422 provider từ chối, 409 trùng account)
-- `GET /api/connections` — Bearer → array (token mask, services[])
-- `POST /api/connections/{id}/refresh` — Bearer → expiresAt mới. (422 refresh invalid→Error, 429)
-- `DELETE /api/connections/{id}` — Bearer → 204. CASCADE services; Item giữ lại (ServiceConnectionId=NULL)
-- `DELETE /api/admin/connections/{id}` — Admin force-disconnect; ghi Notification(sync_error)
+## Connections ⭐ (thay OAuth Connections + Service Connections)
+Mô hình B: mỗi service authorize riêng, tạo 1 Connection.
 
-## Service Connections
-- `PATCH /api/services/{id}/toggle` — Bearer → {isEnabled}. (403 không thuộc user)
-- `POST /api/services/{id}/sync` — Bearer → 202 {jobId, message}. (429 sync quá gần). **Fallback thủ công, không phải cơ chế chính**
+- `POST /api/connections/oauth/start` — `{integrationKey, serviceType, redirectUri}` → `{authorizationUrl, state}`. Scope = full của service đó (dev quyết). Mỗi lần chỉ connect 1 service. (404 integration không tồn tại, 422 serviceType không hợp lệ / provider không hỗ trợ serviceType / integration disabled)
+- `POST /api/connections/oauth/callback` — `{code, state}` → 201 tạo **1** Connection row. Response: `{integrationKey, providerAccountId, connections: [{id, serviceType, status}]}`. (400 CSRF, 400 provider từ chối/scope thiếu, 409 trùng service+account)
+- `GET /api/connections` — array (token mask). Mỗi row = 1 service.
+- `POST /api/connections/{id}/refresh` — refresh token. (422 invalid→Error)
+- `DELETE /api/connections/{id}` — 204, xoá đúng service đó. Items giữ lại (ConnectionId=NULL). KHÔNG ảnh hưởng login hay service khác.
+- `POST /api/connections/{id}/sync` — 202 trigger thủ công (fallback).
 
-## Folders
-- `GET /api/folders?includeShared=true` — Bearer → array (id, name, color, icon, sortOrder, isArchived, itemCount, isOwner, permission, ownerName)
-- `POST /api/folders` — Bearer → {name, color, icon} → 201
-- `PUT /api/folders/{id}` — Bearer (Owner)
-- `DELETE /api/folders/{id}` — Bearer (Owner) → 204. CASCADE ItemFolders+FolderShares; Item giữ lại
+> Bỏ /api/services/* (mô hình A). Toggle = connect/disconnect cả Connection.
 
-## Folder Shares
-- `POST /api/folders/{folderId}/shares` — Owner → {email, permission} → 201. (404 email, 409 đã share)
-- `GET /api/folders/{folderId}/shares` — Owner → array
-- `GET /api/shares/pending` — Bearer
-- `PATCH /api/shares/{id}/accept` | `/decline` — Bearer → 200/204. (403 không phải người được mời)
-- `DELETE /api/shares/{id}` — Owner → 204
+## Folders / Folder Shares / Tags / Important Contacts / Notifications
+Không đổi. Xem bản trước.
 
-## Items
-- `GET /api/items?folderId=&status=&type=&isImportant=&search=&page=&limit=` — Bearer → envelope. **Phần search/filter/pagination chính**
-- `GET /api/items/{id}/detail` — Bearer → metadata + body live từ provider. (403 Viewer không xem body, 502 provider lỗi)
-- `PATCH /api/items/{id}/status` — Bearer → {status} (Kanban)
-- `POST /api/items/note` — Bearer → {title, contentMarkdown, folderId?, tagIds?}
-- `PATCH /api/items/{id}/archive` — Bearer → {isArchived}
+## Items (thêm write-back ⭐)
+- `GET /api/items?folderId&status&type&isImportant&search&page&limit` — envelope. Trả kèm ETag.
+- `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
+- `POST /api/items/note` — tạo Note.
+- `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar.
+- `PATCH /api/items/{id}` ⭐ — write-back, body theo Type:
+  - Email: `{isUnread?, isStarred?, labels?[], isTrashed?}` (KHÔNG sửa nội dung)
+  - Event: `{title?, start?, end?, location?, attendees?[]}`
+  - File: `{name?, isTrashed?}`
+  - → đẩy lên provider. (403 thiếu scope, 409 conflict ETag, 502 provider lỗi)
+- `PATCH /api/items/{id}/status` — Kanban (local only).
+- `PATCH /api/items/{id}/archive` — local only.
+- `DELETE /api/items/{id}` ⭐ — trash/xoá trên provider + local.
 
-## Item-Folder
-- `POST /api/folders/{folderId}/items` — Owner → {itemId, position} → 201. (409 đã thuộc)
-- `DELETE /api/folders/{folderId}/items/{itemId}` — Owner → 204
-- `PATCH /api/folders/{folderId}/items/reorder` — Owner → {orderedItemIds[]}
+## Item-Folder — không đổi
+`POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.
 
-## Tags
-- `GET /api/tags` — Bearer → array {id,name,color,itemCount}
-- `POST /api/tags` — Bearer → {name,color} → 201
-- `PUT /api/tags/{id}` — Bearer
-- `DELETE /api/tags/{id}` — Bearer → 204 (CASCADE assignments)
-- `POST` / `DELETE /api/items/{itemId}/tags/{tagId}` — Bearer → 201/204. (409 assign trùng)
-
-## Important Contacts
-- `GET /api/important-contacts` — Bearer
-- `POST /api/important-contacts` — {type, identifier, label} → 201. (409 trùng)
-- `PUT /api/important-contacts/{id}` — partial
-- `DELETE /api/important-contacts/{id}` → 204
-
-## Scheduled Emails
-- `POST /api/scheduled-emails` — Bearer → {serviceConnectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (400 sendAt quá khứ, 404 connection, 422 không phải Gmail)
-- `GET /api/scheduled-emails?status=&page=&limit=` — Bearer → envelope
-- `PATCH /api/scheduled-emails/{id}/cancel` — Bearer → Cancelled (chỉ khi Pending). (422 đã gửi)
-- `POST /api/internal/process-scheduled` — **X-Cron-Secret, KHÔNG JWT**. Cron gọi mỗi 5 phút, gửi Pending tới hạn
-
-## Notifications
-- `GET /api/notifications?unreadOnly=&page=&limit=` — Bearer → {items, total, page, limit, unreadCount}
-- `GET /api/notifications/unread-count` — Bearer → {count}
-- `PATCH /api/notifications/{id}/read` — Bearer
-- `PATCH /api/notifications/read-all` — Bearer → {markedCount}
-- `DELETE /api/notifications/{id}` — Bearer → 204
+## Scheduled Emails (đổi ConnectionId ⭐)
+- `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (404 connection, 422 connection không phải Gmail)
+- `GET /api/scheduled-emails?status&page&limit` — envelope.
+- `PATCH /api/scheduled-emails/{id}/cancel` — (422 đã gửi).
+- `POST /api/internal/process-scheduled` — X-Cron-Secret. Lấy token từ Connections (Gmail).
