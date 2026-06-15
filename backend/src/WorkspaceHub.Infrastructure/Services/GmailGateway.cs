@@ -109,4 +109,42 @@ public class GmailGateway : IGmailGateway
             hasAttachment,
             occurredAt);
     }
+
+    public async Task<GmailHistory> ListHistoryAsync(Connection connection, string startHistoryId, string? pageToken, CancellationToken ct = default)
+    {
+        if (!ulong.TryParse(startHistoryId, out ulong historyId))
+        {
+            return new GmailHistory(true, new List<string>(), null, null);
+        }
+
+        var gmail = await BuildGmailServiceAsync(connection, ct);
+        var request = gmail.Users.History.List("me");
+        request.StartHistoryId = historyId;
+        if (!string.IsNullOrEmpty(pageToken))
+        {
+            request.PageToken = pageToken;
+        }
+
+        try
+        {
+            var response = await request.ExecuteAsync(ct);
+            var addedIds = response.History?
+                .Where(h => h.MessagesAdded != null)
+                .SelectMany(h => h.MessagesAdded)
+                .Where(m => m.Message?.Id != null)
+                .Select(m => m.Message.Id)
+                .Distinct()
+                .ToList() ?? new List<string>();
+
+            return new GmailHistory(
+                false,
+                addedIds,
+                response.NextPageToken,
+                response.HistoryId?.ToString());
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return new GmailHistory(true, new List<string>(), null, null);
+        }
+    }
 }

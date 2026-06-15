@@ -31,34 +31,102 @@ public class GmailSyncService : IGmailSyncService
 
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, int maxMessages = 50, CancellationToken ct = default)
     {
-        // a. Lấy historyId hiện tại
-        var profile = await _gmailGateway.GetProfileAsync(connection, ct);
-        var newCursor = profile.HistoryId?.ToString();
-
-        // b. Lấy importantEmails
         var importantList = await _importantContacts.GetIdentifiersAsync(connection.UserId, ImportantContactType.Email, ct);
         var importantSet = new HashSet<string>(importantList, StringComparer.OrdinalIgnoreCase);
-
-        // c. Lấy sẵn ExternalId đã có
         var existing = await _items.GetExistingExternalIdsAsync(connection.Id, ct);
 
-        // d. Vòng lặp phân trang gom tối đa maxMessages id
-        string? pageToken = null;
-        var collectedIds = new List<string>();
-        do
-        {
-            var page = await _gmailGateway.ListMessageIdsAsync(connection, pageToken, Math.Min(100, maxMessages - collectedIds.Count), ct);
-            collectedIds.AddRange(page.MessageIds);
-            pageToken = page.NextPageToken;
-        } while (!string.IsNullOrEmpty(pageToken) && collectedIds.Count < maxMessages);
-
-        // e. Duyệt các id
         var newItems = new List<Item>();
-        int scanned = collectedIds.Count;
+        int scanned = 0;
+        int created = 0;
+        int skipped = 0;
+        string? newCursor = null;
+
+        if (string.IsNullOrEmpty(connection.CursorValue) || connection.CursorType != CursorType.HistoryId)
+        {
+            var fullResult = await FullSyncAsync(connection, maxMessages, ct);
+            scanned = fullResult.CollectedIds.Count;
+            newCursor = fullResult.NewCursor;
+
+            var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existing, newItems, ct);
+            created = processResult.Created;
+            skipped = processResult.Skipped;
+        }
+        else
+        {
+            string? pageToken = null;
+            string? latestHistoryId = null;
+            bool expired = false;
+            var addedIds = new List<string>();
+
+            do
+            {
+                var h = await _gmailGateway.ListHistoryAsync(connection, connection.CursorValue, pageToken, ct);
+                if (h.Expired)
+                {
+                    expired = true;
+                    break;
+                }
+                
+                addedIds.AddRange(h.AddedMessageIds);
+                if (h.LatestHistoryId != null)
+                {
+                    latestHistoryId = h.LatestHistoryId;
+                }
+                pageToken = h.NextPageToken;
+
+            } while (!string.IsNullOrEmpty(pageToken));
+
+            if (expired)
+            {
+                var fullResult = await FullSyncAsync(connection, maxMessages, ct);
+                scanned = fullResult.CollectedIds.Count;
+                newCursor = fullResult.NewCursor;
+
+                var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existing, newItems, ct);
+                created = processResult.Created;
+                skipped = processResult.Skipped;
+            }
+            else
+            {
+                scanned = addedIds.Count;
+                newCursor = latestHistoryId ?? connection.CursorValue;
+
+                var processResult = await ProcessMessageIdsAsync(connection, addedIds, importantSet, existing, newItems, ct);
+                created = processResult.Created;
+                skipped = processResult.Skipped;
+            }
+        }
+
+        if (newItems.Any())
+        {
+            await _items.AddRangeAsync(newItems, ct);
+            await _items.SaveChangesAsync(ct);
+        }
+
+        connection.CursorType = CursorType.HistoryId;
+        connection.CursorValue = newCursor;
+        connection.LastSyncedAt = DateTime.UtcNow;
+        connection.Status = ConnectionStatus.Active;
+        connection.LastError = null;
+
+        _connections.Update(connection);
+        await _connections.SaveChangesAsync(ct);
+
+        return new SyncResult(scanned, created, skipped, newCursor);
+    }
+
+    private async Task<(int Created, int Skipped)> ProcessMessageIdsAsync(
+        Connection connection, 
+        IEnumerable<string> ids, 
+        ISet<string> importantSet,
+        HashSet<string> existing, 
+        List<Item> newItems, 
+        CancellationToken ct)
+    {
         int created = 0;
         int skipped = 0;
 
-        foreach (var id in collectedIds)
+        foreach (var id in ids)
         {
             if (existing.Contains(id))
             {
@@ -70,28 +138,27 @@ public class GmailSyncService : IGmailSyncService
             var item = _mapper.ToItem(msg, connection.UserId, connection.Id, importantSet);
             
             newItems.Add(item);
-            existing.Add(id); // Tránh trùng lặp trong cùng 1 đợt
+            existing.Add(id);
             created++;
         }
 
-        // f. Lưu Items
-        if (newItems.Any())
+        return (created, skipped);
+    }
+
+    private async Task<(List<string> CollectedIds, string? NewCursor)> FullSyncAsync(Connection connection, int maxMessages, CancellationToken ct)
+    {
+        var profile = await _gmailGateway.GetProfileAsync(connection, ct);
+        var newCursor = profile.HistoryId?.ToString();
+
+        string? pageToken = null;
+        var collectedIds = new List<string>();
+        do
         {
-            await _items.AddRangeAsync(newItems, ct);
-            await _items.SaveChangesAsync(ct);
-        }
+            var page = await _gmailGateway.ListMessageIdsAsync(connection, pageToken, Math.Min(100, maxMessages - collectedIds.Count), ct);
+            collectedIds.AddRange(page.MessageIds);
+            pageToken = page.NextPageToken;
+        } while (!string.IsNullOrEmpty(pageToken) && collectedIds.Count < maxMessages);
 
-        // g. Cập nhật connection
-        connection.CursorType = CursorType.HistoryId;
-        connection.CursorValue = newCursor;
-        connection.LastSyncedAt = DateTime.UtcNow;
-        connection.Status = ConnectionStatus.Active;
-        connection.LastError = null;
-
-        _connections.Update(connection);
-        await _connections.SaveChangesAsync(ct);
-
-        // h. Return
-        return new SyncResult(scanned, created, skipped, newCursor);
+        return (collectedIds, newCursor);
     }
 }
