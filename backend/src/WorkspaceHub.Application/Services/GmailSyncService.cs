@@ -36,7 +36,7 @@ public class GmailSyncService : IGmailSyncService
         if (conn.UserId != userId) throw new WorkspaceHub.Application.Common.NotFoundException("Connection", connectionId);
 
         if (conn.ServiceType != WorkspaceHub.Domain.Enums.ServiceType.Gmail)
-            throw new WorkspaceHub.Application.Common.BadRequestException("Kết nối này không phải Gmail");
+            throw new WorkspaceHub.Application.Common.BusinessRuleException("Kết nối này không phải Gmail");
 
         return conn;
     }

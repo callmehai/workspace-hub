@@ -68,7 +68,6 @@ public class ExceptionMiddleware
             BusinessRuleException  => (HttpStatusCode.UnprocessableEntity, "BusinessRuleError"),
             UnauthorizedException  => (HttpStatusCode.Unauthorized,        "UnauthorizedError"),
             CsrfException          => (HttpStatusCode.BadRequest,          "CsrfError"),
-            BadRequestException    => (HttpStatusCode.BadRequest,          "BadRequestError"),
             _                      => (HttpStatusCode.InternalServerError, "InternalError")
         };
 
