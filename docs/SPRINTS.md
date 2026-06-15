@@ -61,7 +61,7 @@
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
 | SCRUM-47* | Bỏ DB credentials cho Integrations: drop 2 cột encrypted, xoá PUT /credentials, đổi section config `Dev:` → `OAuth:` | đề xuất Hải (migration) | làm SAU SCRUM-36 (cùng đụng ConnectionsService với Khánh) | ⏳ Chưa tạo Jira |
-| SCRUM-48* | Admin toggle integration: PATCH /api/admin/integrations/{key}/enable | đề xuất Huy (Admin) | 47 | ⏳ Chưa tạo Jira |
+| SCRUM-48* | Admin toggle integration: PATCH /api/admin/integrations/{key}/enable | Khánh | — | ✅ Done 2026-06-15 — `AdminIntegrationsController`, `ToggleIntegrationAsync`, validator + DTOs |
 
 \* Số ticket tạm — sửa lại theo số Jira cấp khi tạo issue.
 

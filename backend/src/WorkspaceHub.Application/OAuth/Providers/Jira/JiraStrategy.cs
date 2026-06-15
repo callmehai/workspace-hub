@@ -23,45 +23,45 @@ public class JiraStrategy(
     public string ProviderKey => "jira";
 
     public Task<InitiateConnectionResult> BuildAuthUrlAsync(
-        ProviderStrategyContext ctx,
+        BuildAuthUrlRequest request,
         CancellationToken ct = default)
     {
-        if (!Enum.TryParse<Domain.Enums.ServiceType>(ctx.ServiceType, ignoreCase: true, out var st) || st != Domain.Enums.ServiceType.Jira)
-            throw new BusinessRuleException($"JiraStrategy chỉ hỗ trợ ServiceType 'Jira', nhận được '{ctx.ServiceType}'");
+        if (!Enum.TryParse<Domain.Enums.ServiceType>(request.ServiceType, ignoreCase: true, out var st) || st != Domain.Enums.ServiceType.Jira)
+            throw new BusinessRuleException($"JiraStrategy chỉ hỗ trợ ServiceType 'Jira', nhận được '{request.ServiceType}'");
 
         var query = HttpUtility.ParseQueryString(string.Empty);
-        query["client_id"]     = ctx.ClientId;
-        query["redirect_uri"]  = ctx.RedirectUri;
+        query["client_id"]     = request.ClientId;
+        query["redirect_uri"]  = request.RedirectUri;
         query["response_type"] = "code";
         // TODO SCRUM-42: chốt scope chính thức khi làm OAuth Atlassian.
         query["scope"]         = string.Join(' ', JiraScopes.All);
-        query["state"]         = ctx.State;
+        query["state"]         = request.State;
         query["audience"]      = AtlassianAudience;
         query["prompt"]        = "consent";
 
-        var url = $"{ctx.Integration.AuthorizationEndpoint}?{query}";
+        var url = $"{request.Integration.AuthorizationEndpoint}?{query}";
 
-        return Task.FromResult(new InitiateConnectionResult(url, ctx.State));
+        return Task.FromResult(new InitiateConnectionResult(url, request.State));
     }
 
     public async Task<TokenExchangeResult> ExchangeCodeAsync(
-        CompleteContext ctx,
+        ExchangeCodeRequest request,
         CancellationToken ct = default)
     {
         // Step 1: exchange code → access_token + refresh_token
         var formData = new Dictionary<string, string>
         {
             ["grant_type"]    = "authorization_code",
-            ["client_id"]     = ctx.ClientId,
-            ["client_secret"] = ctx.ClientSecret,
-            ["code"]          = ctx.Code,
-            ["redirect_uri"]  = ctx.RedirectUri
+            ["client_id"]     = request.ClientId,
+            ["client_secret"] = request.ClientSecret,
+            ["code"]          = request.Code,
+            ["redirect_uri"]  = request.RedirectUri
         };
 
         string json;
         try
         {
-            json = await tokenClient.PostFormAsync(ctx.Integration.TokenEndpoint, formData, ct);
+            json = await tokenClient.PostFormAsync(request.Integration.TokenEndpoint, formData, ct);
         }
         catch (HttpRequestException)
         {
