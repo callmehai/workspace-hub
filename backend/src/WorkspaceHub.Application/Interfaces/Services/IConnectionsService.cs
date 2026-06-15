@@ -34,7 +34,7 @@ public interface IConnectionsService
     Task<IReadOnlyList<ConnectionDto>> GetConnectionsAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// SCRUM-14: Ngắt kết nối — xoá Connection, Items.ConnectionId SET NULL, cancel ScheduledEmails Pending.
+    /// SCRUM-14: Ngắt kết nối — xoá Connection, Items.ConnectionId SET NULL, delete ScheduledEmails.
     /// FK Items/ScheduledEmails → Connections là NoAction ở DB nên phải xử lý ở service layer.
     /// </summary>
     Task DisconnectAsync(Guid connectionId, Guid userId, CancellationToken ct = default);

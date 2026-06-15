@@ -56,6 +56,11 @@ public class ConnectionsServiceTests
             _configMock.Object,
             _tokenClientMock.Object,
             _scheduledEmailsMock.Object);
+
+        // Mock ExecuteInTransactionAsync to just run the action
+        _connectionsMock
+            .Setup(r => r.ExecuteInTransactionAsync(It.IsAny<Func<Task>>(), It.IsAny<CancellationToken>()))
+            .Returns<Func<Task>, CancellationToken>((action, _) => action());
     }
 
     // ───────────── Helpers ─────────────

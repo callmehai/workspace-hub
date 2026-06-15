@@ -13,7 +13,8 @@ public class ScheduledEmailRepository : GenericRepository<ScheduledEmail>, ISche
     /// <inheritdoc/>
     public async Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
     {
-        var emails = await Set.Where(se => se.ConnectionId == connectionId).ToListAsync(ct);
-        Set.RemoveRange(emails);
+        await Set
+            .Where(se => se.ConnectionId == connectionId)
+            .ExecuteDeleteAsync(ct);
     }
 }

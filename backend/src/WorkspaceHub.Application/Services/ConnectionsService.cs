@@ -215,17 +215,20 @@ public class ConnectionsService : IConnectionsService
             throw new ForbiddenException("You do not have permission to disconnect this connection.");
 
         // FK NoAction ở DB → phải xử lý ở service layer trước khi xoá Connection.
-        // Sử dụng tracked entities để đảm bảo tất cả thay đổi nằm trong cùng 1 transaction khi SaveChangesAsync.
+        // Dùng explicit transaction để bọc cả ExecuteUpdate/DeleteAsync (SQL trực tiếp) và change tracker lại.
 
-        // (1) Items.ConnectionId SET NULL (tracked)
-        await _items.NullifyConnectionIdAsync(connectionId, ct);
+        await _connections.ExecuteInTransactionAsync(async () =>
+        {
+            // (1) Items.ConnectionId SET NULL (direct SQL)
+            await _items.NullifyConnectionIdAsync(connectionId, ct);
 
-        // (2) Xoá ScheduledEmails theo ConnectionId (tracked)
-        await _scheduledEmails.DeleteByConnectionIdAsync(connectionId, ct);
+            // (2) Xoá ScheduledEmails theo ConnectionId (direct SQL)
+            await _scheduledEmails.DeleteByConnectionIdAsync(connectionId, ct);
 
-        // (3) Xoá Connection (tracked entity → SaveChanges)
-        _connections.Remove(connection);
-        await _connections.SaveChangesAsync(ct);
+            // (3) Xoá Connection (tracked entity → SaveChanges)
+            _connections.Remove(connection);
+            await _connections.SaveChangesAsync(ct);
+        }, ct);
     }
 
     public async Task<RefreshConnectionResponse> RefreshConnectionAsync(
