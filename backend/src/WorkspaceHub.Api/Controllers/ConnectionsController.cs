@@ -9,10 +9,17 @@ namespace WorkspaceHub.Api.Controllers;
 public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
+    private readonly WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository _connectionRepository;
+    private readonly WorkspaceHub.Application.Abstractions.IGmailGateway _gmailGateway;
 
-    public ConnectionsController(IConnectionsService connections)
+    public ConnectionsController(
+        IConnectionsService connections,
+        WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository connectionRepository,
+        WorkspaceHub.Application.Abstractions.IGmailGateway gmailGateway)
     {
         _connections = connections;
+        _connectionRepository = connectionRepository;
+        _gmailGateway = gmailGateway;
     }
 
     /// <summary>POST /api/connections/oauth/start — build authorization URL.</summary>
@@ -57,4 +64,18 @@ public class ConnectionsController : ApiControllerBase
         return StatusCode(201, response);
     }
 
+    [HttpGet("{id:guid}/gmail-profile")]
+    public async Task<IActionResult> GetGmailProfile(Guid id, CancellationToken ct)
+    {
+        var conn = await _connectionRepository.GetByIdAsync(id, ct);
+        if (conn is null) return NotFound();
+
+        if (conn.UserId != CurrentUserId) return Forbid();
+
+        if (conn.ServiceType != WorkspaceHub.Domain.Enums.ServiceType.Gmail)
+            return BadRequest(new { message = "Kết nối này không phải Gmail" });
+
+        var profile = await _gmailGateway.GetProfileAsync(conn, ct);
+        return Ok(profile);
+    }
 }

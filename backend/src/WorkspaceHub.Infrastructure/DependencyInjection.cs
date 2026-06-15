@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<IItemRepository, ItemRepository>();
 
         services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();
 
         return services;
     }
