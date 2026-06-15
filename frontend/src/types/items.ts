@@ -1,6 +1,6 @@
 export interface PagedResult<T> {
   items: T[];
-  totalCount: number;
+  total: number;
   page: number;
   limit: number;
 }

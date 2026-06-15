@@ -12,7 +12,8 @@ public class CreateNoteValidator : AbstractValidator<CreateNoteRequest>
             .MaximumLength(200).WithMessage("Title cannot exceed 200 characters.");
 
         RuleFor(x => x.ContentMarkdown)
-            .NotEmpty().WithMessage("ContentMarkdown is required.");
+            .NotEmpty().WithMessage("ContentMarkdown is required.")
+            .MaximumLength(50000).WithMessage("ContentMarkdown cannot exceed 50000 characters.");
 
         RuleFor(x => x.FolderId)
             .NotEqual(Guid.Empty).When(x => x.FolderId.HasValue).WithMessage("FolderId cannot be empty GUID.");

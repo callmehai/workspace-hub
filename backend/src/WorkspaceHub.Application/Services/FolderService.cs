@@ -15,10 +15,12 @@ namespace WorkspaceHub.Application.Services;
 public class FolderService : IFolderService
 {
     private readonly IFolderRepository _folderRepo;
+    private readonly IItemRepository _itemRepo;
 
-    public FolderService(IFolderRepository folderRepo)
+    public FolderService(IFolderRepository folderRepo, IItemRepository itemRepo)
     {
         _folderRepo = folderRepo;
+        _itemRepo = itemRepo;
     }
 
     /// <inheritdoc/>
@@ -129,6 +131,10 @@ public class FolderService : IFolderService
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
             throw new ForbiddenException("Only the folder owner can add items to this folder.");
+
+        var item = await _itemRepo.GetByIdAndUserAsync(request.ItemId, userId, ct);
+        if (item == null)
+            throw new ForbiddenException("The item does not belong to the current user or does not exist.");
 
         var exists = await _folderRepo.ItemFolderExistsAsync(request.ItemId, folderId, ct);
         if (exists)
