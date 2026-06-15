@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IConnectionRepository, ConnectionRepository>();
         services.AddScoped<IItemRepository, ItemRepository>();
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
+        services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
 
         services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
         services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();

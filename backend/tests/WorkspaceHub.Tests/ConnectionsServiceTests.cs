@@ -26,7 +26,7 @@ public class ConnectionsServiceTests
     private readonly Mock<IDistributedCache> _cacheMock;
     private readonly Mock<IConfiguration> _configMock;
     private readonly Mock<IOAuthTokenClient> _tokenClientMock;
-    private readonly Mock<IGenericRepository<ScheduledEmail>> _scheduledEmailsMock;
+    private readonly Mock<IScheduledEmailRepository> _scheduledEmailsMock;
     private readonly ConnectionsService _sut;
 
     private readonly Guid _userId = Guid.NewGuid();
@@ -41,7 +41,7 @@ public class ConnectionsServiceTests
         _cacheMock = new Mock<IDistributedCache>();
         _configMock = new Mock<IConfiguration>();
         _tokenClientMock = new Mock<IOAuthTokenClient>();
-        _scheduledEmailsMock = new Mock<IGenericRepository<ScheduledEmail>>();
+        _scheduledEmailsMock = new Mock<IScheduledEmailRepository>();
 
         // No provider strategies needed for SCRUM-14 tests
         var strategies = Enumerable.Empty<IProviderStrategy>();
@@ -132,8 +132,7 @@ public class ConnectionsServiceTests
         // Assert
         Assert.Single(result);
         var dto = result[0];
-        Assert.Equal("****ABCD", dto.MaskedToken);
-        Assert.DoesNotContain("encrypted-access-token", dto.MaskedToken);
+        Assert.Equal("********", dto.MaskedToken);
     }
 
     [Fact]
@@ -195,8 +194,8 @@ public class ConnectionsServiceTests
             .Setup(r => r.NullifyConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _scheduledEmailsMock
-            .Setup(r => r.ListAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ScheduledEmail>().AsReadOnly());
+            .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         _connectionsMock
             .Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
@@ -222,8 +221,8 @@ public class ConnectionsServiceTests
             .Setup(r => r.NullifyConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _scheduledEmailsMock
-            .Setup(r => r.ListAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ScheduledEmail>().AsReadOnly());
+            .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         _connectionsMock
             .Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
@@ -258,8 +257,8 @@ public class ConnectionsServiceTests
             .Setup(r => r.NullifyConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _scheduledEmailsMock
-            .Setup(r => r.ListAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ScheduledEmail> { scheduledEmail }.AsReadOnly());
+            .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         _connectionsMock
             .Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
@@ -268,7 +267,7 @@ public class ConnectionsServiceTests
         await _sut.DisconnectAsync(connection.Id, _userId);
 
         // Assert
-        _scheduledEmailsMock.Verify(r => r.Remove(scheduledEmail), Times.Once);
+        _scheduledEmailsMock.Verify(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -409,31 +408,79 @@ public class ConnectionsServiceTests
     }
 
     [Fact]
-    public async Task RefreshConnectionAsync_SetsStatusError_WhenRefreshTokenInvalid()
+    public async Task RefreshConnectionAsync_SetsStatusError_WhenDecryptFails()
     {
-        // Arrange — empty refresh token triggers Error status
-        var connection = CreateConnection(refreshToken: "");
+        // Arrange — invalid refresh token triggers decrypt failure
+        var connection = CreateConnection(refreshToken: "invalid-cipher-text");
 
         _connectionsMock
             .Setup(r => r.GetByIdTrackedAsync(connection.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(connection);
+        
+        // Setup Unprotect to throw exception
+        _tokenProtectorMock
+            .Setup(p => p.Unprotect("invalid-cipher-text"))
+            .Throws(new System.Security.Cryptography.CryptographicException("Invalid payload"));
+            
+        _connectionsMock
+            .Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(
+            () => _sut.RefreshConnectionAsync(connection.Id, _userId));
+
+        Assert.Contains("invalid", ex.Message);
+
+        // Assert — Status set to Error
+        Assert.Equal(ConnectionStatus.Error, connection.Status);
+        _connectionsMock.Verify(r => r.Update(It.Is<Connection>(c => c.Status == ConnectionStatus.Error)), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshConnectionAsync_UpdatesRefreshToken_WhenProviderRotatesToken()
+    {
+        // Arrange
+        var integration = CreateIntegration();
+        var connection = CreateConnection();
+        connection.IntegrationId = integration.Id;
+
+        _connectionsMock
+            .Setup(r => r.GetByIdTrackedAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(connection);
+        _tokenProtectorMock
+            .Setup(p => p.Unprotect(connection.RefreshTokenEncrypted))
+            .Returns("real-refresh-token");
+        _tokenProtectorMock
+            .Setup(p => p.Protect("new-access-token"))
+            .Returns("new-encrypted-access-token");
+        _tokenProtectorMock
+            .Setup(p => p.Protect("new-refresh-token"))
+            .Returns("new-encrypted-refresh-token");
+        _integrationsMock
+            .Setup(r => r.GetByIdAsync(integration.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(integration);
+        _configMock.Setup(c => c[$"OAuth:google:ClientId"]).Returns("client-id");
+        _configMock.Setup(c => c[$"OAuth:google:ClientSecret"]).Returns("client-secret");
+
+        // Token endpoint returns valid response WITH new refresh_token
+        var tokenResponse = """{"access_token":"new-access-token","expires_in":3600,"refresh_token":"new-refresh-token"}""";
+        _tokenClientMock
+            .Setup(c => c.PostFormAsync(integration.TokenEndpoint, It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(tokenResponse);
         _connectionsMock
             .Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
         // Act
-        try
-        {
-            await _sut.RefreshConnectionAsync(connection.Id, _userId);
-        }
-        catch (BusinessRuleException)
-        {
-            // expected
-        }
+        await _sut.RefreshConnectionAsync(connection.Id, _userId);
 
-        // Assert — Status set to Error
-        Assert.Equal(ConnectionStatus.Error, connection.Status);
-        _connectionsMock.Verify(r => r.Update(It.Is<Connection>(c => c.Status == ConnectionStatus.Error)), Times.Once);
+        // Assert — both tokens updated and saved
+        _connectionsMock.Verify(r => r.Update(It.Is<Connection>(c =>
+            c.AccessTokenEncrypted == "new-encrypted-access-token" &&
+            c.RefreshTokenEncrypted == "new-encrypted-refresh-token" &&
+            c.Status == ConnectionStatus.Active)), Times.Once);
+        _connectionsMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

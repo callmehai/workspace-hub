@@ -23,7 +23,7 @@ public class ConnectionsService : IConnectionsService
     private readonly IReadOnlyDictionary<string, IProviderStrategy> _strategies;
     private readonly IConfiguration _config;
     private readonly IOAuthTokenClient _tokenClient;
-    private readonly IGenericRepository<ScheduledEmail> _scheduledEmails;
+    private readonly IScheduledEmailRepository _scheduledEmails;
 
     public ConnectionsService(
         IIntegrationRepository integrations,
@@ -34,7 +34,7 @@ public class ConnectionsService : IConnectionsService
         IEnumerable<IProviderStrategy> strategies,
         IConfiguration config,
         IOAuthTokenClient tokenClient,
-        IGenericRepository<ScheduledEmail> scheduledEmails)
+        IScheduledEmailRepository scheduledEmails)
     {
         _integrations = integrations;
         _connections = connections;
@@ -214,20 +214,16 @@ public class ConnectionsService : IConnectionsService
         if (connection.UserId != userId)
             throw new ForbiddenException("You do not have permission to disconnect this connection.");
 
-        // FK NoAction ở DB → phải xử lý ở service layer trước khi xoá Connection:
-        // (1) Items.ConnectionId SET NULL
+        // FK NoAction ở DB → phải xử lý ở service layer trước khi xoá Connection.
+        // Sử dụng tracked entities để đảm bảo tất cả thay đổi nằm trong cùng 1 transaction khi SaveChangesAsync.
+
+        // (1) Items.ConnectionId SET NULL (tracked)
         await _items.NullifyConnectionIdAsync(connectionId, ct);
 
-        // (2) Xoá ScheduledEmails Pending (hoặc cancel) — tránh FK violation
-        var scheduledEmails = (await _scheduledEmails.ListAsync(ct))
-            .Where(se => se.ConnectionId == connectionId)
-            .ToList();
-        foreach (var se in scheduledEmails)
-        {
-            _scheduledEmails.Remove(se);
-        }
+        // (2) Xoá ScheduledEmails theo ConnectionId (tracked)
+        await _scheduledEmails.DeleteByConnectionIdAsync(connectionId, ct);
 
-        // (3) Xoá Connection
+        // (3) Xoá Connection (tracked entity → SaveChanges)
         _connections.Remove(connection);
         await _connections.SaveChangesAsync(ct);
     }
@@ -348,15 +344,12 @@ public class ConnectionsService : IConnectionsService
     // ───────────── Helpers ─────────────
 
     /// <summary>
-    /// Mask token: chỉ hiện 4 ký tự cuối, phần còn lại thay bằng ****
+    /// Mask token: trả về "********" để giấu ciphertext.
     /// CONVENTIONS.md: "Token response luôn mask"
     /// </summary>
     private static string MaskToken(string encryptedToken)
     {
-        if (string.IsNullOrEmpty(encryptedToken) || encryptedToken.Length <= 4)
-            return "****";
-
-        return "****" + encryptedToken[^4..];
+        return "********";
     }
 }
 

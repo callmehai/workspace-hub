@@ -73,7 +73,7 @@ public class ConnectionsController : ApiControllerBase
         return Ok(connections);
     }
 
-    /// <summary>DELETE /api/connections/{id} — disconnect, CASCADE ServiceConnections, Items.ConnectionId = NULL.</summary>
+    /// <summary>DELETE /api/connections/{id} — disconnect service, Items.ConnectionId = NULL, delete ScheduledEmails.</summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Disconnect(Guid id, CancellationToken ct)
     {

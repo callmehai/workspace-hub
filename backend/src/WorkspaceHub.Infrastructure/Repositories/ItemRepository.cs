@@ -106,8 +106,10 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     /// <inheritdoc/>
     public async Task NullifyConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
     {
-        await Set
-            .Where(i => i.ConnectionId == connectionId)
-            .ExecuteUpdateAsync(s => s.SetProperty(i => i.ConnectionId, (Guid?)null), ct);
+        var items = await Set.Where(i => i.ConnectionId == connectionId).ToListAsync(ct);
+        foreach (var item in items)
+        {
+            item.ConnectionId = null;
+        }
     }
 }
