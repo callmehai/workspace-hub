@@ -28,7 +28,7 @@ public class GmailGateway : IGmailGateway
 
     public async Task<GmailProfile> GetProfileAsync(Connection connection, CancellationToken ct = default)
     {
-        var gmail = await BuildGmailServiceAsync(connection, ct);
+        using var gmail = await BuildGmailServiceAsync(connection, ct);
         var profile = await gmail.Users.GetProfile("me").ExecuteAsync(ct);
 
         return new GmailProfile(
@@ -40,7 +40,7 @@ public class GmailGateway : IGmailGateway
 
     public async Task<GmailMessageList> ListMessageIdsAsync(Connection connection, string? pageToken, int maxResults, CancellationToken ct = default)
     {
-        var gmail = await BuildGmailServiceAsync(connection, ct);
+        using var gmail = await BuildGmailServiceAsync(connection, ct);
         var request = gmail.Users.Messages.List("me");
         request.MaxResults = maxResults;
         if (!string.IsNullOrEmpty(pageToken))
@@ -56,7 +56,7 @@ public class GmailGateway : IGmailGateway
 
     public async Task<GmailMessage> GetMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
     {
-        var gmail = await BuildGmailServiceAsync(connection, ct);
+        using var gmail = await BuildGmailServiceAsync(connection, ct);
         var request = gmail.Users.Messages.Get("me", messageId);
         
         // Giải thích Format: 
@@ -117,7 +117,7 @@ public class GmailGateway : IGmailGateway
             return new GmailHistory(true, new List<string>(), null, null);
         }
 
-        var gmail = await BuildGmailServiceAsync(connection, ct);
+        using var gmail = await BuildGmailServiceAsync(connection, ct);
         var request = gmail.Users.History.List("me");
         request.StartHistoryId = historyId;
         if (!string.IsNullOrEmpty(pageToken))
