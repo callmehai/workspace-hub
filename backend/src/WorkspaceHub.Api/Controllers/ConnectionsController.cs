@@ -11,15 +11,18 @@ public class ConnectionsController : ApiControllerBase
     private readonly IConnectionsService _connections;
     private readonly WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository _connectionRepository;
     private readonly WorkspaceHub.Application.Abstractions.IGmailGateway _gmailGateway;
+    private readonly WorkspaceHub.Application.Mapping.IGmailItemMapper _mapper;
 
     public ConnectionsController(
         IConnectionsService connections,
         WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository connectionRepository,
-        WorkspaceHub.Application.Abstractions.IGmailGateway gmailGateway)
+        WorkspaceHub.Application.Abstractions.IGmailGateway gmailGateway,
+        WorkspaceHub.Application.Mapping.IGmailItemMapper mapper)
     {
         _connections = connections;
         _connectionRepository = connectionRepository;
         _gmailGateway = gmailGateway;
+        _mapper = mapper;
     }
 
     /// <summary>POST /api/connections/oauth/start — build authorization URL.</summary>
@@ -77,5 +80,28 @@ public class ConnectionsController : ApiControllerBase
 
         var profile = await _gmailGateway.GetProfileAsync(conn, ct);
         return Ok(profile);
+    }
+
+    [HttpGet("{id:guid}/gmail-sample")]
+    public async Task<IActionResult> GetGmailSample(Guid id, CancellationToken ct)
+    {
+        var conn = await _connectionRepository.GetByIdAsync(id, ct);
+        if (conn is null) return NotFound();
+
+        if (conn.UserId != CurrentUserId) return Forbid();
+
+        if (conn.ServiceType != WorkspaceHub.Domain.Enums.ServiceType.Gmail)
+            return BadRequest(new { message = "Kết nối này không phải Gmail" });
+
+        var list = await _gmailGateway.ListMessageIdsAsync(conn, null, 1, ct);
+        if (list.MessageIds.Count == 0)
+        {
+            return Ok(new { message = "Hộp thư trống, không có email để map" });
+        }
+
+        var msg = await _gmailGateway.GetMessageAsync(conn, list.MessageIds[0], ct);
+        var item = _mapper.ToItem(msg, conn.UserId, conn.Id, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        
+        return Ok(item);
     }
 }
