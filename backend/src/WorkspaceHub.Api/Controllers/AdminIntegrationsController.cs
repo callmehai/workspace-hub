@@ -7,6 +7,7 @@ using WorkspaceHub.Application.Interfaces.Services;
 namespace WorkspaceHub.Api.Controllers;
 
 [Authorize(Roles = "Admin")]
+[Route("api/admin/integrations")]
 public class AdminIntegrationsController : ApiControllerBase
 {
     private readonly IConnectionsService _connectionsService;
