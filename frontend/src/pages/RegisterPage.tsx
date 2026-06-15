@@ -20,7 +20,7 @@ export const RegisterPage = () => {
       navigate('/login', { replace: true })
     },
     onError: (error) => {
-      const msg = isAxiosError(error) ? error.response?.data?.message : undefined
+      const msg = isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : undefined
       toast.error(msg || 'Đăng ký thất bại (email có thể đã được sử dụng)')
     },
   })
