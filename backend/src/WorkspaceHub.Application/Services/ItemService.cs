@@ -125,6 +125,15 @@ public class ItemService : IItemService
         return MapToResponse(item);
     }
 
+    /// <inheritdoc/>
+    public async Task<ItemResponse> GetItemByIdAsync(Guid userId, Guid itemId, CancellationToken ct = default)
+    {
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
+            ?? throw new NotFoundException(nameof(Item), itemId);
+
+        return MapToResponse(item);
+    }
+
     // ───────────────────────── Private helpers ─────────────────────────
 
     /// <summary>Map Item entity → ItemResponse DTO.</summary>

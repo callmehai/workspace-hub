@@ -18,7 +18,7 @@ export const KanbanBoard = () => {
   });
 
   // Fetch Items
-  const { data: pagedItems, isLoading } = useQuery({
+  const { data: pagedItems, isLoading, isError } = useQuery({
     queryKey: ['items', selectedFolderId],
     queryFn: () => itemsApi.getItems({ 
       folderId: selectedFolderId || undefined, 
@@ -27,6 +27,9 @@ export const KanbanBoard = () => {
   });
 
   const items = pagedItems?.items || [];
+  if (pagedItems && pagedItems.total > 100) {
+    console.warn(`Total items is ${pagedItems.total}, which exceeds the limit of 100. Some items are truncated.`);
+  }
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string, status: ItemStatus }) => 
@@ -115,56 +118,69 @@ export const KanbanBoard = () => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-x-auto p-6">
-          <div className="flex h-full gap-6 min-w-[900px]">
-            {columns.map(col => (
-              <div 
-                key={col.status} 
-                className={`flex-1 rounded-2xl p-4 flex flex-col border border-gray-800/50 ${col.color} backdrop-blur-sm`}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, col.status)}
-              >
-                <div className="flex justify-between items-center mb-4 px-2">
-                  <h3 className="font-semibold text-gray-100">{col.title}</h3>
-                  <span className="bg-[#0f1019] text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium shadow-inner">
-                    {items.filter(i => i.status === col.status).length}
-                  </span>
-                </div>
-
-                <div className="flex-1 overflow-y-auto space-y-3 hide-scrollbar pb-4">
-                  {items.filter(i => i.status === col.status).map(item => (
-                    <div 
-                      key={item.id} 
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item.id)}
-                      className="bg-[#1c1d2c] border border-gray-700/50 p-4 rounded-xl cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-all group relative shadow-sm"
-                    >
-                      <div className="flex justify-between items-start mb-2.5">
-                        <div className="flex space-x-2">
-                          <span className="text-[10px] uppercase font-bold tracking-widest text-brand-400 bg-brand-400/10 px-2 py-0.5 rounded border border-brand-400/20">
-                            {item.type}
-                          </span>
-                          {item.isImportant && (
-                            <span className="text-[10px] uppercase font-bold tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">
-                              High
-                            </span>
-                          )}
-                        </div>
-                        <button className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <h4 className="text-sm font-semibold text-gray-100 mb-1.5 leading-snug">{item.title}</h4>
-                      <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                        {item.snippet}
-                      </p>
-                    </div>
-                  ))}
-                  {isLoading && <div className="text-center text-gray-500 py-6 text-sm font-medium animate-pulse">Loading items...</div>}
-                </div>
-              </div>
-            ))}
+        {pagedItems && pagedItems.total > 100 && (
+          <div className="bg-yellow-950/20 border-b border-yellow-800/40 px-6 py-2 text-xs text-yellow-400 font-medium flex items-center justify-between shrink-0">
+            <span>⚠️ Note: Only the first 100 items are displayed. Some items may be truncated.</span>
           </div>
+        )}
+
+        <div className="flex-1 overflow-x-auto p-6">
+          {isError ? (
+            <div className="h-full flex flex-col items-center justify-center border border-dashed border-red-800/30 rounded-2xl bg-red-950/10 p-8 text-center max-w-md mx-auto my-12">
+              <span className="text-red-400 text-sm font-semibold mb-2">Failed to load items</span>
+              <p className="text-xs text-gray-500">There was an error retrieving the items. Please try refreshing or try again later.</p>
+            </div>
+          ) : (
+            <div className="flex h-full gap-6 min-w-[900px]">
+              {columns.map(col => (
+                <div 
+                  key={col.status} 
+                  className={`flex-1 rounded-2xl p-4 flex flex-col border border-gray-800/50 ${col.color} backdrop-blur-sm`}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, col.status)}
+                >
+                  <div className="flex justify-between items-center mb-4 px-2">
+                    <h3 className="font-semibold text-gray-100">{col.title}</h3>
+                    <span className="bg-[#0f1019] text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium shadow-inner">
+                      {items.filter(i => i.status === col.status).length}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-3 hide-scrollbar pb-4">
+                    {items.filter(i => i.status === col.status).map(item => (
+                      <div 
+                        key={item.id} 
+                        draggable={!updateStatus.isPending}
+                        onDragStart={(e) => handleDragStart(e, item.id)}
+                        className="bg-[#1c1d2c] border border-gray-700/50 p-4 rounded-xl cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-all group relative shadow-sm"
+                      >
+                        <div className="flex justify-between items-start mb-2.5">
+                          <div className="flex space-x-2">
+                            <span className="text-[10px] uppercase font-bold tracking-widest text-brand-400 bg-brand-400/10 px-2 py-0.5 rounded border border-brand-400/20">
+                              {item.type}
+                            </span>
+                            {item.isImportant && (
+                              <span className="text-[10px] uppercase font-bold tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">
+                                High
+                              </span>
+                            )}
+                          </div>
+                          <button className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <h4 className="text-sm font-semibold text-gray-100 mb-1.5 leading-snug">{item.title}</h4>
+                        <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
+                          {item.snippet}
+                        </p>
+                      </div>
+                    ))}
+                    {isLoading && <div className="text-center text-gray-500 py-6 text-sm font-medium animate-pulse">Loading items...</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

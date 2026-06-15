@@ -65,7 +65,19 @@ public class ItemsController : ApiControllerBase
     }
 
     /// <summary>
-    /// POST /api/items/note — tạo ghi chú nội bộ.
+    /// GET /api/items/{id} — lấy chi tiết một item.
+    /// </summary>
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<ItemResponse>> GetItemById(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var item = await _itemService.GetItemByIdAsync(CurrentUserId, id, ct);
+        return Ok(item);
+    }
+
+    /// <summary>
+    /// POST /api/items/note — tạo ghi chú nội bộ (Note) mới.
     /// </summary>
     [HttpPost("note")]
     public async Task<ActionResult<ItemResponse>> CreateNote(
@@ -74,7 +86,7 @@ public class ItemsController : ApiControllerBase
     {
         await _createNoteValidator.ValidateAndThrowAsync(request, ct);
         var created = await _itemService.CreateNoteAsync(CurrentUserId, request, ct);
-        // Trả 201
-        return CreatedAtAction(nameof(GetItems), null, created);
+        // Trả 201 trỏ về GetItemById
+        return CreatedAtAction(nameof(GetItemById), new { id = created.Id }, created);
     }
 }

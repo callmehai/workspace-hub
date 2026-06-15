@@ -26,4 +26,9 @@ public interface IItemService
     /// </summary>
     Task<ItemResponse> CreateNoteAsync(
         Guid userId, CreateNoteRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy chi tiết một Item theo ID.
+    /// </summary>
+    Task<ItemResponse> GetItemByIdAsync(Guid userId, Guid itemId, CancellationToken ct = default);
 }
