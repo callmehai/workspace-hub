@@ -7,6 +7,5 @@ public class ToggleIntegrationValidator : AbstractValidator<ToggleIntegrationReq
 {
     public ToggleIntegrationValidator()
     {
-        RuleFor(x => x.IsEnabled).NotNull();
     }
 }
