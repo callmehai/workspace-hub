@@ -30,6 +30,21 @@ export const Login = () => {
     },
   });
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      toast.error('Email không hợp lệ');
+      return;
+    }
+    if (password.length < 8) {
+      toast.error('Mật khẩu phải từ 8 ký tự trở lên');
+      return;
+    }
+    
+    loginMutation.mutate();
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900 font-sans">
       <div className="w-full max-w-md p-8">
@@ -43,10 +58,7 @@ export const Login = () => {
         </div>
 
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            loginMutation.mutate();
-          }}
+          onSubmit={handleLogin}
           className="space-y-5"
         >
           <div>

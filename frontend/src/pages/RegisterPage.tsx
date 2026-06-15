@@ -20,20 +20,34 @@ export const RegisterPage = () => {
       navigate('/login', { replace: true })
     },
     onError: (error) => {
-      const message = isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message
-        : undefined
-      toast.error(message ?? 'Đăng ký thất bại (email có thể đã dùng)')
+      const msg = isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : undefined
+      toast.error(msg || 'Đăng ký thất bại (email có thể đã được sử dụng)')
     },
   })
+
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (fullName.trim().length === 0) {
+      toast.error('Vui lòng nhập họ tên')
+      return
+    }
+    if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      toast.error('Email không hợp lệ')
+      return
+    }
+    if (password.length < 8) {
+      toast.error('Mật khẩu phải từ 8 ký tự trở lên')
+      return
+    }
+    
+    register.mutate()
+  }
 
   return (
     <div className="flex h-full items-center justify-center bg-gray-50">
       <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          register.mutate()
-        }}
+        onSubmit={handleRegister}
         className="w-80 space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
       >
         <h1 className="text-xl font-bold text-gray-900">Đăng ký</h1>
