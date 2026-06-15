@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { RegisterPage } from './pages/RegisterPage';
 import { Inbox } from './pages/Inbox';
 import { Projects } from './pages/Projects';
+import { KanbanBoard } from './pages/KanbanBoard';
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
           {
             path: 'projects',
             element: <Projects />,
+          },
+          {
+            path: 'kanban',
+            element: <KanbanBoard />,
           },
           {
             path: '*',

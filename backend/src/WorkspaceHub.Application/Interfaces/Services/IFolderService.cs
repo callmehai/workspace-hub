@@ -19,4 +19,10 @@ public interface IFolderService
 
     /// <summary>Xoá folder (hard delete). CASCADE ItemFolders + FolderShares. Chỉ Owner.</summary>
     Task DeleteAsync(Guid userId, Guid folderId, CancellationToken ct = default);
+
+    /// <summary>Gắn item vào folder. Trả lỗi 409 nếu đã được gắn.</summary>
+    Task<ItemFolderResponse> AddItemToFolderAsync(Guid userId, Guid folderId, AddItemToFolderRequest request, CancellationToken ct = default);
+
+    /// <summary>Gỡ item khỏi folder.</summary>
+    Task RemoveItemFromFolderAsync(Guid userId, Guid folderId, Guid itemId, CancellationToken ct = default);
 }

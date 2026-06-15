@@ -33,3 +33,4 @@ public interface IItemRepository : IGenericRepository<Item>
     /// </summary>
     Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 }
+

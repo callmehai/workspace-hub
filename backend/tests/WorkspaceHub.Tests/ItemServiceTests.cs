@@ -296,4 +296,35 @@ public class ItemServiceTests
             It.IsAny<ItemType?>(), It.IsAny<bool?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task GetItemByIdAsync_ReturnsMappedResponse_WhenItemExistsAndBelongsToUser()
+    {
+        // Arrange
+        var item = CreateItem(_userId, title: "Test Item");
+        _repoMock
+            .Setup(r => r.GetByIdAndUserAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+
+        // Act
+        var result = await _sut.GetItemByIdAsync(_userId, item.Id);
+
+        // Assert
+        Assert.Equal(item.Id, result.Id);
+        Assert.Equal("Test Item", result.Title);
+    }
+
+    [Fact]
+    public async Task GetItemByIdAsync_ThrowsNotFoundException_WhenItemDoesNotExistOrDoesNotBelongToUser()
+    {
+        // Arrange
+        var itemId = Guid.NewGuid();
+        _repoMock
+            .Setup(r => r.GetByIdAndUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.NotFoundException>(() =>
+            _sut.GetItemByIdAsync(_userId, itemId));
+    }
 }

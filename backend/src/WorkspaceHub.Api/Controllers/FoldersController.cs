@@ -20,15 +20,18 @@ public class FoldersController : ApiControllerBase
     private readonly IFolderService _folderService;
     private readonly IValidator<CreateFolderRequest> _createValidator;
     private readonly IValidator<UpdateFolderRequest> _updateValidator;
+    private readonly IValidator<AddItemToFolderRequest> _addItemValidator;
 
     public FoldersController(
         IFolderService folderService,
         IValidator<CreateFolderRequest> createValidator,
-        IValidator<UpdateFolderRequest> updateValidator)
+        IValidator<UpdateFolderRequest> updateValidator,
+        IValidator<AddItemToFolderRequest> addItemValidator)
     {
         _folderService = folderService;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
+        _addItemValidator = addItemValidator;
     }
 
     /// <summary>
@@ -91,6 +94,33 @@ public class FoldersController : ApiControllerBase
         CancellationToken ct = default)
     {
         await _folderService.DeleteAsync(CurrentUserId, id, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// POST /api/folders/{id}/items — gắn item vào folder.
+    /// </summary>
+    [HttpPost("{id:guid}/items")]
+    public async Task<ActionResult<ItemFolderResponse>> AddItemToFolder(
+        Guid id,
+        [FromBody] AddItemToFolderRequest request,
+        CancellationToken ct = default)
+    {
+        await _addItemValidator.ValidateAndThrowAsync(request, ct);
+        var result = await _folderService.AddItemToFolderAsync(CurrentUserId, id, request, ct);
+        return StatusCode(201, result);
+    }
+
+    /// <summary>
+    /// DELETE /api/folders/{id}/items/{itemId} — gỡ item khỏi folder.
+    /// </summary>
+    [HttpDelete("{id:guid}/items/{itemId:guid}")]
+    public async Task<IActionResult> RemoveItemFromFolder(
+        Guid id,
+        Guid itemId,
+        CancellationToken ct = default)
+    {
+        await _folderService.RemoveItemFromFolderAsync(CurrentUserId, id, itemId, ct);
         return NoContent();
     }
 }
