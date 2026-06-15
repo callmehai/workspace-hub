@@ -30,8 +30,7 @@ public record UpdateItemStatusRequest(ItemStatus Status);
 public record CreateNoteRequest(
     string Title,
     string ContentMarkdown,
-    Guid? FolderId = null,
-    List<Guid>? TagIds = null);
+    Guid? FolderId = null);
 
 // ───────────────────────── Response DTO ─────────────────────────
 

@@ -29,14 +29,13 @@ export interface CreateNoteRequest {
   title: string;
   contentMarkdown: string;
   folderId?: string;
-  tagIds?: string[];
 }
 
 export interface FolderResponse {
   id: string;
   name: string;
-  color: string;
-  icon: string;
+  color: string | null;
+  icon: string | null;
   sortOrder: number;
   isArchived: boolean;
   itemCount: number;

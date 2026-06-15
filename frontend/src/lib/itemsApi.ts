@@ -1,12 +1,22 @@
 import api from './api';
 import type { 
   PagedResult, ItemResponse, UpdateItemStatusRequest, CreateNoteRequest, 
-  FolderResponse, AddItemToFolderRequest, ItemFolderResponse 
+  FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType
 } from '../types/items';
 
 
+export interface GetItemsParams {
+  folderId?: string;
+  status?: ItemStatus;
+  type?: ItemType;
+  isImportant?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
 export const itemsApi = {
-  getItems: async (params?: Record<string, any>): Promise<PagedResult<ItemResponse>> => {
+  getItems: async (params?: GetItemsParams): Promise<PagedResult<ItemResponse>> => {
     const response = await api.get('/items', { params });
     return response.data;
   },

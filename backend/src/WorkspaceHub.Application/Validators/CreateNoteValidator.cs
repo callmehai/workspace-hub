@@ -17,9 +17,5 @@ public class CreateNoteValidator : AbstractValidator<CreateNoteRequest>
 
         RuleFor(x => x.FolderId)
             .NotEqual(Guid.Empty).When(x => x.FolderId.HasValue).WithMessage("FolderId cannot be empty GUID.");
-
-        RuleFor(x => x.TagIds)
-            .Must(tags => tags == null || tags.Count <= 20)
-            .WithMessage("Cannot attach more than 20 tags to a note.");
     }
 }
