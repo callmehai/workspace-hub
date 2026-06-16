@@ -2,14 +2,16 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
+using WorkspaceHub.Application.Security;
 using WorkspaceHub.Infrastructure.Data;
 using WorkspaceHub.Infrastructure.Http;
 using WorkspaceHub.Infrastructure.Repositories;
-using WorkspaceHub.Application.Security;
 using WorkspaceHub.Infrastructure.Security;
+using WorkspaceHub.Infrastructure.Services;
 
 namespace WorkspaceHub.Infrastructure;
 
@@ -48,6 +50,8 @@ public static class DependencyInjection
         services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
         services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();
 
+        services.AddScoped<IGoogleCalendarGateway, GoogleCalendarGateway>();
+        services.AddScoped<IGoogleDriveGateway, GoogleDriveGateway>();
         return services;
     }
 }
