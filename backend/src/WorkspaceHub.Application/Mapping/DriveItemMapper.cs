@@ -1,0 +1,36 @@
+﻿using System.Text.Json;
+using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Domain.Enums;
+
+namespace WorkspaceHub.Application.Mapping;
+
+public class DriveItemMapper : IDriveItemMapper
+{
+    public Item ToItem(DriveFileDto file, Guid userId, Guid connectionId)
+    {
+        var metadata = new
+        {
+            mimeType = file.MimeType,
+            size = file.Size,
+            webViewLink = file.WebViewLink,
+            iconLink = file.IconLink
+        };
+
+        return new Item
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Type = ItemType.File,
+            Title = string.IsNullOrEmpty(file.Name) ? "(Không có tên)" : file.Name,
+            Snippet = file.MimeType ?? string.Empty, // Lưu tạm MimeType vào Snippet để UI dễ hiển thị
+            ExternalId = file.Id,
+            ConnectionId = connectionId,
+            Status = ItemStatus.Inbox,
+            OccurredAt = file.ModifiedTime?.UtcDateTime ?? DateTime.UtcNow,
+            IsImportant = false,
+            IsArchived = file.Trashed, // Nếu file đã xoá vào thùng rác trên Drive -> Đánh dấu Archive
+            MetadataJson = JsonSerializer.Serialize(metadata)
+        };
+    }
+}
