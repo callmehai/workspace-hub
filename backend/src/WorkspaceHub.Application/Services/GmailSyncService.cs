@@ -143,11 +143,8 @@ public class GmailSyncService : IGmailSyncService
             }
         }
 
-        if (newItems.Any())
-        {
+        if (newItems.Count > 0)
             await _items.AddRangeAsync(newItems, ct);
-            await _items.SaveChangesAsync(ct);
-        }
 
         connection.CursorType = CursorType.HistoryId;
         connection.CursorValue = newCursor;

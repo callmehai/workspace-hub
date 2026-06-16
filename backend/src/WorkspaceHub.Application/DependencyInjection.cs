@@ -36,6 +36,7 @@ public static class DependencyInjection
         // Đăng ký cho Drive
         services.AddScoped<IDriveItemMapper, DriveItemMapper>();
         services.AddScoped<IDriveSyncService, DriveSyncService>();
+        services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
 
         return services;
     }

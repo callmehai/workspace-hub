@@ -1,4 +1,4 @@
-﻿using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
 
 namespace WorkspaceHub.Application.Interfaces.Services;

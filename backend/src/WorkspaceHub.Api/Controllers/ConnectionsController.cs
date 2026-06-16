@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Services;
-using WorkspaceHub.Application.Interfaces.Repositories;
-using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Api.Controllers;
 
@@ -11,23 +9,17 @@ namespace WorkspaceHub.Api.Controllers;
 public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
-    private readonly IConnectionRepository _connectionRepo;
+    private readonly IConnectionSyncDispatcher _syncDispatcher;
     private readonly IGmailSyncService _gmailSync;
-    private readonly ICalendarSyncService _calendarSync;
-    private readonly IDriveSyncService _driveSync;
 
     public ConnectionsController(
         IConnectionsService connections,
-        IConnectionRepository connectionRepo,
-        IGmailSyncService gmailSync,
-        ICalendarSyncService calendarSync,
-        IDriveSyncService driveSync)
+        IConnectionSyncDispatcher syncDispatcher,
+        IGmailSyncService gmailSync)
     {
         _connections = connections;
-        _connectionRepo = connectionRepo;
+        _syncDispatcher = syncDispatcher;
         _gmailSync = gmailSync;
-        _calendarSync = calendarSync;
-        _driveSync = driveSync;
     }
 
     // ───────────── OAuth flow ─────────────
@@ -118,27 +110,5 @@ public class ConnectionsController : ApiControllerBase
 
     [HttpPost("{id:guid}/sync")]
     public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
-    {
-        // Phân luồng Sync tuỳ thuộc vào loại Connection
-        var connection = await _connectionRepo.GetByIdAsync(id, ct);
-        if (connection == null || connection.UserId != CurrentUserId)
-        {
-            return NotFound();
-        }
-
-        switch (connection.ServiceType)
-        {
-            case ServiceType.Gmail:
-                return Ok(await _gmailSync.SyncAsync(id, CurrentUserId, 50, ct));
-
-            case ServiceType.GCal:
-                return Ok(await _calendarSync.SyncAsync(id, CurrentUserId, ct));
-
-            case ServiceType.Drive:
-                return Ok(await _driveSync.SyncAsync(id, CurrentUserId, ct));
-
-            default:
-                return BadRequest("Service type không hỗ trợ đồng bộ.");
-        }
-    }
+        => Ok(await _syncDispatcher.SyncAsync(id, CurrentUserId, ct));
 }
