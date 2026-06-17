@@ -97,12 +97,17 @@ public class ExceptionMiddleware
         await WriteResponseAsync(context, statusCode, errorType, ex.Message, Array.Empty<string>(), traceId);
     }
 
-    private static async Task WriteResponseAsync(
+    private async Task WriteResponseAsync(
         HttpContext context, HttpStatusCode statusCode, string error, string message, string[] details, string traceId)
     {
-        // Nếu response đã bắt đầu gửi (đã ghi header/body) thì không thể ghi đè → chỉ log.
+        // Nếu response đã bắt đầu gửi (đã ghi header/body) thì không thể ghi đè → chỉ log, không nuốt lỗi âm thầm.
         if (context.Response.HasStarted)
+        {
+            _logger.LogWarning(
+                "Cannot write error response — response already started. ErrorType={ErrorType}, TraceId={TraceId}",
+                error, traceId);
             return;
+        }
 
         var body = new
         {

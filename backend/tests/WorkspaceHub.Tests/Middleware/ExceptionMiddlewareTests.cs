@@ -81,7 +81,8 @@ public class ExceptionMiddlewareTests
         status.Should().Be((int)expectedStatus);
         body.Error.Should().Be(expectedError);
         body.Message.Should().Be("boom"); // domain message an toàn để trả ra client
-        body.Details.Should().NotBeNull();
+        body.Details.Should().BeEmpty(); // domain exception không kèm details
+
         body.TraceId.Should().Be("trace-123");
     }
 
