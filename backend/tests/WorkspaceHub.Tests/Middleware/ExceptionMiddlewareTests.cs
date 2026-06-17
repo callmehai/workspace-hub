@@ -60,6 +60,7 @@ public class ExceptionMiddlewareTests
 
         status.Should().Be((int)HttpStatusCode.BadRequest);
         body.Error.Should().Be("ValidationError");
+        body.Message.Should().Be("One or more validation errors occurred.");
         body.Details.Should().HaveCount(2);
         body.Details.Should().Contain("Email: Email is required");
         body.TraceId.Should().Be("trace-123");
