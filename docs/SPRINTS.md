@@ -57,6 +57,12 @@
 **Lưu ý sau SCRUM-34:** response của `POST /api/connections/oauth/callback` đã đổi shape (trả list connections) — xem API.md; FE (Dũng) cập nhật khi wire.
 **Huy** đợt này: cập nhật GET /api/items trả ETag (phục vụ 37/38) + viết lại SCRUM-14 theo Connections, hoặc test write-back.
 
+## Sprint 3 — Chất lượng / hardening (BE)
+
+| Ticket | Việc | Assignee | Dependency | Status |
+|---|---|---|---|---|
+| SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done 2026-06-17 — `ExceptionMiddleware` map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack/message ở production (kèm diagnostics ở Development); traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
+
 ## Cleanup / tech-debt (chốt 2026-06-12 — xem CHANGELOG)
 
 | Ticket | Việc | Assignee | Dependency | Status |
