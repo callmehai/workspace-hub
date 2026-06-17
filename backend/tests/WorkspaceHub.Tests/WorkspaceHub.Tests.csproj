@@ -23,10 +23,15 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Needed to reference the Api (Web SDK) project for ExceptionMiddleware tests. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\WorkspaceHub.Application\WorkspaceHub.Application.csproj" />
     <ProjectReference Include="..\..\src\WorkspaceHub.Infrastructure\WorkspaceHub.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\WorkspaceHub.Application\WorkspaceHub.Application.csproj" />
+    <ProjectReference Include="..\..\src\WorkspaceHub.Api\WorkspaceHub.Api.csproj" />
   </ItemGroup>
 
 </Project>

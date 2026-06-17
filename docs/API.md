@@ -9,6 +9,18 @@
 - DateTime ISO 8601 UTC. Pagination ?page&limit (default 20, max 100).
 - Collection lớn → envelope `{items,total,page,limit}`; nhỏ → array.
 
+## Error format chuẩn (SCRUM-24 ✅)
+Mọi lỗi (4xx/5xx) đi qua `ExceptionMiddleware` → trả body thống nhất:
+```json
+{ "error": "NotFoundError", "message": "...", "details": [], "traceId": "..." }
+```
+- `error`: loại lỗi (`ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `BusinessRuleError`, `CsrfError`, `InternalError`).
+- `details[]`: với 400 validation = `"field: message"` mỗi lỗi; với lỗi khác = `[]`.
+- `traceId`: đối chiếu log.
+- **Mapping exception → status:** ValidationException→400 · UnauthorizedException→401 · ForbiddenException→403 · NotFoundException→404 · ConflictException→409 · BusinessRuleException→422 · CsrfException→400 · còn lại→500.
+- **500 không lộ stack trace / message nội bộ ở production** (chỉ message generic + traceId; chi tiết ghi log). Ở Development thì kèm vào `details[]` để debug.
+- Controller KHÔNG tự format lỗi — chỉ throw custom exception (`WorkspaceHub.Application.Common`) hoặc gọi `ValidateAndThrowAsync`.
+
 ## Status code (bổ sung cho write-back)
 Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409** conflict ETag · **502** provider lỗi khi ghi/đọc live.
 
