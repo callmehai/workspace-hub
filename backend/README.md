@@ -44,11 +44,13 @@ dotnet ef database update       --project src/WorkspaceHub.Infrastructure --star
 
 > Luôn kèm `--startup-project` (hoặc set env `WORKSPACEHUB_CONNECTION`) — không thì design-time factory rơi về fallback `Trusted_Connection` → lỗi Kerberos trên macOS.
 
-Migrations hiện có: `InitialCreate` → `UsersMultiAuth` → `ModelBConnections` (mô hình B: gộp OAuthConnections + ServiceConnections thành `Connections`, Items.ConnectionId + ETag).
+Migrations hiện có (4): `InitialCreate` → `UsersMultiAuth` → `ModelBConnections` (mô hình B: gộp OAuthConnections + ServiceConnections thành `Connections`, Items.ConnectionId + ETag) → `RemoveClientCredentialsFromIntegration` (drop ClientId/ClientSecret khỏi Integrations — credentials đọc từ config `OAuth:`).
 
-## Trạng thái (2026-06-11 — chi tiết: ../docs/SPRINTS.md)
+## Trạng thái (2026-06-18 — chi tiết: ../docs/SPRINTS.md)
 
-✅ SCRUM-5→13: solution, schema + migrations, Data Protection, auth (register/login/JWT/me/role), OAuth Google start + callback
-✅ SCRUM-18/19: Folder CRUD, Items list + filter + pagination + search
-✅ SCRUM-32/33/34: Users multi-auth, Google Sign-In, migration mô hình B
-⏭️ Kế: SCRUM-35/36 (OAuth per-service) → 37 (write-back) + 38 (conflict ETag) → 30/31 (scheduled email). Nợ: SCRUM-14 viết lại theo Connections.
+✅ SCRUM-5→14: solution, schema + migrations, Data Protection, auth (register/login/JWT/me/role), OAuth Google start + callback, connection list/disconnect/refresh
+✅ SCRUM-18/19/20: Folder CRUD, Items list + filter + pagination + search, Kanban + Note + ItemFolders
+✅ SCRUM-24: exception middleware + error format chuẩn
+✅ SCRUM-32/33/34/35/36: Users multi-auth, Google Sign-In, migration mô hình B, OAuth per-service + scope read-write
+✅ SCRUM-47/48: bỏ DB credentials (dùng config `OAuth:`), admin toggle integration
+⏭️ Kế (phase dừng ở SCRUM-38): SCRUM-37 (write-back) + 38 (conflict ETag) → 30/31 (scheduled email).

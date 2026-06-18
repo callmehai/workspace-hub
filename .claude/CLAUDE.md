@@ -46,7 +46,7 @@ Tech stack:
 - Namespace `WorkspaceHub.{Domain|Application|Infrastructure|Api}.*`. Route `/api/...` lowercase.
 - Guid PK, enum lưu string, UTC `datetime2`, JSON `nvarchar(max)`.
 - **Mô hình B:** mỗi service = 1 row `Connections`. KHÔNG cột Scopes/Permission — scope suy từ ServiceType trong code. Đừng tạo lại OAuthConnections/ServiceConnections cũ.
-- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 3: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`.
+- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 4: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`.
 - DB dev: SQL Server chạy Docker container `wh-sqlserver` (xem docs/SETUP.md). KHÔNG phải SQLite/Postgres.
 
 ### Frontend
