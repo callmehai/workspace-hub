@@ -1,96 +1,26 @@
-# TODO: Tách ServiceType thành read/write riêng lẻ
+# [LỖI THỜI — KHÔNG IMPLEMENT] Tách ServiceType thành read/write riêng lẻ
 
-> Chưa làm — để lại sau khi có feature write thực sự (tạo issue Jira, gửi Gmail).
+> **Trạng thái: ĐÃ BỊ MÔ HÌNH B THAY THẾ. Giữ file làm lịch sử, đừng code theo.**
+> File này viết theo mô hình A cũ (ServiceConnections, OAuthConnection→ServiceConnection, scope `*Readonly`). Hiện trạng đã khác hẳn — xem 3 lý do bên dưới trước khi định đụng vào enum/schema.
 
-## Vấn đề hiện tại
+## Vì sao không còn làm
 
-`ServiceType` enum đang gộp read + write vào 1 giá trị:
-- `Gmail` → vừa đại diện cho đọc mail, vừa gửi mail
-- `Jira` → vừa đọc issue, vừa tạo/sửa issue
+1. **Không còn `ServiceConnections`.** Mô hình B (SCRUM-34, đã migrate) gộp `OAuthConnections` + `ServiceConnections` thành một bảng `Connections` — mỗi service = 1 row, token riêng. Toàn bộ phần "data migration repoint ServiceConnections", "ServiceConnectionId", "ServiceConnectionSync" trong bản cũ không còn đối tượng để áp dụng.
 
-Khi user grant write scope nhưng app chỉ có 1 `ServiceConnection`, không phân biệt được user đã grant write hay chưa.
+2. **Quy ước "bật service = FULL scope" → tách read/write ở mức connection là trái thiết kế.** CLAUDE.md chốt: không có cột `Permission`/`AccessLevel`, không có trạng thái "một phần quyền". Connect một service Google = cấp full scope read-write của service đó (Gmail luôn kèm `gmail.modify` + `gmail.send`). Vì vậy "user đã grant write chưa" = "có Connection Gmail Active chưa" — không cần enum `GmailRead`/`GmailSend` tách rời để biết điều đó. `GoogleScopes.ServiceScopes` đã map mỗi `ServiceType` sang đúng bộ scope read-write cố định.
 
-## Hướng sửa
+3. **Jira là phase sau.** Mọi nội dung `JiraRead`/`JiraWrite`/`ReadJiraWork`/`WriteJiraWork` thuộc SCRUM-42→46 (backlog, chưa code). Đừng thêm enum/scope Jira ở phase này.
 
-### 1. Thêm enum values
-```csharp
-public enum ServiceType
-{
-    Gmail,      // deprecated → giữ cho backward compat
-    GCal,
-    Drive,
-    Jira,       // deprecated → giữ cho backward compat
-    GmailRead,
-    GmailSend,
-    JiraRead,
-    JiraWrite
-}
-```
+## Nếu sau này phát sinh nhu cầu thật
 
-### 2. Sửa ServicesFromGrantedScopes
-
-**Google:**
-```csharp
-if (set.Contains(GmailReadonly)) result.Add(ServiceType.GmailRead);
-if (set.Contains(GmailSend))     result.Add(ServiceType.GmailSend);
-if (set.Contains(CalendarReadonly)) result.Add(ServiceType.GCal);
-if (set.Contains(DriveReadonly)) result.Add(ServiceType.Drive);
-```
-
-**Jira:**
-```csharp
-if (set.Contains(ReadJiraWork))  result.Add(ServiceType.JiraRead);
-if (set.Contains(WriteJiraWork)) result.Add(ServiceType.JiraWrite);
-```
-
-### 3. Data migration
-
-Với các row `ServiceConnections` đang có `ServiceType = "Gmail"` hoặc `"Jira"`:
-- `Gmail` → tạo row mới `GmailRead` (copy CursorType/CursorValue), xóa row cũ
-- `Jira` → tạo row mới `JiraRead`, xóa row cũ
-- Items/ScheduledEmails trỏ vào row cũ → repoint sang row mới trước khi xóa
-
-### 4. ScheduledEmails validation
-
-Hiện chỉ Gmail mới gửi được. Sau tách phải validate:
-```csharp
-if (serviceConnection.ServiceType != ServiceType.GmailSend)
-    throw new BusinessRuleException("ServiceConnection không có quyền gửi mail");
-```
-
-### 5. Seed data
-
-Cập nhật `SupportedServices` trong `AppDbContext`:
-```csharp
-// Google
-SupportedServices = "[\"GmailRead\",\"GmailSend\",\"GCal\",\"Drive\"]"
-
-// Jira
-SupportedServices = "[\"JiraRead\",\"JiraWrite\"]"
-```
-
-### 6. Frontend
-
-Response `serviceType` thay đổi từ `"Gmail"` → `"GmailRead"` / `"GmailSend"` — frontend phải update UI labels và logic tương ứng.
+- **Google:** hiện gần như không còn nhu cầu tách — write đi kèm read trong cùng scope service. Nếu phát sinh case thật (vd muốn cho phép connect Gmail chỉ-đọc), **dừng và bàn lại thiết kế** (sẽ phải xét lại quy ước "bật = full"), đừng tự thêm enum.
+- **Jira:** xem lại ở **phase Jira (SCRUM-42→46)** — lúc đó mới quyết mô hình read/write cho Atlassian scope (`read:jira-work` vs `write:jira-work`), dựa trên mô hình B hiện hành chứ không phải bản cũ này.
 
 ---
 
-## Files cần sửa
+<details>
+<summary>📜 Nội dung gốc (mô hình A — chỉ để tham khảo lịch sử)</summary>
 
-| File | Việc cần làm |
-|------|-------------|
-| `Domain/Enums/Enums.cs` | Thêm GmailRead, GmailSend, JiraRead, JiraWrite |
-| `OAuth/Providers/Google/GoogleScopes.cs` | Thêm GmailSend scope + update ServicesFromGrantedScopes |
-| `OAuth/Providers/Jira/JiraScopes.cs` | Update ServicesFromGrantedScopes trả về JiraRead + JiraWrite |
-| `OAuth/Core/ServiceConnectionSync.cs` | Kiểm tra lại ApplyGrantedScopes nếu cần |
-| `Infrastructure/Data/AppDbContext.cs` | Update seed SupportedServices |
-| `[Migration mới]` | Data migration repoint Items + ScheduledEmails |
-| Frontend | Update serviceType string handling |
+`ServiceType` enum gộp read + write vào 1 giá trị (`Gmail` = đọc + gửi; `Jira` = đọc + tạo/sửa). Bản cũ đề xuất thêm `GmailRead`/`GmailSend`/`JiraRead`/`JiraWrite`, sửa `ServicesFromGrantedScopes`, data migration repoint `ServiceConnections`, cập nhật seed `SupportedServices`, và đồng bộ frontend theo chuỗi `serviceType` mới. Toàn bộ dựa trên bảng `ServiceConnections` (mô hình A) nay không còn tồn tại.
 
----
-
-## Rủi ro cần chú ý
-
-- **Items orphan**: Phải repoint `ServiceConnectionId` trước khi xóa row cũ
-- **ScheduledEmails stranded**: Nếu không repoint đúng → FK NoAction gây lỗi khi xóa
-- **Sync trùng**: GmailRead + GmailSend cùng sync 1 mailbox → cần chỉ sync trên GmailRead
+</details>

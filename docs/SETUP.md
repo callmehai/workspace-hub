@@ -71,7 +71,7 @@ dotnet ef migrations add <TenMigration> \
 
 1. Google Cloud Console → tạo project.
 2. APIs & Services → bật Gmail API, Calendar API, Drive API.
-3. OAuth consent screen → cấu hình (External, scope readonly).
+3. OAuth consent screen → cấu hình (External, scope read-write: gmail.modify + gmail.send, calendar, drive — xem danh sách bên dưới).
 4. Credentials → tạo OAuth Client ID (Web application).
 5. Authorized redirect URIs → thêm `https://localhost:5001/oauth/callback` (dev) và URL prod.
 6. Copy Client ID + Secret vào user-secrets.

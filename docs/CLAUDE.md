@@ -1,76 +1,82 @@
 # Workspace Hub — Claude Code Context
 
-> Bản đồng bộ của `CLAUDE.md` ở root (root là bản chính thức được load tự động). Sửa ở đâu thì sync sang bên kia.
-> Thay đổi gần nhất: xem `docs/CHANGELOG.md`.
+> File này là context gốc cho Claude Code. Đọc file này trước, rồi tham chiếu các file trong `docs/` khi cần chi tiết. Thay đổi thiết kế gần nhất: xem `docs/CHANGELOG.md`.
 
 ## Project là gì
 
-Web app gom email / sự kiện / file / note / ticket từ **Google (Gmail, Calendar, Drive)** và **Jira** về một nơi, quản lý theo **Folder context** với **Kanban 3 cột** (Cần xem / Đang xử lý / Done). Có chia sẻ folder, hẹn giờ gửi email, dashboard admin.
+Web app gom email / sự kiện / file / note (và ticket ở phase Jira) từ **Google (Gmail, Calendar, Drive)** về **một nơi duy nhất**, quản lý theo **Folder context** (dự án / khách hàng / chủ đề) với giao diện **Kanban 3 cột** (Cần xem / Đang xử lý / Done). Có chia sẻ folder (Viewer-only), hẹn giờ gửi email, và dashboard admin.
 
-Đồ án PRN232 (Fullstack ASP.NET, 60% BE / 40% FE).
+Đây là đồ án môn học (PRN232 — Fullstack ASP.NET, 60% backend / 40% frontend).
 
 ## Scope & Phase — ĐỌC KỸ
 
-App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provider) với cả Google và Jira. Nhưng triển khai **theo phase**, đừng làm hết một lúc:
+App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Triển khai **theo phase**, đừng làm hết một lúc:
 
-### Phase hiện tại (đang làm) — Mô hình B + Write-back Google
-- **Mô hình connection B:** mỗi service = 1 connection riêng, token riêng (xem DATABASE.md).
-- **2 chiều cho Google bằng polling + write-back:** cron đọc như cũ; thao tác trên app ghi ngược lên Google ngay (synchronous).
-- Ghi được: Email (label/read/star/trash + gửi mới — KHÔNG sửa nội dung), Event (CRUD đầy đủ), File (rename/trash).
-- Conflict qua ETag → 409.
-- Ticket: SCRUM-34 ✅ (đã migrate DB) → 35→38 ⏳ (+ 30/31 scheduled email làm sau 38). Status: `docs/SPRINTS.md`.
+### Phase hiện tại (Sprint 4) — Mô hình B + Write-back Google + Google Sign-In
+- **Mô hình connection B:** mỗi service (Gmail/GCal/Drive) = 1 row `Connections` riêng, token riêng. User authorize riêng từng service. ✅ DB đã migrate (SCRUM-34).
+- **Google Sign-In:** đăng nhập app bằng Google, tách biệt connect-để-sync. ✅ Done (SCRUM-32/33).
+- **OAuth per-service (mô hình B):** start + callback theo từng service, scope read-write. ✅ Done (SCRUM-35/36).
+- **2 chiều bằng polling + write-back:** cron đọc như cũ (1 chiều pull); thao tác trên app ghi ngược lên Google ngay (synchronous). ⏳ SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc).
+  - Ghi được: Email (label/read/star/trash + gửi mới — **KHÔNG sửa nội dung**, Gmail immutable), Event (CRUD đầy đủ), File (rename/trash).
+  - Conflict qua `Items.ETag` → 409.
+- Kế tiếp: SCRUM-37 + 38 (song song), rồi 30/31 (scheduled email). **Phase hiện tại dừng ở SCRUM-38.** Status chi tiết: `docs/SPRINTS.md`.
 
-### Phase sau (CHƯA làm — đừng code) — Webhook & Jira
-- Webhook/push (Gmail watch + Pub/Sub, Calendar/Drive watch) thay polling chiều đọc.
-- Bảng WebhookChannels + cron renew.
-- Jira: OAuth Atlassian (cloudId), sync issue → Item(Ticket), write-back (transition/assign/comment), Jira webhook.
-- Ticket: SCRUM-39→46 (backlog, chưa assign).
+### NGOÀI scope phase này (đừng code, chỉ tham khảo roadmap)
+- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch) → phase sau (SCRUM-39→41).
+- Jira / Atlassian integration → phase sau (SCRUM-42→46).
+- Social / friend system, AI workflow → future.
 
-**Nếu một task thuộc phase sau (webhook, Jira) → dừng và hỏi.** Phase hiện tại dừng ở SCRUM-38.
+Nếu một task có vẻ cần webhook hoặc Jira, **dừng lại và hỏi** — nhiều khả năng đang vượt phase.
 
 ## Tech Stack
 
-- **Backend:** ASP.NET Core Web API (.NET 8), EF Core — solution 4 project (Domain/Application/Infrastructure/Api)
-- **Database:** SQL Server (dev chạy Docker `wh-sqlserver`; JSON `nvarchar(max)`, datetime `datetime2` UTC)
-- **Frontend:** Vite + React + TypeScript + Tailwind + React Router + TanStack Query + axios
+- **Backend:** ASP.NET Core Web API (.NET 8), Entity Framework Core — solution 4 project: `Domain` / `Application` / `Infrastructure` / `Api` (xem `backend/README.md`)
+- **Database:** SQL Server (EF Core `UseSqlServer`; dev chạy Docker `wh-sqlserver`). JSON lưu `nvarchar(max)`, datetime lưu `datetime2` (UTC). Dev + prod cùng SQL Server.
+- **Frontend:** Vite + React + TypeScript + Tailwind + React Router + TanStack Query + axios + react-hot-toast (SPA gọi REST).
 - **Auth:** JWT Bearer + Google Sign-In (đăng nhập bằng Google, tách khỏi connect-để-sync)
-- **Token encryption:** ASP.NET Data Protection (`IDataProtectionProvider`)
-- **Deploy:** <!-- CHỐT -->
+- **Token encryption:** ASP.NET Data Protection (`IDataProtectionProvider`) — KHÔNG tự viết AES, KHÔNG lưu key trong DB
+- **Deploy:** <!-- CHỐT: Render / Vercel / Azure? -->
 
 ## Kiến trúc
-Layered: **Controller → Service → Repository**. Controller mỏng. DTO tách Entity. Async toàn bộ. DI cho mọi service/repo.
 
-## Quy ước nền tảng (BẮT BUỘC)
-- **ID:** Guid cho mọi entity.
-- **Role:** cột `Users.Role` string (Admin/User), KHÔNG bảng Roles/UserRoles.
-- **Timestamp:** UTC (`datetime2`).
-- **Soft delete:** không dùng, dùng IsArchived; xoá thật khi Delete.
-- **Enum:** string (`.HasConversion<string>()`).
-- **JSON:** `nvarchar(max)` (SQL Server).
-- **Cascade:** child của User/Folder CASCADE; `Items.ConnectionId`/`ScheduledEmails.ConnectionId` NoAction ở DB (SQL Server cấm multiple cascade path) — service layer set NULL khi disconnect.
-- **Unique:** junction composite PK; Key/slug UNIQUE; FK có index.
+Layered / Clean: **Controller (API) → Service (business logic) → Repository (data access)**.
+- Controller mỏng, không chứa business logic.
+- DTO tách khỏi Entity — không expose entity trực tiếp ra API.
+- Async/await toàn bộ data access.
+- DI cho mọi service/repository (không `new` trực tiếp trong controller).
 
 ## Hai khái niệm dễ nhầm — phân biệt rõ
+
 1. **Google Sign-In** = đăng nhập vào app (scope openid/email/profile). KHÔNG tạo Connection, chỉ tạo/tìm User + phát JWT. Disconnect service KHÔNG làm logout.
-2. **Connect service** = cấp quyền đọc/ghi Gmail/Drive/Calendar/Jira. Tạo 1 Connection (mô hình B). Bật service = cấp FULL scope của service đó (không read-only, scope do dev quyết).
+2. **Connect service** = cấp quyền đọc/ghi Gmail/GCal/Drive. Tạo 1 Connection mỗi service (mô hình B). Bật service = cấp FULL scope của service đó (scope do dev quyết, hardcode trong code).
 
-## Không thêm cột thừa
-- KHÔNG thêm cột `Permission`/`AccessLevel` vào Connections — bật là full, không có "một phần quyền".
-- KHÔNG thêm cột `Scopes` vào Connections — scope suy từ ServiceType (cố định mỗi service).
+## Quy ước nền tảng (BẮT BUỘC tuân thủ)
 
-## Tài liệu
-- `docs/DATABASE.md` — schema (mô hình B)
-- `docs/API.md` — endpoint
-- `docs/SPRINTS.md` — ticket + assignee + dependency
-- `docs/CONVENTIONS.md` — coding style, git
-- `docs/SETUP.md` — chạy local, OAuth setup
-- `docs/CHANGELOG.md` — lịch sử thay đổi thiết kế
+- **ID:** `Guid` cho mọi entity.
+- **Role:** 1 user = 1 role. Lưu cột `Users.Role` (string `Admin`/`User`), KHÔNG bảng `Roles`/`UserRoles`. Đẩy vào JWT claim `role`.
+- **Timestamp:** UTC. SQL Server `datetime2`, EF `DateTimeKind.Utc`. Convert timezone ở frontend.
+- **Soft delete:** KHÔNG dùng. Dùng `IsArchived`. Xoá thật khi Delete.
+- **Enum:** lưu dạng string (`.HasConversion<string>()`).
+- **JSON:** SQL Server `nvarchar(max)`. Parse ở frontend.
+- **Cascade:** ON DELETE CASCADE cho child của User/Folder. `Items.ConnectionId`/`ScheduledEmails.ConnectionId` → NoAction ở DB (tránh multiple cascade path), service layer set NULL khi disconnect.
+- **Unique:** junction → composite PK. Cột Key/slug → UNIQUE. Mọi FK có index.
+- **Connections (mô hình B):** KHÔNG thêm cột `Scopes` (suy từ ServiceType trong code) và KHÔNG cột `Permission`/`AccessLevel` (bật là full quyền).
+
+## Cấu trúc tài liệu
+
+- `docs/DATABASE.md` — schema đầy đủ (mô hình B), quan hệ, constraint
+- `docs/API.md` — endpoint, request/response, status code
+- `docs/SPRINTS.md` — ticket + assignee + dependency + **status** (đồng bộ Jira)
+- `docs/CONVENTIONS.md` — coding style, naming, git
+- `docs/SETUP.md` — cách chạy local, env, migration
+- `docs/CHANGELOG.md` — lịch sử quyết định thiết kế
 
 ## Nguyên tắc khi code
-1. Bám phase hiện tại. Phase sau (webhook/Jira) → hỏi trước.
-2. Tuân thủ quy ước nền tảng.
-3. Layered + DTO.
-4. Status code đúng (API.md). Write-back: 403 thiếu scope, 409 conflict, 502 provider lỗi.
-5. Không hardcode secret.
-6. **Xong task code → cập nhật các .md liên quan** (tối thiểu status trong SPRINTS.md; schema → DATABASE.md; endpoint → API.md).
-7. Không chắc thuộc scope → hỏi.
+
+1. Bám đúng phase hiện tại ở trên. Phase sau (webhook/Jira) → hỏi trước.
+2. Tuân thủ quy ước nền tảng (ID/timestamp/enum/cascade).
+3. Theo layered architecture, dùng DTO.
+4. Validate input; trả status code đúng (xem `docs/API.md`). Write-back: 403 thiếu scope, 409 conflict ETag, 502 provider lỗi.
+5. Không hardcode secret — đọc từ config / env.
+6. **Sau khi hoàn thành bất kỳ task code nào, cập nhật các file .md liên quan để phản ánh trạng thái hoàn thành hiện tại của ticket/feature đó** (tối thiểu `docs/SPRINTS.md`; schema → DATABASE.md; endpoint → API.md).
+7. Khi không chắc thuộc scope hay không → hỏi trước khi code.
