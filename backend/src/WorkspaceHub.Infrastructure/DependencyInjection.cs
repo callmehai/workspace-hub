@@ -10,6 +10,7 @@ using WorkspaceHub.Infrastructure.Http;
 using WorkspaceHub.Infrastructure.Repositories;
 using WorkspaceHub.Application.Security;
 using WorkspaceHub.Infrastructure.Security;
+using WorkspaceHub.Infrastructure.BackgroundServices;
 
 namespace WorkspaceHub.Infrastructure;
 
@@ -47,6 +48,8 @@ public static class DependencyInjection
 
         services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
         services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();
+
+        services.AddHostedService<AutoSyncBackgroundService>();
 
         return services;
     }

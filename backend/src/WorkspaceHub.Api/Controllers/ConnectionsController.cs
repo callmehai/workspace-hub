@@ -103,10 +103,50 @@ public class ConnectionsController : ApiControllerBase
         return Ok(await _syncService.GetSampleAsync(id, CurrentUserId, ct));
     }
 
-    [HttpPost("{id:guid}/sync")]
-    public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
+    [HttpPost("/api/services/{id:guid}/sync")]
+    public IActionResult SyncConnectionFallback(Guid id, [FromServices] IServiceScopeFactory scopeFactory)
     {
-        return Ok(await _syncService.SyncAsync(id, CurrentUserId, 50, ct));
+        var userId = CurrentUserId;
+
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            var syncService = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
+            var connectionRepo = scope.ServiceProvider.GetRequiredService<WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<ConnectionsController>>();
+
+            try
+            {
+                var conn = await connectionRepo.GetByIdTrackedAsync(id, CancellationToken.None);
+                if (conn == null || conn.UserId != userId)
+                {
+                    logger.LogWarning("Manual sync failed: Connection {ConnectionId} not found or unauthorized.", id);
+                    return;
+                }
+
+                if (conn.ServiceType == WorkspaceHub.Domain.Enums.ServiceType.Gmail)
+                {
+                    await syncService.SyncConnectionAsync(conn, 50, CancellationToken.None);
+                }
+                else
+                {
+                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", conn.ServiceType);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Manual sync failed for connection {ConnectionId}", id);
+
+                var connToUpdate = await connectionRepo.GetByIdTrackedAsync(id, CancellationToken.None);
+                if (connToUpdate != null)
+                {
+                    connToUpdate.LastError = ex.Message;
+                    await connectionRepo.SaveChangesAsync(CancellationToken.None);
+                }
+            }
+        });
+
+        return Accepted();
     }
 }
 
