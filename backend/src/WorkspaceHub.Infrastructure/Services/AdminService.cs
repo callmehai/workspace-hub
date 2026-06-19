@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.DTOs.Admin;
-using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Domain.Enums;
 using WorkspaceHub.Infrastructure.Data;
@@ -14,20 +13,23 @@ namespace WorkspaceHub.Infrastructure.Services;
 /// Đặt trong Infrastructure.Services (không phải Application.Services) vì:
 ///   AdminService cần AppDbContext trực tiếp để thực hiện EF projection phức tạp (1 SQL,
 ///   no N+1) cho ConnectionCount + ItemCount. Application project không reference Infrastructure,
-///   nên đặt service này trong Infrastructure là cách đúng về dependency direction.
+///   nên đặt service này trong Infrastructure là đúng về dependency direction.
 ///
 /// Implement interface IAdminService (từ Application layer) — Controller inject qua interface,
-/// không biết về class cụ thể → vẫn đảm bảo loose coupling.
+/// không biết về class cụ thể → đảm bảo loose coupling.
+///
+/// Lý do không inject IUserRepository:
+///   AdminService query _db.Users trực tiếp để có EF anonymous projection gồm cả
+///   ConnCount + ItemCount trong 1 SQL duy nhất. Đẩy projection này vào IUserRepository
+///   sẽ buộc repository phải biết về DTO (vi phạm separation of concerns).
 /// </summary>
 public class AdminService : IAdminService
 {
     private readonly AppDbContext _db;
-    private readonly IUserRepository _userRepo;
 
-    public AdminService(AppDbContext db, IUserRepository userRepo)
+    public AdminService(AppDbContext db)
     {
         _db = db;
-        _userRepo = userRepo;
     }
 
     /// <inheritdoc/>
@@ -102,7 +104,10 @@ public class AdminService : IAdminService
             .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
             .ToListAsync(ct);
 
-        var connectionsByStatus = byStatus.ToDictionary(x => x.Status, x => x.Count);
+        // IReadOnlyDictionary: record là immutable về reference, nhưng Dictionary bên trong
+        // vẫn mutable. Cast sang IReadOnlyDictionary ngăn consumer gọi .Add()/.Remove().
+        IReadOnlyDictionary<string, int> connectionsByStatus =
+            byStatus.ToDictionary(x => x.Status, x => x.Count);
 
         // ── Items ──
         var totalItems = await _db.Items.CountAsync(ct);

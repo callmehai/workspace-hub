@@ -22,8 +22,7 @@ public class GetAdminUsersRequestValidator : AbstractValidator<GetAdminUsersRequ
             .WithMessage("Limit must be between 1 and 100.");
 
         RuleFor(x => x.Search)
-            .Must(s => s!.Trim().Length <= 200)
-            .When(x => !string.IsNullOrWhiteSpace(x.Search))
+            .Must(s => s == null || s.Trim().Length <= 200)
             .WithMessage("Search term cannot exceed 200 characters.");
     }
 }

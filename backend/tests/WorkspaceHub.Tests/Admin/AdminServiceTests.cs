@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Moq;
 using WorkspaceHub.Application.DTOs.Admin;
-using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
 using WorkspaceHub.Infrastructure.Data;
@@ -11,19 +9,14 @@ namespace WorkspaceHub.Tests.Admin;
 
 /// <summary>
 /// Unit tests cho AdminService.
-/// Dùng EF InMemory để test các EF projection phức tạp (ConnectionCount, ItemCount, GroupBy, v.v.)
-/// vì AdminService inject AppDbContext trực tiếp (không qua repository interface mock-able).
-/// IUserRepository được Moq (dùng trong GetPagedAdminAsync để đơn giản hóa count).
+/// Dùng EF InMemory vì AdminService inject AppDbContext trực tiếp cho EF projection
+/// (ConnectionCount, ItemCount, GroupBy) — không thể mock bằng Moq thông thường.
 ///
-/// Note về InMemory vs Moq:
-///   - ItemServiceTests dùng Moq vì ItemService chỉ gọi IItemRepository (interface) → mock được.
-///   - AdminService gọi _db.Users, _db.Connections, _db.Items trực tiếp → cần InMemory EF.
-///   - Đây là quyết định kỹ thuật hợp lý, không mâu thuẫn với pattern hiện tại (xem task spec).
+/// Mỗi test dùng database name riêng (Guid.NewGuid()) để isolate hoàn toàn.
 /// </summary>
 public class AdminServiceTests : IDisposable
 {
     private readonly AppDbContext _db;
-    private readonly Mock<IUserRepository> _userRepoMock;
     private readonly AdminService _sut;
 
     public AdminServiceTests()
@@ -33,8 +26,7 @@ public class AdminServiceTests : IDisposable
             .Options;
 
         _db = new AppDbContext(options);
-        _userRepoMock = new Mock<IUserRepository>();
-        _sut = new AdminService(_db, _userRepoMock.Object);
+        _sut = new AdminService(_db);
     }
 
     public void Dispose() => _db.Dispose();
@@ -184,7 +176,7 @@ public class AdminServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetUsersAsync_SearchIsCaseInsensitive()
+    public async Task GetUsersAsync_Search_FiltersCorrectlyByFullNameContainsMatch()
     {
         // Arrange
         // Lưu ý quan trọng về test này:
