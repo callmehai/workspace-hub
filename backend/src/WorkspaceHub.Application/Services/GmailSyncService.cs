@@ -146,7 +146,34 @@ public class GmailSyncService : IGmailSyncService
         if (newItems.Any())
         {
             await _items.AddRangeAsync(newItems, ct);
-            await _items.SaveChangesAsync(ct);
+            try
+            {
+                await _items.SaveChangesAsync(ct);
+            }
+            catch (Exception ex) when (ex.GetType().Name == "DbUpdateException")
+            {
+                // Xoá tất cả khỏi ChangeTracker trước khi thử lại
+                foreach (var item in newItems)
+                {
+                    _items.Remove(item);
+                }
+
+                // Lưu từng item một để không làm rollback toàn bộ batch
+                foreach (var item in newItems)
+                {
+                    await _items.AddAsync(item, ct);
+                    try
+                    {
+                        await _items.SaveChangesAsync(ct);
+                    }
+                    catch (Exception innerEx) when (innerEx.GetType().Name == "DbUpdateException")
+                    {
+                        _items.Remove(item);
+                        skipped++;
+                        created--;
+                    }
+                }
+            }
         }
 
         connection.CursorType = CursorType.HistoryId;

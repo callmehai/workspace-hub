@@ -23,4 +23,7 @@ public interface IConnectionRepository : IGenericRepository<Connection>
 
     /// <summary>Lấy các connection đang Active và Integration được Enable để background sync.</summary>
     Task<IReadOnlyList<Connection>> GetActiveConnectionsToSyncAsync(CancellationToken ct = default);
+
+    /// <summary>Lấy các connection Active + Integration Enabled của user cụ thể (on-demand sync).</summary>
+    Task<IReadOnlyList<Connection>> GetActiveConnectionsForUserAsync(Guid userId, CancellationToken ct = default);
 }

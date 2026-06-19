@@ -38,5 +38,11 @@ public class ConnectionRepository : GenericRepository<Connection>, IConnectionRe
             .Include(c => c.Integration)
             .Where(c => c.Status == ConnectionStatus.Active && c.Integration.IsEnabled)
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Connection>> GetActiveConnectionsForUserAsync(Guid userId, CancellationToken ct = default)
+        => await Set
+            .Include(c => c.Integration)
+            .Where(c => c.UserId == userId && c.Status == ConnectionStatus.Active && c.Integration.IsEnabled)
+            .ToListAsync(ct);
 }
 

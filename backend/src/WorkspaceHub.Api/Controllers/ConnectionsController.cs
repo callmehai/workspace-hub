@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Services;
 
@@ -103,50 +104,64 @@ public class ConnectionsController : ApiControllerBase
         return Ok(await _syncService.GetSampleAsync(id, CurrentUserId, ct));
     }
 
-    [HttpPost("/api/services/{id:guid}/sync")]
-    public IActionResult SyncConnectionFallback(Guid id, [FromServices] IServiceScopeFactory scopeFactory)
+    [HttpPost("{id:guid}/sync")]
+    public async Task<IActionResult> SyncConnectionFallback(
+        Guid id, 
+        [FromServices] WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository connectionRepo,
+        [FromServices] IServiceScopeFactory scopeFactory,
+        [FromServices] IMemoryCache cache)
     {
         var userId = CurrentUserId;
+
+        var conn = await connectionRepo.GetByIdTrackedAsync(id, CancellationToken.None);
+        if (conn == null) return NotFound();
+        if (conn.UserId != userId) return StatusCode(403);
+
+        var cacheKey = $"manual_sync_throttle_{id}";
+        if (cache.TryGetValue(cacheKey, out _))
+        {
+            return StatusCode(429);
+        }
+
+        cache.Set(cacheKey, true, TimeSpan.FromSeconds(60));
+
+        var jobId = Guid.NewGuid();
 
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
             var syncService = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
-            var connectionRepo = scope.ServiceProvider.GetRequiredService<WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository>();
+            var bgRepo = scope.ServiceProvider.GetRequiredService<WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<ConnectionsController>>();
 
             try
             {
-                var conn = await connectionRepo.GetByIdTrackedAsync(id, CancellationToken.None);
-                if (conn == null || conn.UserId != userId)
-                {
-                    logger.LogWarning("Manual sync failed: Connection {ConnectionId} not found or unauthorized.", id);
-                    return;
-                }
+                var scopedConn = await bgRepo.GetByIdTrackedAsync(id, CancellationToken.None);
+                if (scopedConn == null) return;
 
-                if (conn.ServiceType == WorkspaceHub.Domain.Enums.ServiceType.Gmail)
+                if (scopedConn.ServiceType == WorkspaceHub.Domain.Enums.ServiceType.Gmail)
                 {
-                    await syncService.SyncConnectionAsync(conn, 50, CancellationToken.None);
+                    await syncService.SyncConnectionAsync(scopedConn, 50, CancellationToken.None);
                 }
                 else
                 {
-                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", conn.ServiceType);
+                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
                 }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Manual sync failed for connection {ConnectionId}", id);
 
-                var connToUpdate = await connectionRepo.GetByIdTrackedAsync(id, CancellationToken.None);
+                var connToUpdate = await bgRepo.GetByIdTrackedAsync(id, CancellationToken.None);
                 if (connToUpdate != null)
                 {
                     connToUpdate.LastError = ex.Message;
-                    await connectionRepo.SaveChangesAsync(CancellationToken.None);
+                    await bgRepo.SaveChangesAsync(CancellationToken.None);
                 }
             }
         });
 
-        return Accepted();
+        return Accepted(new { jobId });
     }
 }
 
