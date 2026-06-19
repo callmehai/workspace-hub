@@ -29,7 +29,7 @@ PascalCase (class/method/property), camelCase (local/param), `I` prefix (interfa
 
 ## Mô hình B — Connections (quan trọng)
 - Mỗi service = 1 row Connections, token riêng. KHÔNG còn OAuthConnection→ServiceConnection.
-- Scope KHÔNG lưu DB — suy từ ServiceType qua `GoogleScopes.ForService()`. Một nguồn scope duy nhất trong code.
+- Scope KHÔNG lưu DB — suy từ ServiceType qua `GoogleScopes.BuildRequestScopes()`. Một nguồn scope duy nhất trong code.
 - KHÔNG thêm cột Permission/AccessLevel — bật service là full quyền.
 - Disconnect = xoá đúng row Connection, Items.ConnectionId SET NULL.
 

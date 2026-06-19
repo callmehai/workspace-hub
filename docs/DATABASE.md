@@ -56,7 +56,8 @@ Catalog provider. Seed Google; thêm Atlassian ở phase Jira.
 | SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` / `["Jira"]` |
 | IsEnabled | bool | |
 
-> Bỏ cột DefaultScopes — scope suy từ ServiceType trong code (GoogleScopes.ForService).
+> Bỏ cột DefaultScopes — scope suy từ ServiceType trong code (`GoogleScopes.BuildRequestScopes`).
+> Không có cột ClientId/ClientSecret — OAuth credentials đọc từ config `OAuth:{key}:...`, không lưu DB (SCRUM-47).
 
 ---
 
