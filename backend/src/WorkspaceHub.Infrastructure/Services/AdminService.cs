@@ -79,7 +79,7 @@ public class AdminService : IAdminService
             CreatedAt:       x.User.CreatedAt,
             ConnectionCount: x.ConnCount,
             ItemCount:       x.ItemCount
-        )).ToList().AsReadOnly();
+        )).ToList(); // List<T> already implements IReadOnlyList<T> — no .AsReadOnly() wrapper needed
 
         return new PagedResult<AdminUserDto>(dtos, total, page, limit);
     }
@@ -95,14 +95,16 @@ public class AdminService : IAdminService
         var lockedUsers = totalUsers - activeUsers;
 
         // ── Connections ──
-        var totalConnections = await _db.Connections.CountAsync(ct);
-
+        // byStatus fetch đầu tiên — totalConnections được tính từ memory (không cần round-trip thứ 4).
         // GroupBy enum → string key (enum lưu dạng string theo HaveConversion<string>() trong AppDbContext).
         // Dictionary chỉ chứa key có count > 0 (GroupBy tự lọc nhóm trống).
         var byStatus = await _db.Connections
             .GroupBy(c => c.Status)
             .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
             .ToListAsync(ct);
+
+        // Tính totalConnections từ kết quả byStatus đã có trong memory — không query thêm.
+        var totalConnections = byStatus.Sum(x => x.Count);
 
         // IReadOnlyDictionary: record là immutable về reference, nhưng Dictionary bên trong
         // vẫn mutable. Cast sang IReadOnlyDictionary ngăn consumer gọi .Add()/.Remove().

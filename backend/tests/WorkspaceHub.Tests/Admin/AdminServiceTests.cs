@@ -18,6 +18,7 @@ public class AdminServiceTests : IDisposable
 {
     private readonly AppDbContext _db;
     private readonly AdminService _sut;
+    private readonly Integration _testIntegration;
 
     public AdminServiceTests()
     {
@@ -27,6 +28,26 @@ public class AdminServiceTests : IDisposable
 
         _db = new AppDbContext(options);
         _sut = new AdminService(_db);
+
+        // Pre-save integration một lần trong constructor.
+        // Lý do không để trong CreateConnection: EF InMemory chỉ thấy entity sau SaveChanges(),
+        // nên FirstOrDefault() trong helper sẽ không thấy integration chưa save → mỗi lần gọi
+        // CreateConnection sẽ tạo 1 Integration mới (confusing và khó debug).
+        _testIntegration = new Integration
+        {
+            Id = Guid.NewGuid(),
+            Key = "google",
+            DisplayName = "Google",
+            IconUrl = "",
+            Description = "",
+            Provider = "Google",
+            AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
+            TokenEndpoint = "https://oauth2.googleapis.com/token",
+            SupportedServices = "[\"Gmail\"]",
+            IsEnabled = true
+        };
+        _db.Integrations.Add(_testIntegration);
+        _db.SaveChanges();
     }
 
     public void Dispose() => _db.Dispose();
@@ -59,29 +80,11 @@ public class AdminServiceTests : IDisposable
         ConnectionStatus status = ConnectionStatus.Active,
         DateTime? lastSyncedAt = null)
     {
-        var integration = _db.Integrations.FirstOrDefault()
-            ?? new Integration
-            {
-                Id = Guid.NewGuid(),
-                Key = "google",
-                DisplayName = "Google",
-                IconUrl = "",
-                Description = "",
-                Provider = "Google",
-                AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
-                TokenEndpoint = "https://oauth2.googleapis.com/token",
-                SupportedServices = "[\"Gmail\"]",
-                IsEnabled = true
-            };
-
-        if (!_db.Integrations.Any())
-            _db.Integrations.Add(integration);
-
         var conn = new Connection
         {
             Id                    = Guid.NewGuid(),
             UserId                = userId,
-            IntegrationId         = integration.Id,
+            IntegrationId         = _testIntegration.Id,
             Provider              = ProviderType.Google,
             ServiceType           = ServiceType.Gmail,
             ProviderAccountId     = $"account-{Guid.NewGuid()}",
@@ -161,36 +164,15 @@ public class AdminServiceTests : IDisposable
     public async Task GetUsersAsync_FiltersBy_FullNameContains()
     {
         // Arrange
+        // Ghi chú về case sensitivity:
+        // - EF InMemory: Contains() dùng ordinal comparison (CASE-SENSITIVE).
+        // - SQL Server (production): CI_AS collation → LIKE '%term%' = case-insensitive.
+        // → Test dùng cùng case để pass trên InMemory; case-insensitivity ở production
+        //   do SQL Server collation xử lý, không phải code — KHÔNG dùng .ToLower() (CONVENTIONS.md).
         CreateUser("a@test.com", "Vy Cuong");
         CreateUser("b@test.com", "John Doe");
         await _db.SaveChangesAsync();
 
-        var request = new GetAdminUsersRequest(Search: "Vy");
-
-        // Act
-        var result = await _sut.GetUsersAsync(request);
-
-        // Assert
-        Assert.Equal(1, result.Total);
-        Assert.Equal("Vy Cuong", result.Items[0].FullName);
-    }
-
-    [Fact]
-    public async Task GetUsersAsync_Search_FiltersCorrectlyByFullNameContainsMatch()
-    {
-        // Arrange
-        // Lưu ý quan trọng về test này:
-        // - EF InMemory: String.Contains() dùng ordinal comparison (CASE-SENSITIVE).
-        // - SQL Server (production): CI_AS collation → Contains() map thành LIKE '%...%' = case-insensitive.
-        // - Test này verify logic routing của service (search term được truyền xuống đúng, filter áp dụng).
-        // - Việc search thực sự case-insensitive ở production là do SQL Server collation, không phải code.
-        // - Convention: KHÔNG dùng .ToLower() trong LINQ (xem task spec và CONVENTIONS.md).
-        // → Test này dùng cùng case để chạy được trên InMemory; integration test với SQL Server mới test đầy đủ CI.
-        CreateUser("vy@gmail.com", "Vy Cuong");
-        CreateUser("john@test.com", "John Doe");
-        await _db.SaveChangesAsync();
-
-        // Search dùng exact case match (cho InMemory); SQL Server sẽ match "VY" → "Vy" tự động
         var request = new GetAdminUsersRequest(Search: "Vy");
 
         // Act

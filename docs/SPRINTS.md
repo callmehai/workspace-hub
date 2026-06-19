@@ -67,14 +67,9 @@
 
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
-<<<<<<< Updated upstream
 | SCRUM-47* | Bỏ DB credentials cho Integrations: drop 2 cột encrypted, xoá PUT /credentials, đổi section config `Dev:` → `OAuth:` | — | SCRUM-36 | ✅ Done in code 2026-06-12 — migration `RemoveClientCredentialsFromIntegration` (drop 2 cột), bỏ endpoint PUT /credentials + `SetCredentials`, code đọc `OAuth:{provider}:ClientId/Secret`. ⚠️ Chưa tạo issue Jira tương ứng. |
 | SCRUM-48* | Admin toggle integration: PATCH /api/admin/integrations/{key}/enable | Khánh | — | ✅ Done 2026-06-15 — `AdminIntegrationsController`, `ToggleIntegrationAsync`, validator + DTOs |
-=======
-| SCRUM-47* | Bỏ DB credentials cho Integrations: drop 2 cột encrypted, xoá PUT /credentials, đổi section config `Dev:` → `OAuth:` | đề xuất Hải (migration) | làm SAU SCRUM-36 (cùng đụng ConnectionsService với Khánh) | ⏳ Chưa tạo Jira |
-| SCRUM-48* | Admin toggle integration: PATCH /api/admin/integrations/{key}/enable | đề xuất Huy (Admin) | 47 | ⏳ Chưa tạo Jira |
 | SCRUM-49* | Admin API: GET /api/admin/users (phân trang + search) + GET /api/admin/stats (thống kê) | Huy/Antigravity | — | ✅ Done 2026-06-19 — AdminController + AdminService (Infrastructure) + GetAdminUsersRequestValidator + 15 unit tests (InMemory EF); IAdminService đăng ký trong Infrastructure DI |
->>>>>>> Stashed changes
 
 \* Số ticket tạm — sửa lại theo số Jira cấp khi tạo issue.
 
