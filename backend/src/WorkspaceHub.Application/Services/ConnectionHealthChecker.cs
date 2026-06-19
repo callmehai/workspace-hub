@@ -87,7 +87,7 @@ public class ConnectionHealthChecker : IConnectionHealthChecker
             catch (Exception ex)
             {
                 // Refresh fail (revoked/invalid) → đánh dấu connection cần re-auth
-                conn.Status = ConnectionStatus.Error;
+                conn!.Status = ConnectionStatus.Error;
                 conn.LastError = $"Token expired and auto-refresh failed. Please re-authenticate. Error: {ex.Message}";
                 _connections.Update(conn);
                 await _connections.SaveChangesAsync(ct);
