@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -150,7 +151,7 @@ public class GmailSyncService : IGmailSyncService
             {
                 await _items.SaveChangesAsync(ct);
             }
-            catch (Exception ex) when (ex.GetType().Name == "DbUpdateException")
+            catch (DbUpdateException)
             {
                 // Xoá tất cả khỏi ChangeTracker trước khi thử lại
                 foreach (var item in newItems)
@@ -166,7 +167,7 @@ public class GmailSyncService : IGmailSyncService
                     {
                         await _items.SaveChangesAsync(ct);
                     }
-                    catch (Exception innerEx) when (innerEx.GetType().Name == "DbUpdateException")
+                    catch (DbUpdateException)
                     {
                         _items.Remove(item);
                         skipped++;

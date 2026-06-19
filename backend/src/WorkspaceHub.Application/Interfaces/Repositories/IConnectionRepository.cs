@@ -22,6 +22,7 @@ public interface IConnectionRepository : IGenericRepository<Connection>
     Task<Connection?> GetByIdTrackedAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>Lấy các connection đang Active và Integration được Enable để background sync.</summary>
+    // Reserved for webhook phase (SCRUM-39+).
     Task<IReadOnlyList<Connection>> GetActiveConnectionsToSyncAsync(CancellationToken ct = default);
 
     /// <summary>Lấy các connection Active + Integration Enabled của user cụ thể (on-demand sync).</summary>

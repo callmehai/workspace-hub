@@ -191,6 +191,8 @@ public class ConnectionsControllerTests : IClassFixture<WebApplicationFactory<Pr
         response202.StatusCode.Should().Be(HttpStatusCode.Accepted);
 
         // Wait for background job to run
+        // Note: Task.Delay is used for testing fire-and-forget logic.
+        // This is a known limitation and could be flaky on slow CI.
         await Task.Delay(500);
 
         // Check DB

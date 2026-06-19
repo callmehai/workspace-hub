@@ -80,13 +80,14 @@ public class ConnectionHealthChecker : IConnectionHealthChecker
             {
                 await _connectionsService.RefreshConnectionAsync(connectionId, userId, ct);
                 // Re-fetch connection sau khi refresh (token mới)
+                // Note: We don't re-check Integration.IsEnabled here to avoid extra DB query (MVP limitation)
                 conn = await _connections.GetByIdTrackedAsync(connectionId, ct);
                 if (conn == null || conn.Status != ConnectionStatus.Active) return;
             }
             catch (Exception ex)
             {
                 // Refresh fail (revoked/invalid) → đánh dấu connection cần re-auth
-                conn!.Status = ConnectionStatus.Error;
+                conn.Status = ConnectionStatus.Error;
                 conn.LastError = $"Token expired and auto-refresh failed. Please re-authenticate. Error: {ex.Message}";
                 _connections.Update(conn);
                 await _connections.SaveChangesAsync(ct);
@@ -100,6 +101,7 @@ public class ConnectionHealthChecker : IConnectionHealthChecker
         // Chỉ hỗ trợ Gmail hiện tại
         if (conn.ServiceType != ServiceType.Gmail)
         {
+            _logger.LogDebug("On-demand sync skipped: ServiceType {ServiceType} not yet supported.", conn.ServiceType);
             return;
         }
 
