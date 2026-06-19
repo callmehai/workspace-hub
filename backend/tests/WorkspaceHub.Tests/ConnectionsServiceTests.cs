@@ -1,6 +1,9 @@
 using Moq;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Repositories;
@@ -27,6 +30,9 @@ public class ConnectionsServiceTests
     private readonly Mock<IConfiguration> _configMock;
     private readonly Mock<IOAuthTokenClient> _tokenClientMock;
     private readonly Mock<IScheduledEmailRepository> _scheduledEmailsMock;
+    private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
+    private readonly Mock<IMemoryCache> _memoryCacheMock;
+    private readonly Mock<ILogger<ConnectionsService>> _loggerMock;
     private readonly ConnectionsService _sut;
 
     private readonly Guid _userId = Guid.NewGuid();
@@ -42,6 +48,9 @@ public class ConnectionsServiceTests
         _configMock = new Mock<IConfiguration>();
         _tokenClientMock = new Mock<IOAuthTokenClient>();
         _scheduledEmailsMock = new Mock<IScheduledEmailRepository>();
+        _scopeFactoryMock = new Mock<IServiceScopeFactory>();
+        _memoryCacheMock = new Mock<IMemoryCache>();
+        _loggerMock = new Mock<ILogger<ConnectionsService>>();
 
         // No provider strategies needed for SCRUM-14 tests
         var strategies = Enumerable.Empty<IProviderStrategy>();
@@ -55,7 +64,10 @@ public class ConnectionsServiceTests
             strategies,
             _configMock.Object,
             _tokenClientMock.Object,
-            _scheduledEmailsMock.Object);
+            _scheduledEmailsMock.Object,
+            _scopeFactoryMock.Object,
+            _memoryCacheMock.Object,
+            _loggerMock.Object);
 
         // Mock ExecuteInTransactionAsync to just run the action
         _connectionsMock

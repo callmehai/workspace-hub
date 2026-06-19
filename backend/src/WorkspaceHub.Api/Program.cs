@@ -31,6 +31,8 @@ builder.Services.AddControllers()
         .SkipToken()
         .AddRouteComponents("api", edmBuilder.GetEdmModel()));
 
+builder.Services.AddMemoryCache();
+
 // Swagger.
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>

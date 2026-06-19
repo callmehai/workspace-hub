@@ -105,63 +105,16 @@ public class ConnectionsController : ApiControllerBase
     }
 
     [HttpPost("{id:guid}/sync")]
-    public async Task<IActionResult> SyncConnectionFallback(
-        Guid id, 
-        [FromServices] WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository connectionRepo,
-        [FromServices] IServiceScopeFactory scopeFactory,
-        [FromServices] IMemoryCache cache)
+    public async Task<IActionResult> SyncConnectionFallback(Guid id, CancellationToken ct)
     {
-        var userId = CurrentUserId;
-
-        var conn = await connectionRepo.GetByIdTrackedAsync(id, CancellationToken.None);
-        if (conn == null) return NotFound();
-        if (conn.UserId != userId) return StatusCode(403);
-
-        var cacheKey = $"manual_sync_throttle_{id}";
-        if (cache.TryGetValue(cacheKey, out _))
+        var result = await _connections.TriggerManualSyncAsync(id, CurrentUserId, ct);
+        
+        return result.StatusCode switch
         {
-            return StatusCode(429);
-        }
-
-        cache.Set(cacheKey, true, TimeSpan.FromSeconds(60));
-
-        var jobId = Guid.NewGuid();
-
-        _ = Task.Run(async () =>
-        {
-            using var scope = scopeFactory.CreateScope();
-            var syncService = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
-            var bgRepo = scope.ServiceProvider.GetRequiredService<WorkspaceHub.Application.Interfaces.Repositories.IConnectionRepository>();
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<ConnectionsController>>();
-
-            try
-            {
-                var scopedConn = await bgRepo.GetByIdTrackedAsync(id, CancellationToken.None);
-                if (scopedConn == null) return;
-
-                if (scopedConn.ServiceType == WorkspaceHub.Domain.Enums.ServiceType.Gmail)
-                {
-                    await syncService.SyncConnectionAsync(scopedConn, 50, CancellationToken.None);
-                }
-                else
-                {
-                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Manual sync failed for connection {ConnectionId}", id);
-
-                var connToUpdate = await bgRepo.GetByIdTrackedAsync(id, CancellationToken.None);
-                if (connToUpdate != null)
-                {
-                    connToUpdate.LastError = ex.Message;
-                    await bgRepo.SaveChangesAsync(CancellationToken.None);
-                }
-            }
-        });
-
-        return Accepted(new { jobId });
+            429 => StatusCode(429),
+            202 => Accepted(new { result.JobId }),
+            _ => StatusCode(500)
+        };
     }
 }
 
