@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Services;
 
@@ -104,9 +105,16 @@ public class ConnectionsController : ApiControllerBase
     }
 
     [HttpPost("{id:guid}/sync")]
-    public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
+    public async Task<IActionResult> SyncConnectionFallback(Guid id, CancellationToken ct)
     {
-        return Ok(await _syncService.SyncAsync(id, CurrentUserId, 50, ct));
+        var result = await _connections.TriggerManualSyncAsync(id, CurrentUserId, ct);
+        
+        return result.StatusCode switch
+        {
+            429 => StatusCode(429),
+            202 => Accepted(new { result.JobId }),
+            _ => StatusCode(500)
+        };
     }
 }
 

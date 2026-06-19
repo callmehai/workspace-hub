@@ -43,5 +43,7 @@ public interface IConnectionsService
     /// SCRUM-14: Refresh token của connection. 422 nếu refresh token invalid → set Status = Error.
     /// </summary>
     Task<RefreshConnectionResponse> RefreshConnectionAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
+
+    Task<ManualSyncResult> TriggerManualSyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
 }
 

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
@@ -15,17 +16,36 @@ public class ItemService : IItemService
 {
     private readonly IItemRepository _itemRepo;
     private readonly IFolderRepository _folderRepo;
+    private readonly IConnectionHealthChecker _healthChecker;
+    private readonly ILogger<ItemService> _logger;
 
-    public ItemService(IItemRepository itemRepo, IFolderRepository folderRepo)
+    public ItemService(
+        IItemRepository itemRepo,
+        IFolderRepository folderRepo,
+        IConnectionHealthChecker healthChecker,
+        ILogger<ItemService> logger)
     {
         _itemRepo = itemRepo;
         _folderRepo = folderRepo;
+        _healthChecker = healthChecker;
+        _logger = logger;
     }
 
     /// <inheritdoc/>
     public async Task<PagedResult<ItemResponse>> GetItemsAsync(
         Guid userId, GetItemsRequest request, CancellationToken ct = default)
     {
+        // On-demand sync: check connections → auto-refresh → sync trước khi trả Items
+        try
+        {
+            await _healthChecker.EnsureAllSyncedAsync(userId, ct);
+        }
+        catch (Exception ex)
+        {
+            // Sync fail KHÔNG chặn user xem items cũ — log warning và tiếp tục
+            _logger.LogWarning(ex, "On-demand sync failed for user {UserId}, returning cached items.", userId);
+        }
+
         // Clamp page/limit to safe ranges (validator should catch, but defense-in-depth)
         var page = Math.Max(1, request.Page);
         var limit = Math.Clamp(request.Limit, 1, 100);

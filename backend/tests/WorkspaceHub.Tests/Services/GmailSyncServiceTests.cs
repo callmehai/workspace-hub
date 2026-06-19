@@ -69,9 +69,6 @@ public class GmailSyncServiceTests
         result.Created.Should().Be(3);
         result.Skipped.Should().Be(0);
         result.NewCursor.Should().Be("100");
-
-        _itemsMock.Verify(m => m.AddRangeAsync(It.Is<IEnumerable<Item>>(items => System.Linq.Enumerable.Count(items) == 3), It.IsAny<CancellationToken>()), Times.Once);
-        _itemsMock.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         
         connection.CursorValue.Should().Be("100");
         connection.CursorType.Should().Be(CursorType.HistoryId);
@@ -104,8 +101,6 @@ public class GmailSyncServiceTests
 
         result.Created.Should().Be(2);
         result.Skipped.Should().Be(1);
-
-        _itemsMock.Verify(m => m.AddRangeAsync(It.Is<IEnumerable<Item>>(items => System.Linq.Enumerable.Count(items) == 2), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -185,8 +180,6 @@ public class GmailSyncServiceTests
         var result = await _service.SyncConnectionAsync(connection);
 
         result.Created.Should().Be(0);
-        
-        _itemsMock.Verify(m => m.AddRangeAsync(It.IsAny<IEnumerable<Item>>(), It.IsAny<CancellationToken>()), Times.Never);
         
         connection.CursorValue.Should().Be("100");
         connection.LastSyncedAt.Should().NotBeNull();

@@ -28,6 +28,7 @@ public static class DependencyInjection
 
         services.AddScoped<WorkspaceHub.Application.Mapping.IGmailItemMapper, WorkspaceHub.Application.Mapping.GmailItemMapper>();
         services.AddScoped<WorkspaceHub.Application.Interfaces.Services.IGmailSyncService, WorkspaceHub.Application.Services.GmailSyncService>();
+        services.AddScoped<IConnectionHealthChecker, ConnectionHealthChecker>();
 
         return services;
     }

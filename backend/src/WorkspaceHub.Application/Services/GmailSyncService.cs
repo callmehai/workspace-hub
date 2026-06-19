@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -146,7 +147,34 @@ public class GmailSyncService : IGmailSyncService
         if (newItems.Any())
         {
             await _items.AddRangeAsync(newItems, ct);
-            await _items.SaveChangesAsync(ct);
+            try
+            {
+                await _items.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Xoá tất cả khỏi ChangeTracker trước khi thử lại
+                foreach (var item in newItems)
+                {
+                    _items.Remove(item);
+                }
+
+                // Lưu từng item một để không làm rollback toàn bộ batch
+                foreach (var item in newItems)
+                {
+                    await _items.AddAsync(item, ct);
+                    try
+                    {
+                        await _items.SaveChangesAsync(ct);
+                    }
+                    catch (DbUpdateException)
+                    {
+                        _items.Remove(item);
+                        skipped++;
+                        created--;
+                    }
+                }
+            }
         }
 
         connection.CursorType = CursorType.HistoryId;

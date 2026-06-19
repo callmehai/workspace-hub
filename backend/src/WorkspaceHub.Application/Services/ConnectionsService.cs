@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Repositories;
@@ -24,6 +27,9 @@ public class ConnectionsService : IConnectionsService
     private readonly IConfiguration _config;
     private readonly IOAuthTokenClient _tokenClient;
     private readonly IScheduledEmailRepository _scheduledEmails;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IMemoryCache _memoryCache;
+    private readonly ILogger<ConnectionsService> _logger;
 
     public ConnectionsService(
         IIntegrationRepository integrations,
@@ -34,7 +40,10 @@ public class ConnectionsService : IConnectionsService
         IEnumerable<IProviderStrategy> strategies,
         IConfiguration config,
         IOAuthTokenClient tokenClient,
-        IScheduledEmailRepository scheduledEmails)
+        IScheduledEmailRepository scheduledEmails,
+        IServiceScopeFactory scopeFactory,
+        IMemoryCache memoryCache,
+        ILogger<ConnectionsService> logger)
     {
         _integrations = integrations;
         _connections = connections;
@@ -45,6 +54,9 @@ public class ConnectionsService : IConnectionsService
         _config = config;
         _tokenClient = tokenClient;
         _scheduledEmails = scheduledEmails;
+        _scopeFactory = scopeFactory;
+        _memoryCache = memoryCache;
+        _logger = logger;
     }
 
     public async Task<InitiateConnectionResult> InitiateConnectionAsync(
@@ -345,6 +357,59 @@ public class ConnectionsService : IConnectionsService
     }
 
     // ───────────── Helpers ─────────────
+
+    public async Task<ManualSyncResult> TriggerManualSyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var conn = await _connections.GetByIdTrackedAsync(connectionId, ct);
+        if (conn == null) throw new NotFoundException("Connection", connectionId);
+        if (conn.UserId != userId) throw new ForbiddenException("You do not have permission to sync this connection.");
+
+        var cacheKey = $"manual_sync_throttle_{connectionId}";
+        if (_memoryCache.TryGetValue(cacheKey, out _))
+        {
+            return new ManualSyncResult(429);
+        }
+
+        _memoryCache.Set(cacheKey, true, TimeSpan.FromSeconds(60));
+
+        var jobId = Guid.NewGuid();
+
+        _ = Task.Run(async () =>
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var syncService = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
+            var bgRepo = scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<ConnectionsService>>();
+
+            try
+            {
+                var scopedConn = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
+                if (scopedConn == null) return;
+
+                if (scopedConn.ServiceType == ServiceType.Gmail)
+                {
+                    await syncService.SyncConnectionAsync(scopedConn, 50, CancellationToken.None);
+                }
+                else
+                {
+                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Manual sync failed for connection {ConnectionId}", connectionId);
+
+                var connToUpdate = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
+                if (connToUpdate != null)
+                {
+                    connToUpdate.LastError = ex.Message;
+                    await bgRepo.SaveChangesAsync(CancellationToken.None);
+                }
+            }
+        });
+
+        return new ManualSyncResult(202, jobId);
+    }
 
     /// <summary>
     /// Mask token: trả về "********" để giấu ciphertext.
