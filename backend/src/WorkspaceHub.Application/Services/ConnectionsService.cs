@@ -283,10 +283,12 @@ public class ConnectionsService : IConnectionsService
         var integration = await _integrations.GetByIdAsync(connection.IntegrationId, ct)
             ?? throw new NotFoundException("Integration", connection.IntegrationId);
 
-        var clientId = _config[$"OAuth:{integration.Key}:ClientId"]
-            ?? throw new BusinessRuleException($"Missing ClientId config for '{integration.Key}'");
-        var clientSecret = _config[$"OAuth:{integration.Key}:ClientSecret"]
-            ?? throw new BusinessRuleException($"Missing ClientSecret config for '{integration.Key}'");
+        var clientId = _config[$"OAuth:{integration.Key}:ClientId"];
+        if (string.IsNullOrEmpty(clientId))
+            throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integration.Key}'");
+        var clientSecret = _config[$"OAuth:{integration.Key}:ClientSecret"];
+        if (string.IsNullOrEmpty(clientSecret))
+            throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integration.Key}'");
 
         // Gọi provider để refresh token
         try
