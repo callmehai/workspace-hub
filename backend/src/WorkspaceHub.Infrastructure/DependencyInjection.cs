@@ -17,13 +17,25 @@ namespace WorkspaceHub.Infrastructure;
 /// <summary>Đăng ký DbContext + repository của tầng Infrastructure.</summary>
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services, IConfiguration config, bool isDevelopment = false)
     {
         var connectionString = config.GetConnectionString("Default")
             ?? throw new InvalidOperationException(
                 "Thiếu ConnectionStrings:Default. Set qua user-secrets/appsettings (xem docs/SETUP.md).");
 
-        services.AddDbContext<AppDbContext>(opt => opt.UseSqlServer(connectionString));
+        services.AddDbContext<AppDbContext>(opt =>
+        {
+            opt.UseSqlServer(connectionString);
+
+            // EF query logging để verify SQL sinh ra (SCRUM-25). CHỈ ở Development —
+            // EnableSensitiveDataLogging log cả giá trị tham số nên KHÔNG bật ở production.
+            if (isDevelopment)
+            {
+                opt.EnableSensitiveDataLogging();
+                opt.EnableDetailedErrors();
+            }
+        });
 
         // Data Protection: mã hoá / giải mã token OAuth trước khi lưu DB
         services.AddDataProtection()

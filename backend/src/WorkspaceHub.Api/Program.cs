@@ -92,9 +92,13 @@ builder.Services.AddAuthentication(options =>
 
 // Register application and infrastructure services
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 
 var app = builder.Build();
+
+// Request logging (SCRUM-25) — đặt NGOÀI CÙNG để đo trọn thời gian xử lý và đọc đúng
+// status code cuối (kể cả 5xx do ExceptionMiddleware set sau khi nuốt exception).
+app.UseMiddleware<RequestLoggingMiddleware>();
 
 // Exception middleware — bắt mọi lỗi → error format chuẩn (SCRUM-24 / CONVENTIONS.md).
 app.UseMiddleware<ExceptionMiddleware>();

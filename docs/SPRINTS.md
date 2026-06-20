@@ -62,6 +62,7 @@
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
 | SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done 2026-06-17 — `ExceptionMiddleware` map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack/message ở production (kèm diagnostics ở Development); traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
+| SCRUM-25 | Structured logging + tối ưu query EF (tránh N+1) cho list endpoints | — | — | ✅ Done 2026-06-20 — **Logging:** `RequestLoggingMiddleware` (request/response + elapsed ms + userId, đặt outermost trước ExceptionMiddleware) + EF query logging dev-only (`EnableSensitiveDataLogging`/`EnableDetailedErrors` + `Database.Command=Information`). **Query:** fix cartesian/N+1 folder list — `GetUserFoldersAsync` gỡ Include `FolderShares` (include chết: owned folder luôn map "Owner") + `AsSplitQuery` cho `ItemFolders`; `GetSharedFoldersAsync` thêm `AsSplitQuery`. Items list `GetPagedAsync` verify = đúng 1 SELECT có `OFFSET/FETCH` (filter/sort/paging ở DB, `AsNoTracking`), không N+1. Test: `RequestLoggingMiddlewareTests` (6) + `ItemListQuerySqlTests` (1, qua `ToQueryString`). _AC "đo perf với data mẫu (seed)" đã descope khỏi ticket — `elapsed ms` trong log đủ để đo khi cần._ |
 
 ## Cleanup / tech-debt (chốt 2026-06-12 — xem CHANGELOG)
 
