@@ -58,3 +58,11 @@ public class CsrfException : Exception
     public CsrfException(string message) : base(message) { }
 }
 
+/// <summary>
+/// Lỗi 502 — Lỗi từ phía Provider (3rd party API).
+/// Middleware sẽ map sang HTTP 502 Bad Gateway.
+/// </summary>
+public class ProviderException : Exception
+{
+    public ProviderException(string message) : base(message) { }
+}

@@ -60,8 +60,8 @@ public static class DependencyInjection
 
         services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
         services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();
-
-
+        services.AddScoped<WorkspaceHub.Application.Abstractions.ICalendarGateway, WorkspaceHub.Infrastructure.Services.CalendarGateway>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IDriveGateway, WorkspaceHub.Infrastructure.Services.DriveGateway>();
         // AdminService đặt tại Infrastructure vì cần inject AppDbContext trực tiếp
         // (EF projection no-N+1 cho ConnectionCount/ItemCount — xem AdminService.cs).
         services.AddScoped<IAdminService, AdminService>();

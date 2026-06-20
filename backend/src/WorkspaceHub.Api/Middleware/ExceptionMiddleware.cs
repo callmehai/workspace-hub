@@ -17,6 +17,7 @@ namespace WorkspaceHub.Api.Middleware;
 ///   ConflictException                      → 409
 ///   BusinessRuleException                  → 422
 ///   CsrfException                          → 400
+///   ProviderException                      → 502
 ///   còn lại                                → 500
 ///
 /// Bảo mật: KHÔNG lộ stack trace / message nội bộ của lỗi 500 ra client ở môi trường
@@ -74,6 +75,7 @@ public class ExceptionMiddleware
             ConflictException      => (HttpStatusCode.Conflict,            "ConflictError"),
             BusinessRuleException  => (HttpStatusCode.UnprocessableEntity, "BusinessRuleError"),
             CsrfException          => (HttpStatusCode.BadRequest,          "CsrfError"),
+            ProviderException      => (HttpStatusCode.BadGateway,          "ProviderError"),
             _                      => (HttpStatusCode.InternalServerError, "InternalError")
         };
 

@@ -1,0 +1,254 @@
+using System.Text.Json;
+using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs;
+using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Interfaces.Services;
+using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Domain.Enums;
+
+namespace WorkspaceHub.Application.Services;
+
+public class ItemWriteBackService : IItemWriteBackService
+{
+    private readonly IItemRepository _items;
+    private readonly IConnectionRepository _connections;
+    private readonly IWriteBackGuard _guard;
+    private readonly IGmailGateway _gmailGateway;
+    private readonly ICalendarGateway _calendarGateway;
+    private readonly IDriveGateway _driveGateway;
+
+    public ItemWriteBackService(
+        IItemRepository items,
+        IConnectionRepository connections,
+        IWriteBackGuard guard,
+        IGmailGateway gmailGateway,
+        ICalendarGateway calendarGateway,
+        IDriveGateway driveGateway)
+    {
+        _items = items;
+        _connections = connections;
+        _guard = guard;
+        _gmailGateway = gmailGateway;
+        _calendarGateway = calendarGateway;
+        _driveGateway = driveGateway;
+    }
+
+    private async Task<Connection> GetConnectionAsync(Guid? connectionId, CancellationToken ct)
+    {
+        if (connectionId == null) throw new BusinessRuleException("Item is not linked to any connection.");
+        var conn = await _connections.GetByIdTrackedAsync(connectionId.Value, ct);
+        if (conn == null) throw new NotFoundException("Connection", connectionId.Value);
+        return conn;
+    }
+
+    public async Task<ItemResponse> PatchItemAsync(Guid itemId, Guid userId, PatchItemRequest payload, CancellationToken ct = default)
+    {
+        var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null) throw new NotFoundException("Item", itemId);
+
+        var conn = await GetConnectionAsync(item.ConnectionId, ct);
+
+        if (item.Type == ItemType.Email && conn.ServiceType != ServiceType.Gmail) throw new BusinessRuleException("Connection type mismatch for Gmail.");
+        if (item.Type == ItemType.Event && conn.ServiceType != ServiceType.GCal) throw new BusinessRuleException("Connection type mismatch for Calendar.");
+        if (item.Type == ItemType.File && conn.ServiceType != ServiceType.Drive) throw new BusinessRuleException("Connection type mismatch for Drive.");
+
+        if (item.ExternalId == null) throw new BusinessRuleException("Item has no external ID.");
+
+        string? providerEtag = null;
+        switch (item.Type)
+        {
+            case ItemType.Email:
+                providerEtag = await _gmailGateway.GetMessageETagAsync(conn, item.ExternalId, ct);
+                break;
+            case ItemType.Event:
+                var ev = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
+                providerEtag = ev.ETag;
+                break;
+            case ItemType.File:
+                var file = await _driveGateway.GetFileAsync(conn, item.ExternalId, ct);
+                providerEtag = file.ETag;
+                break;
+            default:
+                throw new BusinessRuleException("Unsupported item type for writeback.");
+        }
+
+        _guard.EnsureNoConflict(item.ETag, providerEtag);
+
+        string? newETag = null;
+
+        switch (item.Type)
+        {
+            case ItemType.Email:
+                if (payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null || payload.Name != null)
+                    throw new BusinessRuleException("Invalid fields for Email writeback.");
+
+                var addLabels = new List<string>();
+                var removeLabels = new List<string>();
+
+                bool isUnreadChanged = payload.IsUnread.HasValue;
+                bool isStarredChanged = payload.IsStarred.HasValue;
+
+                if (isUnreadChanged)
+                {
+                    if (payload.IsUnread!.Value) addLabels.Add("UNREAD");
+                    else removeLabels.Add("UNREAD");
+                }
+                
+                if (isStarredChanged)
+                {
+                    if (payload.IsStarred!.Value) addLabels.Add("STARRED");
+                    else removeLabels.Add("STARRED");
+                }
+                
+                if (payload.Labels != null) addLabels.AddRange(payload.Labels);
+
+                if (addLabels.Any() || removeLabels.Any())
+                {
+                    await _gmailGateway.ModifyMessageAsync(conn, item.ExternalId, addLabels, removeLabels, ct);
+                }
+
+                if (payload.IsTrashed.HasValue)
+                {
+                    if (payload.IsTrashed.Value)
+                        await _gmailGateway.TrashMessageAsync(conn, item.ExternalId, ct);
+                    else
+                        await _gmailGateway.UntrashMessageAsync(conn, item.ExternalId, ct);
+                }
+                
+                newETag = await _gmailGateway.GetMessageETagAsync(conn, item.ExternalId, ct);
+                
+                var metaDictEmail = JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+                if (isUnreadChanged) metaDictEmail["IsUnread"] = payload.IsUnread!.Value;
+                if (isStarredChanged) metaDictEmail["IsStarred"] = payload.IsStarred!.Value;
+                item.MetadataJson = JsonSerializer.Serialize(metaDictEmail);
+
+                break;
+
+            case ItemType.Event:
+                if (payload.IsUnread != null || payload.IsStarred != null || payload.Labels != null || payload.IsTrashed != null || payload.Name != null)
+                    throw new BusinessRuleException("Invalid fields for Event writeback.");
+                    
+                var evDto = new CalendarEvent(
+                    item.ExternalId,
+                    providerEtag,
+                    payload.Title,
+                    null,
+                    payload.Start,
+                    payload.End,
+                    payload.Location,
+                    payload.Attendees
+                );
+
+                var updatedEvent = await _calendarGateway.UpdateEventAsync(conn, "primary", item.ExternalId, evDto, ct);
+                newETag = updatedEvent.ETag;
+                item.Title = updatedEvent.Summary ?? "No Title";
+                item.OccurredAt = updatedEvent.Start?.UtcDateTime ?? DateTime.UtcNow;
+                if (updatedEvent.End.HasValue) item.DueAt = updatedEvent.End.Value.UtcDateTime;
+
+                var metaDictEvent = JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+                if (updatedEvent.Location != null) metaDictEvent["Location"] = updatedEvent.Location;
+                if (updatedEvent.Attendees != null) metaDictEvent["Attendees"] = updatedEvent.Attendees;
+                item.MetadataJson = JsonSerializer.Serialize(metaDictEvent);
+                break;
+
+            case ItemType.File:
+                if (payload.IsUnread != null || payload.IsStarred != null || payload.Labels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null)
+                    throw new BusinessRuleException("Invalid fields for File writeback.");
+                    
+                if (payload.Name != null)
+                {
+                    var updatedFile = await _driveGateway.UpdateFileAsync(conn, item.ExternalId, payload.Name, ct);
+                    newETag = updatedFile.ETag;
+                    item.Title = updatedFile.Name ?? "Untitled";
+                }
+                if (payload.IsTrashed.HasValue)
+                {
+                    if (payload.IsTrashed.Value)
+                    {
+                        await _driveGateway.TrashFileAsync(conn, item.ExternalId, ct);
+                        var f = await _driveGateway.GetFileAsync(conn, item.ExternalId, ct);
+                        newETag = f.ETag;
+                    }
+                }
+                break;
+        }
+
+        if (newETag != null) item.ETag = newETag;
+        
+        await _items.SaveChangesAsync(ct);
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson);
+    }
+
+    public async Task<ItemResponse> CreateEventAsync(Guid userId, CreateEventRequest payload, CancellationToken ct = default)
+    {
+        var conn = await _connections.GetByIdTrackedAsync(payload.ConnectionId, ct);
+        if (conn == null) throw new NotFoundException("Connection", payload.ConnectionId);
+        if (conn.UserId != userId) throw new ForbiddenException("Not your connection.");
+        if (conn.ServiceType != ServiceType.GCal) throw new BusinessRuleException("Connection is not for Calendar.");
+
+        var evDto = new CalendarEvent(
+            "",
+            null,
+            payload.Title,
+            null,
+            payload.Start,
+            payload.End,
+            payload.Location,
+            payload.Attendees
+        );
+
+        var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
+
+        var metaDict = new Dictionary<string, object>();
+        if (created.Location != null) metaDict["Location"] = created.Location;
+        if (created.Attendees != null) metaDict["Attendees"] = created.Attendees;
+
+        var item = new Item
+        {
+            UserId = userId,
+            ConnectionId = payload.ConnectionId,
+            Type = ItemType.Event,
+            ExternalId = created.Id,
+            ETag = created.ETag,
+            Title = created.Summary ?? "New Event",
+            Snippet = created.Description ?? "",
+            OccurredAt = created.Start?.UtcDateTime ?? DateTime.UtcNow,
+            DueAt = created.End?.UtcDateTime,
+            MetadataJson = JsonSerializer.Serialize(metaDict)
+        };
+
+        await _items.AddAsync(item, ct);
+        await _items.SaveChangesAsync(ct);
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson);
+    }
+
+    public async Task DeleteItemAsync(Guid itemId, Guid userId, CancellationToken ct = default)
+    {
+        var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null) throw new NotFoundException("Item", itemId);
+
+        if (item.ExternalId != null && item.ConnectionId != null)
+        {
+            var conn = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct);
+            if (conn != null)
+            {
+                switch (item.Type)
+                {
+                    case ItemType.Email:
+                        await _gmailGateway.TrashMessageAsync(conn, item.ExternalId, ct);
+                        break;
+                    case ItemType.Event:
+                        await _calendarGateway.DeleteEventAsync(conn, "primary", item.ExternalId, ct);
+                        break;
+                    case ItemType.File:
+                        await _driveGateway.TrashFileAsync(conn, item.ExternalId, ct);
+                        break;
+                }
+            }
+        }
+
+        _items.Remove(item);
+        await _items.SaveChangesAsync(ct);
+    }
+}
