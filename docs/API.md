@@ -36,8 +36,19 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - `POST /api/auth/google/callback` — {code, state} → verify id_token, tìm/tạo/link user, phát JWT. (400 CSRF, 401 token invalid / user khoá)
 > KHÔNG tạo Connection. Chỉ tạo/tìm User. Auto-link nếu email trùng.
 
-## Admin — không đổi
-`GET /api/admin/users`, `/users/{id}`, `PATCH /users/{id}/lock`, `GET /api/admin/stats`, `DELETE /api/admin/connections/{id}`.
+## Admin — ✅ Implemented (SCRUM-49 2026-06-19)
+`GET /api/admin/users` — danh sách user phân trang + search, Admin only.
+- Query: `?search=` (Email|FullName, case-insensitive, max 200 chars), `?page=1`, `?limit=20` (max 100).
+- Response 200: `{ items: AdminUserDto[], total, page, limit }`. AdminUserDto gồm: id, email, fullName, role, isActive, lastLoginAt, createdAt, connectionCount (tất cả connection), itemCount.
+- Status: 200 · 400 (validation) · 401 · 403.
+
+`GET /api/admin/stats` — thống kê hệ thống, Admin only.
+- Response 200: `{ totalUsers, activeUsers, lockedUsers, totalConnections, connectionsByStatus: {Active,Error,Disconnected}, totalItems, syncErrorsLast24h }`.
+- `syncErrorsLast24h` = count Connections với Status=Error VÀ LastSyncedAt!=null VÀ LastSyncedAt>=UtcNow-24h.
+- `activeUsers + lockedUsers == totalUsers` (invariant).
+- Status: 200 · 401 · 403.
+
+`GET /api/admin/users/{id}`, `PATCH /users/{id}/lock`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
 - `GET /api/integrations` — catalog cho user.

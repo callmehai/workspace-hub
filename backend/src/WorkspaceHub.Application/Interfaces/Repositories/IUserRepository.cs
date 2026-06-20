@@ -11,3 +11,4 @@ public interface IUserRepository : IGenericRepository<User>
     Task<int> CountAsync(CancellationToken ct = default);
     Task<User?> GetByGoogleSubAsync(string googleSub, CancellationToken ct = default);
 }
+
