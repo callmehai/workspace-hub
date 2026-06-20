@@ -61,6 +61,33 @@ public class ItemListQuerySqlTests
         CountOccurrences(sql, "SELECT").Should().Be(1);
     }
 
+    [Fact]
+    public void ItemsPagedQuery_FolderFilter_TranslatesToExistsSubquery_NotInMemory()
+    {
+        using var db = OfflineSqlServerContext();
+        var userId = Guid.NewGuid();
+        var folderId = Guid.NewGuid();
+        const int page = 1, limit = 20;
+
+        // Mirror nhánh folderId của GetPagedAsync: join qua ItemFolders bằng .Any().
+        var sql = db.Set<Item>()
+            .AsNoTracking()
+            .Where(i => i.UserId == userId && !i.IsArchived)
+            .Where(i => i.ItemFolders.Any(ifj => ifj.FolderId == folderId))
+            .OrderByDescending(i => i.OccurredAt)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .ToQueryString();
+
+        _output.WriteLine(sql);
+
+        // folderId filter dịch thành EXISTS subquery TRONG cùng 1 query (không load ItemFolders ra app
+        // rồi lọc in-memory) — đây là nhánh dễ N+1 nhất nếu viết sai. EXISTS tương quan ≠ N+1.
+        sql.Should().Contain("EXISTS");
+        sql.Should().Contain("OFFSET");
+        sql.Should().Contain("FETCH NEXT");
+    }
+
     private static int CountOccurrences(string haystack, string needle)
     {
         int count = 0, index = 0;

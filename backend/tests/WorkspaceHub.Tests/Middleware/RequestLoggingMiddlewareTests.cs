@@ -70,6 +70,19 @@ public class RequestLoggingMiddlewareTests
     }
 
     [Fact]
+    public async Task AuthenticatedRequest_FallsBackToSubClaim_WhenNoNameIdentifier()
+    {
+        // Token chỉ có "sub" (vd Google Sign-In) mà không có NameIdentifier → phải dùng nhánh fallback.
+        var userId = Guid.NewGuid();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            new[] { new Claim("sub", userId.ToString()) }, "TestAuth"));
+
+        var logger = await RunAsync(200, user: principal);
+
+        logger.Entries[0].Message.Should().Contain(userId.ToString());
+    }
+
+    [Fact]
     public async Task AnonymousRequest_LogsAnonymousUser()
     {
         var logger = await RunAsync(200);
