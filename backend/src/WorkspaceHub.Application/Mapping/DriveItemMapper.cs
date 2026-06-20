@@ -23,13 +23,13 @@ public class DriveItemMapper : IDriveItemMapper
             UserId = userId,
             Type = ItemType.File,
             Title = string.IsNullOrEmpty(file.Name) ? "(Không có tên)" : file.Name,
-            Snippet = file.MimeType ?? string.Empty, // Lưu tạm MimeType vào Snippet để UI dễ hiển thị
+            Snippet = string.Empty,
             ExternalId = file.Id,
             ConnectionId = connectionId,
             Status = ItemStatus.Inbox,
             OccurredAt = file.ModifiedTime?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
-            IsArchived = file.Trashed, // Nếu file đã xoá vào thùng rác trên Drive -> Đánh dấu Archive
+            IsArchived = false,
             MetadataJson = JsonSerializer.Serialize(metadata)
         };
     }

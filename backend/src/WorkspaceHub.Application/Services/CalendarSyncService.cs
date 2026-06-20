@@ -33,10 +33,9 @@ public class CalendarSyncService : ICalendarSyncService
 
         string? syncToken = connection.CursorType == CursorType.SyncToken ? connection.CursorValue : null;
         var result = await _gateway.SyncEventsAsync(connection, syncToken, ct);
+
         if (result.Expired)
-        {
             result = await _gateway.SyncEventsAsync(connection, null, ct);
-        }
 
         int scanned = result.Events.Count;
         int created = 0;
@@ -49,17 +48,14 @@ public class CalendarSyncService : ICalendarSyncService
                 skipped++;
                 continue;
             }
-            var item = _mapper.ToItem(ev, connection.UserId, connection.Id);
-            newItems.Add(item);
+
+            newItems.Add(_mapper.ToItem(ev, connection.UserId, connection.Id));
             existing.Add(ev.Id);
             created++;
         }
 
-        if (newItems.Any())
-        {
+        if (newItems.Count > 0)
             await _items.AddRangeAsync(newItems, ct);
-            await _items.SaveChangesAsync(ct);
-        }
 
         connection.CursorType = CursorType.SyncToken;
         connection.CursorValue = result.NextSyncToken;

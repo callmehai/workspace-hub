@@ -1,5 +1,7 @@
-﻿using Google.Apis.Auth.OAuth2;
+﻿using System.Globalization;
+using Google.Apis.Auth.OAuth2;
 using Google.Apis.Calendar.v3;
+using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Services;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
@@ -32,13 +34,9 @@ public class GoogleCalendarGateway : IGoogleCalendarGateway
         var request = service.Events.List("primary");
 
         if (!string.IsNullOrEmpty(syncToken))
-        {
-            request.SyncToken = syncToken; 
-        }
+            request.SyncToken = syncToken;
         else
-        {
-            request.TimeMin = DateTime.UtcNow.AddMonths(-3);
-        }
+            request.TimeMinDateTimeOffset = DateTimeOffset.UtcNow.AddMonths(-3);
 
         var eventsDto = new List<CalendarEventDto>();
         string? nextSyncToken = null;
@@ -53,26 +51,28 @@ public class GoogleCalendarGateway : IGoogleCalendarGateway
                 {
                     foreach (var item in response.Items)
                     {
-                        var evDto = new CalendarEventDto
+                        eventsDto.Add(new CalendarEventDto
                         {
                             Id = item.Id,
                             Title = item.Summary ?? string.Empty,
                             Snippet = item.Description ?? string.Empty,
-                            Start = item.Start?.DateTime != null ? new DateTimeOffset(item.Start.DateTime.Value) : (item.Start?.Date != null ? DateTimeOffset.Parse(item.Start.Date) : null),
-                            End = item.End?.DateTime != null ? new DateTimeOffset(item.End.DateTime.Value) : (item.End?.Date != null ? DateTimeOffset.Parse(item.End.Date) : null),
+                            Start = ParseEventDateTime(item.Start),
+                            End = ParseEventDateTime(item.End),
                             Location = item.Location,
-                            Attendees = item.Attendees?.Select(a => a.Email).ToList() ?? new List<string>(),
-                            MeetUrl = item.HangoutLink ?? item.HtmlLink,
+                            Attendees = item.Attendees?
+                                .Select(a => a.Email)
+                                .Where(e => !string.IsNullOrEmpty(e))
+                                .ToList() ?? [],
+                            MeetUrl = item.HangoutLink,
                             OccurredAt = item.UpdatedDateTimeOffset ?? DateTimeOffset.UtcNow
-                        };
-                        eventsDto.Add(evDto);
+                        });
                     }
                 }
 
                 request.PageToken = response.NextPageToken;
                 nextSyncToken = response.NextSyncToken;
 
-            } while (!string.IsNullOrEmpty(request.PageToken)); 
+            } while (!string.IsNullOrEmpty(request.PageToken));
 
             return new CalendarSyncResult(false, eventsDto, nextSyncToken);
         }
@@ -80,5 +80,16 @@ public class GoogleCalendarGateway : IGoogleCalendarGateway
         {
             return new CalendarSyncResult(true, new List<CalendarEventDto>(), null);
         }
+    }
+
+    private static DateTimeOffset? ParseEventDateTime(EventDateTime? eventTime)
+    {
+        if (eventTime?.DateTimeDateTimeOffset != null)
+            return eventTime.DateTimeDateTimeOffset;
+
+        if (!string.IsNullOrEmpty(eventTime?.Date))
+            return DateTimeOffset.Parse(eventTime.Date, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+
+        return null;
     }
 }

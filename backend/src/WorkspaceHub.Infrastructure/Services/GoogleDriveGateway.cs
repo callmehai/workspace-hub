@@ -41,14 +41,18 @@ public class GoogleDriveGateway : IGoogleDriveGateway
                 listRequest.Fields = "nextPageToken, files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed)";
                 listRequest.OrderBy = "modifiedTime desc";
 
-                var response = await listRequest.ExecuteAsync(ct);
-                if (response.Files != null)
+                string? filesPageToken = null;
+                do
                 {
-                    foreach (var file in response.Files)
+                    listRequest.PageToken = filesPageToken;
+                    var response = await listRequest.ExecuteAsync(ct);
+                    if (response.Files != null)
                     {
-                        filesDto.Add(MapToDto(file));
+                        foreach (var file in response.Files)
+                            filesDto.Add(MapToDto(file));
                     }
-                }
+                    filesPageToken = response.NextPageToken;
+                } while (!string.IsNullOrEmpty(filesPageToken));
 
                 var tokenResponse = await service.Changes.GetStartPageToken().ExecuteAsync(ct);
                 nextToken = tokenResponse.StartPageTokenValue;

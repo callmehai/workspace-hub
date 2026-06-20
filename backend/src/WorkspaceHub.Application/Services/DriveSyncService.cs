@@ -74,14 +74,9 @@ public class DriveSyncService : IDriveSyncService
             created++;
         }
 
-        // 5. Đẩy dữ liệu mới vào DB
-        if (newItems.Any())
-        {
+        if (newItems.Count > 0)
             await _items.AddRangeAsync(newItems, ct);
-            await _items.SaveChangesAsync(ct);
-        }
 
-        // 6. Cất cái thẻ đánh dấu mới (NextPageToken) vào ví (CursorValue)
         connection.CursorType = CursorType.PageToken;
         connection.CursorValue = result.NextSyncCursor;
         connection.LastSyncedAt = DateTime.UtcNow;
