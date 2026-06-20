@@ -2,6 +2,15 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-06-20] Logging: built-in ILogger + request logging middleware (SCRUM-25, phần logging)
+
+- **Quyết định:** dùng **built-in `ILogger`** (KHÔNG thêm Serilog) cho structured logging. Thêm `RequestLoggingMiddleware` log mỗi request 1 dòng completion (method/path/status/elapsed ms/userId).
+- **Lý do:** đồ án quy mô nhỏ, built-in đủ dùng và không thêm dependency; có thể nâng cấp Serilog sau nếu cần sink file/JSON. Một dòng completion (kiểu `UseSerilogRequestLogging`) đủ cho cả AC "log request/response" lẫn AC "đo response time", ít noise hơn log riêng request-in + response-out.
+- **Thứ tự middleware (quan trọng):** `RequestLoggingMiddleware` đặt **ngoài cùng**, trước `ExceptionMiddleware`. Vì ExceptionMiddleware nuốt exception và tự set status code, đặt logging bên ngoài mới đọc đúng status 5xx và đo trọn thời gian. 5xx chỉ log Error 1 lần ở ExceptionMiddleware; dòng completion log Warning, tránh trùng.
+- **EF query logging:** `EnableSensitiveDataLogging()` + `EnableDetailedErrors()` + `Database.Command=Information` **chỉ bật ở Development** (qua cờ `isDevelopment` truyền vào `AddInfrastructure`) — production không bật để khỏi lộ tham số SQL trong log.
+- **Tối ưu query (cùng SCRUM-25, làm 2026-06-20):** folder list `GetUserFoldersAsync` gỡ `Include(FolderShares)` — include chết vì folder do user sở hữu luôn map permission "Owner", không đọc FolderShares; đây cũng là 1 trong 2 collection gây cartesian explosion (folders × itemFolders × folderShares). Thêm `AsSplitQuery()` cho collection `ItemFolders` còn lại (cả `GetSharedFoldersAsync`). Items list `GetPagedAsync` xác nhận đã tối ưu sẵn — `ToQueryString()` cho ra đúng 1 SELECT có `OFFSET/FETCH` (filter/sort/paging ở DB, `AsNoTracking`, không navigation → không N+1).
+- **Descope:** AC "đo response time với data mẫu (seed)" đã bỏ khỏi SCRUM-25 — `OFFSET/FETCH` + composite index `IX_Items_User_Status_OccurredAt` đã đảm bảo độ phức tạp tốt; `elapsed ms` trong log (`RequestLoggingMiddleware`) đủ để đo bất cứ lúc nào khi chạy thật, không cần seed-script riêng. SCRUM-25 còn lại 2 AC (logging + query no-N+1) → **Done**.
+
 ## [2026-06-12] Integrations: bỏ credentials trong DB, dùng config/env (chốt scope admin)
 
 - **Quyết định:** OAuth client credentials (ClientId/ClientSecret của app với Google) đọc từ **config/env duy nhất** cho cả dev lẫn prod. Drop 2 cột `Integrations.ClientIdEncrypted/ClientSecretEncrypted` + xoá endpoint `PUT /api/connections/{key}/credentials` (một phần SCRUM-13). Ticket: SCRUM-47 (xem SPRINTS.md).

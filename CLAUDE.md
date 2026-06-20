@@ -15,10 +15,11 @@ App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provid
 ### Phase hiện tại (Sprint 4) — Mô hình B + Write-back Google + Google Sign-In
 - **Mô hình connection B:** mỗi service (Gmail/GCal/Drive) = 1 row `Connections` riêng, token riêng. User authorize riêng từng service. ✅ DB đã migrate (SCRUM-34).
 - **Google Sign-In:** đăng nhập app bằng Google, tách biệt connect-để-sync. ✅ Done (SCRUM-32/33).
-- **2 chiều bằng polling + write-back:** cron đọc như cũ (1 chiều pull); thao tác trên app ghi ngược lên Google ngay (synchronous). ⏳ SCRUM-35→38.
+- **OAuth per-service (mô hình B):** start + callback theo từng service, scope read-write. ✅ Done (SCRUM-35/36).
+- **2 chiều bằng polling + write-back:** cron đọc như cũ (1 chiều pull); thao tác trên app ghi ngược lên Google ngay (synchronous). ⏳ SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc).
   - Ghi được: Email (label/read/star/trash + gửi mới — **KHÔNG sửa nội dung**, Gmail immutable), Event (CRUD đầy đủ), File (rename/trash).
   - Conflict qua `Items.ETag` → 409.
-- Ticket đợt này: SCRUM-34→38, rồi 30/31 (scheduled email). Status chi tiết: `docs/SPRINTS.md`.
+- Kế tiếp: SCRUM-37 + 38 (song song), rồi 30/31 (scheduled email). **Phase hiện tại dừng ở SCRUM-38.** Status chi tiết: `docs/SPRINTS.md`.
 
 ### NGOÀI scope phase này (đừng code, chỉ tham khảo roadmap)
 - Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch) → phase sau (SCRUM-39→41).

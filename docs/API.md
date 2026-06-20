@@ -9,6 +9,18 @@
 - DateTime ISO 8601 UTC. Pagination ?page&limit (default 20, max 100).
 - Collection lớn → envelope `{items,total,page,limit}`; nhỏ → array.
 
+## Error format chuẩn (SCRUM-24 ✅)
+Mọi lỗi (4xx/5xx) đi qua `ExceptionMiddleware` → trả body thống nhất:
+```json
+{ "error": "NotFoundError", "message": "...", "details": [], "traceId": "..." }
+```
+- `error`: loại lỗi (`ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `BusinessRuleError`, `CsrfError`, `InternalError`).
+- `details[]`: với 400 validation = `"field: message"` mỗi lỗi; với lỗi khác = `[]`.
+- `traceId`: đối chiếu log.
+- **Mapping exception → status:** ValidationException→400 · UnauthorizedException→401 · ForbiddenException→403 · NotFoundException→404 · ConflictException→409 · BusinessRuleException→422 · CsrfException→400 · còn lại→500.
+- **500 không lộ stack trace / message nội bộ ở production** (chỉ message generic + traceId; chi tiết ghi log). Ở Development thì kèm vào `details[]` để debug.
+- Controller KHÔNG tự format lỗi — chỉ throw custom exception (`WorkspaceHub.Application.Common`) hoặc gọi `ValidateAndThrowAsync`.
+
 ## Status code (bổ sung cho write-back)
 Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409** conflict ETag · **502** provider lỗi khi ghi/đọc live.
 
@@ -24,12 +36,26 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - `POST /api/auth/google/callback` — {code, state} → verify id_token, tìm/tạo/link user, phát JWT. (400 CSRF, 401 token invalid / user khoá)
 > KHÔNG tạo Connection. Chỉ tạo/tìm User. Auto-link nếu email trùng.
 
-## Admin — không đổi
-`GET /api/admin/users`, `/users/{id}`, `PATCH /users/{id}/lock`, `GET /api/admin/stats`, `DELETE /api/admin/connections/{id}`.
+## Admin — ✅ Implemented (SCRUM-49 2026-06-19)
+`GET /api/admin/users` — danh sách user phân trang + search, Admin only.
+- Query: `?search=` (Email|FullName, case-insensitive, max 200 chars), `?page=1`, `?limit=20` (max 100).
+- Response 200: `{ items: AdminUserDto[], total, page, limit }`. AdminUserDto gồm: id, email, fullName, role, isActive, lastLoginAt, createdAt, connectionCount (tất cả connection), itemCount.
+- Status: 200 · 400 (validation) · 401 · 403.
+
+`GET /api/admin/stats` — thống kê hệ thống, Admin only.
+- Response 200: `{ totalUsers, activeUsers, lockedUsers, totalConnections, connectionsByStatus: {Active,Error,Disconnected}, totalItems, syncErrorsLast24h }`.
+- `syncErrorsLast24h` = count Connections với Status=Error VÀ LastSyncedAt!=null VÀ LastSyncedAt>=UtcNow-24h.
+- `activeUsers + lockedUsers == totalUsers` (invariant).
+- Status: 200 · 401 · 403.
+
+`GET /api/admin/users/{id}`, `PATCH /users/{id}/lock`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
 - `GET /api/integrations` — catalog cho user.
-- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (422). ⏳ SCRUM-48.
+- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (422). ✅ SCRUM-48.
+  - Request: `{ "isEnabled": true | false }`
+  - Response 200: `{ "id", "key", "displayName", "isEnabled" }`
+  - 404 key không tồn tại · 403 không phải Admin
 - ~~`PUT /api/connections/{key}/credentials`~~ — **sẽ xoá ở SCRUM-47**: admin không quản lý credentials nữa, ClientId/Secret đọc từ config/env (CHANGELOG 2026-06-12).
 
 ## Connections ⭐ (thay OAuth Connections + Service Connections)
@@ -37,9 +63,9 @@ Mô hình B: mỗi service authorize riêng, tạo 1 Connection.
 
 - `POST /api/connections/oauth/start` — `{integrationKey, serviceType, redirectUri}` → `{authorizationUrl, state}`. Scope = full của service đó (dev quyết). Mỗi lần chỉ connect 1 service. (404 integration không tồn tại, 422 serviceType không hợp lệ / provider không hỗ trợ serviceType / integration disabled)
 - `POST /api/connections/oauth/callback` — `{code, state}` → 201 tạo **1** Connection row. Response: `{integrationKey, providerAccountId, connections: [{id, serviceType, status}]}`. (400 CSRF, 400 provider từ chối/scope thiếu, 409 trùng service+account)
-- `GET /api/connections` — array (token mask). Mỗi row = 1 service.
-- `POST /api/connections/{id}/refresh` — refresh token. (422 invalid→Error)
-- `DELETE /api/connections/{id}` — 204, xoá đúng service đó. Items giữ lại (ConnectionId=NULL). KHÔNG ảnh hưởng login hay service khác.
+- `GET /api/connections` — array (token mask). Mỗi row = 1 service. ✅ SCRUM-14.
+- `POST /api/connections/{id}/refresh` — refresh token. (422 invalid→Error) ✅ SCRUM-14.
+- `DELETE /api/connections/{id}` — 204, xoá đúng service đó. Items giữ lại (ConnectionId=NULL). KHÔNG ảnh hưởng login hay service khác. ✅ SCRUM-14.
 - `POST /api/connections/{id}/sync` — 202 trigger thủ công (fallback).
 
 > Bỏ /api/services/* (mô hình A). Toggle = connect/disconnect cả Connection.

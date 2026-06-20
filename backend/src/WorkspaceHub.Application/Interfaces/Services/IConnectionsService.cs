@@ -1,3 +1,4 @@
+using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.OAuth.Core;
 
 namespace WorkspaceHub.Application.Interfaces.Services;
@@ -25,7 +26,24 @@ public interface IConnectionsService
         Guid userId,
         CancellationToken ct = default);
 
-    // TODO SCRUM-14 (DisconnectAsync): FK Items/ScheduledEmails → Connections là NoAction ở DB,
-    // nên trước khi xoá Connection PHẢI: (1) UPDATE Items SET ConnectionId = NULL,
-    // (2) cancel/xoá ScheduledEmails Pending của connection đó — xoá thẳng sẽ FK violation.
+    Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default);
+
+    /// <summary>
+    /// SCRUM-14: Lấy danh sách connections của user (token masked).
+    /// </summary>
+    Task<IReadOnlyList<ConnectionDto>> GetConnectionsAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// SCRUM-14: Ngắt kết nối — xoá Connection, Items.ConnectionId SET NULL, delete ScheduledEmails.
+    /// FK Items/ScheduledEmails → Connections là NoAction ở DB nên phải xử lý ở service layer.
+    /// </summary>
+    Task DisconnectAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// SCRUM-14: Refresh token của connection. 422 nếu refresh token invalid → set Status = Error.
+    /// </summary>
+    Task<RefreshConnectionResponse> RefreshConnectionAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
+
+    Task<ManualSyncResult> TriggerManualSyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
 }
+

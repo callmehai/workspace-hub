@@ -2,7 +2,8 @@
   "Logging": {
     "LogLevel": {
       "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Information"
     }
   },
   "AllowedHosts": "*",
@@ -13,13 +14,12 @@
     "Secret": "workspace-hub-super-secret-key-change-in-production-32chars",
     "Issuer": "WorkspaceHub",
     "Audience": "WorkspaceHub",
-    "ExpiresIn": 3600,
-    "Key": "YOUR_JWT_SECRET_KEY_MIN_32_CHARS_LONG"
+    "ExpiresIn": 3600
   },
   "Google": {
     "RedirectUri": "http://localhost:5173/oauth/callback"
   },
-  "Dev": {
+  "OAuth": {
     "google": {
       "ClientId": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
       "ClientSecret": "YOUR_GOOGLE_CLIENT_SECRET"

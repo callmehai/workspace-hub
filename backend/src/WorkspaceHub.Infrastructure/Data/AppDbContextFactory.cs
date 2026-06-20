@@ -24,7 +24,7 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 
         var conn = Environment.GetEnvironmentVariable("WORKSPACEHUB_CONNECTION")
             ?? config.GetConnectionString("Default")
-            ?? "Server=localhost;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True";
+            ?? "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True";
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlServer(conn)

@@ -1,7 +1,11 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.OAuth.Core;
@@ -11,33 +15,48 @@ using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Application.Services;
 
-/// <summary>
-/// Dispatcher — nhận request từ controller, resolve đúng IProviderStrategy theo integrationKey,
-/// delegate việc build URL xuống strategy. Thêm provider mới = thêm strategy + đăng ký DI, không sửa file này.
-/// </summary>
+/// <summary>Chọn đúng strategy theo provider, rồi để việc thực thi xuống strategy đó.</summary>
 public class ConnectionsService : IConnectionsService
 {
     private readonly IIntegrationRepository _integrations;
     private readonly IConnectionRepository _connections;
+    private readonly IItemRepository _items;
     private readonly ITokenProtector _tokenProtector;
     private readonly IDistributedCache _cache;
     private readonly IReadOnlyDictionary<string, IProviderStrategy> _strategies;
     private readonly IConfiguration _config;
+    private readonly IOAuthTokenClient _tokenClient;
+    private readonly IScheduledEmailRepository _scheduledEmails;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IMemoryCache _memoryCache;
+    private readonly ILogger<ConnectionsService> _logger;
 
     public ConnectionsService(
         IIntegrationRepository integrations,
         IConnectionRepository connections,
+        IItemRepository items,
         ITokenProtector tokenProtector,
         IDistributedCache cache,
         IEnumerable<IProviderStrategy> strategies,
-        IConfiguration config)
+        IConfiguration config,
+        IOAuthTokenClient tokenClient,
+        IScheduledEmailRepository scheduledEmails,
+        IServiceScopeFactory scopeFactory,
+        IMemoryCache memoryCache,
+        ILogger<ConnectionsService> logger)
     {
         _integrations = integrations;
         _connections = connections;
+        _items = items;
         _tokenProtector = tokenProtector;
         _cache = cache;
         _strategies = strategies.ToDictionary(s => s.ProviderKey, StringComparer.OrdinalIgnoreCase);
         _config = config;
+        _tokenClient = tokenClient;
+        _scheduledEmails = scheduledEmails;
+        _scopeFactory = scopeFactory;
+        _memoryCache = memoryCache;
+        _logger = logger;
     }
 
     public async Task<InitiateConnectionResult> InitiateConnectionAsync(
@@ -47,7 +66,7 @@ public class ConnectionsService : IConnectionsService
         Guid userId,
         CancellationToken ct = default)
     {
-        // Validate serviceType sớm — fail fast trước khi hit DB hay cache.
+        // Kiểm tra serviceType hợp lệ trước khi làm gì khác.
         if (!Enum.TryParse<ServiceType>(serviceType, ignoreCase: true, out _))
             throw new BusinessRuleException($"ServiceType '{serviceType}' không hợp lệ");
 
@@ -65,7 +84,7 @@ public class ConnectionsService : IConnectionsService
 
         var state = Guid.NewGuid().ToString("N");
 
-        // Cache integrationKey + userId + serviceType — callback xác minh đúng user và service.
+        // Lưu thông tin phiên kết nối vào cache — dùng để xác minh khi Google redirect về.
         var payload = JsonSerializer.Serialize(new OAuthStatePayload(integrationKey, userId, redirectUri, serviceType));
         var cacheOptions = new DistributedCacheEntryOptions
         {
@@ -73,8 +92,8 @@ public class ConnectionsService : IConnectionsService
         };
         await _cache.SetStringAsync($"oauth:state:{state}", payload, cacheOptions, ct);
 
-        var context = new ProviderStrategyContext(clientId, redirectUri, state, integration, serviceType);
-        return await strategy.BuildAuthUrlAsync(context, ct);
+        var request = new BuildAuthUrlRequest(clientId, redirectUri, state, integration, serviceType);
+        return await strategy.BuildAuthUrlAsync(request, ct);
     }
 
     public async Task<CompleteConnectionResult> CompleteConnectionAsync(
@@ -83,7 +102,7 @@ public class ConnectionsService : IConnectionsService
         Guid userId,
         CancellationToken ct = default)
     {
-        // Step 1 — Verify + xoá state (one-time use).
+        // Bước 1 — Kiểm tra state còn hợp lệ, xoá ngay để không dùng lại được.
         var cacheKey = $"oauth:state:{state}";
         var cached = await _cache.GetStringAsync(cacheKey, ct);
         if (cached is null)
@@ -94,18 +113,18 @@ public class ConnectionsService : IConnectionsService
         var payload = JsonSerializer.Deserialize<OAuthStatePayload>(cached)
             ?? throw new CsrfException("State không hợp lệ hoặc đã hết hạn");
 
-        // Xác minh state này đúng là do userId hiện tại tạo ra — chặn OAuth session hijacking.
+        // Đảm bảo state này đúng là do user hiện tại tạo ra.
         if (payload.UserId != userId)
             throw new CsrfException("State không hợp lệ hoặc đã hết hạn");
 
         var integrationKey = payload.IntegrationKey;
         var redirectUri = payload.RedirectUri;
 
-        // Step 2 — Resolve strategy.
+        // Bước 2 — Tìm strategy phù hợp với provider.
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
             throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
 
-        // Step 3 — Load Integration + decrypt credentials.
+        // Bước 3 — Lấy thông tin integration và credentials từ config.
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
@@ -114,16 +133,14 @@ public class ConnectionsService : IConnectionsService
         var clientSecret = _config[$"OAuth:{integrationKey}:ClientSecret"]
             ?? throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
 
-        // Step 4 — Delegate provider-specific exchange to strategy.
-        var context = new CompleteContext(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
-        var tokenResult = await strategy.ExchangeCodeAsync(context, ct);
+        // Bước 4 — Đổi code lấy token (logic riêng của từng provider).
+        var request = new ExchangeCodeRequest(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
+        var tokenResult = await strategy.ExchangeCodeAsync(request, ct);
 
         if (tokenResult.GrantedServices.Count == 0)
             throw new BusinessRuleException("Provider không cấp quyền cho service nào");
 
-        // Step 5 — Encrypt tokens.
-        // RefreshToken null/empty (provider không trả, vd Google khi re-consent) → lưu chuỗi rỗng,
-        // KHÔNG encrypt chuỗi rỗng. Convention: RefreshTokenEncrypted == "" nghĩa là "không có refresh token".
+        // Bước 5 — Mã hoá token trước khi lưu. RefreshToken rỗng thì giữ nguyên chuỗi rỗng.
         var accessTokenEncrypted = _tokenProtector.Protect(tokenResult.AccessToken);
         var refreshTokenEncrypted = string.IsNullOrEmpty(tokenResult.RefreshToken)
             ? string.Empty
@@ -131,17 +148,16 @@ public class ConnectionsService : IConnectionsService
         var expiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn);
         var provider = Enum.Parse<ProviderType>(integration.Provider);
 
-        // Step 6 — Mô hình B: mỗi service 1 Connection độc lập.
-        // Đã tồn tại → 409 (user phải disconnect trước rồi mới connect lại).
+        // Bước 6 — Tạo một Connection riêng cho mỗi service được cấp quyền.
         var results = new List<ConnectionResult>();
-        foreach (var serviceType in tokenResult.GrantedServices)
+        foreach (var svcType in tokenResult.GrantedServices)
         {
             var existing = await _connections.GetByUniqueKeyAsync(
-                userId, provider, serviceType, tokenResult.ProviderAccountId, ct);
+                userId, provider, svcType, tokenResult.ProviderAccountId, ct);
 
             if (existing is not null)
                 throw new ConflictException(
-                    $"Bạn đã kết nối {serviceType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
+                    $"Bạn đã kết nối {svcType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
 
             var connection = new Connection
             {
@@ -149,7 +165,7 @@ public class ConnectionsService : IConnectionsService
                 UserId = userId,
                 IntegrationId = integration.Id,
                 Provider = provider,
-                ServiceType = serviceType,
+                ServiceType = svcType,
                 ProviderAccountId = tokenResult.ProviderAccountId,
                 AccessTokenEncrypted = accessTokenEncrypted,
                 RefreshTokenEncrypted = refreshTokenEncrypted,
@@ -164,10 +180,244 @@ public class ConnectionsService : IConnectionsService
                 connection.Id, connection.ServiceType.ToString(), connection.Status.ToString()));
         }
 
-        // Step 7 — Lưu DB.
+        // Bước 7 — Lưu tất cả vào DB.
         await _connections.SaveChangesAsync(ct);
 
         return new CompleteConnectionResult(integrationKey, tokenResult.ProviderAccountId, results);
     }
 
+    public async Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default)
+    {
+        var integration = await _integrations.GetByKeyAsync(key, ct)
+            ?? throw new NotFoundException($"Integration '{key}' không tồn tại");
+
+        integration.IsEnabled = isEnabled;
+        _integrations.Update(integration);
+        await _integrations.SaveChangesAsync(ct);
+
+        return new IntegrationResponse(integration.Id, integration.Key, integration.DisplayName, integration.IsEnabled);
+    }
+
+    // ───────────── SCRUM-14: List / Disconnect / Refresh ─────────────
+
+    public async Task<IReadOnlyList<ConnectionDto>> GetConnectionsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var connections = await _connections.GetByUserIdAsync(userId, ct);
+
+        return connections.Select(c => new ConnectionDto
+        {
+            Id = c.Id,
+            Provider = c.Provider.ToString(),
+            ServiceType = c.ServiceType.ToString(),
+            ProviderAccountId = c.ProviderAccountId,
+            MaskedToken = MaskToken(c.AccessTokenEncrypted),
+            Status = c.Status.ToString(),
+            ExpiresAt = c.ExpiresAt,
+            LastSyncedAt = c.LastSyncedAt,
+            CreatedAt = c.CreatedAt
+        }).ToList().AsReadOnly();
+    }
+
+    public async Task DisconnectAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var connection = await _connections.GetByIdTrackedAsync(connectionId, ct)
+            ?? throw new NotFoundException("Connection", connectionId);
+
+        if (connection.UserId != userId)
+            throw new ForbiddenException("You do not have permission to disconnect this connection.");
+
+        // FK NoAction ở DB → phải xử lý ở service layer trước khi xoá Connection.
+        // Dùng explicit transaction để bọc cả ExecuteUpdate/DeleteAsync (SQL trực tiếp) và change tracker lại.
+
+        await _connections.ExecuteInTransactionAsync(async () =>
+        {
+            // (1) Items.ConnectionId SET NULL (direct SQL)
+            await _items.NullifyConnectionIdAsync(connectionId, ct);
+
+            // (2) Xoá ScheduledEmails theo ConnectionId (direct SQL)
+            await _scheduledEmails.DeleteByConnectionIdAsync(connectionId, ct);
+
+            // (3) Xoá Connection (tracked entity → SaveChanges)
+            _connections.Remove(connection);
+            await _connections.SaveChangesAsync(ct);
+        }, ct);
+    }
+
+    public async Task<RefreshConnectionResponse> RefreshConnectionAsync(
+        Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var connection = await _connections.GetByIdTrackedAsync(connectionId, ct)
+            ?? throw new NotFoundException("Connection", connectionId);
+
+        if (connection.UserId != userId)
+            throw new ForbiddenException("You do not have permission to refresh this connection.");
+
+        // Lấy refresh token đã mã hoá → giải mã
+        if (string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
+        {
+            connection.Status = ConnectionStatus.Error;
+            connection.LastError = "No refresh token available";
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+            throw new BusinessRuleException("Refresh token is not available. Please reconnect.");
+        }
+
+        string refreshToken;
+        try
+        {
+            refreshToken = _tokenProtector.Unprotect(connection.RefreshTokenEncrypted);
+        }
+        catch
+        {
+            connection.Status = ConnectionStatus.Error;
+            connection.LastError = "Failed to decrypt refresh token";
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+            throw new BusinessRuleException("Refresh token is invalid. Please reconnect.");
+        }
+
+        // Lấy integration để biết token endpoint
+        var integration = await _integrations.GetByIdAsync(connection.IntegrationId, ct)
+            ?? throw new NotFoundException("Integration", connection.IntegrationId);
+
+        var clientId = _config[$"OAuth:{integration.Key}:ClientId"]
+            ?? throw new BusinessRuleException($"Missing ClientId config for '{integration.Key}'");
+        var clientSecret = _config[$"OAuth:{integration.Key}:ClientSecret"]
+            ?? throw new BusinessRuleException($"Missing ClientSecret config for '{integration.Key}'");
+
+        // Gọi provider để refresh token
+        try
+        {
+            var formData = new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = refreshToken,
+                ["client_id"] = clientId,
+                ["client_secret"] = clientSecret
+            };
+
+            var responseJson = await _tokenClient.PostFormAsync(integration.TokenEndpoint, formData, ct);
+            var tokenResponse = JsonSerializer.Deserialize<JsonElement>(responseJson);
+
+            // Parse access_token và expires_in từ response
+            if (!tokenResponse.TryGetProperty("access_token", out var accessTokenEl))
+            {
+                // Provider trả lỗi → set Status = Error, throw 422
+                connection.Status = ConnectionStatus.Error;
+                connection.LastError = "Provider did not return a new access token";
+                _connections.Update(connection);
+                await _connections.SaveChangesAsync(ct);
+                throw new BusinessRuleException("Refresh token is invalid. Please reconnect.");
+            }
+
+            var newAccessToken = accessTokenEl.GetString()!;
+            var expiresIn = tokenResponse.TryGetProperty("expires_in", out var expiresInEl)
+                ? expiresInEl.GetInt32()
+                : 3600;
+
+            // Cập nhật connection
+            connection.AccessTokenEncrypted = _tokenProtector.Protect(newAccessToken);
+            connection.ExpiresAt = DateTime.UtcNow.AddSeconds(expiresIn);
+            connection.Status = ConnectionStatus.Active;
+            connection.LastError = null;
+
+            // Nếu provider trả refresh_token mới (rotation), cập nhật luôn
+            if (tokenResponse.TryGetProperty("refresh_token", out var newRefreshEl))
+            {
+                var newRefresh = newRefreshEl.GetString();
+                if (!string.IsNullOrEmpty(newRefresh))
+                {
+                    connection.RefreshTokenEncrypted = _tokenProtector.Protect(newRefresh);
+                }
+            }
+
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+
+            return new RefreshConnectionResponse
+            {
+                ConnectionId = connection.Id,
+                ExpiresAt = connection.ExpiresAt,
+                Status = connection.Status.ToString()
+            };
+        }
+        catch (BusinessRuleException)
+        {
+            throw; // re-throw our own exceptions
+        }
+        catch (Exception ex)
+        {
+            // Provider lỗi → set Status = Error, throw 422
+            connection.Status = ConnectionStatus.Error;
+            connection.LastError = ex.Message;
+            _connections.Update(connection);
+            await _connections.SaveChangesAsync(ct);
+            throw new BusinessRuleException("Refresh token is invalid. Please reconnect.");
+        }
+    }
+
+    // ───────────── Helpers ─────────────
+
+    public async Task<ManualSyncResult> TriggerManualSyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var conn = await _connections.GetByIdTrackedAsync(connectionId, ct);
+        if (conn == null) throw new NotFoundException("Connection", connectionId);
+        if (conn.UserId != userId) throw new ForbiddenException("You do not have permission to sync this connection.");
+
+        var cacheKey = $"manual_sync_throttle_{connectionId}";
+        if (_memoryCache.TryGetValue(cacheKey, out _))
+        {
+            return new ManualSyncResult(429);
+        }
+
+        _memoryCache.Set(cacheKey, true, TimeSpan.FromSeconds(60));
+
+        var jobId = Guid.NewGuid();
+
+        _ = Task.Run(async () =>
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var syncService = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
+            var bgRepo = scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<ConnectionsService>>();
+
+            try
+            {
+                var scopedConn = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
+                if (scopedConn == null) return;
+
+                if (scopedConn.ServiceType == ServiceType.Gmail)
+                {
+                    await syncService.SyncConnectionAsync(scopedConn, 50, CancellationToken.None);
+                }
+                else
+                {
+                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Manual sync failed for connection {ConnectionId}", connectionId);
+
+                var connToUpdate = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
+                if (connToUpdate != null)
+                {
+                    connToUpdate.LastError = ex.Message;
+                    await bgRepo.SaveChangesAsync(CancellationToken.None);
+                }
+            }
+        });
+
+        return new ManualSyncResult(202, jobId);
+    }
+
+    /// <summary>
+    /// Mask token: trả về "********" để giấu ciphertext.
+    /// CONVENTIONS.md: "Token response luôn mask"
+    /// </summary>
+    private static string MaskToken(string encryptedToken)
+    {
+        return "********";
+    }
 }
+

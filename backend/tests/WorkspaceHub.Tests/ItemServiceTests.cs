@@ -1,6 +1,8 @@
+using Microsoft.Extensions.Logging;
 using Moq;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.Services;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
@@ -15,6 +17,8 @@ public class ItemServiceTests
 {
     private readonly Mock<IItemRepository> _repoMock;
     private readonly Mock<IFolderRepository> _folderRepoMock;
+    private readonly Mock<IConnectionHealthChecker> _healthCheckerMock;
+    private readonly Mock<ILogger<ItemService>> _loggerMock;
     private readonly ItemService _sut; // System Under Test
     private readonly Guid _userId = Guid.NewGuid();
 
@@ -22,7 +26,9 @@ public class ItemServiceTests
     {
         _repoMock = new Mock<IItemRepository>();
         _folderRepoMock = new Mock<IFolderRepository>();
-        _sut = new ItemService(_repoMock.Object, _folderRepoMock.Object);
+        _healthCheckerMock = new Mock<IConnectionHealthChecker>();
+        _loggerMock = new Mock<ILogger<ItemService>>();
+        _sut = new ItemService(_repoMock.Object, _folderRepoMock.Object, _healthCheckerMock.Object, _loggerMock.Object);
     }
 
     // ───────────── Helper ─────────────
@@ -295,5 +301,36 @@ public class ItemServiceTests
             It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<ItemStatus?>(),
             It.IsAny<ItemType?>(), It.IsAny<bool?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetItemByIdAsync_ReturnsMappedResponse_WhenItemExistsAndBelongsToUser()
+    {
+        // Arrange
+        var item = CreateItem(_userId, title: "Test Item");
+        _repoMock
+            .Setup(r => r.GetByIdAndUserAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+
+        // Act
+        var result = await _sut.GetItemByIdAsync(_userId, item.Id);
+
+        // Assert
+        Assert.Equal(item.Id, result.Id);
+        Assert.Equal("Test Item", result.Title);
+    }
+
+    [Fact]
+    public async Task GetItemByIdAsync_ThrowsNotFoundException_WhenItemDoesNotExistOrDoesNotBelongToUser()
+    {
+        // Arrange
+        var itemId = Guid.NewGuid();
+        _repoMock
+            .Setup(r => r.GetByIdAndUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.NotFoundException>(() =>
+            _sut.GetItemByIdAsync(_userId, itemId));
     }
 }

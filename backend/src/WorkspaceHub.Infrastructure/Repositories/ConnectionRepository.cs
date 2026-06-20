@@ -22,4 +22,28 @@ public class ConnectionRepository : GenericRepository<Connection>, IConnectionRe
                 c.Provider == provider &&
                 c.ServiceType == serviceType &&
                 c.ProviderAccountId == providerAccountId, ct);
+
+    public async Task<IReadOnlyList<Connection>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
+        => await Set
+            .AsNoTracking()
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.CreatedAt)
+            .ToListAsync(ct);
+
+    public async Task<Connection?> GetByIdTrackedAsync(Guid id, CancellationToken ct = default)
+        => await Set.FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    // Reserved for webhook phase (SCRUM-39+).
+    public async Task<IReadOnlyList<Connection>> GetActiveConnectionsToSyncAsync(CancellationToken ct = default)
+        => await Set
+            .Include(c => c.Integration)
+            .Where(c => c.Status == ConnectionStatus.Active && c.Integration.IsEnabled)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Connection>> GetActiveConnectionsForUserAsync(Guid userId, CancellationToken ct = default)
+        => await Set
+            .Include(c => c.Integration)
+            .Where(c => c.UserId == userId && c.Status == ConnectionStatus.Active && c.Integration.IsEnabled)
+            .ToListAsync(ct);
 }
+

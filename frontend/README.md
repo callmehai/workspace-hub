@@ -26,8 +26,11 @@ Cần **backend chạy ở http://localhost:5118** (xem `../backend/README.md`).
 
 ```
 src/
-  pages/        # *Page.tsx — Login, Register, Inbox
-  components/   # AppLayout (shell), ProtectedRoute (token guard)
+  pages/        # Login, RegisterPage, Inbox, Projects
+  layouts/      # MainLayout (shell sau đăng nhập)
+  components/   # ProtectedRoute (token guard), layout/, ...
+  context/      # AuthProvider (auth-context)
+  hooks/        # useAuth
   lib/api.ts    # axios instance + JWT interceptor + 401 → /login
   App.tsx       # Router + QueryClient + Toaster
   main.tsx
@@ -44,5 +47,5 @@ tailwind.config.js
 
 ## Config
 
-- Dev: không cần `.env` (proxy lo). 
+- Dev: không cần `.env` (proxy lo).
 - Prod: set `VITE_API_URL` trỏ backend đã deploy (xem `.env.example`).

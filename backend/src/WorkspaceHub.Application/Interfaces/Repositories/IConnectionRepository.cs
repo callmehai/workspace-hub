@@ -14,4 +14,17 @@ public interface IConnectionRepository : IGenericRepository<Connection>
         ServiceType serviceType,
         string providerAccountId,
         CancellationToken ct = default);
+
+    /// <summary>Lấy tất cả connections của user (AsNoTracking cho read).</summary>
+    Task<IReadOnlyList<Connection>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Lấy connection theo ID (tracked, để update/delete).</summary>
+    Task<Connection?> GetByIdTrackedAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Lấy các connection đang Active và Integration được Enable để background sync.</summary>
+    // Reserved for webhook phase (SCRUM-39+).
+    Task<IReadOnlyList<Connection>> GetActiveConnectionsToSyncAsync(CancellationToken ct = default);
+
+    /// <summary>Lấy các connection Active + Integration Enabled của user cụ thể (on-demand sync).</summary>
+    Task<IReadOnlyList<Connection>> GetActiveConnectionsForUserAsync(Guid userId, CancellationToken ct = default);
 }
