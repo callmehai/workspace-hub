@@ -59,10 +59,12 @@ public class CsrfException : Exception
 }
 
 /// <summary>
-/// Lỗi 502 — Lỗi từ phía Provider (3rd party API).
+/// Lỗi 502 — Provider (Google) trả về lỗi không phải expired/not-found.
+/// Ví dụ: 403 thiếu scope, 429 rate limit, 5xx server error.
 /// Middleware sẽ map sang HTTP 502 Bad Gateway.
 /// </summary>
 public class ProviderException : Exception
 {
     public ProviderException(string message) : base(message) { }
+    public ProviderException(string message, Exception inner) : base(message, inner) { }
 }

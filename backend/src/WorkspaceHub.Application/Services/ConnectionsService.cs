@@ -79,8 +79,9 @@ public class ConnectionsService : IConnectionsService
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
             throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
 
-        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"];
+        if (string.IsNullOrEmpty(clientId))
+            throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
 
         var state = Guid.NewGuid().ToString("N");
 
@@ -128,10 +129,12 @@ public class ConnectionsService : IConnectionsService
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
-        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
-        var clientSecret = _config[$"OAuth:{integrationKey}:ClientSecret"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"];
+        if (string.IsNullOrEmpty(clientId))
+            throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
+        var clientSecret = _config[$"OAuth:{integrationKey}:ClientSecret"];
+        if (string.IsNullOrEmpty(clientSecret))
+            throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
 
         // Bước 4 — Đổi code lấy token (logic riêng của từng provider).
         var request = new ExchangeCodeRequest(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
@@ -280,10 +283,12 @@ public class ConnectionsService : IConnectionsService
         var integration = await _integrations.GetByIdAsync(connection.IntegrationId, ct)
             ?? throw new NotFoundException("Integration", connection.IntegrationId);
 
-        var clientId = _config[$"OAuth:{integration.Key}:ClientId"]
-            ?? throw new BusinessRuleException($"Missing ClientId config for '{integration.Key}'");
-        var clientSecret = _config[$"OAuth:{integration.Key}:ClientSecret"]
-            ?? throw new BusinessRuleException($"Missing ClientSecret config for '{integration.Key}'");
+        var clientId = _config[$"OAuth:{integration.Key}:ClientId"];
+        if (string.IsNullOrEmpty(clientId))
+            throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integration.Key}'");
+        var clientSecret = _config[$"OAuth:{integration.Key}:ClientSecret"];
+        if (string.IsNullOrEmpty(clientSecret))
+            throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integration.Key}'");
 
         // Gọi provider để refresh token
         try
@@ -358,6 +363,8 @@ public class ConnectionsService : IConnectionsService
 
     // ───────────── Helpers ─────────────
 
+    private const int GmailDefaultBatchSize = 50;
+
     public async Task<ManualSyncResult> TriggerManualSyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
     {
         var conn = await _connections.GetByIdTrackedAsync(connectionId, ct);
@@ -377,7 +384,6 @@ public class ConnectionsService : IConnectionsService
         _ = Task.Run(async () =>
         {
             using var scope = _scopeFactory.CreateScope();
-            var syncService = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
             var bgRepo = scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<ConnectionsService>>();
 
@@ -386,22 +392,35 @@ public class ConnectionsService : IConnectionsService
                 var scopedConn = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
                 if (scopedConn == null) return;
 
-                if (scopedConn.ServiceType == ServiceType.Gmail)
+                switch (scopedConn.ServiceType)
                 {
-                    await syncService.SyncConnectionAsync(scopedConn, 50, CancellationToken.None);
-                }
-                else
-                {
-                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
+                    case ServiceType.Gmail:
+                        var gmailSync = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
+                        await gmailSync.SyncConnectionAsync(scopedConn, GmailDefaultBatchSize, CancellationToken.None);
+                        break;
+                    case ServiceType.GCal:
+                        var calendarSync = scope.ServiceProvider.GetRequiredService<ICalendarSyncService>();
+                        await calendarSync.SyncConnectionAsync(scopedConn, CancellationToken.None);
+                        break;
+                    case ServiceType.Drive:
+                        var driveSync = scope.ServiceProvider.GetRequiredService<IDriveSyncService>();
+                        await driveSync.SyncConnectionAsync(scopedConn, CancellationToken.None);
+                        break;
+                    default:
+                        logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
+                        break;
                 }
             }
             catch (Exception ex)
             {
+                // GoogleApiException từ provider (403/429/5xx) sẽ bị bắt ở đây —
+                // ghi vào LastError + đánh Status=Error để UI hiển thị trạng thái lỗi.
                 logger.LogError(ex, "Manual sync failed for connection {ConnectionId}", connectionId);
 
                 var connToUpdate = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
                 if (connToUpdate != null)
                 {
+                    connToUpdate.Status = ConnectionStatus.Error;
                     connToUpdate.LastError = ex.Message;
                     await bgRepo.SaveChangesAsync(CancellationToken.None);
                 }

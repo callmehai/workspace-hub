@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using WorkspaceHub.Application.Interfaces.Services;
+using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.OAuth.Core;
 using WorkspaceHub.Application.OAuth.Providers.Google;
 using WorkspaceHub.Application.OAuth.Providers.Jira;
@@ -31,6 +32,14 @@ public static class DependencyInjection
         services.AddScoped<WorkspaceHub.Application.Mapping.IGmailItemMapper, WorkspaceHub.Application.Mapping.GmailItemMapper>();
         services.AddScoped<WorkspaceHub.Application.Interfaces.Services.IGmailSyncService, WorkspaceHub.Application.Services.GmailSyncService>();
         services.AddScoped<IConnectionHealthChecker, ConnectionHealthChecker>();
+
+        // Đăng ký cho Calendar
+        services.AddScoped<ICalendarItemMapper, CalendarItemMapper>();
+        services.AddScoped<ICalendarSyncService, CalendarSyncService>();
+        // Đăng ký cho Drive
+        services.AddScoped<IDriveItemMapper, DriveItemMapper>();
+        services.AddScoped<IDriveSyncService, DriveSyncService>();
+        services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
 
         return services;
     }

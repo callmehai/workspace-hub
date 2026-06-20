@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Memory;
 using WorkspaceHub.Application.DTOs.Connections;
 using WorkspaceHub.Application.Interfaces.Services;
 
@@ -10,14 +9,17 @@ namespace WorkspaceHub.Api.Controllers;
 public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
-    private readonly IGmailSyncService _syncService;
+    private readonly IConnectionSyncDispatcher _syncDispatcher;
+    private readonly IGmailSyncService _gmailSync;
 
     public ConnectionsController(
         IConnectionsService connections,
-        IGmailSyncService syncService)
+        IConnectionSyncDispatcher syncDispatcher,
+        IGmailSyncService gmailSync)
     {
         _connections = connections;
-        _syncService = syncService;
+        _syncDispatcher = syncDispatcher;
+        _gmailSync = gmailSync;
     }
 
     // ───────────── OAuth flow ─────────────
@@ -95,26 +97,18 @@ public class ConnectionsController : ApiControllerBase
     [HttpGet("{id:guid}/gmail-profile")]
     public async Task<IActionResult> GetGmailProfile(Guid id, CancellationToken ct)
     {
-        return Ok(await _syncService.GetProfileAsync(id, CurrentUserId, ct));
+        return Ok(await _gmailSync.GetProfileAsync(id, CurrentUserId, ct));
     }
 
     [HttpGet("{id:guid}/gmail-sample")]
     public async Task<IActionResult> GetGmailSample(Guid id, CancellationToken ct)
     {
-        return Ok(await _syncService.GetSampleAsync(id, CurrentUserId, ct));
+        return Ok(await _gmailSync.GetSampleAsync(id, CurrentUserId, ct));
     }
+
+    // ───────────── Dynamic Sync ─────────────
 
     [HttpPost("{id:guid}/sync")]
-    public async Task<IActionResult> SyncConnectionFallback(Guid id, CancellationToken ct)
-    {
-        var result = await _connections.TriggerManualSyncAsync(id, CurrentUserId, ct);
-        
-        return result.StatusCode switch
-        {
-            429 => StatusCode(429),
-            202 => Accepted(new { result.JobId }),
-            _ => StatusCode(500)
-        };
-    }
+    public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
+        => Ok(await _syncDispatcher.SyncAsync(id, CurrentUserId, ct));
 }
-
