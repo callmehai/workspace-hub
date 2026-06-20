@@ -26,24 +26,6 @@ public class DriveSyncService : IDriveSyncService
         _connections = connections;
     }
 
-    private async Task<Connection> GetValidConnectionAsync(Guid connectionId, Guid userId, CancellationToken ct)
-    {
-        var conn = await _connections.GetByIdAsync(connectionId, ct);
-        if (conn is null || conn.UserId != userId)
-            throw new WorkspaceHub.Application.Common.NotFoundException("Connection", connectionId);
-
-        if (conn.ServiceType != ServiceType.Drive)
-            throw new WorkspaceHub.Application.Common.BusinessRuleException("Kết nối này không phải Google Drive");
-
-        return conn;
-    }
-
-    public async Task<SyncResult> SyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
-    {
-        var conn = await GetValidConnectionAsync(connectionId, userId, ct);
-        return await SyncConnectionAsync(conn, ct);
-    }
-
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, CancellationToken ct = default)
     {
         // 1. Lấy danh sách ID đã lưu để tránh tạo trùng item
@@ -101,7 +83,7 @@ public class DriveSyncService : IDriveSyncService
 
         // 6. Cất cái thẻ đánh dấu mới (NextPageToken) vào ví (CursorValue)
         connection.CursorType = CursorType.PageToken;
-        connection.CursorValue = result.NextPageToken;
+        connection.CursorValue = result.NextSyncCursor;
         connection.LastSyncedAt = DateTime.UtcNow;
         connection.Status = ConnectionStatus.Active;
         connection.LastError = null;
@@ -109,6 +91,6 @@ public class DriveSyncService : IDriveSyncService
         _connections.Update(connection);
         await _connections.SaveChangesAsync(ct);
 
-        return new SyncResult(scanned, created, skipped, result.NextPageToken);
+        return new SyncResult(scanned, created, skipped, result.NextSyncCursor);
     }
 }

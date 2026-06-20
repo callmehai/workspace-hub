@@ -36,7 +36,7 @@ workspace-hub-plan/
 │   │   └── WorkspaceHub.Api/             # Controllers, Program.cs, appsettings
 │   └── tests/WorkspaceHub.Tests/
 └── frontend/                                   # Vite + React + TypeScript
-    └── src/{pages, components, layouts, context, lib, services, types}
+    └── src/{pages, components, layouts, context, hooks, lib, types}
 ```
 
 ---
@@ -73,7 +73,7 @@ npm install
 npm run dev                                   # http://localhost:5173
 ```
 
-Health check: `GET /api/health` → `{api:"ok", db:"ok"}`.
+Health check: `GET /api/health` (AllowAnonymous) → `{status:"Healthy", database:"Connected", userCount, serverTimeUtc}`.
 
 ---
 
@@ -120,21 +120,22 @@ feature/* ← feature/SCRUM-x-mo-ta
 
 ---
 
-## 📋 Trạng thái (2026-06-11 — chi tiết & cập nhật: [`docs/SPRINTS.md`](docs/SPRINTS.md))
+## 📋 Trạng thái (2026-06-18 — chi tiết & cập nhật: [`docs/SPRINTS.md`](docs/SPRINTS.md))
 
 ### ✅ Done
 - Nền tảng: solution + clean architecture, EF schema + migrations, Data Protection, repo/branching (SCRUM-5→8)
 - Auth: register/login BCrypt+JWT, middleware + `/api/auth/me`, role-based authorization (SCRUM-9→11)
-- OAuth Google: start flow + callback + token encrypted (SCRUM-12/13)
-- Workspace: Folder CRUD, Items list + filter + pagination + search (SCRUM-18/19)
+- OAuth Google: start flow + callback + token encrypted (SCRUM-12/13), connection list/disconnect/refresh (SCRUM-14)
+- Workspace: Folder CRUD, Items list + filter + pagination + search (SCRUM-18/19), Kanban + Note + ItemFolders (SCRUM-20)
 - FE: setup routing/layout/protected route (SCRUM-21)
-- **Sprint 4:** Users multi-auth + Google Sign-In (SCRUM-32/33), migration mô hình B — bảng `Connections`, `Items.ConnectionId` + `ETag` (SCRUM-34)
+- Hardening: exception middleware + error format chuẩn (SCRUM-24)
+- **Sprint 4:** Users multi-auth + Google Sign-In (SCRUM-32/33), migration mô hình B — bảng `Connections`, `Items.ConnectionId` + `ETag` (SCRUM-34), OAuth per-service + scope read-write (SCRUM-35/36)
+- Admin toggle integration (SCRUM-48), bỏ DB credentials → dùng config `OAuth:` (SCRUM-47, done in code)
 
-### ⏳ Đang tới
-- SCRUM-35/36: OAuth per-service theo mô hình B (Khánh)
-- SCRUM-37: write-back Gmail/Calendar/Drive (Vũ) + SCRUM-38: conflict ETag → 409 (Lộc)
+### ⏳ Đang tới (phase dừng ở SCRUM-38)
+- SCRUM-37: write-back Gmail/Calendar/Drive (Vũ) + SCRUM-38: conflict ETag → 409 (Lộc) — song song
 - SCRUM-30/31: scheduled email theo Connections
-- Nợ phase 1: SCRUM-14 (viết lại theo Connections), SCRUM-22, các ticket còn lại
+- Nợ phase 1: SCRUM-22 (auth pages wire API) + các ticket 15–17, 23, 25–29
 
 ---
 

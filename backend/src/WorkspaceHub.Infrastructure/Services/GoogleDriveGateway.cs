@@ -53,11 +53,11 @@ public class GoogleDriveGateway : IGoogleDriveGateway
                 var tokenResponse = await service.Changes.GetStartPageToken().ExecuteAsync(ct);
                 nextToken = tokenResponse.StartPageTokenValue;
 
-                return new DriveSyncResult(false, filesDto, nextToken);
+                return new DriveSyncResult(false, filesDto, nextToken); // nextToken = NewStartPageToken (sync cursor)
             }
 
-            // Đưa việc khởi tạo request vào TONG vòng lặp để lách luật read-only của PageToken
-            do
+            // Đưa việc khởi tạo request vào trong vòng lặp để lách luật read-only của PageToken
+            while (true)
             {
                 var changesRequest = service.Changes.List(pageToken);
                 changesRequest.Fields = "nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed), removed)";
@@ -70,6 +70,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
                     {
                         if (change.Removed == true || change.File == null)
                         {
+                            if (string.IsNullOrEmpty(change.FileId)) continue;
                             filesDto.Add(new DriveFileDto { Id = change.FileId, Trashed = true });
                             continue;
                         }
@@ -86,10 +87,9 @@ public class GoogleDriveGateway : IGoogleDriveGateway
                     nextToken = response.NewStartPageToken;
                     break;
                 }
+            }
 
-            } while (!string.IsNullOrEmpty(pageToken));
-
-            return new DriveSyncResult(false, filesDto, nextToken);
+            return new DriveSyncResult(false, filesDto, nextToken); // nextToken = NewStartPageToken (sync cursor)
         }
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Gone || ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
         {

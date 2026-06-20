@@ -21,12 +21,13 @@ namespace WorkspaceHub.Application.Abstractions
     {
         public bool Expired { get; set; }
         public List<DriveFileDto> Files { get; set; } = new();
-        public string? NextPageToken { get; set; }
-        public DriveSyncResult(bool expired, List<DriveFileDto> files, string? nextPageToken)
+        /// <summary>Google's NewStartPageToken — cursor for next incremental sync, not a pagination token.</summary>
+        public string? NextSyncCursor { get; set; }
+        public DriveSyncResult(bool expired, List<DriveFileDto> files, string? nextSyncCursor)
         {
             Expired = expired;
             Files = files;
-            NextPageToken = nextPageToken;
+            NextSyncCursor = nextSyncCursor;
         }
     }
 
