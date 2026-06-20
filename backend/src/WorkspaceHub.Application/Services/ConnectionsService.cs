@@ -79,8 +79,9 @@ public class ConnectionsService : IConnectionsService
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
             throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
 
-        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"];
+        if (string.IsNullOrEmpty(clientId))
+            throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
 
         var state = Guid.NewGuid().ToString("N");
 
@@ -128,10 +129,12 @@ public class ConnectionsService : IConnectionsService
         var integration = await _integrations.GetByKeyAsync(integrationKey, ct)
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
-        var clientId = _config[$"OAuth:{integrationKey}:ClientId"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
-        var clientSecret = _config[$"OAuth:{integrationKey}:ClientSecret"]
-            ?? throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
+        var clientId = _config[$"OAuth:{integrationKey}:ClientId"];
+        if (string.IsNullOrEmpty(clientId))
+            throw new BusinessRuleException($"Chưa cấu hình ClientId cho '{integrationKey}'");
+        var clientSecret = _config[$"OAuth:{integrationKey}:ClientSecret"];
+        if (string.IsNullOrEmpty(clientSecret))
+            throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
 
         // Bước 4 — Đổi code lấy token (logic riêng của từng provider).
         var request = new ExchangeCodeRequest(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
