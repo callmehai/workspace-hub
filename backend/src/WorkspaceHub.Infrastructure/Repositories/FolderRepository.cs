@@ -7,7 +7,7 @@ namespace WorkspaceHub.Infrastructure.Repositories;
 
 /// <summary>
 /// EF Core implementation cho <see cref="IFolderRepository"/>.
-/// AsNoTracking cho read-only queries. Include/projection tránh N+1.
+/// AsNoTracking cho read-only queries. AsSplitQuery khi load collection → tránh cartesian explosion / N+1.
 /// </summary>
 public class FolderRepository : GenericRepository<Folder>, IFolderRepository
 {
@@ -16,13 +16,18 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Folder>> GetUserFoldersAsync(Guid userId, CancellationToken ct = default)
     {
+        // Owner (ref) cho OwnerName, ItemFolders chỉ để đếm ItemCount.
+        // KHÔNG Include FolderShares: folder do user sở hữu → FolderService map permission = "Owner",
+        // không bao giờ đọc FolderShares (xem FolderService.MapToResponse). Include nó vừa thừa vừa
+        // gây cartesian explosion (rows = folders × itemFolders × folderShares).
+        // AsSplitQuery: tách collection ItemFolders ra query riêng, không nhân đôi hàng folder/owner.
         return await Set
             .AsNoTracking()
             .Include(f => f.Owner)
             .Include(f => f.ItemFolders)
-            .Include(f => f.FolderShares)
             .Where(f => f.OwnerId == userId && !f.IsArchived)
             .OrderBy(f => f.SortOrder)
+            .AsSplitQuery()
             .ToListAsync(ct);
     }
 
@@ -30,6 +35,7 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
     public async Task<IReadOnlyList<Folder>> GetSharedFoldersAsync(Guid userId, CancellationToken ct = default)
     {
         // Chỉ lấy folder đã accept (AcceptedAt != null) và chưa hết hạn.
+        // AsSplitQuery: collection ItemFolders load ở query riêng, tránh nhân hàng.
         return await Db.FolderShares
             .AsNoTracking()
             .Include(fs => fs.Folder)
@@ -42,6 +48,7 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
                          && (fs.ExpiresAt == null || fs.ExpiresAt > DateTime.UtcNow))
             .Select(fs => fs.Folder)
             .OrderBy(f => f.SortOrder)
+            .AsSplitQuery()
             .ToListAsync(ct);
     }
 

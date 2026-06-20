@@ -26,6 +26,13 @@ PascalCase (class/method/property), camelCase (local/param), `I` prefix (interfa
 - Enum string, Guid PK, UTC (`datetime2`), JSON lưu `nvarchar(max)` (SQL Server) cho MetadataJson/ToJson/SupportedServices.
 - Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit.
 - Composite PK junction.
+- Read-only query luôn `AsNoTracking()`. List nhiều collection `Include` → cân nhắc `AsSplitQuery()`/projection tránh cartesian explosion & N+1.
+
+## Logging (SCRUM-25)
+- Dùng built-in `ILogger<T>` (chưa cần Serilog). Message template dùng placeholder có tên (`{UserId}`, `{StatusCode}`...) để structured — KHÔNG nội suy chuỗi (`$"..."`).
+- **Request/response:** `RequestLoggingMiddleware` log 1 dòng completion mỗi request (method, path, status, elapsed ms, userId): Information cho <400, Warning cho ≥400. Đặt NGOÀI CÙNG pipeline (trước `ExceptionMiddleware`) để đo trọn thời gian và đọc đúng status 5xx (ExceptionMiddleware nuốt exception + set status).
+- **Lỗi:** `ExceptionMiddleware` log domain exception ở Warning, 500 ở Error (kèm stack + traceId). KHÔNG log Error trùng cho 5xx ở nơi khác.
+- **EF query:** chỉ Development mới bật `EnableSensitiveDataLogging()` + `EnableDetailedErrors()` và `Microsoft.EntityFrameworkCore.Database.Command=Information` (verify SQL sinh ra). KHÔNG bật ở production — lộ giá trị tham số.
 
 ## Mô hình B — Connections (quan trọng)
 - Mỗi service = 1 row Connections, token riêng. KHÔNG còn OAuthConnection→ServiceConnection.
