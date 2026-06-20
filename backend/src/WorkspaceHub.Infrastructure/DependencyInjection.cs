@@ -2,15 +2,16 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
-using WorkspaceHub.Infrastructure.Services;
+using WorkspaceHub.Application.Security;
 using WorkspaceHub.Infrastructure.Data;
 using WorkspaceHub.Infrastructure.Http;
 using WorkspaceHub.Infrastructure.Repositories;
-using WorkspaceHub.Application.Security;
 using WorkspaceHub.Infrastructure.Security;
+using WorkspaceHub.Infrastructure.Services;
 
 namespace WorkspaceHub.Infrastructure;
 
@@ -61,6 +62,8 @@ public static class DependencyInjection
         services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
         services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();
 
+        services.AddScoped<IGoogleCalendarGateway, GoogleCalendarGateway>();
+        services.AddScoped<IGoogleDriveGateway, GoogleDriveGateway>();
 
         // AdminService đặt tại Infrastructure vì cần inject AppDbContext trực tiếp
         // (EF projection no-N+1 cho ConnectionCount/ItemCount — xem AdminService.cs).

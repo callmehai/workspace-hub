@@ -70,12 +70,6 @@ public class GmailSyncService : IGmailSyncService
             item.MetadataJson);
     }
 
-    public async Task<SyncResult> SyncAsync(Guid connectionId, Guid userId, int maxMessages = 50, CancellationToken ct = default)
-    {
-        var conn = await GetValidConnectionAsync(connectionId, userId, ct);
-        return await SyncConnectionAsync(conn, maxMessages, ct);
-    }
-
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, int maxMessages = 50, CancellationToken ct = default)
     {
         var importantList = await _importantContacts.GetIdentifiersAsync(connection.UserId, ImportantContactType.Email, ct);
@@ -113,7 +107,7 @@ public class GmailSyncService : IGmailSyncService
                     expired = true;
                     break;
                 }
-                
+
                 addedIds.AddRange(h.AddedMessageIds);
                 if (h.LatestHistoryId != null)
                 {
@@ -144,7 +138,7 @@ public class GmailSyncService : IGmailSyncService
             }
         }
 
-        if (newItems.Any())
+        if (newItems.Count > 0)
         {
             await _items.AddRangeAsync(newItems, ct);
             try
@@ -155,9 +149,7 @@ public class GmailSyncService : IGmailSyncService
             {
                 // Xoá tất cả khỏi ChangeTracker trước khi thử lại
                 foreach (var item in newItems)
-                {
                     _items.Remove(item);
-                }
 
                 // Lưu từng item một để không làm rollback toàn bộ batch
                 foreach (var item in newItems)
@@ -190,11 +182,11 @@ public class GmailSyncService : IGmailSyncService
     }
 
     private async Task<(int Created, int Skipped)> ProcessMessageIdsAsync(
-        Connection connection, 
-        IEnumerable<string> ids, 
+        Connection connection,
+        IEnumerable<string> ids,
         ISet<string> importantSet,
-        HashSet<string> existing, 
-        List<Item> newItems, 
+        HashSet<string> existing,
+        List<Item> newItems,
         CancellationToken ct)
     {
         int created = 0;
@@ -210,7 +202,7 @@ public class GmailSyncService : IGmailSyncService
 
             var msg = await _gmailGateway.GetMessageAsync(connection, id, ct);
             var item = _mapper.ToItem(msg, connection.UserId, connection.Id, importantSet);
-            
+
             newItems.Add(item);
             existing.Add(id);
             created++;

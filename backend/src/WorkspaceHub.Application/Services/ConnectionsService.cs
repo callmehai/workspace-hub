@@ -363,6 +363,8 @@ public class ConnectionsService : IConnectionsService
 
     // ───────────── Helpers ─────────────
 
+    private const int GmailDefaultBatchSize = 50;
+
     public async Task<ManualSyncResult> TriggerManualSyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
     {
         var conn = await _connections.GetByIdTrackedAsync(connectionId, ct);
@@ -382,7 +384,6 @@ public class ConnectionsService : IConnectionsService
         _ = Task.Run(async () =>
         {
             using var scope = _scopeFactory.CreateScope();
-            var syncService = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
             var bgRepo = scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<ConnectionsService>>();
 
@@ -391,22 +392,35 @@ public class ConnectionsService : IConnectionsService
                 var scopedConn = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
                 if (scopedConn == null) return;
 
-                if (scopedConn.ServiceType == ServiceType.Gmail)
+                switch (scopedConn.ServiceType)
                 {
-                    await syncService.SyncConnectionAsync(scopedConn, 50, CancellationToken.None);
-                }
-                else
-                {
-                    logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
+                    case ServiceType.Gmail:
+                        var gmailSync = scope.ServiceProvider.GetRequiredService<IGmailSyncService>();
+                        await gmailSync.SyncConnectionAsync(scopedConn, GmailDefaultBatchSize, CancellationToken.None);
+                        break;
+                    case ServiceType.GCal:
+                        var calendarSync = scope.ServiceProvider.GetRequiredService<ICalendarSyncService>();
+                        await calendarSync.SyncConnectionAsync(scopedConn, CancellationToken.None);
+                        break;
+                    case ServiceType.Drive:
+                        var driveSync = scope.ServiceProvider.GetRequiredService<IDriveSyncService>();
+                        await driveSync.SyncConnectionAsync(scopedConn, CancellationToken.None);
+                        break;
+                    default:
+                        logger.LogWarning("Manual sync skipped: ServiceType {ServiceType} not supported.", scopedConn.ServiceType);
+                        break;
                 }
             }
             catch (Exception ex)
             {
+                // GoogleApiException từ provider (403/429/5xx) sẽ bị bắt ở đây —
+                // ghi vào LastError + đánh Status=Error để UI hiển thị trạng thái lỗi.
                 logger.LogError(ex, "Manual sync failed for connection {ConnectionId}", connectionId);
 
                 var connToUpdate = await bgRepo.GetByIdTrackedAsync(connectionId, CancellationToken.None);
                 if (connToUpdate != null)
                 {
+                    connToUpdate.Status = ConnectionStatus.Error;
                     connToUpdate.LastError = ex.Message;
                     await bgRepo.SaveChangesAsync(CancellationToken.None);
                 }
