@@ -30,8 +30,8 @@ public class CalendarGateway : ICalendarGateway
 
     private CalendarEvent MapToDto(Event ev)
     {
-        DateTimeOffset? start = ev.Start?.DateTimeDateTimeOffset ?? (ev.Start?.Date != null ? DateTimeOffset.Parse(ev.Start.Date) : null);
-        DateTimeOffset? end = ev.End?.DateTimeDateTimeOffset ?? (ev.End?.Date != null ? DateTimeOffset.Parse(ev.End.Date) : null);
+        DateTimeOffset? start = ev.Start?.DateTimeDateTimeOffset ?? (ev.Start?.Date != null ? DateTimeOffset.Parse(ev.Start.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
+        DateTimeOffset? end = ev.End?.DateTimeDateTimeOffset ?? (ev.End?.Date != null ? DateTimeOffset.Parse(ev.End.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
 
         return new CalendarEvent(
             ev.Id,
@@ -54,9 +54,13 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                throw new NotFoundException("Event", eventId);
+            }
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
-                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+                throw new ForbiddenException("Cần reconnect.");
             }
             throw new ProviderException($"Calendar API error: {ex.Message}");
         }
@@ -82,6 +86,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Event", eventId);
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
                 throw new ForbiddenException("Cần reconnect với quyền ghi.");
@@ -111,6 +116,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Event", calendarId);
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
                 throw new ForbiddenException("Cần reconnect với quyền ghi.");
@@ -128,6 +134,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Event", eventId);
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
                 throw new ForbiddenException("Cần reconnect với quyền ghi.");
@@ -136,3 +143,4 @@ public class CalendarGateway : ICalendarGateway
         }
     }
 }
+

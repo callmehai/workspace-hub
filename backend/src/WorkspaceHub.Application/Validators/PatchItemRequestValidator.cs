@@ -8,7 +8,7 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
     public PatchItemRequestValidator()
     {
         RuleFor(x => x)
-            .Must(x => x.IsUnread.HasValue || x.IsStarred.HasValue || x.Labels != null ||
+            .Must(x => x.IsUnread.HasValue || x.IsStarred.HasValue || x.AddLabels != null || x.RemoveLabels != null ||
                        x.IsTrashed.HasValue || x.Title != null || x.Start.HasValue ||
                        x.End.HasValue || x.Location != null || x.Attendees != null ||
                        x.Name != null)

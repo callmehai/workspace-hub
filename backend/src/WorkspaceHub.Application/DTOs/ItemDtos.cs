@@ -35,7 +35,8 @@ public record CreateNoteRequest(
 public record PatchItemRequest(
     bool? IsUnread = null,
     bool? IsStarred = null,
-    List<string>? Labels = null,
+    List<string>? AddLabels = null,
+    List<string>? RemoveLabels = null,
     bool? IsTrashed = null,
     string? Title = null,
     DateTimeOffset? Start = null,

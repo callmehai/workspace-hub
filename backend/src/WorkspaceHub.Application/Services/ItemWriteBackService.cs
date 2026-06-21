@@ -55,7 +55,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
         if (item.ExternalId == null) throw new BusinessRuleException("Item has no external ID.");
 
-        if (!payload.IsUnread.HasValue && !payload.IsStarred.HasValue && payload.Labels == null &&
+        if (!payload.IsUnread.HasValue && !payload.IsStarred.HasValue && payload.AddLabels == null && payload.RemoveLabels == null &&
             !payload.IsTrashed.HasValue && payload.Title == null && payload.Start == null &&
             payload.End == null && payload.Location == null && payload.Attendees == null &&
             payload.Name == null)
@@ -109,7 +109,8 @@ public class ItemWriteBackService : IItemWriteBackService
                     else removeLabels.Add("STARRED");
                 }
                 
-                if (payload.Labels != null) addLabels.AddRange(payload.Labels);
+                if (payload.AddLabels != null) addLabels.AddRange(payload.AddLabels);
+                if (payload.RemoveLabels != null) removeLabels.AddRange(payload.RemoveLabels);
 
                 if (addLabels.Any() || removeLabels.Any())
                 {
@@ -126,7 +127,7 @@ public class ItemWriteBackService : IItemWriteBackService
                 
                 newETag = await _gmailGateway.GetMessageETagAsync(conn, item.ExternalId, ct);
                 
-                var metaDictEmail = JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+                var metaDictEmail = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
                 if (isUnreadChanged) metaDictEmail["IsUnread"] = payload.IsUnread!.Value;
                 if (isStarredChanged) metaDictEmail["IsStarred"] = payload.IsStarred!.Value;
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEmail);
@@ -134,7 +135,7 @@ public class ItemWriteBackService : IItemWriteBackService
                 break;
 
             case ItemType.Event:
-                if (payload.IsUnread != null || payload.IsStarred != null || payload.Labels != null || payload.IsTrashed != null || payload.Name != null)
+                if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.IsTrashed != null || payload.Name != null)
                     throw new BusinessRuleException("Invalid fields for Event writeback.");
                     
                 var evDto = new CalendarEvent(
@@ -154,14 +155,14 @@ public class ItemWriteBackService : IItemWriteBackService
                 item.OccurredAt = updatedEvent.Start?.UtcDateTime ?? DateTime.UtcNow;
                 if (updatedEvent.End.HasValue) item.DueAt = updatedEvent.End.Value.UtcDateTime;
 
-                var metaDictEvent = JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
-                if (updatedEvent.Location != null) metaDictEvent["Location"] = updatedEvent.Location;
-                if (updatedEvent.Attendees != null) metaDictEvent["Attendees"] = updatedEvent.Attendees;
+                var metaDictEvent = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+                if (updatedEvent.Location != null) metaDictEvent["location"] = updatedEvent.Location;
+                if (updatedEvent.Attendees != null) metaDictEvent["attendees"] = updatedEvent.Attendees;
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEvent);
                 break;
 
             case ItemType.File:
-                if (payload.IsUnread != null || payload.IsStarred != null || payload.Labels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null)
+                if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null)
                     throw new BusinessRuleException("Invalid fields for File writeback.");
                     
                 if (payload.Name != null)
@@ -213,8 +214,8 @@ public class ItemWriteBackService : IItemWriteBackService
         var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
 
         var metaDict = new Dictionary<string, object>();
-        if (created.Location != null) metaDict["Location"] = created.Location;
-        if (created.Attendees != null) metaDict["Attendees"] = created.Attendees;
+        if (created.Location != null) metaDict["location"] = created.Location;
+        if (created.Attendees != null) metaDict["attendees"] = created.Attendees;
 
         var item = new Item
         {
@@ -237,6 +238,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
     public async Task DeleteItemAsync(Guid itemId, Guid userId, CancellationToken ct = default)
     {
+        // Thiết kế: Xoá item không yêu cầu check ETag vì hành động xoá là dứt điểm, không quan tâm nội dung hiện tại
         var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
         if (item == null) throw new NotFoundException("Item", itemId);
 
