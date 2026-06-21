@@ -115,18 +115,16 @@ public class ItemWriteBackService : IItemWriteBackService
 
                 if (addLabels.Any() || removeLabels.Any())
                 {
-                    await _gmailGateway.ModifyMessageAsync(conn, item.ExternalId, addLabels, removeLabels, ct);
+                    newETag = await _gmailGateway.ModifyMessageAsync(conn, item.ExternalId, addLabels, removeLabels, ct);
                 }
 
                 if (payload.IsTrashed.HasValue)
                 {
                     if (payload.IsTrashed.Value)
-                        await _gmailGateway.TrashMessageAsync(conn, item.ExternalId, ct);
+                        newETag = await _gmailGateway.TrashMessageAsync(conn, item.ExternalId, ct);
                     else
-                        await _gmailGateway.UntrashMessageAsync(conn, item.ExternalId, ct);
+                        newETag = await _gmailGateway.UntrashMessageAsync(conn, item.ExternalId, ct);
                 }
-                
-                newETag = await _gmailGateway.GetMessageETagAsync(conn, item.ExternalId, ct);
                 
                 var metaDictEmail = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
                 if (isUnreadChanged) metaDictEmail["isUnread"] = payload.IsUnread!.Value;

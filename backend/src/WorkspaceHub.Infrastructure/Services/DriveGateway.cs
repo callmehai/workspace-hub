@@ -46,7 +46,7 @@ public class DriveGateway : IDriveGateway
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("File", fileId);
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
-                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+                throw new ForbiddenException("Cần reconnect.");
             }
             throw new ProviderException($"Drive API error: {ex.Message}");
         }

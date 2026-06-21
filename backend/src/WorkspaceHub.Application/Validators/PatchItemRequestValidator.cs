@@ -19,6 +19,16 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .When(x => x.Start.HasValue && x.End.HasValue)
             .WithMessage("Start time must be before End time.");
 
+        RuleFor(x => x.AddLabels)
+            .Must(labels => labels!.All(l => !string.IsNullOrWhiteSpace(l)))
+            .When(x => x.AddLabels != null)
+            .WithMessage("AddLabels list cannot contain empty label IDs.");
+
+        RuleFor(x => x.RemoveLabels)
+            .Must(labels => labels!.All(l => !string.IsNullOrWhiteSpace(l)))
+            .When(x => x.RemoveLabels != null)
+            .WithMessage("RemoveLabels list cannot contain empty label IDs.");
+
         RuleFor(x => x.Attendees)
             .Must(attendees => attendees!.All(a => !string.IsNullOrWhiteSpace(a)))
             .When(x => x.Attendees != null)

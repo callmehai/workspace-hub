@@ -150,7 +150,7 @@ public class GmailGateway : IGmailGateway
         }
     }
 
-    public async Task ModifyMessageAsync(Connection connection, string messageId, IList<string> addLabelIds, IList<string> removeLabelIds, CancellationToken ct = default)
+    public async Task<string?> ModifyMessageAsync(Connection connection, string messageId, IList<string> addLabelIds, IList<string> removeLabelIds, CancellationToken ct = default)
     {
         try
         {
@@ -160,7 +160,8 @@ public class GmailGateway : IGmailGateway
                 AddLabelIds = addLabelIds,
                 RemoveLabelIds = removeLabelIds
             };
-            await gmail.Users.Messages.Modify(req, "me", messageId).ExecuteAsync(ct);
+            var response = await gmail.Users.Messages.Modify(req, "me", messageId).ExecuteAsync(ct);
+            return response.HistoryId?.ToString();
         }
         catch (Google.GoogleApiException ex)
         {
@@ -173,12 +174,13 @@ public class GmailGateway : IGmailGateway
         }
     }
 
-    public async Task TrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
+    public async Task<string?> TrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
     {
         try
         {
             using var gmail = await BuildGmailServiceAsync(connection, ct);
-            await gmail.Users.Messages.Trash("me", messageId).ExecuteAsync(ct);
+            var response = await gmail.Users.Messages.Trash("me", messageId).ExecuteAsync(ct);
+            return response.HistoryId?.ToString();
         }
         catch (Google.GoogleApiException ex)
         {
@@ -191,12 +193,13 @@ public class GmailGateway : IGmailGateway
         }
     }
 
-    public async Task UntrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
+    public async Task<string?> UntrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
     {
         try
         {
             using var gmail = await BuildGmailServiceAsync(connection, ct);
-            await gmail.Users.Messages.Untrash("me", messageId).ExecuteAsync(ct);
+            var response = await gmail.Users.Messages.Untrash("me", messageId).ExecuteAsync(ct);
+            return response.HistoryId?.ToString();
         }
         catch (Google.GoogleApiException ex)
         {
