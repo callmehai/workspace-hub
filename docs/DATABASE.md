@@ -3,6 +3,8 @@
 > Cập nhật 2026-06-11: bỏ tách OAuthConnections/ServiceConnections, gộp thành **Connections** (mỗi service 1 row, token riêng). Thêm Google Sign-In + write-back fields. Lịch sử: CHANGELOG.md.
 >
 > **Status:** ✅ schema này ĐÃ áp dụng vào code — migration `ModelBConnections` (SCRUM-34, sau `InitialCreate` + `UsersMultiAuth`). DB là **SQL Server**: JSON lưu `nvarchar(max)`, datetime `datetime2` UTC, enum lưu string.
+>
+> Ghi chú: các giá trị `Jira` / `JiraAccount` / `Ticket` bên dưới được **seed sẵn trong enum** nhưng Jira/Atlassian **không nằm trong scope hiện tại** (không có ticket Jira) — chỉ là chỗ trống cho tương lai, đừng implement.
 
 ## Quan hệ tổng quan
 ```
@@ -44,20 +46,20 @@ KHÔNG có bảng Roles/UserRoles (code thật dùng cột `Users.Role` string `
 ---
 
 ## Integrations
-Catalog provider. Seed Google; thêm Atlassian ở phase Jira.
+Catalog provider. Seed Google. (Atlassian là chỗ trống tương lai — không seed/không dùng ở scope hiện tại.)
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
-| Key | string UNIQUE | google / atlassian |
+| Key | string UNIQUE | google (/ atlassian — tương lai) |
 | DisplayName, IconUrl, Description | string | |
-| Provider | string | Google / Atlassian |
+| Provider | string | Google (/ Atlassian — tương lai) |
 | AuthorizationEndpoint, TokenEndpoint | string | |
-| SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` / `["Jira"]` |
+| SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` |
 | IsEnabled | bool | |
 
 > Bỏ cột DefaultScopes — scope suy từ ServiceType trong code (`GoogleScopes.BuildRequestScopes`).
-> Không có cột ClientId/ClientSecret — OAuth credentials đọc từ config `OAuth:{key}:...`, không lưu DB (SCRUM-47).
+> Không có cột ClientId/ClientSecret — OAuth credentials đọc từ config `OAuth:{key}:...`, không lưu DB (SCRUM-39).
 
 ---
 
@@ -69,16 +71,16 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 | Id | uuid PK | |
 | UserId | uuid FK→Users | CASCADE |
 | IntegrationId | uuid FK→Integrations | |
-| Provider | enum string | Google / Atlassian |
-| ServiceType | enum string | Gmail / GCal / Drive / Jira |
-| ProviderAccountId | string | account nào (email/sub/cloudId) |
+| Provider | enum string | Google (Atlassian — chỗ trống tương lai) |
+| ServiceType | enum string | Gmail / GCal / Drive (Jira — seed sẵn, chưa dùng) |
+| ProviderAccountId | string | account nào (email/sub) |
 | AccessTokenEncrypted | string | Data Protection |
 | RefreshTokenEncrypted | string | Data Protection; **chuỗi rỗng `""` = provider không trả refresh token** (vd Google re-consent) — check `IsNullOrEmpty`, không check null |
 | ExpiresAt | datetime | refresh nếu < 5 phút |
 | Status | enum string | Active / Disconnected / Error |
 | CursorType | enum string null | HistoryId / PageToken / SyncToken |
 | CursorValue | string null | null = sync lần đầu |
-| LastSyncedAt | datetime null | |
+| LastSyncedAt | datetime null | cập nhật sau mỗi lần sync on-demand |
 | LastError | string null | |
 | CreatedAt | datetime | |
 
@@ -102,7 +104,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 |---|---|---|
 | Id | uuid PK | |
 | UserId | uuid FK→Users | CASCADE |
-| Type | enum string | Email / Event / File / Note / Ticket |
+| Type | enum string | Email / Event / File / Note (Ticket — chỗ trống tương lai) |
 | Title | string | |
 | Snippet | string | ~200 ký tự |
 | ExternalId | string null | ID gốc provider; NULL cho Note |
@@ -120,7 +122,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 - Event: `{start, end, location, attendees[], meetUrl}`
 - File: `{mimeType, size, webViewLink, iconLink}`
 - Note: `{contentMarkdown}`
-- Ticket (phase Jira): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`
+- Ticket (tương lai, nếu làm Jira): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`
 
 **Constraint:** UNIQUE(ConnectionId, ExternalId). **Index:** (UserId, Status, OccurredAt DESC).
 
@@ -130,8 +132,8 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 Không đổi cấu trúc.
 - Tags (UserId, Name không unique toàn hệ thống, Color).
 - TagAssignments composite PK.
-- ImportantContacts (Type: Email; phase Jira thêm JiraAccount; UNIQUE(UserId,Type,Identifier)).
-- Notifications (Type: share_invite/important_email/sync_error/schedule_sent; phase sau thêm friend_request/automation_triggered nếu làm).
+- ImportantContacts (Type: Email; tương lai có thể thêm JiraAccount; UNIQUE(UserId,Type,Identifier)).
+- Notifications (Type: share_invite/important_email/sync_error/schedule_sent; tương lai thêm friend_request/automation_triggered nếu làm).
 
 ## ScheduledEmails
 Đổi tham chiếu sang Connections.

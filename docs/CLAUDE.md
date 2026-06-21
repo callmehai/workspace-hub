@@ -4,29 +4,44 @@
 
 ## Project là gì
 
-Web app gom email / sự kiện / file / note (và ticket ở phase Jira) từ **Google (Gmail, Calendar, Drive)** về **một nơi duy nhất**, quản lý theo **Folder context** (dự án / khách hàng / chủ đề) với giao diện **Kanban 3 cột** (Cần xem / Đang xử lý / Done). Có chia sẻ folder (Viewer-only), hẹn giờ gửi email, và dashboard admin.
+Web app gom email / sự kiện / file / note từ **Google (Gmail, Calendar, Drive)** về **một nơi duy nhất**, quản lý theo **Folder context** (dự án / khách hàng / chủ đề) với giao diện **Kanban 3 cột** (Cần xem / Đang xử lý / Done). Có chia sẻ folder (Viewer-only), hẹn giờ gửi email, và dashboard admin.
 
 Đây là đồ án môn học (PRN232 — Fullstack ASP.NET, 60% backend / 40% frontend).
 
 ## Scope & Phase — ĐỌC KỸ
 
-App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Triển khai **theo phase**, đừng làm hết một lúc:
+App đồng bộ **2 chiều** với Google (đọc + ghi ngược). Triển khai **theo Sprint**, đừng làm hết một lúc. Status chi tiết từng ticket: `docs/SPRINTS.md` (đồng bộ Jira).
 
-### Phase hiện tại (Sprint 4) — Mô hình B + Write-back Google + Google Sign-In
-- **Mô hình connection B:** mỗi service (Gmail/GCal/Drive) = 1 row `Connections` riêng, token riêng. User authorize riêng từng service. ✅ DB đã migrate (SCRUM-34).
-- **Google Sign-In:** đăng nhập app bằng Google, tách biệt connect-để-sync. ✅ Done (SCRUM-32/33).
-- **OAuth per-service (mô hình B):** start + callback theo từng service, scope read-write. ✅ Done (SCRUM-35/36).
-- **2 chiều bằng polling + write-back:** cron đọc như cũ (1 chiều pull); thao tác trên app ghi ngược lên Google ngay (synchronous). ⏳ SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc).
+### Đã xong (Sprint 1–2)
+- **Nền tảng + Auth:** solution clean-architecture, EF schema + migrations, Data Protection, register/login (BCrypt+JWT), JWT middleware + RBAC, Google Sign-In. (SCRUM-5→14, 32/33)
+- **Sync đọc Google:** Gmail client → Item, Calendar + Drive. **Sync theo nhu cầu (on-demand/lazy)** — xem mục dưới. (SCRUM-15/16/17)
+- **Mô hình connection B:** mỗi service (Gmail/GCal/Drive) = 1 row `Connections` riêng, token riêng, authorize riêng từng service. (SCRUM-34/35/36)
+- **Workspace:** Folder CRUD, Items list/filter/search/pagination, Kanban + Note + ItemFolders. (SCRUM-18/19/20)
+- **Admin:** users list + stats, bật/tắt integration; bỏ DB credentials (đọc `OAuth:` từ config/env). (SCRUM-23, 39, 40)
+- **Hardening:** exception middleware + error format chuẩn, logging + tối ưu query. (SCRUM-24/25)
+
+### Sprint hiện hành (Sprint 3) — write-back hoàn thiện + scheduled email + bắt đầu FE
+- **Write-back Google:** thao tác trên app ghi ngược lên Google ngay (synchronous). 🔍 SCRUM-37 **In Review** (Vũ).
   - Ghi được: Email (label/read/star/trash + gửi mới — **KHÔNG sửa nội dung**, Gmail immutable), Event (CRUD đầy đủ), File (rename/trash).
-  - Conflict qua `Items.ETag` → 409.
-- Kế tiếp: SCRUM-37 + 38 (song song), rồi 30/31 (scheduled email). **Phase hiện tại dừng ở SCRUM-38.** Status chi tiết: `docs/SPRINTS.md`.
+  - Conflict qua `Items.ETag` → 409. ⏳ SCRUM-38 (Lộc) — chốt `IWriteBackGuard` với Vũ trước.
+- **Scheduled email:** tạo/list/cancel + cron gửi qua Gmail. ⏳ SCRUM-30/31.
+- **Chất lượng:** refactor service (26), API testing + Postman (27), README backend (28), unit test service (29).
+- **Bắt đầu FE:** API layer axios+JWT+TanStack Query (41), wire Login/Register (42), Connections page (43).
 
-### NGOÀI scope phase này (đừng code, chỉ tham khảo roadmap)
-- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch) → phase sau (SCRUM-39→41).
-- Jira / Atlassian integration → phase sau (SCRUM-42→46).
-- Social / friend system, AI workflow → future.
+### Sprint 4 — Frontend đầy đủ + deploy + nghiệm thu
+Inbox/Kanban/write-back UI/scheduled UI/admin dashboard (44→50), deploy prod (51), finalize Swagger+E2E (52), defense (53). Đừng nhảy vào trừ khi Sprint 3 xong.
 
-Nếu một task có vẻ cần webhook hoặc Jira, **dừng lại và hỏi** — nhiều khả năng đang vượt phase.
+### Mô hình sync (quan trọng — đừng nhầm)
+- **Đọc = on-demand.** KHÔNG có background service pull định kỳ (đã bỏ hẳn timer/cron đọc), KHÔNG webhook trong MVP. Khi user CRUD/mở list của một connection mới check connection còn Active + Enabled + token còn hạn (refresh nếu cần) rồi pull. (SCRUM-16)
+- **Cron chỉ dùng cho gửi scheduled email** (`/api/internal/process-scheduled`, SCRUM-31) — không liên quan đọc dữ liệu.
+- **Ghi = write-back synchronous** ngay khi user thao tác (SCRUM-37).
+
+### NGOÀI scope — KHÔNG còn ticket Jira (đừng code, đừng gán số SCRUM)
+- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch).
+- Jira / Atlassian integration.
+- Social / friend system, AI workflow.
+
+> ⚠️ Số SCRUM-39→46 **không còn** là webhook/Jira — đó là việc đã/đang làm khác (xem SPRINTS.md). Nếu một task có vẻ cần webhook hoặc Jira, **dừng lại và hỏi** — gần như chắc chắn vượt scope.
 
 ## Tech Stack
 
@@ -35,7 +50,7 @@ Nếu một task có vẻ cần webhook hoặc Jira, **dừng lại và hỏi** 
 - **Frontend:** Vite + React + TypeScript + Tailwind + React Router + TanStack Query + axios + react-hot-toast (SPA gọi REST).
 - **Auth:** JWT Bearer + Google Sign-In (đăng nhập bằng Google, tách khỏi connect-để-sync)
 - **Token encryption:** ASP.NET Data Protection (`IDataProtectionProvider`) — KHÔNG tự viết AES, KHÔNG lưu key trong DB
-- **Deploy:** <!-- CHỐT: Render / Vercel / Azure? -->
+- **Deploy:** <!-- CHỐT: Render / Vercel / Azure? (SCRUM-51) -->
 
 ## Kiến trúc
 
@@ -73,7 +88,7 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 
 ## Nguyên tắc khi code
 
-1. Bám đúng phase hiện tại ở trên. Phase sau (webhook/Jira) → hỏi trước.
+1. Bám đúng Sprint hiện hành ở trên. Việc ngoài scope (webhook/Jira) → hỏi trước.
 2. Tuân thủ quy ước nền tảng (ID/timestamp/enum/cascade).
 3. Theo layered architecture, dùng DTO.
 4. Validate input; trả status code đúng (xem `docs/API.md`). Write-back: 403 thiếu scope, 409 conflict ETag, 502 provider lỗi.

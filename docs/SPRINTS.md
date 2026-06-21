@@ -1,22 +1,26 @@
 # Sprints & Tickets — Workspace Hub
 
-> Cập nhật 2026-06-11: status đồng bộ theo Jira. Đợt hiện tại (Sprint 4): mô hình B + write-back + Google Sign-In (SCRUM-32→38). Lịch sử quyết định: CHANGELOG.md.
+> Cập nhật 2026-06-21: đồng bộ lại toàn bộ theo Jira (export mới). Backlog Webhook/Jira cũ (SCRUM-39→46) đã **bị bỏ** khỏi Jira — số đó nay là việc khác (xem bảng). Sprint hiện hành: **Sprint 3**. Lịch sử quyết định: CHANGELOG.md.
 >
 > **Quy tắc:** sau khi hoàn thành task code nào, cập nhật status ticket đó trong file này (và các .md liên quan).
 
 ## Team
-| Tên | Vai trò |
-|---|---|
-| Hải | Lead — foundation, schema/migration, optimize |
-| Lộc | Auth, conflict resolution, scheduled cron |
-| Khánh | OAuth flow, scope |
-| Vũ | Sync + write-back Google, scheduled email |
-| Huy | Folders/Items/filter/Admin |
-| Dũng | Frontend |
+| Tên | Jira | Vai trò |
+|---|---|---|
+| Hải | Hải Trần Việt | Lead — foundation, schema/migration, optimize |
+| Lộc | Hoàng Đức Lộc | Auth, conflict resolution, scheduled cron |
+| Khánh | Gia Khánh Phạm | OAuth flow, scope, integrations |
+| Vũ | VuPM25 | Sync + write-back Google, scheduled email |
+| Huy | Nguyễn Quang Huy | Folders/Items/filter/Admin |
+| Dũng | Dũng Hoàng Tuấn | Frontend |
+
+> ⚠️ **Đánh số đã đổi so với bản trước.** Các "ticket tạm" 47*/48*/49* nay có số Jira thật:
+> bỏ DB credentials = **SCRUM-39**, admin toggle integration = **SCRUM-40**, admin users+stats = **SCRUM-23**.
+> Webhook & Jira/Atlassian **không còn ticket** (ngoài scope đồ án, không nằm trong Jira nữa).
 
 ---
 
-## Phase 1 — Nền tảng (status thật theo Jira 2026-06-11)
+## Sprint 1 — Nền tảng + Auth + OAuth + workspace (Done)
 
 | Ticket | Việc | Assignee | Status |
 |---|---|---|---|
@@ -28,60 +32,73 @@
 | SCRUM-10 | JWT middleware + protected route + GET /api/auth/me | Lộc | ✅ Done |
 | SCRUM-11 | Role-based authorization + logout | Khánh | ✅ Done |
 | SCRUM-12 | OAuth start flow + đăng ký app Google Cloud | Khánh | ✅ Done |
-| SCRUM-13 | OAuth callback + lưu token encrypted | Khánh | ✅ Done |
-| SCRUM-14 | List/disconnect/refresh connection | — | ✅ Done 2026-06-15 — `GET /api/connections` (masked token), `DELETE /api/connections/{id}` (cascade + Items.ConnectionId=NULL), `POST /api/connections/{id}/refresh` (422 invalid→Error) |
 | SCRUM-18 | Folder CRUD | Huy | ✅ Done |
 | SCRUM-19 | Items list + filter + pagination + search | Huy | ✅ Done |
 | SCRUM-21 | Frontend setup: routing, layout, protected route | Dũng | ✅ Done |
-| SCRUM-20 | Kanban Status + Note CRUD + ItemFolders (Backend & UI) | — | ✅ Done |
-| SCRUM-22 | Auth pages connected to API | Dũng | ⏳ Pending |
 
-> Các ticket phase 1 còn lại (15–17, 23–29: sync Gmail, Admin dashboard, ...) chưa done — xem Jira. Bản cũ của file này ghi "SCRUM-5→29 đã done" là **sai**, đã sửa theo Jira.
+## Sprint 2 — Sync + mô hình B + write-back foundation (Done, trừ 37)
 
-## Sprint 4 (đợt hiện tại) — Mô hình B + Write-back + Google Sign-In
+| Ticket | Việc | Assignee | Status |
+|---|---|---|---|
+| SCRUM-13 | OAuth callback + lưu token encrypted | Khánh | ✅ Done |
+| SCRUM-14 | List/disconnect/refresh connection | Lộc | ✅ Done — `GET /api/connections` (masked token), `DELETE /api/connections/{id}` (cascade + Items.ConnectionId=NULL), `POST /api/connections/{id}/refresh` (422 invalid→Error) |
+| SCRUM-15 | Gmail client + lấy message → Item | Vũ | ✅ Done |
+| SCRUM-16 | Sync **theo nhu cầu (lazy / on-demand)** — KHÔNG pull định kỳ | Vũ | ✅ Done — bỏ hẳn timer/cron đọc; khi user CRUD/mở list của 1 connection mới check Active+Enabled + token còn hạn (refresh nếu cần) rồi pull; chống trùng nhờ UNIQUE(ConnectionId, ExternalId); cập nhật LastSyncedAt |
+| SCRUM-17 | Sync Calendar + Drive (stretch) | Dũng | ✅ Done |
+| SCRUM-20 | Kanban status + Note CRUD + ItemFolders | Huy | ✅ Done |
+| SCRUM-22 | Auth pages (login/register) nối API | Dũng | ✅ Done |
+| SCRUM-23 | Admin API: users + stats (stretch) | Huy | ✅ Done — `GET /api/admin/users` (search + pagination, Admin) + `GET /api/admin/stats` (tổng user/connection/item, sync error 24h); user thường → 403 |
+| SCRUM-25 | Logging + optimize queries | Hải | ✅ Done — `RequestLoggingMiddleware` (request/response + elapsed ms + userId, đặt outermost trước ExceptionMiddleware) + EF query logging dev-only. Query: fix cartesian/N+1 folder list (`GetUserFoldersAsync` gỡ Include FolderShares + `AsSplitQuery` ItemFolders; `GetSharedFoldersAsync` thêm `AsSplitQuery`); Items list `GetPagedAsync` = 1 SELECT OFFSET/FETCH (`AsNoTracking`). |
+| SCRUM-32 | Migration: Users multi-auth (PasswordHash null, GoogleSub, AuthProvider) | Lộc | ✅ Done |
+| SCRUM-33 | Google Sign-In (đăng nhập Google, auto-link) | Lộc | ✅ Done |
+| SCRUM-34 | Migration mô hình B: gộp Connections, Items.ConnectionId + ETag | Hải | ✅ Done — migration `ModelBConnections`, đã apply DB dev |
+| SCRUM-35 | OAuth start flow mô hình B (mỗi service authorize riêng) | Khánh | ✅ Done — `InitiateConnectionAsync` nhận `serviceType`, cache vào state; `ProviderStrategyContext` + `BuildAuthUrlAsync` per-service |
+| SCRUM-36 | Đổi scope sang read-write (Google) — callback mô hình B | Khánh | ✅ Done — `CompleteConnectionAsync` đọc `serviceType` từ state, `ValidateAndExtract` chỉ check scope của service đó; scope read-write (gmail.modify+send, calendar, drive) |
+| SCRUM-37 | Item write-back: ghi ngược lên Google (Email + Event + File) | Vũ | 🔍 **In Review** — `PATCH /api/items/{id}` phân nhánh theo Type; Email modify (label/read/star/trash, KHÔNG sửa nội dung), Event update, File rename/trash; thêm `Items.ETag` |
+| SCRUM-39 | Bỏ DB credentials cho Integrations → config/env (`OAuth:`) | Khánh | ✅ Done — migration `RemoveClientCredentialsFromIntegration` (drop 2 cột encrypted), bỏ endpoint PUT /credentials + `SetCredentials`, code đọc `OAuth:{provider}:ClientId/Secret` |
+| SCRUM-40 | Admin bật/tắt integration — `PATCH /api/admin/integrations/{key}/enable` | Khánh | ✅ Done — `AdminIntegrationsController`, `ToggleIntegrationAsync`, validator + DTOs |
 
-| Ticket | Việc | Assignee | Dependency | Status |
-|---|---|---|---|---|
-| SCRUM-32 | Migration: Users multi-auth (PasswordHash null, GoogleSub, AuthProvider) | Lộc | SCRUM-6 | ✅ Done |
-| SCRUM-33 | Google Sign-In (đăng nhập Google, auto-link) | Lộc | 32, 9 | ✅ Done |
-| SCRUM-34 | Migration mô hình B: gộp Connections, Items.ConnectionId + ETag | Hải | SCRUM-6 | ✅ Done 2026-06-11 — migration `ModelBConnections`, đã apply DB dev |
-| SCRUM-35 | OAuth start flow theo mô hình B (mỗi service 1 connection) | Khánh | 34 | ✅ Done 2026-06-12 — `InitiateConnectionAsync` nhận `serviceType`, cache vào state; `ProviderStrategyContext` + `BuildAuthUrlAsync` per-service |
-| SCRUM-36 | OAuth callback theo mô hình B (per-service) + scope read-write | Khánh | 35 | ✅ Done 2026-06-12 — `CompleteConnectionAsync` đọc `serviceType` từ state, `ValidateAndExtract` chỉ check scope của service đó; scope đã là read-write (gmail.modify+send, calendar, drive) |
-| SCRUM-37 | Write-back Google: Email + Event + File (PATCH/POST/DELETE items) | Vũ | 36 | ⏳ Not started |
-| SCRUM-38 | Conflict detection (ETag → 409) cho mọi write-back | Lộc | 37 — **chốt interface `IWriteBackGuard` với Vũ trước khi code** | ⏳ Not started |
-| SCRUM-30 | Scheduled email tạo/list/cancel (đổi ConnectionId) | Vũ | 34, 36 | ⏳ Not started |
-| SCRUM-31 | Cron process-scheduled (token từ Connections) | Lộc | 30, 37 | ⏳ Not started |
+> Lưu ý sau SCRUM-34: response `POST /api/connections/oauth/callback` đổi shape (trả list connections) — xem API.md; FE cập nhật khi wire.
 
-**Execution order:** 34 ✅ → 35 → 36 (Khánh) → 37 (Vũ) và 38 (Lộc) song song → rồi 30/31.
-**Phối hợp:** Vũ (37) + Lộc (38) thống nhất interface `IWriteBackGuard` trước khi code.
-**Lưu ý sau SCRUM-34:** response của `POST /api/connections/oauth/callback` đã đổi shape (trả list connections) — xem API.md; FE (Dũng) cập nhật khi wire.
-**Huy** đợt này: cập nhật GET /api/items trả ETag (phục vụ 37/38), hoặc test write-back. (SCRUM-14 đã xong.)
-
-## Sprint 3 — Chất lượng / hardening (BE)
-
-| Ticket | Việc | Assignee | Dependency | Status |
-|---|---|---|---|---|
-| SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done 2026-06-17 — `ExceptionMiddleware` map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack/message ở production (kèm diagnostics ở Development); traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
-| SCRUM-25 | Structured logging + tối ưu query EF (tránh N+1) cho list endpoints | — | — | ✅ Done 2026-06-20 — **Logging:** `RequestLoggingMiddleware` (request/response + elapsed ms + userId, đặt outermost trước ExceptionMiddleware) + EF query logging dev-only (`EnableSensitiveDataLogging`/`EnableDetailedErrors` + `Database.Command=Information`). **Query:** fix cartesian/N+1 folder list — `GetUserFoldersAsync` gỡ Include `FolderShares` (include chết: owned folder luôn map "Owner") + `AsSplitQuery` cho `ItemFolders`; `GetSharedFoldersAsync` thêm `AsSplitQuery`. Items list `GetPagedAsync` verify = đúng 1 SELECT có `OFFSET/FETCH` (filter/sort/paging ở DB, `AsNoTracking`), không N+1. Test: `RequestLoggingMiddlewareTests` (6) + `ItemListQuerySqlTests` (1, qua `ToQueryString`). _AC "đo perf với data mẫu (seed)" đã descope khỏi ticket — `elapsed ms` trong log đủ để đo khi cần._ |
-
-## Cleanup / tech-debt (chốt 2026-06-12 — xem CHANGELOG)
+## Sprint 3 — Hardening + write-back hoàn thiện + scheduled email + bắt đầu FE (hiện hành)
 
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
-| SCRUM-47* | Bỏ DB credentials cho Integrations: drop 2 cột encrypted, xoá PUT /credentials, đổi section config `Dev:` → `OAuth:` | — | SCRUM-36 | ✅ Done in code 2026-06-12 — migration `RemoveClientCredentialsFromIntegration` (drop 2 cột), bỏ endpoint PUT /credentials + `SetCredentials`, code đọc `OAuth:{provider}:ClientId/Secret`. ⚠️ Chưa tạo issue Jira tương ứng. |
-| SCRUM-48* | Admin toggle integration: PATCH /api/admin/integrations/{key}/enable | Khánh | — | ✅ Done 2026-06-15 — `AdminIntegrationsController`, `ToggleIntegrationAsync`, validator + DTOs |
-| SCRUM-49* | Admin API: GET /api/admin/users (phân trang + search) + GET /api/admin/stats (thống kê) | Huy/Antigravity | — | ✅ Done 2026-06-19 — AdminController + AdminService (Infrastructure) + GetAdminUsersRequestValidator + 15 unit tests (InMemory EF); IAdminService đăng ký trong Infrastructure DI |
+| SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done — map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack ở prod; traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
+| SCRUM-26 | Refactor services + clean architecture | Khánh | — | ⏳ To Do |
+| SCRUM-27 | API testing + Postman collection | Huy | — | ⏳ To Do |
+| SCRUM-28 | README backend + setup guide | Dũng | — | ⏳ To Do |
+| SCRUM-29 | Unit test cho service chính | Hải | — | ⏳ To Do |
+| SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ⏳ To Do — `POST /api/scheduled-emails` (422 nếu Connection ≠ Gmail, 400 nếu sendAt quá khứ); list phân trang; cancel |
+| SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | ⏳ To Do |
+| SCRUM-38 | Conflict resolution chung (ETag → 409) | Lộc | 37 — **chốt interface `IWriteBackGuard` với Vũ trước khi code** | ⏳ To Do |
+| SCRUM-41 | FE: API layer (axios + JWT interceptor + TanStack Query) | Vũ | — | ⏳ To Do |
+| SCRUM-42 | FE: Wire Login/Register vào API | Lộc | 41 | ⏳ To Do |
+| SCRUM-43 | FE: Connections page (list/connect/disconnect per-service) | Khánh | 41 | ⏳ To Do |
 
-\* Số ticket tạm — sửa lại theo số Jira cấp khi tạo issue.
+**Phối hợp:** SCRUM-37 (Vũ) đang review; SCRUM-38 (Lộc) thống nhất interface `IWriteBackGuard` trước khi code. Scheduled email (30/31) viết theo mô hình B (`ScheduledEmails.ConnectionId` → Connection ServiceType=Gmail).
 
-## Phase sau — BACKLOG, CHƯA LÀM (đừng code)
-| Ticket | Việc |
-|---|---|
-| SCRUM-39 | Webhook Gmail (watch + Pub/Sub) thay polling đọc |
-| SCRUM-40 | Webhook Calendar (events.watch) + renew |
-| SCRUM-41 | Bảng WebhookChannels + cron renew |
-| SCRUM-42 | Jira: Integration Atlassian + OAuth (cloudId) |
-| SCRUM-43 | Jira: sync issue → Item(Ticket) |
-| SCRUM-44 | Jira: write-back (transition/assign/comment) |
-| SCRUM-45 | Jira webhook (issue created/updated) |
-| SCRUM-46 | ImportantContacts: khôi phục JiraAccount |
+## Sprint 4 — Frontend đầy đủ + deploy + nghiệm thu
+
+| Ticket | Việc | Assignee | Status |
+|---|---|---|---|
+| SCRUM-44 | FE: Inbox/Items view (list + filter + search + pagination) | Huy | ⏳ To Do |
+| SCRUM-45 | FE: Kanban 3 cột (drag-drop) + Folder sidebar | Huy | ⏳ To Do |
+| SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ⏳ To Do |
+| SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Vũ | ⏳ To Do |
+| SCRUM-48 | FE: Loading/error/toast chuẩn | Khánh | ⏳ To Do |
+| SCRUM-49 | FE: Admin dashboard (users list + stats charts) | Huy | ⏳ To Do |
+| SCRUM-50 | FE: Responsive polish + dashboard chart + dark mode | Dũng | ⏳ To Do |
+| SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do |
+| SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
+| SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
+
+---
+
+## Ngoài scope (KHÔNG còn ticket Jira)
+
+Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — chỉ là định hướng tương lai, đừng code, đừng gán số SCRUM (số 39–46 nay đã dùng cho việc khác):
+
+- Webhook / push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch) thay sync on-demand.
+- Jira / Atlassian integration (OAuth cloudId, sync issue → Item(Ticket), write-back, webhook).
+- Social / friend system, AI workflow.
