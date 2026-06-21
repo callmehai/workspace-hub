@@ -116,7 +116,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Event", calendarId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Calendar", calendarId);
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
                 throw new ForbiddenException("Cần reconnect với quyền ghi.");

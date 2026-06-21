@@ -55,6 +55,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
         if (item.ExternalId == null) throw new BusinessRuleException("Item has no external ID.");
 
+        // belt-and-suspenders: validator already enforces this check, but keeping it for defense-in-depth.
         if (!payload.IsUnread.HasValue && !payload.IsStarred.HasValue && payload.AddLabels == null && payload.RemoveLabels == null &&
             !payload.IsTrashed.HasValue && payload.Title == null && payload.Start == null &&
             payload.End == null && payload.Location == null && payload.Attendees == null &&
@@ -128,8 +129,8 @@ public class ItemWriteBackService : IItemWriteBackService
                 newETag = await _gmailGateway.GetMessageETagAsync(conn, item.ExternalId, ct);
                 
                 var metaDictEmail = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
-                if (isUnreadChanged) metaDictEmail["IsUnread"] = payload.IsUnread!.Value;
-                if (isStarredChanged) metaDictEmail["IsStarred"] = payload.IsStarred!.Value;
+                if (isUnreadChanged) metaDictEmail["isUnread"] = payload.IsUnread!.Value;
+                if (isStarredChanged) metaDictEmail["isStarred"] = payload.IsStarred!.Value;
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEmail);
 
                 break;
@@ -165,6 +166,8 @@ public class ItemWriteBackService : IItemWriteBackService
                 if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null)
                     throw new BusinessRuleException("Invalid fields for File writeback.");
                     
+                // Thiết kế: Chấp nhận rủi ro partial write nếu update Name thành công nhưng Trash thất bại.
+                // Sync sau đó sẽ tự fix state.
                 if (payload.Name != null)
                 {
                     var updatedFile = await _driveGateway.UpdateFileAsync(conn, item.ExternalId, payload.Name, ct);
