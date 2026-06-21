@@ -1,4 +1,4 @@
-﻿using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
 using WorkspaceHub.Application.Abstractions;
@@ -38,7 +38,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             {
                 var listRequest = service.Files.List();
                 listRequest.PageSize = 50;
-                listRequest.Fields = "nextPageToken, files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed)";
+                listRequest.Fields = "nextPageToken, files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
                 listRequest.OrderBy = "modifiedTime desc";
 
                 string? filesPageToken = null;
@@ -64,7 +64,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             while (true)
             {
                 var changesRequest = service.Changes.List(pageToken);
-                changesRequest.Fields = "nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed), removed)";
+                changesRequest.Fields = "nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId), removed)";
 
                 var response = await changesRequest.ExecuteAsync(ct);
 
@@ -113,7 +113,9 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             IconLink = file.IconLink,
             // Sửa lỗi cảnh báo: Dùng trực tiếp ModifiedTimeDateTimeOffset theo khuyến nghị của Google
             ModifiedTime = file.ModifiedTimeDateTimeOffset ?? DateTimeOffset.UtcNow,
-            Trashed = file.Trashed ?? false
+            Trashed = file.Trashed ?? false,
+            Version = file.Version,
+            HeadRevisionId = file.HeadRevisionId
         };
     }
 }

@@ -10,6 +10,8 @@ public class DriveFileDto
     public string? IconLink { get; set; }
     public DateTimeOffset? ModifiedTime { get; set; }
     public bool Trashed { get; set; }
+    public long? Version { get; set; }
+    public string? HeadRevisionId { get; set; }
 }
 
 public class DriveSyncResult

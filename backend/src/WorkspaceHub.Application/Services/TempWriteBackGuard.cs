@@ -7,8 +7,11 @@ public class TempWriteBackGuard : IWriteBackGuard
 {
     public void EnsureNoConflict(string? storedEtag, string? providerEtag)
     {
+        Console.WriteLine($"[Writeback Guard] Stored: {storedEtag}, Provider: {providerEtag}");
+        
         // TEMP - replace by SCRUM-38 (Loc)
-        if (providerEtag == null) return;
+        if (string.IsNullOrEmpty(storedEtag)) return;
+        if (string.IsNullOrEmpty(providerEtag)) return;
         
         if (storedEtag != providerEtag)
         {

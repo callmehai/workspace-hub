@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
@@ -30,7 +30,8 @@ public class DriveItemMapper : IDriveItemMapper
             OccurredAt = file.ModifiedTime?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata)
+            MetadataJson = JsonSerializer.Serialize(metadata),
+            ETag = file.Version?.ToString() ?? file.HeadRevisionId ?? file.ModifiedTime?.ToString("o")
         };
     }
 }

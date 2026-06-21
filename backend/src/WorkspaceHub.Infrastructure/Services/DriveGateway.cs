@@ -33,11 +33,11 @@ public class DriveGateway : IDriveGateway
         {
             using var drive = await BuildDriveServiceAsync(connection, ct);
             var request = drive.Files.Get(fileId);
-            request.Fields = "id, name, mimeType, version, modifiedTime";
+            request.Fields = "id, name, mimeType, version, modifiedTime, trashed, headRevisionId";
             var file = await request.ExecuteAsync(ct);
             return new DriveFile(
                 file.Id,
-                file.Version?.ToString() ?? file.ModifiedTimeDateTimeOffset?.ToString("o"),
+                file.Version?.ToString() ?? file.HeadRevisionId ?? file.ModifiedTimeDateTimeOffset?.ToString("o"),
                 file.Name,
                 file.MimeType);
         }
@@ -61,11 +61,11 @@ public class DriveGateway : IDriveGateway
                 Name = newName
             };
             var request = drive.Files.Update(fileMetadata, fileId);
-            request.Fields = "id, name, mimeType, version, modifiedTime";
+            request.Fields = "id, name, mimeType, version, modifiedTime, trashed, headRevisionId";
             var updatedFile = await request.ExecuteAsync(ct);
             return new DriveFile(
                 updatedFile.Id,
-                updatedFile.Version?.ToString() ?? updatedFile.ModifiedTimeDateTimeOffset?.ToString("o"),
+                updatedFile.Version?.ToString() ?? updatedFile.HeadRevisionId ?? updatedFile.ModifiedTimeDateTimeOffset?.ToString("o"),
                 updatedFile.Name,
                 updatedFile.MimeType);
         }
