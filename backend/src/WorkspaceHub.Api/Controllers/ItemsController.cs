@@ -22,6 +22,7 @@ public class ItemsController : ApiControllerBase
     private readonly IValidator<UpdateItemStatusRequest> _updateStatusValidator;
     private readonly IValidator<CreateNoteRequest> _createNoteValidator;
     private readonly IValidator<CreateEventRequest> _createEventValidator;
+    private readonly IValidator<PatchItemRequest> _patchItemValidator;
 
     public ItemsController(
         IItemService itemService,
@@ -29,7 +30,8 @@ public class ItemsController : ApiControllerBase
         IValidator<GetItemsRequest> validator,
         IValidator<UpdateItemStatusRequest> updateStatusValidator,
         IValidator<CreateNoteRequest> createNoteValidator,
-        IValidator<CreateEventRequest> createEventValidator)
+        IValidator<CreateEventRequest> createEventValidator,
+        IValidator<PatchItemRequest> patchItemValidator)
     {
         _itemService = itemService;
         _writeBackService = writeBackService;
@@ -37,6 +39,7 @@ public class ItemsController : ApiControllerBase
         _updateStatusValidator = updateStatusValidator;
         _createNoteValidator = createNoteValidator;
         _createEventValidator = createEventValidator;
+        _patchItemValidator = patchItemValidator;
     }
 
     /// <summary>
@@ -105,6 +108,7 @@ public class ItemsController : ApiControllerBase
         [FromBody] PatchItemRequest request,
         CancellationToken ct = default)
     {
+        await _patchItemValidator.ValidateAndThrowAsync(request, ct);
         var updated = await _writeBackService.PatchItemAsync(id, CurrentUserId, request, ct);
         return Ok(updated);
     }

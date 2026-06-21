@@ -3,6 +3,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Application.Common;
 
 namespace WorkspaceHub.Infrastructure.Services;
 
@@ -165,9 +166,9 @@ public class GmailGateway : IGmailGateway
         {
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
-                throw new WorkspaceHub.Application.Common.ForbiddenException("Cần reconnect với quyền ghi.");
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
             }
-            throw new WorkspaceHub.Application.Common.ProviderException($"Gmail API error: {ex.Message}");
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
     }
 
@@ -182,9 +183,9 @@ public class GmailGateway : IGmailGateway
         {
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
-                throw new WorkspaceHub.Application.Common.ForbiddenException("Cần reconnect với quyền ghi.");
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
             }
-            throw new WorkspaceHub.Application.Common.ProviderException($"Gmail API error: {ex.Message}");
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
     }
 
@@ -199,9 +200,9 @@ public class GmailGateway : IGmailGateway
         {
             if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
-                throw new WorkspaceHub.Application.Common.ForbiddenException("Cần reconnect với quyền ghi.");
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
             }
-            throw new WorkspaceHub.Application.Common.ProviderException($"Gmail API error: {ex.Message}");
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
     }
 
@@ -217,7 +218,7 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            throw new WorkspaceHub.Application.Common.ProviderException($"Gmail API error: {ex.Message}");
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
     }
 }

@@ -37,7 +37,7 @@ public class ItemWriteBackService : IItemWriteBackService
     private async Task<Connection> GetConnectionAsync(Guid? connectionId, CancellationToken ct)
     {
         if (connectionId == null) throw new BusinessRuleException("Item is not linked to any connection.");
-        var conn = await _connections.GetByIdTrackedAsync(connectionId.Value, ct);
+        var conn = await _connections.GetByIdAsync(connectionId.Value, ct);
         if (conn == null) throw new NotFoundException("Connection", connectionId.Value);
         return conn;
     }
@@ -54,6 +54,14 @@ public class ItemWriteBackService : IItemWriteBackService
         if (item.Type == ItemType.File && conn.ServiceType != ServiceType.Drive) throw new BusinessRuleException("Connection type mismatch for Drive.");
 
         if (item.ExternalId == null) throw new BusinessRuleException("Item has no external ID.");
+
+        if (!payload.IsUnread.HasValue && !payload.IsStarred.HasValue && payload.Labels == null &&
+            !payload.IsTrashed.HasValue && payload.Title == null && payload.Start == null &&
+            payload.End == null && payload.Location == null && payload.Attendees == null &&
+            payload.Name == null)
+        {
+            throw new BusinessRuleException("No fields provided for update.");
+        }
 
         string? providerEtag = null;
         switch (item.Type)
@@ -166,8 +174,12 @@ public class ItemWriteBackService : IItemWriteBackService
                 {
                     if (payload.IsTrashed.Value)
                     {
-                        await _driveGateway.TrashFileAsync(conn, item.ExternalId, ct);
-                        var f = await _driveGateway.GetFileAsync(conn, item.ExternalId, ct);
+                        var f = await _driveGateway.TrashFileAsync(conn, item.ExternalId, ct);
+                        newETag = f.ETag;
+                    }
+                    else
+                    {
+                        var f = await _driveGateway.UntrashFileAsync(conn, item.ExternalId, ct);
                         newETag = f.ETag;
                     }
                 }
@@ -182,7 +194,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
     public async Task<ItemResponse> CreateEventAsync(Guid userId, CreateEventRequest payload, CancellationToken ct = default)
     {
-        var conn = await _connections.GetByIdTrackedAsync(payload.ConnectionId, ct);
+        var conn = await _connections.GetByIdAsync(payload.ConnectionId, ct);
         if (conn == null) throw new NotFoundException("Connection", payload.ConnectionId);
         if (conn.UserId != userId) throw new ForbiddenException("Not your connection.");
         if (conn.ServiceType != ServiceType.GCal) throw new BusinessRuleException("Connection is not for Calendar.");
@@ -230,7 +242,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
         if (item.ExternalId != null && item.ConnectionId != null)
         {
-            var conn = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct);
+            var conn = await _connections.GetByIdAsync(item.ConnectionId.Value, ct);
             if (conn != null)
             {
                 switch (item.Type)

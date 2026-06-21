@@ -79,7 +79,7 @@ public class DriveGateway : IDriveGateway
         }
     }
 
-    public async Task TrashFileAsync(Connection connection, string fileId, CancellationToken ct = default)
+    public async Task<DriveFile> TrashFileAsync(Connection connection, string fileId, CancellationToken ct = default)
     {
         try
         {
@@ -89,7 +89,41 @@ public class DriveGateway : IDriveGateway
                 Trashed = true
             };
             var request = drive.Files.Update(fileMetadata, fileId);
-            await request.ExecuteAsync(ct);
+            request.Fields = "id, name, mimeType, version, modifiedTime, trashed, headRevisionId";
+            var updatedFile = await request.ExecuteAsync(ct);
+            return new DriveFile(
+                updatedFile.Id,
+                updatedFile.Version?.ToString() ?? updatedFile.HeadRevisionId ?? updatedFile.ModifiedTimeDateTimeOffset?.ToString("o"),
+                updatedFile.Name,
+                updatedFile.MimeType);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Drive API error: {ex.Message}");
+        }
+    }
+
+    public async Task<DriveFile> UntrashFileAsync(Connection connection, string fileId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var drive = await BuildDriveServiceAsync(connection, ct);
+            var fileMetadata = new Google.Apis.Drive.v3.Data.File
+            {
+                Trashed = false
+            };
+            var request = drive.Files.Update(fileMetadata, fileId);
+            request.Fields = "id, name, mimeType, version, modifiedTime, trashed, headRevisionId";
+            var updatedFile = await request.ExecuteAsync(ct);
+            return new DriveFile(
+                updatedFile.Id,
+                updatedFile.Version?.ToString() ?? updatedFile.HeadRevisionId ?? updatedFile.ModifiedTimeDateTimeOffset?.ToString("o"),
+                updatedFile.Name,
+                updatedFile.MimeType);
         }
         catch (Google.GoogleApiException ex)
         {

@@ -68,15 +68,16 @@ public class CalendarGateway : ICalendarGateway
         {
             using var calendar = await BuildCalendarServiceAsync(connection, ct);
             
-            var existing = await calendar.Events.Get(calendarId, eventId).ExecuteAsync(ct);
-            existing.Summary = eventDto.Summary;
-            existing.Description = eventDto.Description;
+            var existing = new Event();
+            if (eventDto.Summary != null) existing.Summary = eventDto.Summary;
+            if (eventDto.Description != null) existing.Description = eventDto.Description;
             if (eventDto.Location != null) existing.Location = eventDto.Location;
             if (eventDto.Attendees != null) existing.Attendees = eventDto.Attendees.Select(a => new EventAttendee { Email = a }).ToList();
             if (eventDto.Start.HasValue) existing.Start = new EventDateTime { DateTimeDateTimeOffset = eventDto.Start.Value };
             if (eventDto.End.HasValue) existing.End = new EventDateTime { DateTimeDateTimeOffset = eventDto.End.Value };
             
-            var updated = await calendar.Events.Update(existing, calendarId, eventId).ExecuteAsync(ct);
+            var request = calendar.Events.Patch(existing, calendarId, eventId);
+            var updated = await request.ExecuteAsync(ct);
             return MapToDto(updated);
         }
         catch (Google.GoogleApiException ex)
