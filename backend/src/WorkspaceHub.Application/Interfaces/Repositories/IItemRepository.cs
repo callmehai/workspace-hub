@@ -34,9 +34,9 @@ public interface IItemRepository : IGenericRepository<Item>
     Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// Set ConnectionId = NULL cho tất cả Items đang trỏ vào connectionId.
-    /// Dùng khi disconnect connection (SCRUM-14) — Items giữ lại nhưng mất liên kết.
+    /// Xóa toàn bộ Items và các liên kết (ItemFolders, TagAssignments) thuộc connectionId.
+    /// Dùng khi disconnect connection để tránh vi phạm Unique Index (ConnectionId, ExternalId) do ConnectionId=NULL trùng lặp.
     /// </summary>
-    Task NullifyConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
+    Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
 }
 

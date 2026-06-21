@@ -3,6 +3,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Application.Common;
 
 namespace WorkspaceHub.Infrastructure.Services;
 
@@ -107,7 +108,8 @@ public class GmailGateway : IGmailGateway
             msg.Snippet,
             msg.LabelIds?.ToList() ?? new List<string>(),
             hasAttachment,
-            occurredAt);
+            occurredAt,
+            msg.HistoryId?.ToString());
     }
 
     public async Task<GmailHistory> ListHistoryAsync(Connection connection, string startHistoryId, string? pageToken, CancellationToken ct = default)
@@ -147,4 +149,88 @@ public class GmailGateway : IGmailGateway
             return new GmailHistory(true, new List<string>(), null, null);
         }
     }
+
+    public async Task<string?> ModifyMessageAsync(Connection connection, string messageId, IList<string> addLabelIds, IList<string> removeLabelIds, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var req = new Google.Apis.Gmail.v1.Data.ModifyMessageRequest
+            {
+                AddLabelIds = addLabelIds,
+                RemoveLabelIds = removeLabelIds
+            };
+            var response = await gmail.Users.Messages.Modify(req, "me", messageId).ExecuteAsync(ct);
+            return response.HistoryId?.ToString();
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
+        }
+    }
+
+    public async Task<string?> TrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var response = await gmail.Users.Messages.Trash("me", messageId).ExecuteAsync(ct);
+            return response.HistoryId?.ToString();
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
+        }
+    }
+
+    public async Task<string?> UntrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var response = await gmail.Users.Messages.Untrash("me", messageId).ExecuteAsync(ct);
+            return response.HistoryId?.ToString();
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
+        }
+    }
+
+    public async Task<string?> GetMessageETagAsync(Connection connection, string messageId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var request = gmail.Users.Messages.Get("me", messageId);
+            request.Format = Google.Apis.Gmail.v1.UsersResource.MessagesResource.GetRequest.FormatEnum.Minimal;
+            var msg = await request.ExecuteAsync(ct);
+            return msg.HistoryId?.ToString();
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
+        }
+    }
 }
+

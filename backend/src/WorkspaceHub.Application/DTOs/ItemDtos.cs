@@ -32,6 +32,29 @@ public record CreateNoteRequest(
     string ContentMarkdown,
     Guid? FolderId = null);
 
+public record PatchItemRequest(
+    bool? IsUnread = null,
+    bool? IsStarred = null,
+    List<string>? AddLabels = null,
+    List<string>? RemoveLabels = null,
+    bool? IsTrashed = null,
+    string? Title = null,
+    DateTimeOffset? Start = null,
+    DateTimeOffset? End = null,
+    string? Location = null,
+    List<string>? Attendees = null,
+    string? Name = null
+);
+
+public record CreateEventRequest(
+    Guid ConnectionId,
+    string Title,
+    DateTimeOffset Start,
+    DateTimeOffset End,
+    string? Location = null,
+    List<string>? Attendees = null
+);
+
 // ───────────────────────── Response DTO ─────────────────────────
 
 /// <summary>

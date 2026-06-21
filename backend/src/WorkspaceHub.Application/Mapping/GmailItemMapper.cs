@@ -49,7 +49,8 @@ public class GmailItemMapper : IGmailItemMapper
             OccurredAt = message.OccurredAt?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = isImportant,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata)
+            MetadataJson = JsonSerializer.Serialize(metadata),
+            ETag = message.ETag
         };
     }
 }

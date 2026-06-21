@@ -208,7 +208,7 @@ public class ConnectionsServiceTests
             .Setup(r => r.GetByIdTrackedAsync(connection.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(connection);
         _itemsMock
-            .Setup(r => r.NullifyConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _scheduledEmailsMock
             .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
@@ -235,7 +235,7 @@ public class ConnectionsServiceTests
             .Setup(r => r.GetByIdTrackedAsync(connection.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(connection);
         _itemsMock
-            .Setup(r => r.NullifyConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _scheduledEmailsMock
             .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
@@ -248,7 +248,7 @@ public class ConnectionsServiceTests
         await _sut.DisconnectAsync(connection.Id, _userId);
 
         // Assert — Items.ConnectionId nullified before connection removed
-        _itemsMock.Verify(r => r.NullifyConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()), Times.Once);
+        _itemsMock.Verify(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -271,7 +271,7 @@ public class ConnectionsServiceTests
             .Setup(r => r.GetByIdTrackedAsync(connection.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(connection);
         _itemsMock
-            .Setup(r => r.NullifyConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _scheduledEmailsMock
             .Setup(r => r.DeleteByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))

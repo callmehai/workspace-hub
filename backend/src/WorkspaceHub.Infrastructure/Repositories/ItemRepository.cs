@@ -104,10 +104,21 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     }
 
     /// <inheritdoc/>
-    public async Task NullifyConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
+    public async Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
     {
+        // 1. Delete associated ItemFolders
+        await Db.ItemFolders
+            .Where(x => x.Item.ConnectionId == connectionId)
+            .ExecuteDeleteAsync(ct);
+
+        // 2. Delete associated TagAssignments
+        await Db.TagAssignments
+            .Where(x => x.Item.ConnectionId == connectionId)
+            .ExecuteDeleteAsync(ct);
+
+        // 3. Delete the Items themselves
         await Set
             .Where(i => i.ConnectionId == connectionId)
-            .ExecuteUpdateAsync(s => s.SetProperty(i => i.ConnectionId, (Guid?)null), ct);
+            .ExecuteDeleteAsync(ct);
     }
 }

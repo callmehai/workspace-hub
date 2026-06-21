@@ -234,8 +234,8 @@ public class ConnectionsService : IConnectionsService
 
         await _connections.ExecuteInTransactionAsync(async () =>
         {
-            // (1) Items.ConnectionId SET NULL (direct SQL)
-            await _items.NullifyConnectionIdAsync(connectionId, ct);
+            // (1) Items.ConnectionId: Delete all items and associations (direct SQL)
+            await _items.DeleteByConnectionIdAsync(connectionId, ct);
 
             // (2) Xoá ScheduledEmails theo ConnectionId (direct SQL)
             await _scheduledEmails.DeleteByConnectionIdAsync(connectionId, ct);

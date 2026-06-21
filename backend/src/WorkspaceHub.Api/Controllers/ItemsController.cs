@@ -17,20 +17,29 @@ namespace WorkspaceHub.Api.Controllers;
 public class ItemsController : ApiControllerBase
 {
     private readonly IItemService _itemService;
+    private readonly IItemWriteBackService _writeBackService;
     private readonly IValidator<GetItemsRequest> _validator;
     private readonly IValidator<UpdateItemStatusRequest> _updateStatusValidator;
     private readonly IValidator<CreateNoteRequest> _createNoteValidator;
+    private readonly IValidator<CreateEventRequest> _createEventValidator;
+    private readonly IValidator<PatchItemRequest> _patchItemValidator;
 
     public ItemsController(
         IItemService itemService,
+        IItemWriteBackService writeBackService,
         IValidator<GetItemsRequest> validator,
         IValidator<UpdateItemStatusRequest> updateStatusValidator,
-        IValidator<CreateNoteRequest> createNoteValidator)
+        IValidator<CreateNoteRequest> createNoteValidator,
+        IValidator<CreateEventRequest> createEventValidator,
+        IValidator<PatchItemRequest> patchItemValidator)
     {
         _itemService = itemService;
+        _writeBackService = writeBackService;
         _validator = validator;
         _updateStatusValidator = updateStatusValidator;
         _createNoteValidator = createNoteValidator;
+        _createEventValidator = createEventValidator;
+        _patchItemValidator = patchItemValidator;
     }
 
     /// <summary>
@@ -88,5 +97,44 @@ public class ItemsController : ApiControllerBase
         var created = await _itemService.CreateNoteAsync(CurrentUserId, request, ct);
         // Trả 201 trỏ về GetItemById
         return CreatedAtAction(nameof(GetItemById), new { id = created.Id }, created);
+    }
+
+    /// <summary>
+    /// PATCH /api/items/{id} — cập nhật writeback item.
+    /// </summary>
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<ItemResponse>> PatchItem(
+        Guid id,
+        [FromBody] PatchItemRequest request,
+        CancellationToken ct = default)
+    {
+        await _patchItemValidator.ValidateAndThrowAsync(request, ct);
+        var updated = await _writeBackService.PatchItemAsync(id, CurrentUserId, request, ct);
+        return Ok(updated);
+    }
+
+    /// <summary>
+    /// POST /api/items/event — tạo event mới trên Google Calendar.
+    /// </summary>
+    [HttpPost("event")]
+    public async Task<ActionResult<ItemResponse>> CreateEvent(
+        [FromBody] CreateEventRequest request,
+        CancellationToken ct = default)
+    {
+        await _createEventValidator.ValidateAndThrowAsync(request, ct);
+        var created = await _writeBackService.CreateEventAsync(CurrentUserId, request, ct);
+        return CreatedAtAction(nameof(GetItemById), new { id = created.Id }, created);
+    }
+
+    /// <summary>
+    /// DELETE /api/items/{id} — xoá writeback item.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteItem(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        await _writeBackService.DeleteItemAsync(id, CurrentUserId, ct);
+        return NoContent();
     }
 }
