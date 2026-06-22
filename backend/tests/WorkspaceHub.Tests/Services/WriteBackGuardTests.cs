@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Services;
 using Xunit;
@@ -12,7 +13,7 @@ namespace WorkspaceHub.Tests.Services;
 /// </summary>
 public class WriteBackGuardTests
 {
-    private readonly WriteBackGuard _guard = new();
+    private readonly WriteBackGuard _guard = new(NullLogger<WriteBackGuard>.Instance);
 
     [Fact]
     public void EnsureNoConflict_WhenEtagsMatch_DoesNotThrow()
@@ -36,6 +37,7 @@ public class WriteBackGuardTests
     [InlineData("etag-v1", null)]   // provider không cấp ETag
     [InlineData("etag-v1", "")]
     [InlineData(null, null)]
+    [InlineData("", "")]            // cả hai đều empty → skip-check
     public void EnsureNoConflict_WhenEitherEtagIsNullOrEmpty_SkipsCheck(string? stored, string? provider)
     {
         var act = () => _guard.EnsureNoConflict(stored, provider);

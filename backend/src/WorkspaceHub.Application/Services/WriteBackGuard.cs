@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Services;
 
@@ -16,6 +17,13 @@ namespace WorkspaceHub.Application.Services;
 /// </summary>
 public class WriteBackGuard : IWriteBackGuard
 {
+    private readonly ILogger<WriteBackGuard> _logger;
+
+    public WriteBackGuard(ILogger<WriteBackGuard> logger)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc />
     /// <remarks>
     /// Quy ước skip-check (KHÔNG coi là conflict):
@@ -34,6 +42,10 @@ public class WriteBackGuard : IWriteBackGuard
 
         if (!string.Equals(storedEtag, providerEtag, StringComparison.Ordinal))
         {
+            // Ghi log để có dấu vết debug ở production — exception chỉ mang TraceId.
+            _logger.LogWarning(
+                "Write-back ETag conflict: stored={StoredEtag}, provider={ProviderEtag}",
+                storedEtag, providerEtag);
             throw new ConflictException(
                 "The item was modified on the provider since it was last synced. " +
                 "Refetch the latest version and retry.");
