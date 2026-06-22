@@ -13,4 +13,9 @@ public interface IScheduledEmailRepository : IGenericRepository<ScheduledEmail>
     /// Dùng khi disconnect connection — tránh FK violation (NoAction ở DB).
     /// </summary>
     Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy danh sách email đã lên lịch của user.
+    /// </summary>
+    Task<IReadOnlyList<ScheduledEmail>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
 }
