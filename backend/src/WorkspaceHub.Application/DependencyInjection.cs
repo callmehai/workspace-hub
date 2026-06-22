@@ -20,7 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IConnectionsService, ConnectionsService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IItemWriteBackService, ItemWriteBackService>();
-        services.AddScoped<IWriteBackGuard, TempWriteBackGuard>();
+        services.AddScoped<IWriteBackGuard, WriteBackGuard>();
 
         // Register OAuth Provider Strategies
         services.AddScoped<IProviderStrategy, GoogleStrategy>();
