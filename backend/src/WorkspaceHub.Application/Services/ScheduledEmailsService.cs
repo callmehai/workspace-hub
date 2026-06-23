@@ -51,7 +51,7 @@ public class ScheduledEmailsService : IScheduledEmailsService
             BccJson = JsonSerializer.Serialize(request.Bcc),
             Subject = request.Subject,
             BodyHtml = request.BodyHtml,
-            SendAt = request.SendAt.ToUniversalTime(),
+            SendAt = request.SendAt,
             Status = ScheduledEmailStatus.Pending,
             RetryCount = 0
         };

@@ -1,6 +1,6 @@
 # Sprints & Tickets — Workspace Hub
 
-> Cập nhật 2026-06-21: đồng bộ lại toàn bộ theo Jira (export mới). Backlog Webhook/Jira cũ (SCRUM-39→46) đã **bị bỏ** khỏi Jira — số đó nay là việc khác (xem bảng). Sprint hiện hành: **Sprint 3**. Lịch sử quyết định: CHANGELOG.md.
+> Cập nhật 2026-06-23: SCRUM-30 Done. Cập nhật 2026-06-21: đồng bộ lại toàn bộ theo Jira (export mới). Backlog Webhook/Jira cũ (SCRUM-39→46) đã **bị bỏ** khỏi Jira — số đó nay là việc khác (xem bảng). Sprint hiện hành: **Sprint 3**. Lịch sử quyết định: CHANGELOG.md.
 >
 > **Quy tắc:** sau khi hoàn thành task code nào, cập nhật status ticket đó trong file này (và các .md liên quan).
 
@@ -69,14 +69,14 @@
 | SCRUM-27 | API testing + Postman collection | Huy | — | ⏳ To Do |
 | SCRUM-28 | README backend + setup guide | Dũng | — | ⏳ To Do |
 | SCRUM-29 | Unit test cho service chính | Hải | — | ⏳ To Do |
-| SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ⏳ To Do — `POST /api/scheduled-emails` (422 nếu Connection ≠ Gmail, 400 nếu sendAt quá khứ); list phân trang; cancel |
+| SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ✅ Done — `POST /api/scheduled-emails` (404 connection, 422 ≠ Gmail, 400 sendAt UTC+future); `GET /api/scheduled-emails` OData in-memory (`$top/$skip/$filter/$orderby/$count`); `GET /{id}`; `PATCH /{id}/cancel` (422 đã Sent, idempotent nếu Cancelled). Disconnect xóa scheduled emails theo ConnectionId. |
 | SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | ⏳ To Do |
 | SCRUM-38 | Conflict resolution chung (ETag → 409) | Lộc | 37 — **chốt interface `IWriteBackGuard` với Vũ trước khi code** | ⏳ To Do |
 | SCRUM-41 | FE: API layer (axios + JWT interceptor + TanStack Query) | Vũ | — | ⏳ To Do |
 | SCRUM-42 | FE: Wire Login/Register vào API | Lộc | 41 | ⏳ To Do |
 | SCRUM-43 | FE: Connections page (list/connect/disconnect per-service) | Khánh | 41 | ⏳ To Do |
 
-**Phối hợp:** SCRUM-37 (Vũ) đang review; SCRUM-38 (Lộc) thống nhất interface `IWriteBackGuard` trước khi code. Scheduled email (30/31) viết theo mô hình B (`ScheduledEmails.ConnectionId` → Connection ServiceType=Gmail).
+**Phối hợp:** SCRUM-37 (Vũ) đang review; SCRUM-38 (Lộc) thống nhất interface `IWriteBackGuard` trước khi code. SCRUM-30 ✅ xong API; SCRUM-31 (cron gửi) tiếp theo — `ScheduledEmails.ConnectionId` → Connection ServiceType=Gmail.
 
 ## Sprint 4 — Frontend đầy đủ + deploy + nghiệm thu
 
