@@ -37,6 +37,10 @@ public class CreateScheduledEmailRequestValidator : AbstractValidator<CreateSche
             .NotEmpty().WithMessage("BodyHtml is required.");
 
         RuleFor(x => x.SendAt)
+            .Must(d => d.Kind == DateTimeKind.Utc)
+            .WithMessage("SendAt must be UTC. Append 'Z' to the timestamp, e.g. 2026-06-22T15:00:00Z.");
+
+        RuleFor(x => x.SendAt)
             .Must(sendAt => sendAt > DateTime.UtcNow)
             .WithMessage("SendAt must be in the future.");
     }
