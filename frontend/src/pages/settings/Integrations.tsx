@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import toast from 'react-hot-toast';
-import { Loader2, Mail, Calendar, HardDrive, Kanban, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 
 const SERVICES = [
   {
@@ -10,9 +10,9 @@ const SERVICES = [
     serviceType: 'Gmail',
     name: 'Google Gmail',
     description: 'Sync your inbox directly into your workspace.',
-    icon: Mail,
-    color: 'text-red-500',
-    bgColor: 'bg-red-50',
+    icon: '/icons/gmail.svg',
+    color: '',
+    bgColor: 'bg-gray-50',
   },
   {
     integrationKey: 'google',
@@ -20,9 +20,9 @@ const SERVICES = [
     serviceType: 'GCal',
     name: 'Google Calendar',
     description: 'Manage your events and schedule seamlessly.',
-    icon: Calendar,
-    color: 'text-blue-500',
-    bgColor: 'bg-blue-50',
+    icon: '/icons/gcal.svg',
+    color: '',
+    bgColor: 'bg-gray-50',
   },
   {
     integrationKey: 'google',
@@ -30,9 +30,9 @@ const SERVICES = [
     serviceType: 'Drive',
     name: 'Google Drive',
     description: 'Access and organize your files from Drive.',
-    icon: HardDrive,
-    color: 'text-green-500',
-    bgColor: 'bg-green-50',
+    icon: '/icons/drive.svg',
+    color: '',
+    bgColor: 'bg-gray-50',
   },
   {
     integrationKey: 'jira',
@@ -40,9 +40,9 @@ const SERVICES = [
     serviceType: 'Jira',
     name: 'Atlassian Jira',
     description: 'Import issues, track sprints, and link commits.',
-    icon: Kanban, // Using Kanban icon as a placeholder for Jira
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
+    icon: '/icons/jira.svg',
+    color: '',
+    bgColor: 'bg-gray-50',
   },
 ];
 
@@ -118,13 +118,11 @@ export const Integrations = () => {
           const isActive = status.toLowerCase() === 'active';
           const isError = status.toLowerCase() === 'error';
 
-          const Icon = service.icon;
-
           return (
             <div key={`${service.integrationKey}-${service.serviceType}`} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col transition-shadow hover:shadow-md">
               <div className="flex justify-between items-start mb-4">
-                <div className={`w-12 h-12 rounded-lg ${service.bgColor} flex items-center justify-center`}>
-                  <Icon className={`w-6 h-6 ${service.color}`} />
+                <div className={`w-12 h-12 rounded-lg ${service.bgColor} flex items-center justify-center border border-gray-100`}>
+                  <img src={service.icon} alt={service.name} className="w-6 h-6 object-contain drop-shadow-sm" />
                 </div>
 
                 {/* Status Badge */}
@@ -158,13 +156,7 @@ export const Integrations = () => {
                 {isConnected && connection.providerAccountId && (
                   <p className="text-xs text-gray-400 mt-2 font-mono">Account: {connection.providerAccountId}</p>
                 )}
-                {/* Warning for Readonly scope reconnect reminder */}
-                {isConnected && service.integrationKey === 'google' && (
-                  <div className="mt-3 flex items-start space-x-2 text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-100">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <p>If migrated from older version with read-only access, reconnect to enable write permissions.</p>
-                  </div>
-                )}
+
               </div>
 
               <div className="mt-auto pt-4 border-t border-gray-100">
