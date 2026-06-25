@@ -15,7 +15,7 @@ export const router = createBrowserRouter([
     element: <Login />,
   },
   {
-    path: '/connections/oauth-callback',
+    path: '/oauth/callback',
     element: <OAuthCallback />,
   },
   {

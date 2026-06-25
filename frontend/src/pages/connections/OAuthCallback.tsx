@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { connectionsApi } from '../../lib/connectionsApi';
 import { Loader2 } from 'lucide-react';
@@ -7,18 +7,23 @@ import toast from 'react-hot-toast';
 export const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  
+
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const hasValidParams = !!(code && state);
 
   const [status, setStatus] = useState<'loading' | 'error'>(hasValidParams ? 'loading' : 'error');
 
+  const hasProcessed = useRef(false);
+
   useEffect(() => {
     if (!hasValidParams) {
       toast.error('Invalid callback parameters');
       return;
     }
+
+    if (hasProcessed.current) return;
+    hasProcessed.current = true;
 
     const processCallback = async () => {
       try {

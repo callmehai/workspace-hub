@@ -6,6 +6,7 @@ import { Loader2, Mail, Calendar, HardDrive, Kanban, AlertCircle, CheckCircle2, 
 const SERVICES = [
   {
     integrationKey: 'google',
+    provider: 'google',
     serviceType: 'Gmail',
     name: 'Google Gmail',
     description: 'Sync your inbox directly into your workspace.',
@@ -15,7 +16,8 @@ const SERVICES = [
   },
   {
     integrationKey: 'google',
-    serviceType: 'Calendar',
+    provider: 'google',
+    serviceType: 'GCal',
     name: 'Google Calendar',
     description: 'Manage your events and schedule seamlessly.',
     icon: Calendar,
@@ -24,6 +26,7 @@ const SERVICES = [
   },
   {
     integrationKey: 'google',
+    provider: 'google',
     serviceType: 'Drive',
     name: 'Google Drive',
     description: 'Access and organize your files from Drive.',
@@ -33,6 +36,7 @@ const SERVICES = [
   },
   {
     integrationKey: 'jira',
+    provider: 'atlassian',
     serviceType: 'Jira',
     name: 'Atlassian Jira',
     description: 'Import issues, track sprints, and link commits.',
@@ -64,9 +68,9 @@ export const Integrations = () => {
 
   const handleConnect = async (integrationKey: string, serviceType: string) => {
     try {
-      const redirectUri = `${window.location.origin}/connections/oauth-callback`;
+      const redirectUri = `${window.location.origin}/oauth/callback`;
       const res = await connectionsApi.startOAuth({ integrationKey, serviceType, redirectUri });
-      
+
       // eslint-disable-next-line react-hooks/immutability
       window.location.href = res.authorizationUrl;
     } catch (err) {
@@ -105,15 +109,15 @@ export const Integrations = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {SERVICES.map((service) => {
           const connection = connections.find(
-            (c) => c.provider.toLowerCase() === service.integrationKey.toLowerCase() && 
-                   c.serviceType.toLowerCase() === service.serviceType.toLowerCase()
+            (c) => c.provider.toLowerCase() === service.provider.toLowerCase() &&
+              c.serviceType.toLowerCase() === service.serviceType.toLowerCase()
           );
 
           const isConnected = !!connection;
           const status = connection?.status || 'Disconnected';
           const isActive = status.toLowerCase() === 'active';
           const isError = status.toLowerCase() === 'error';
-          
+
           const Icon = service.icon;
 
           return (
@@ -122,7 +126,7 @@ export const Integrations = () => {
                 <div className={`w-12 h-12 rounded-lg ${service.bgColor} flex items-center justify-center`}>
                   <Icon className={`w-6 h-6 ${service.color}`} />
                 </div>
-                
+
                 {/* Status Badge */}
                 {isConnected ? (
                   isActive ? (
