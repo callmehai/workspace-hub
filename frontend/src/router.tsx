@@ -6,11 +6,17 @@ import { RegisterPage } from './pages/RegisterPage';
 import { Inbox } from './pages/Inbox';
 import { Projects } from './pages/Projects';
 import { KanbanBoard } from './pages/KanbanBoard';
+import { Integrations } from './pages/settings/Integrations';
+import { OAuthCallback } from './pages/connections/OAuthCallback';
 
 export const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />,
+  },
+  {
+    path: '/connections/oauth-callback',
+    element: <OAuthCallback />,
   },
   {
     path: '/register',
@@ -34,6 +40,10 @@ export const router = createBrowserRouter([
           {
             path: 'kanban',
             element: <KanbanBoard />,
+          },
+          {
+            path: 'settings/integrations',
+            element: <Integrations />,
           },
           {
             path: '*',
