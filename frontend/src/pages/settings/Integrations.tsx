@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { connectionsApi } from '../../lib/connectionsApi';
 import toast from 'react-hot-toast';
 import { Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 
@@ -47,45 +47,29 @@ const SERVICES = [
 ];
 
 export const Integrations = () => {
-  const [connections, setConnections] = useState<ConnectionDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: connections = [], isLoading: loading, refetch } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+  });
 
-  const fetchConnections = async () => {
-    try {
-      const data = await connectionsApi.getConnections();
-      setConnections(data);
-    } catch {
-      toast.error('Failed to load connections');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchConnections();
-  }, []);
+  const disconnectMutation = useMutation({
+    mutationFn: connectionsApi.disconnect,
+    onSuccess: () => {
+      toast.success('Disconnected successfully');
+      refetch();
+    },
+    onError: () => toast.error('Failed to disconnect'),
+  });
 
   const handleConnect = async (integrationKey: string, serviceType: string) => {
     try {
       const redirectUri = `${window.location.origin}/oauth/callback`;
       const res = await connectionsApi.startOAuth({ integrationKey, serviceType, redirectUri });
 
-      // eslint-disable-next-line react-hooks/immutability
       window.location.href = res.authorizationUrl;
     } catch (err) {
       const e = err as { response?: { data?: { message?: string } } };
       toast.error(e.response?.data?.message || 'Failed to start connection');
-    }
-  };
-
-  const handleDisconnect = async (id: string) => {
-    try {
-      await connectionsApi.disconnect(id);
-      toast.success('Disconnected successfully');
-      fetchConnections();
-    } catch {
-      toast.error('Failed to disconnect');
     }
   };
 
@@ -162,7 +146,7 @@ export const Integrations = () => {
               <div className="mt-auto pt-4 border-t border-gray-100">
                 {isConnected ? (
                   <button
-                    onClick={() => handleDisconnect(connection.id)}
+                    onClick={() => disconnectMutation.mutate(connection.id)}
                     className="w-full py-2 px-4 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Disconnect
