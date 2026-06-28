@@ -10,6 +10,7 @@ using Microsoft.OpenApi.Models;
 using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application;
 using WorkspaceHub.Application.DTOs;
+using WorkspaceHub.Application.DTOs.ScheduledEmails;
 using WorkspaceHub.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 // OData EDM model — expose FolderResponse cho $filter/$orderby/$select/$top/$skip/$count.
 var edmBuilder = new ODataConventionModelBuilder();
 edmBuilder.EntitySet<FolderResponse>("Folders");
+edmBuilder.EntitySet<ScheduledEmailDto>("ScheduledEmails");
 
 // Controllers + serialize enum dạng string (khớp cách lưu DB) + OData.
 builder.Services.AddControllers()

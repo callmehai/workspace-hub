@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IItemWriteBackService, ItemWriteBackService>();
         services.AddScoped<IWriteBackGuard, WriteBackGuard>();
+        services.AddScoped<IScheduledEmailsService, ScheduledEmailsService>();
 
         // Register OAuth Provider Strategies
         services.AddScoped<IProviderStrategy, GoogleStrategy>();
