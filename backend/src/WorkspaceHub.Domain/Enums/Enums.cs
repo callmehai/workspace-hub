@@ -81,10 +81,11 @@ public enum ScheduledEmailStatus
     Cancelled
 }
 
-/// <summary>Loại liên hệ quan trọng. MVP chỉ Email.</summary>
+/// <summary>Loại liên hệ quan trọng. Email (Gmail) + JiraAccount (phase Jira — SCRUM-60).</summary>
 public enum ImportantContactType
 {
-    Email
+    Email,
+    JiraAccount   // Jira accountId — đánh dấu 1 account Jira là liên hệ quan trọng
 }
 
 /// <summary>Phân loại thông báo in-app.</summary>

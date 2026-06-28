@@ -134,7 +134,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 Không đổi cấu trúc.
 - Tags (UserId, Name không unique toàn hệ thống, Color).
 - TagAssignments composite PK.
-- ImportantContacts (Type: Email; **phase Jira khôi phục Type=JiraAccount** — SCRUM-60, Identifier=accountId/email Jira; UNIQUE(UserId,Type,Identifier)).
+- ImportantContacts (Type: Email / **JiraAccount** — ✅ SCRUM-60, Identifier=email (Email) / accountId (JiraAccount); UNIQUE(UserId,Type,Identifier)). CRUD: `GET/POST /api/importantcontacts`, `DELETE /{id}`. Enum lưu string nên thêm JiraAccount KHÔNG cần migration.
 - Notifications (Type: share_invite/important_email/sync_error/schedule_sent; **phase Jira (SCRUM-60, optional) thêm type cho Jira** — vd jira_assigned/jira_mention; tương lai thêm friend_request/automation_triggered nếu làm).
 
 ## ScheduledEmails

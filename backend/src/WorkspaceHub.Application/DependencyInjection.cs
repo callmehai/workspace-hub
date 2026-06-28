@@ -45,6 +45,8 @@ public static class DependencyInjection
         services.AddScoped<IJiraSyncService, JiraSyncService>();
         // Jira metadata helpers (SCRUM-59)
         services.AddScoped<IJiraMetadataService, JiraMetadataService>();
+        // Important contacts (SCRUM-60)
+        services.AddScoped<IImportantContactService, ImportantContactService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
 
         return services;

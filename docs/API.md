@@ -100,6 +100,13 @@ Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B. Sync issue
 ## Folders / Folder Shares / Tags / Important Contacts / Notifications
 Không đổi. Xem bản trước. List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (target — $filter/$orderby trên IQueryable, scope theo CurrentUserId trước).
 
+### Important Contacts — ✅ SCRUM-60 (CRUD)
+Đánh dấu Email/JiraAccount là liên hệ quan trọng (Item sync về từ contact này tự set IsImportant).
+- `GET /api/importantcontacts?type=` — list của user (lọc Email/JiraAccount nếu có type).
+- `POST /api/importantcontacts` — `{type, identifier, label}` → 201. Email: identifier = email hợp lệ; JiraAccount: identifier = accountId. (409 trùng (UserId,Type,Identifier), 400 validation)
+- `DELETE /api/importantcontacts/{id}` — 204, owner-only (404 nếu không phải của mình).
+> Notification type cho Jira (jira_assigned…): chưa làm — optional, chờ có nguồn sync-event Jira.
+
 ## Items (thêm write-back ⭐)
 - `GET /api/items?folderId&status&type&isImportant&search&page&limit` — envelope. Trả kèm ETag. **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
