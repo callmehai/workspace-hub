@@ -1,0 +1,3102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+// GENERATED from dc-runtime/src/*.ts — do not edit. Rebuild with `cd dc-runtime && bun run build`.
+"use strict";
+(() => {
+  var __defProp = Object.defineProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+
+  // src/react.ts
+  function getReact() {
+    const R = window.React;
+    if (!R) throw new Error("dc-runtime: window.React is not available yet");
+    return R;
+  }
+  function getReactDOM() {
+    const RD = window.ReactDOM;
+    if (!RD) throw new Error("dc-runtime: window.ReactDOM is not available yet");
+    return RD;
+  }
+  var h = ((...args) => getReact().createElement(
+    ...args
+  ));
+
+  // src/parse.ts
+  function parseDcDocument(doc) {
+    const dc = doc.querySelector("x-dc");
+    if (!dc) return null;
+    const scriptEl = doc.querySelector("script[data-dc-script]");
+    const { props, preview } = parseDataProps(
+      scriptEl?.getAttribute("data-props") ?? null
+    );
+    return {
+      template: dc.innerHTML,
+      js: scriptEl ? scriptEl.textContent || "" : "",
+      props,
+      preview
+    };
+  }
+  function parseDcText(src) {
+    const openMatch = /<x-dc(?:\s[^>]*)?>/.exec(src);
+    if (!openMatch) return null;
+    const close = src.lastIndexOf("</x-dc>");
+    if (close === -1 || close < openMatch.index) return null;
+    const template = src.slice(openMatch.index + openMatch[0].length, close);
+    const doc = new DOMParser().parseFromString(src, "text/html");
+    const scriptEl = doc.querySelector("script[data-dc-script]");
+    const { props, preview } = parseDataProps(
+      scriptEl?.getAttribute("data-props") ?? null
+    );
+    return {
+      template,
+      js: scriptEl ? scriptEl.textContent || "" : "",
+      props,
+      preview
+    };
+  }
+  function parseDataProps(raw) {
+    if (!raw) return { props: null, preview: null };
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { props: null, preview: null };
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { props: null, preview: null };
+    }
+    const obj = parsed;
+    const preview = obj.$preview && typeof obj.$preview === "object" ? obj.$preview : null;
+    const rest = {};
+    for (const k of Object.keys(obj)) {
+      if (k[0] !== "$") rest[k] = obj[k];
+    }
+    return { props: Object.keys(rest).length ? rest : null, preview };
+  }
+  function dcNameFromPath(pathname) {
+    let p = pathname || "";
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+    }
+    const base = p.split("/").pop() || "Root";
+    return base.replace(/\.dc\.html$/, "").replace(/\.html?$/, "") || "Root";
+  }
+
+  // src/boot.ts
+  var BASE_CSS = `
+    .sc-placeholder{background:rgba(255,255,255,.3);border:1px solid rgba(0,0,0,.5);
+      border-radius:2px;box-sizing:border-box;overflow:hidden}
+    @keyframes sc-shine{0%{background-position:100% 50%}100%{background-position:0% 50%}}
+    html.sc-dc-streaming .sc-placeholder,
+    html.sc-dc-streaming .sc-interp.sc-missing{position:relative;
+      background:color-mix(in srgb,currentColor 5%,transparent);
+      border-color:transparent}
+    html.sc-dc-streaming .sc-placeholder::before,
+    html.sc-dc-streaming .sc-interp.sc-missing::before{content:'';
+      position:absolute;inset:0;pointer-events:none;
+      background:linear-gradient(90deg,rgba(217,119,87,0) 25%,rgba(247,225,211,.95) 37%,rgba(217,119,87,0) 63%);
+      background-size:400% 100%;animation:sc-shine 1.4s ease infinite}
+    html.sc-dc-streaming .sc-placeholder:nth-child(n+9 of .sc-placeholder)::before,
+    html.sc-dc-streaming .sc-interp.sc-missing:nth-child(n+9 of .sc-interp.sc-missing)::before{animation:none;
+      background:color-mix(in srgb,currentColor 8%,transparent)}
+    .sc-placeholder-error{padding:4px 8px;font:11px/1.4 ui-monospace,monospace;
+      color:rgba(0,0,0,.7);word-break:break-word}
+    .sc-interp.sc-missing{display:inline-block;width:2em;height:1em;overflow:hidden;
+      vertical-align:text-bottom;background:rgba(255,255,255,.3);border:1px solid rgba(0,0,0,.5);
+      border-radius:2px;box-sizing:border-box;color:transparent;
+      user-select:none}
+    .sc-interp.sc-unresolved{font-family:ui-monospace,monospace;font-size:.85em;
+      color:rgba(0,0,0,.5);background:rgba(0,0,0,.05);border-radius:3px;
+      padding:0 3px}
+    .sc-host.sc-has-error{position:relative}
+    .sc-logic-error{position:absolute;top:8px;left:8px;z-index:2147483647;max-width:60ch;
+      padding:6px 10px;background:#b00020;color:#fff;font:12px/1.4 ui-monospace,monospace;
+      border-radius:4px;white-space:pre-wrap;pointer-events:none}
+    /* Mirrors PRINT_BASELINE_CSS in apps/web deck-stage-export.ts \u2014 keep both
+       in sync until dc-runtime regains a build step. */
+    @media print {
+      @page { margin: 0.5cm; }
+      figure, table { break-inside: avoid; }
+      #dc-root, #dc-root > .sc-host { height: auto; }
+      *, *::before, *::after {
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+        backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+        animation-delay: -99s !important; animation-duration: .001s !important;
+        animation-iteration-count: 1 !important; animation-fill-mode: both !important;
+        animation-play-state: running !important; transition-duration: 0s !important;
+      }
+    }
+  `;
+  var FULL_PAGE_CSS = "html,body{height:100%;margin:0}#dc-root,#dc-root>.sc-host{height:100%}";
+  function rootNameForDocument(doc, loc) {
+    let bootPath = loc.pathname || "";
+    if (!/\.dc\.html?$/i.test(safeDecode(bootPath))) {
+      try {
+        bootPath = new URL(doc.baseURI || "/").pathname;
+      } catch {
+      }
+    }
+    return dcNameFromPath(bootPath);
+  }
+  function safeDecode(s) {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  }
+  function boot(runtime, doc = document) {
+    const parsed = parseDcDocument(doc);
+    if (!parsed) return null;
+    const React = getReact();
+    const rootName = rootNameForDocument(doc, location);
+    runtime.markFetched(rootName);
+    runtime.setRootName(rootName);
+    runtime.adoptParsed(rootName, parsed);
+    Promise.resolve("").then((t) => {
+      const raw = t ? parseDcText(t) : null;
+      if (raw?.template) runtime.updateHtml(rootName, raw.template);
+    }).catch(() => {
+    });
+    const dc = doc.querySelector("x-dc");
+    const hostEl = doc.createElement("div");
+    hostEl.id = "dc-root";
+    dc.replaceWith(hostEl);
+    if (!parsed.preview) {
+      const s = doc.createElement("style");
+      s.textContent = FULL_PAGE_CSS;
+      doc.head.appendChild(s);
+    }
+    const Root = runtime.getDC(rootName);
+    const entry = runtime.registry.get(rootName);
+    function StandaloneRoot() {
+      const [, setTick] = React.useState(0);
+      React.useEffect(() => {
+        const sub = () => setTick((n) => n + 1);
+        entry.subs.add(sub);
+        return () => {
+          entry.subs.delete(sub);
+        };
+      }, []);
+      const defaults = React.useMemo(() => {
+        const d = {};
+        for (const k in entry.propsMeta || {}) {
+          const v = entry.propsMeta?.[k]?.default;
+          if (v !== void 0) d[k] = v;
+        }
+        return d;
+      }, [entry.propsMeta]);
+      return h(Root, { ...defaults, ...entry.propOverrides || {} });
+    }
+    const ReactDOM = getReactDOM();
+    if (ReactDOM.createRoot)
+      ReactDOM.createRoot(hostEl).render(h(StandaloneRoot));
+    else ReactDOM.render(h(StandaloneRoot), hostEl);
+    return rootName;
+  }
+
+  // src/expr.ts
+  var IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*/;
+  var NUMBER_RE = /^-?\d+(\.\d+)?$/;
+  function resolve(vals, src) {
+    const expr = String(src).trim();
+    if (!expr) return void 0;
+    if (expr[0] === "(" && expr[expr.length - 1] === ")" && parensWrapWhole(expr)) {
+      return resolve(vals, expr.slice(1, -1));
+    }
+    const eq = findTopLevelEquality(expr);
+    if (eq) {
+      const lv = resolve(vals, expr.slice(0, eq.index));
+      const rv = resolve(vals, expr.slice(eq.index + eq.op.length));
+      switch (eq.op) {
+        case "===":
+          return lv === rv;
+        case "!==":
+          return lv !== rv;
+        case "==":
+          return lv == rv;
+        default:
+          return lv != rv;
+      }
+    }
+    if (expr[0] === "!") return !resolve(vals, expr.slice(1));
+    if (expr === "true") return true;
+    if (expr === "false") return false;
+    if (expr === "null") return null;
+    if (expr === "undefined") return void 0;
+    if (NUMBER_RE.test(expr)) return Number(expr);
+    if (expr.length >= 2 && (expr[0] === '"' || expr[0] === "'") && expr[expr.length - 1] === expr[0]) {
+      return expr.slice(1, -1);
+    }
+    return resolvePath(vals, expr);
+  }
+  function parensWrapWhole(expr) {
+    let depth = 0;
+    for (let i = 0; i < expr.length - 1; i++) {
+      if (expr[i] === "(") depth++;
+      else if (expr[i] === ")") {
+        depth--;
+        if (depth === 0) return false;
+      }
+    }
+    return true;
+  }
+  function findTopLevelEquality(expr) {
+    let depth = 0;
+    for (let i = 0; i < expr.length; i++) {
+      const c = expr[i];
+      if (c === "[" || c === "(") depth++;
+      else if (c === "]" || c === ")") depth--;
+      else if (depth === 0 && (c === "=" || c === "!") && expr[i + 1] === "=") {
+        if (i > 0 && (expr[i - 1] === "=" || expr[i - 1] === "!")) continue;
+        if (!expr.slice(0, i).trim()) continue;
+        const op = expr[i + 2] === "=" ? c + "==" : c + "=";
+        return { index: i, op };
+      }
+    }
+    return null;
+  }
+  function resolvePath(vals, expr) {
+    const head = expr.match(IDENT_RE);
+    if (!head) return void 0;
+    let cur = vals == null ? void 0 : vals[head[0]];
+    let i = head[0].length;
+    while (i < expr.length) {
+      if (expr[i] === ".") {
+        const m = expr.slice(i + 1).match(IDENT_RE) || expr.slice(i + 1).match(/^\d+/);
+        if (!m) return void 0;
+        cur = cur == null ? void 0 : cur[m[0]];
+        i += 1 + m[0].length;
+      } else if (expr[i] === "[") {
+        let depth = 1;
+        let j = i + 1;
+        while (j < expr.length && depth > 0) {
+          if (expr[j] === "[") depth++;
+          else if (expr[j] === "]") {
+            depth--;
+            if (depth === 0) break;
+          }
+          j++;
+        }
+        if (depth !== 0) return void 0;
+        const key = resolve(vals, expr.slice(i + 1, j));
+        cur = cur == null ? void 0 : cur[key];
+        i = j + 1;
+      } else {
+        return void 0;
+      }
+    }
+    return cur;
+  }
+
+  // src/encode.ts
+  var CAMEL_ATTR = "sc-camel-";
+  var RAW_WRAP = {
+    select: "sc-raw-select",
+    table: "sc-raw-table",
+    tbody: "sc-raw-tbody",
+    thead: "sc-raw-thead",
+    tfoot: "sc-raw-tfoot",
+    tr: "sc-raw-tr",
+    td: "sc-raw-td",
+    th: "sc-raw-th",
+    caption: "sc-raw-caption"
+  };
+  var RAW_UNWRAP = Object.fromEntries(
+    Object.entries(RAW_WRAP).map(([k, v]) => [v, k])
+  );
+  var EVENT_MAP = {
+    onclick: "onClick",
+    onchange: "onChange",
+    oninput: "onInput",
+    onsubmit: "onSubmit",
+    onkeydown: "onKeyDown",
+    onkeyup: "onKeyUp",
+    onkeypress: "onKeyPress",
+    onmousedown: "onMouseDown",
+    onmouseup: "onMouseUp",
+    onmouseenter: "onMouseEnter",
+    onmouseleave: "onMouseLeave",
+    onfocus: "onFocus",
+    onblur: "onBlur",
+    ondoubleclick: "onDoubleClick",
+    oncontextmenu: "onContextMenu"
+  };
+  var ATTRS = `(?:[^>"']|"[^"]*"|'[^']*')*`;
+  var IMPORT_SELF_CLOSE_RE = new RegExp(
+    "<(x-import|dc-import)(" + ATTRS + ")/>",
+    "gi"
+  );
+  var CAMEL_ATTR_RE = /(\s)([a-z]+[A-Z][A-Za-z0-9]*)(\s*=)/g;
+  function encodeCase(html) {
+    html = html.replace(
+      IMPORT_SELF_CLOSE_RE,
+      (_, t, a) => "<" + t + a + "></" + t + ">"
+    );
+    html = html.replace(/<helmet(\s|>)/gi, "<sc-helmet$1");
+    html = html.replace(/<\/helmet\s*>/gi, "</sc-helmet>");
+    html = html.replace(
+      CAMEL_ATTR_RE,
+      (_, sp, name, eq) => sp + CAMEL_ATTR + name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()) + eq
+    );
+    for (const [real, alias] of Object.entries(RAW_WRAP)) {
+      html = html.replace(
+        new RegExp("(</?)" + real + "(?=[\\s>])", "gi"),
+        "$1" + alias
+      );
+    }
+    return html;
+  }
+  function kebabToCamel(s) {
+    return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  }
+  function cssToObj(css) {
+    const o = {};
+    for (const decl of css.split(";")) {
+      const i = decl.indexOf(":");
+      if (i < 0) continue;
+      const prop = decl.slice(0, i).trim();
+      o[prop.startsWith("--") ? prop : kebabToCamel(prop)] = decl.slice(i + 1).trim();
+    }
+    return o;
+  }
+  function compileAttr(raw) {
+    const whole = raw.match(/^\s*\{\{([\s\S]+?)\}\}\s*$/);
+    if (whole) {
+      const path = whole[1];
+      return (vals) => resolve(vals, path);
+    }
+    if (raw.includes("{{")) {
+      const parts = raw.split(/\{\{([\s\S]+?)\}\}/g);
+      return (vals) => parts.map((s, i) => i & 1 ? resolve(vals, s) ?? "" : s).join("");
+    }
+    return () => raw;
+  }
+
+  // src/compile.ts
+  function collectProps(node, kind, host) {
+    const propGetters = [];
+    const pseudoClasses = [];
+    let hintSize = null;
+    for (const { name, value } of [...node.attributes]) {
+      if (name === "sc-name" || name === "data-dc-tpl") continue;
+      let key = name;
+      if (key.startsWith(CAMEL_ATTR))
+        key = kebabToCamel(key.slice(CAMEL_ATTR.length));
+      if (key === "hint-size") {
+        hintSize = value;
+        continue;
+      }
+      if (key.startsWith("style-")) {
+        pseudoClasses.push(host.pseudoClass(key.slice(6), value));
+        continue;
+      }
+      if (kind !== "dom") {
+        if (key.includes("-") && !(kind === "x-import" && (key.startsWith("aria-") || key.startsWith("data-"))))
+          key = kebabToCamel(key);
+      } else {
+        if (key === "class") key = "className";
+        else if (key === "for") key = "htmlFor";
+        else if (key.startsWith("on"))
+          key = EVENT_MAP[key] || "on" + key[2].toUpperCase() + key.slice(3);
+      }
+      propGetters.push([key, compileAttr(value)]);
+    }
+    return { propGetters, pseudoClasses, hintSize };
+  }
+  var HOST_STYLE_PROPS = /* @__PURE__ */ new Set([
+    "position",
+    "left",
+    "right",
+    "top",
+    "bottom",
+    "inset",
+    "width",
+    "height",
+    "z-index",
+    "transform"
+  ]);
+  function hostPositionStyle(style) {
+    const all = typeof style === "string" ? cssToObj(style) : style != null && typeof style === "object" ? style : null;
+    if (!all) return void 0;
+    const out = {};
+    for (const [k, v] of Object.entries(all)) {
+      const kebab = k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+      if (HOST_STYLE_PROPS.has(kebab)) out[k] = v;
+    }
+    return Object.keys(out).length ? out : void 0;
+  }
+  function compileTemplate(html, host) {
+    const tpl = document.createElement("template");
+    //! nosemgrep: direct-inner-html-assignment
+    tpl.innerHTML = encodeCase(html);
+    let tplN = 0;
+    (function stamp(node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        node.setAttribute("data-dc-tpl", String(tplN++));
+      }
+      for (const c of node.childNodes) stamp(c);
+    })(tpl.content);
+    const builders = walkChildren(tpl.content, host);
+    const render = ((vals, ctx) => builders.map((b, i) => b(vals || {}, ctx, i)));
+    render.__annotated = tpl.innerHTML;
+    return render;
+  }
+  function walkChildren(node, host) {
+    return [...node.childNodes].map((c) => walk(c, host)).filter((b) => b != null);
+  }
+  function walk(node, host) {
+    if (node.nodeType === Node.TEXT_NODE) return walkText(node);
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+    const el = node;
+    const tag = el.tagName.toLowerCase();
+    if (tag === "sc-for") return walkFor(el, host);
+    if (tag === "sc-if") return walkIf(el, host);
+    if (tag === "x-import") return walkXImport(el, host);
+    if (tag === "sc-helmet") return host.helmet(el);
+    if (tag === "dc-import") return walkComponent(el, host);
+    return walkElement(el, host);
+  }
+  var warnedHoles = /* @__PURE__ */ new Set();
+  function warnUnresolved(ctx, what) {
+    const key = (ctx?.__name || "?") + "\0" + what;
+    if (warnedHoles.has(key)) return;
+    warnedHoles.add(key);
+    console.warn("[dc-runtime] " + (ctx?.__name || "template") + ": " + what);
+  }
+  function walkText(node) {
+    const txt = node.nodeValue ?? "";
+    if (!txt.includes("{{")) {
+      if (!txt.trim() && !txt.includes(" ")) return null;
+      return () => txt;
+    }
+    const parts = txt.split(/\{\{([\s\S]+?)\}\}/g);
+    return (vals, ctx, key) => h(
+      getReact().Fragment,
+      { key },
+      ...parts.map((p, i) => {
+        if (!(i & 1)) return p;
+        const v = resolve(vals, p);
+        if (v === void 0) {
+          if (!ctx?.__streamingNow) {
+            if (document.body?.hasAttribute("data-dc-editor-on")) {
+              return h(
+                "span",
+                { key: i, className: "sc-interp sc-unresolved" },
+                "{{ " + p.trim() + " }}"
+              );
+            }
+            warnUnresolved(
+              ctx,
+              "{{ " + p.trim() + " }} never resolved \u2014 rendered as empty"
+            );
+            return null;
+          }
+          return h(
+            "span",
+            { key: i, className: "sc-interp sc-missing" },
+            p.trim()
+          );
+        }
+        if (getReact().isValidElement(v) || Array.isArray(v)) {
+          return h(getReact().Fragment, { key: i }, v);
+        }
+        if (v === null || typeof v === "boolean") return null;
+        return h("span", { key: i, className: "sc-interp" }, String(v));
+      })
+    );
+  }
+  function walkFor(el, host) {
+    const listGet = compileAttr(el.getAttribute("list") || "");
+    const asName = el.getAttribute("as") || "item";
+    const hintN = parseInt(el.getAttribute("hint-placeholder-count") || "0", 10);
+    const kids = walkChildren(el, host);
+    const listSrc = el.getAttribute("list") || "";
+    return (vals, ctx, key) => {
+      let list = listGet(vals);
+      if (!Array.isArray(list)) {
+        if (!ctx?.__streamingNow) {
+          if (list !== void 0 && list !== null) {
+            warnUnresolved(
+              ctx,
+              'sc-for list="' + listSrc + '" is not an array (' + typeof list + ")"
+            );
+          }
+          list = [];
+        } else {
+          list = hintN > 0 ? Array(hintN).fill(void 0) : [];
+        }
+      }
+      return h(
+        getReact().Fragment,
+        { key },
+        list.map((item, i) => {
+          const sub = { ...vals, [asName]: item, $index: i };
+          return h(
+            getReact().Fragment,
+            { key: i },
+            kids.map((b, j) => b(sub, ctx, j))
+          );
+        })
+      );
+    };
+  }
+  function walkIf(el, host) {
+    const valGet = compileAttr(el.getAttribute("value") || "");
+    const hintRaw = el.getAttribute("hint-placeholder-val");
+    const hintGet = hintRaw != null ? compileAttr(hintRaw) : null;
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      let v = valGet(vals);
+      if (v === void 0 && hintGet && ctx?.__streamingNow) v = hintGet(vals);
+      return v ? h(
+        getReact().Fragment,
+        { key },
+        kids.map((b, j) => b(vals, ctx, j))
+      ) : null;
+    };
+  }
+  function walkComponent(el, host) {
+    const name = el.getAttribute("name") || el.getAttribute("component") || "";
+    el.removeAttribute("name");
+    el.removeAttribute("component");
+    const tplId = el.getAttribute("data-dc-tpl");
+    const styleRaw = el.getAttribute("style");
+    el.removeAttribute("style");
+    const styleGet = styleRaw != null ? compileAttr(styleRaw) : null;
+    const { propGetters, hintSize } = collectProps(el, "dc-import", host);
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      const props = {
+        key,
+        __hintSize: hintSize,
+        __tplId: tplId,
+        __hostStyle: styleGet ? hostPositionStyle(styleGet(vals)) : void 0
+      };
+      for (const [k, g] of propGetters) {
+        const v = g(vals);
+        if (k === "dcProps") {
+          if (v && typeof v === "object") Object.assign(props, v);
+          continue;
+        }
+        props[k] = v;
+      }
+      if (kids.length) props.children = kids.map((b, j) => b(vals, ctx, j));
+      return h(host.component(name), props);
+    };
+  }
+  function walkXImport(el, host) {
+    const globalNameGet = compileAttr(
+      el.getAttribute("component-from-global-scope") || ""
+    );
+    const exportNameGet = compileAttr(
+      el.getAttribute("component") || el.getAttribute("name") || ""
+    );
+    const fromRaw = el.getAttribute("from") || el.getAttribute("src") || el.getAttribute("import") || "";
+    const urls = fromRaw.trim() ? fromRaw.trim().split(/\s+/) : [];
+    const url = urls.length ? urls[urls.length - 1] : "";
+    const kindOf = (u) => /\.(jsx|tsx)(\?|#|$)/i.test(u) ? "jsx" : "js";
+    const tplId = el.getAttribute("data-dc-tpl");
+    const styleRaw = el.getAttribute("style");
+    el.removeAttribute("style");
+    const styleGet = styleRaw != null ? compileAttr(styleRaw) : null;
+    const wrap = tplId != null || styleGet != null;
+    const { propGetters, hintSize } = collectProps(el, "x-import", host);
+    const hasContent = el.children.length > 0 || !!(el.textContent || "").trim();
+    const kids = hasContent ? walkChildren(el, host) : [];
+    const urlBindable = fromRaw.includes("{{");
+    if (urls.length && !urlBindable) {
+      let prev;
+      for (const u of urls) prev = host.loadExternal(kindOf(u), u, prev);
+    }
+    const evalName = (g, vals) => {
+      const v = g(vals);
+      const s = v == null ? "" : String(v);
+      return s.includes("{{") ? "" : s;
+    };
+    return (vals, ctx, key) => {
+      const globalName = evalName(globalNameGet, vals);
+      const name = globalName || evalName(exportNameGet, vals);
+      const C = !name || urlBindable ? null : globalName ? host.resolveExternalGlobal(url, globalName) : host.resolveExternal(url, name);
+      const hostStyle = styleGet ? hostPositionStyle(styleGet(vals)) : void 0;
+      const wrapper = wrap ? {
+        key,
+        className: "sc-host-x",
+        "data-dc-tpl": tplId,
+        style: hostStyle || { display: "contents" }
+      } : null;
+      if (!C) {
+        const error = urlBindable ? "x-import `from` cannot contain {{ \u2026 }} \u2014 module URLs are resolved at parse time; use a literal URL" : host.resolveExternalError(url, name);
+        const ph = host.placeholder({
+          key: wrapper ? void 0 : key,
+          name,
+          hintSize,
+          error
+        });
+        return wrapper ? h("div", wrapper, ph) : ph;
+      }
+      const props = wrapper ? {} : { key };
+      let unresolvedHole = false;
+      for (const [k, g] of propGetters) {
+        if (k === "component" || k === "componentFromGlobalScope" || k === "from") {
+          continue;
+        }
+        const v = g(vals);
+        if (v === void 0) unresolvedHole = true;
+        if (k === "dcProps") {
+          if (v && typeof v === "object") Object.assign(props, v);
+          continue;
+        }
+        props[k] = v;
+      }
+      if (unresolvedHole && ctx?.__htmlStreamingNow) {
+        const ph = host.placeholder({
+          key: wrapper ? void 0 : key,
+          name,
+          hintSize,
+          error: null
+        });
+        return wrapper ? h("div", wrapper, ph) : ph;
+      }
+      if (kids.length) props.children = kids.map((b, j) => b(vals, ctx, j));
+      return wrapper ? h("div", wrapper, h(C, props)) : h(C, props);
+    };
+  }
+  function walkElement(el, host) {
+    const realTag = RAW_UNWRAP[el.localName] || el.localName;
+    const tplId = el.getAttribute("data-dc-tpl");
+    const { propGetters, pseudoClasses } = collectProps(el, "dom", host);
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      const props = { key, "data-dc-tpl": tplId };
+      for (const [k, g] of propGetters) {
+        let v = g(vals);
+        if (k === "style" && typeof v === "string") v = cssToObj(v);
+        if ((k === "value" || k === "checked") && v === void 0) {
+          v = k === "checked" ? false : "";
+        }
+        props[k] = v;
+      }
+      if (pseudoClasses.length) {
+        props.className = [props.className, ...pseudoClasses].filter(Boolean).join(" ");
+      }
+      return h(realTag, props, ...kids.map((b, j) => b(vals, ctx, j)));
+    };
+  }
+
+  // src/logic.ts
+  var StreamableLogic = class {
+    constructor(props) {
+      __publicField(this, "props");
+      __publicField(this, "state", {});
+      /** Back-pointer to the wrapper component, installed after construction. */
+      __publicField(this, "__host");
+      this.props = props || {};
+    }
+    setState(update, cb) {
+      this.__host && this.__host.__setLogicState(update, cb);
+    }
+    forceUpdate() {
+      this.__host && this.__host.forceUpdate();
+    }
+    componentDidMount() {
+    }
+    componentDidUpdate(_prevProps) {
+    }
+    componentWillUnmount() {
+    }
+    /** The flat object the template renders against (merged over props). */
+    renderVals() {
+      return {};
+    }
+  };
+  function evalDcLogic(src) {
+    //! nosemgrep: eval-and-function-constructor
+    const fn = new Function(
+      "DCLogic",
+      "StreamableLogic",
+      "React",
+      src + '\n;return (typeof Component!=="undefined"&&Component)||undefined;'
+    );
+    return fn(StreamableLogic, StreamableLogic, getReact());
+  }
+
+  // src/component.ts
+  function shallowEqual(a, b) {
+    if (!b) return false;
+    const ak = Object.keys(a).filter((k) => k !== "children");
+    const bk = Object.keys(b).filter((k) => k !== "children");
+    if (ak.length !== bk.length) return false;
+    for (const k of ak) if (a[k] !== b[k]) return false;
+    return true;
+  }
+  function Placeholder({
+    name,
+    hintSize,
+    streaming,
+    error
+  }) {
+    const [w, hgt] = (hintSize || "100%,60px").split(",");
+    return h(
+      "div",
+      {
+        className: "sc-placeholder" + (streaming ? " sc-streaming" : ""),
+        style: { width: w.trim(), height: hgt && hgt.trim() },
+        title: name
+      },
+      error ? h(
+        "div",
+        { className: "sc-placeholder-error" },
+        (name ? name + ": " : "") + error
+      ) : null
+    );
+  }
+  function hintToMin(hint) {
+    if (!hint) return void 0;
+    const [w, hgt] = hint.split(",");
+    return { minWidth: w.trim(), minHeight: hgt && hgt.trim() };
+  }
+  function createComponentFactory(registry, ensureFetched) {
+    const React = getReact();
+    const AncestorContext = React.createContext([]);
+    class StreamableComponent extends React.Component {
+      constructor(props) {
+        super(props);
+        __publicField(this, "__name");
+        __publicField(this, "__sub");
+        __publicField(this, "__needsDidMount", false);
+        /** Snapshot of the registry's streaming flags taken at render time —
+         *  builders read it off the RenderCtx (this) to pick placeholder vs
+         *  render-nothing for unresolved values. */
+        __publicField(this, "__streamingNow", false);
+        __publicField(this, "__htmlStreamingNow", false);
+        /** When a construct throws, remember the (class, registry.ver, props)
+         *  triple so render-time reconcile doesn't re-attempt it on every parent
+         *  re-render. A registry bump (new class, template, external module
+         *  resolving via bumpAll) changes `ver` and breaks the memo so an
+         *  env-dependent constructor can self-heal. */
+        __publicField(this, "__failedLogic", null);
+        __publicField(this, "__failedUserProps", null);
+        __publicField(this, "__failedVer", -1);
+        /** Per-instance constructor error — kept here (not on the registry entry)
+         *  so one instance's successful construct can't hide a sibling's failure,
+         *  and a construct can never wipe an eval error `updateJs` recorded on
+         *  `r.logicError`. */
+        __publicField(this, "__ctorError", null);
+        __publicField(this, "logic");
+        this.__name = props.__name;
+        this.state = { __v: 0, __err: null };
+        this.__sub = () => {
+          if (this.state.__err) this.setState({ __err: null });
+          this.forceUpdate();
+        };
+        this.__makeLogic(registry.get(this.__name).Logic, null);
+        ensureFetched(this.__name);
+      }
+      /** Error-boundary hook: a render crash anywhere in this DC's subtree
+       *  (its own template, an x-import'd component, a child DC without its
+       *  own deeper boundary) lands here instead of unmounting the page. */
+      static getDerivedStateFromError(e) {
+        return { __err: e instanceof Error && e.message ? e.message : String(e) };
+      }
+      componentDidCatch(e, info) {
+        console.error(
+          "[dc-runtime] render error in <" + this.__name + ">:",
+          e,
+          info?.componentStack || ""
+        );
+      }
+      /** Instantiate the logic class (or the no-op base) and adopt `prevState`
+       *  over its initial state — used both at mount and on hot-swap. */
+      __makeLogic(Logic, prevState) {
+        const L = Logic || StreamableLogic;
+        try {
+          this.logic = new L(this.__userProps());
+          this.__failedLogic = null;
+          this.__failedUserProps = null;
+          this.__ctorError = null;
+        } catch (e) {
+          console.error(e);
+          this.__failedLogic = Logic;
+          this.__failedUserProps = this.__userProps();
+          this.__failedVer = registry.get(this.__name).ver;
+          this.__ctorError = this.__name + ": " + (e instanceof Error && e.message ? e.message : String(e));
+          this.logic = new StreamableLogic(
+            this.__userProps()
+          );
+        }
+        this.logic.__host = this;
+        if (prevState)
+          this.logic.state = { ...this.logic.state || {}, ...prevState };
+      }
+      /** The props the author's logic + template see — internal __-prefixed
+       *  wiring stripped. */
+      __userProps() {
+        const { __name, __hintSize, __tplId, __hostStyle, ...rest } = this.props;
+        return rest;
+      }
+      __setLogicState(update, cb) {
+        const prev = this.logic.state;
+        const patch = typeof update === "function" ? update(prev) : update;
+        this.logic.state = { ...prev, ...patch };
+        this.setState((s) => ({ __v: s.__v + 1 }), cb);
+      }
+      /** Swap the logic instance when the registry's Logic class changed
+       *  (streaming completion, hot reload). State carries over; didMount
+       *  re-fires after the swap commits so refs exist. */
+      __reconcileLogic() {
+        const r = registry.get(this.__name);
+        const Next = r.Logic;
+        const Cur = this.logic.constructor;
+        if (Next === Cur || !Next && Cur === StreamableLogic || Next === this.__failedLogic && r.ver === this.__failedVer && shallowEqual(this.__userProps(), this.__failedUserProps)) {
+          return;
+        }
+        if (!this.__needsDidMount) {
+          try {
+            this.logic.componentWillUnmount();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        this.__makeLogic(Next, this.logic.state);
+        this.__needsDidMount = true;
+      }
+      componentDidMount() {
+        registry.get(this.__name).subs.add(this.__sub);
+        try {
+          this.logic.componentDidMount();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      componentDidUpdate(prevProps) {
+        this.logic.props = this.__userProps();
+        if (this.__needsDidMount) {
+          if (this.state.__err || !registry.get(this.__name).tpl) return;
+          this.__needsDidMount = false;
+          try {
+            this.logic.componentDidMount();
+          } catch (e) {
+            console.error(e);
+          }
+        } else {
+          try {
+            this.logic.componentDidUpdate(prevProps);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+      componentWillUnmount() {
+        registry.get(this.__name).subs.delete(this.__sub);
+        if (!this.__needsDidMount) {
+          try {
+            this.logic.componentWillUnmount();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+      render() {
+        const r = registry.get(this.__name);
+        const cls = "sc-host" + (r.htmlStreaming ? " sc-streaming-html" : "") + (r.jsStreaming ? " sc-streaming-js" : "");
+        const hintStyle = r.htmlStreaming ? hintToMin(this.props.__hintSize) : void 0;
+        const hostStyle = this.props.__hostStyle || hintStyle ? { ...hintStyle || {}, ...this.props.__hostStyle || {} } : void 0;
+        const hostBase = {
+          className: cls,
+          style: hostStyle,
+          "data-sc-name": this.__name,
+          "data-dc-tpl": this.props.__tplId
+        };
+        const chain = Array.isArray(this.context) ? this.context : [];
+        if (chain.includes(this.__name)) {
+          const cycle = [
+            ...chain.slice(chain.indexOf(this.__name)),
+            this.__name
+          ].join(" \u2192 ");
+          return h(
+            "div",
+            { ...hostBase, className: cls + " sc-has-error" },
+            h(Placeholder, {
+              name: this.__name,
+              hintSize: this.props.__hintSize,
+              error: "circular import: " + cycle
+            })
+          );
+        }
+        if (this.state.__err) {
+          return h(
+            "div",
+            { ...hostBase, className: cls + " sc-has-error" },
+            h(
+              "div",
+              { className: "sc-logic-error", "data-omelette-chrome": "" },
+              this.__name + ": " + this.state.__err
+            ),
+            h(Placeholder, {
+              name: this.__name,
+              hintSize: this.props.__hintSize,
+              error: this.state.__err
+            })
+          );
+        }
+        this.__reconcileLogic();
+        if (!r.tpl) {
+          return h(
+            "div",
+            hostBase,
+            h(Placeholder, { name: this.__name, hintSize: this.props.__hintSize })
+          );
+        }
+        const userProps = this.__userProps();
+        this.logic.props = userProps;
+        let vals = userProps;
+        let renderErr = r.logicError || this.__ctorError;
+        try {
+          vals = { ...userProps, ...this.logic.renderVals() || {} };
+        } catch (e) {
+          console.error(e);
+          renderErr = this.__name + ".renderVals(): " + (e instanceof Error && e.message ? e.message : String(e));
+        }
+        this.__streamingNow = !!(r.htmlStreaming || r.jsStreaming);
+        this.__htmlStreamingNow = !!r.htmlStreaming;
+        return h(
+          "div",
+          { ...hostBase, className: cls + (renderErr ? " sc-has-error" : "") },
+          renderErr && h(
+            "div",
+            { className: "sc-logic-error", "data-omelette-chrome": "" },
+            renderErr
+          ),
+          h(
+            AncestorContext.Provider,
+            { value: [...chain, this.__name] },
+            r.tpl(vals, this)
+          )
+        );
+      }
+    }
+    __publicField(StreamableComponent, "contextType", AncestorContext);
+    const named = /* @__PURE__ */ new Map();
+    function getDC(name) {
+      const hit = named.get(name);
+      if (hit) return hit;
+      function Dispatcher(p) {
+        const [, setTick] = React.useState(0);
+        React.useEffect(() => {
+          const sub = () => setTick((n) => n + 1);
+          registry.get(name).subs.add(sub);
+          return () => {
+            registry.get(name).subs.delete(sub);
+          };
+        }, []);
+        ensureFetched(name);
+        return h(StreamableComponent, { ...p, __name: name });
+      }
+      Dispatcher.displayName = name;
+      named.set(name, Dispatcher);
+      return Dispatcher;
+    }
+    return {
+      getDC,
+      StreamableComponent
+    };
+  }
+
+  // src/external.ts
+  var isCustomElementName = (n) => !n.includes(".") && n.includes("-");
+  function isRenderableType(g) {
+    if (typeof g === "function") return !isElementClass(g);
+    return typeof g === "object" && g !== null && typeof g.$$typeof === "symbol";
+  }
+  function resolveDottedPath(root, name) {
+    let cur = root;
+    for (const seg of name.split(".")) {
+      if (cur == null) return void 0;
+      cur = cur[seg];
+    }
+    return cur;
+  }
+  var BABEL_URL = "https://unpkg.com/@babel/standalone@7.26.4/babel.min.js";
+  var GLOBAL_POLL_INTERVAL_MS = 50;
+  var GLOBAL_POLL_TIMEOUT_MS = 3e4;
+  function createExternalModules(onResolved) {
+    const cache = /* @__PURE__ */ new Map();
+    let babelLoading = null;
+    const reportedMissing = /* @__PURE__ */ new Map();
+    const polling = /* @__PURE__ */ new Set();
+    function ensureBabel() {
+      if (window.Babel) return Promise.resolve();
+      if (babelLoading) return babelLoading;
+      babelLoading = new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = BABEL_URL;
+        s.crossOrigin = "anonymous";
+        s.onload = () => res();
+        s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      return babelLoading;
+    }
+    const pending = /* @__PURE__ */ new Map();
+    function load(kind, url, after) {
+      const existing = pending.get(url);
+      if (existing) return existing;
+      cache.set(url, null);
+      console.info("[dc-runtime] x-import: loading", url, "(" + kind + ")");
+      const ready = Promise.all([
+        kind === "jsx" ? ensureBabel() : Promise.resolve(),
+        after ?? Promise.resolve()
+      ]);
+      const p = ready.then(() => fetch(url)).then((r) => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      }).then((src) => {
+        const code = kind === "jsx" ? window.Babel.transform(src, {
+          filename: url,
+          presets: ["react", "typescript"]
+        }).code : src;
+        const module = { exports: {} };
+        const before = new Set(Object.keys(window));
+        //! nosemgrep: eval-and-function-constructor
+        new Function("React", "module", "exports", "require", code)(
+          getReact(),
+          module,
+          module.exports,
+          () => ({})
+        );
+        const globals = {};
+        for (const k of Object.keys(window)) {
+          if (!before.has(k) && typeof window[k] === "function") {
+            globals[k] = window[k];
+          }
+        }
+        cache.set(url, { mod: module.exports, globals });
+        console.info(
+          "[dc-runtime] x-import: loaded",
+          url,
+          "\u2014 exports:",
+          Object.keys(module.exports),
+          "window globals:",
+          Object.keys(globals)
+        );
+        onResolved();
+      }).catch((e) => {
+        cache.set(url, {
+          mod: {},
+          globals: {},
+          error: "failed to load: " + (e instanceof Error && e.message ? e.message : String(e))
+        });
+        console.error(
+          "[dc-runtime] x-import: FAILED to load",
+          url,
+          "(" + kind + ")",
+          e
+        );
+        onResolved();
+      });
+      pending.set(url, p);
+      return p;
+    }
+    function resolve2(url, name) {
+      const entry = cache.get(url);
+      if (!entry) return null;
+      const { mod, globals } = entry;
+      const C = mod && mod[name] || globals && globals[name] || typeof window !== "undefined" && window[name] || mod && mod.default;
+      if (typeof C === "function") return C;
+      const key = url + "\0" + name;
+      if (!reportedMissing.has(key)) {
+        reportedMissing.set(
+          key,
+          entry.error || 'no export named "' + name + '" (has: ' + Object.keys(mod).join(", ") + ")"
+        );
+        console.error(
+          "[dc-runtime] x-import: module",
+          url,
+          "loaded but has no component named",
+          JSON.stringify(name),
+          "\u2014 available exports:",
+          Object.keys(mod),
+          "window globals:",
+          Object.keys(globals),
+          ". The module must `module.exports = {" + name + "}` or set `window." + name + "`."
+        );
+      }
+      return null;
+    }
+    function waitForGlobal(name) {
+      if (polling.has(name)) return;
+      polling.add(name);
+      const started = Date.now();
+      const isCE = isCustomElementName(name);
+      const tick = () => {
+        const found = isCE ? customElements.get(name) : isRenderableType(resolveDottedPath(window, name));
+        if (found) {
+          polling.delete(name);
+          onResolved();
+          return;
+        }
+        if (Date.now() - started >= GLOBAL_POLL_TIMEOUT_MS) {
+          console.warn(
+            "[dc-runtime] x-import: global",
+            JSON.stringify(name),
+            "never appeared on window after " + GLOBAL_POLL_TIMEOUT_MS + "ms"
+          );
+          return;
+        }
+        setTimeout(tick, GLOBAL_POLL_INTERVAL_MS);
+      };
+      setTimeout(tick, GLOBAL_POLL_INTERVAL_MS);
+    }
+    function resolveGlobal(url, name) {
+      const isCE = isCustomElementName(name);
+      if (!url) {
+        if (isCE) {
+          if (customElements.get(name)) return name;
+          waitForGlobal(name);
+          return null;
+        }
+        const g2 = resolveDottedPath(window, name);
+        if (isRenderableType(g2)) return g2;
+        waitForGlobal(name);
+        return null;
+      }
+      const entry = cache.get(url);
+      if (!entry) return null;
+      if (isCE && customElements.get(name)) return name;
+      const g = entry.globals[name] ?? resolveDottedPath(window, name);
+      if (isRenderableType(g)) return g;
+      if (name.includes(".")) return null;
+      const key = url + "\0global\0" + name;
+      if (!reportedMissing.has(key)) {
+        reportedMissing.set(key, null);
+        if (isCE && !customElements.get(name)) {
+          console.warn(
+            "[dc-runtime] x-import:",
+            url,
+            "loaded but no custom element",
+            JSON.stringify(name),
+            "is registered and window." + name + " is not a function \u2014 rendering <" + name + "> as an unknown element."
+          );
+        }
+      }
+      return name;
+    }
+    function getError(url, name) {
+      const entry = cache.get(url);
+      if (entry?.error) return entry.error;
+      return reportedMissing.get(url + "\0" + name) || null;
+    }
+    return { load, resolve: resolve2, resolveGlobal, getError };
+  }
+  function isElementClass(g) {
+    try {
+      return typeof g === "function" && typeof HTMLElement !== "undefined" && g.prototype instanceof HTMLElement;
+    } catch {
+      return false;
+    }
+  }
+
+  // src/atomics.ts
+  var ATOMIC_CSS = (
+    // layout
+    ".fx{display:flex}.col{display:flex;flex-direction:column}.grid{display:grid}.ac{align-items:center}.jc{justify-content:center}.jb{justify-content:space-between}.f1{flex:1}.noshrink{flex-shrink:0}.wrap{flex-wrap:wrap}.fw5{font-weight:500}.fw6{font-weight:600}.fw7{font-weight:700}.fw8{font-weight:800}.fs11{font-size:11px}.fs12{font-size:12px}.fs13{font-size:13px}.fs14{font-size:14px}.fs15{font-size:15px}.fs16{font-size:16px}.fs20{font-size:20px}.fs22{font-size:22px}.upper{text-transform:uppercase}.tc{text-align:center}.nowrap{white-space:nowrap}.gap8{gap:8px}.gap10{gap:10px}.gap12{gap:12px}.gap16{gap:16px}.gap24{gap:24px}.m0{margin:0}.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}.posrel{position:relative}.posabs{position:absolute}.round{border-radius:50%}.ohide{overflow:hidden}.bbox{box-sizing:border-box}.pointer{cursor:pointer}.w100{width:100%}.b0{border:none}"
+  );
+
+  // src/helmet.ts
+  var DESIGN_DOC_MODE_RE = /<meta\b[^>]*\bname\s*=\s*["']design_doc_mode["'][^>]*\b(?:content|value)\s*=\s*["'](\w+)["']/i;
+  var CANVAS_BG = "#f0eee9";
+  function createHelmetManager(doc, isStreaming) {
+    const mounted = /* @__PURE__ */ new Set();
+    const live = /* @__PURE__ */ new Map();
+    let designDocMode = null;
+    let canvasStyleEl = null;
+    function postDesignMode(mode) {
+      if (window.parent === window) return;
+      try {
+        window.parent.postMessage({ type: "__dc_design_mode", mode }, "*");
+      } catch {
+      }
+    }
+    function setDesignDocMode(mode) {
+      if (mode === designDocMode) return;
+      designDocMode = mode;
+      postDesignMode(mode);
+      if (mode === "canvas") {
+        doc.documentElement.setAttribute("data-dc-canvas", "");
+        canvasStyleEl = doc.createElement("style");
+        canvasStyleEl.setAttribute("data-dc-canvas", "");
+        canvasStyleEl.textContent = `html,body{background:${CANVAS_BG}}#dc-root>.sc-host{position:relative}`;
+        doc.head.appendChild(canvasStyleEl);
+      } else {
+        doc.documentElement.removeAttribute("data-dc-canvas");
+        canvasStyleEl?.remove();
+        canvasStyleEl = null;
+      }
+    }
+    window.addEventListener("message", (e) => {
+      if (!designDocMode || (e.data && e.data.type) !== "__dc_probe") return;
+      postDesignMode(designDocMode);
+    });
+    function compile(node) {
+      const raw = [...node.children];
+      const helmetClosed = node.nextSibling != null || node.parentNode?.nextSibling != null;
+      if (node.hasAttribute("data-dc-atomics") && !mounted.has("__dc-atomics")) {
+        mounted.add("__dc-atomics");
+        const el = doc.createElement("style");
+        el.id = "__dc-atomics";
+        el.textContent = ATOMIC_CSS;
+        doc.head.appendChild(el);
+      }
+      return (_vals, ctx) => {
+        const name = ctx && ctx.__name || "";
+        const streaming = !!(name && isStreaming(name));
+        for (let i = 0; i < raw.length; i++) {
+          const child = raw[i];
+          const tag = child.tagName;
+          const mayBePartial = streaming && !helmetClosed && i === raw.length - 1;
+          if (tag === "SCRIPT") {
+            if (mayBePartial) continue;
+            const key = "SCRIPT|" + (child.getAttribute("src") || child.textContent || "");
+            if (mounted.has(key)) continue;
+            mounted.add(key);
+            const el = doc.createElement("script");
+            for (const { name: an, value } of [...child.attributes])
+              el.setAttribute(an, value);
+            if (child.textContent) el.textContent = child.textContent;
+            doc.head.appendChild(el);
+          } else if (tag === "LINK" || tag === "META") {
+            if (mayBePartial) continue;
+            const key = tag + "|" + (child.getAttribute("href") || child.getAttribute("src") || child.outerHTML);
+            if (mounted.has(key)) continue;
+            mounted.add(key);
+            doc.head.appendChild(child.cloneNode(true));
+          } else {
+            const key = name + "|" + i;
+            let el = live.get(key);
+            if (!el || el.tagName !== tag) {
+              if (el) el.remove();
+              el = doc.createElement(tag.toLowerCase());
+              live.set(key, el);
+              doc.head.appendChild(el);
+            }
+            for (const { name: an, value } of [...child.attributes]) {
+              if (el.getAttribute(an) !== value) el.setAttribute(an, value);
+            }
+            if (el.textContent !== child.textContent)
+              el.textContent = child.textContent;
+          }
+        }
+        return null;
+      };
+    }
+    return { compile, setDesignDocMode };
+  }
+
+  // src/pseudo.ts
+  function createPseudoSheet(doc) {
+    let el = null;
+    const cache = /* @__PURE__ */ new Map();
+    let n = 0;
+    return (pseudo, css) => {
+      const k = pseudo + "|" + css;
+      const hit = cache.get(k);
+      if (hit) return hit;
+      if (!el) {
+        el = doc.createElement("style");
+        doc.head.appendChild(el);
+      }
+      const cls = "scp" + (n++).toString(36);
+      const sel = pseudo === "before" || pseudo === "after" ? "." + cls + "::" + pseudo : "." + cls + ":" + pseudo;
+      el.sheet.insertRule(sel + "{" + css + "}", el.sheet.cssRules.length);
+      cache.set(k, cls);
+      return cls;
+    };
+  }
+
+  // src/registry.ts
+  function createRegistry() {
+    const entries = /* @__PURE__ */ Object.create(null);
+    function get(name) {
+      return entries[name] || (entries[name] = {
+        html: "",
+        tpl: null,
+        Logic: null,
+        jsStreaming: false,
+        htmlStreaming: false,
+        ver: 0,
+        subs: /* @__PURE__ */ new Set(),
+        fetched: false
+      });
+    }
+    function bump(name) {
+      const r = get(name);
+      r.ver++;
+      for (const fn of r.subs) fn();
+    }
+    return {
+      entries,
+      get,
+      bump,
+      bumpAll() {
+        for (const n in entries) bump(n);
+      }
+    };
+  }
+
+  // src/runtime.ts
+  var COMPONENT_DIR = ".";
+  function createRuntime(doc = document) {
+    const registry = createRegistry();
+    const pseudoClass = createPseudoSheet(doc);
+    const helmet = createHelmetManager(
+      doc,
+      (name) => registry.get(name).htmlStreaming
+    );
+    const external = createExternalModules(() => registry.bumpAll());
+    const factory = createComponentFactory(registry, ensureFetched);
+    const host = {
+      component: (name) => factory.getDC(name),
+      placeholder: (props) => h(Placeholder, props),
+      helmet: (node) => helmet.compile(node),
+      loadExternal: (kind, url, after) => external.load(kind, url, after),
+      resolveExternal: (url, name) => external.resolve(url, name),
+      resolveExternalGlobal: (url, name) => external.resolveGlobal(url, name),
+      resolveExternalError: (url, name) => external.getError(url, name),
+      pseudoClass
+    };
+    function ensureFetched(name) {
+      const r = registry.get(name);
+      if (r.fetched) return;
+      r.fetched = true;
+      const url = COMPONENT_DIR + "/" + encodeURIComponent(name) + ".dc.html";
+      fetch(url).then((res) => {
+        if (!res.ok) {
+          console.error(
+            "[dc-runtime] sibling fetch for <" + name + "/> failed:",
+            url,
+            "returned",
+            res.status,
+            "\u2014 the reference renders as an empty placeholder."
+          );
+          return "";
+        }
+        return res.text();
+      }).then((t) => {
+        if (!t) return;
+        const parsed = parseDcText(t);
+        if (!parsed) {
+          console.error(
+            "[dc-runtime] sibling fetch for <" + name + "/>:",
+            url,
+            "has no <x-dc> block \u2014 not a Design Component."
+          );
+          return;
+        }
+        if (parsed.props) r.propsMeta = parsed.props;
+        if (parsed.preview) r.preview = parsed.preview;
+        if (parsed.template && !r.html) updateHtml(name, parsed.template);
+        if (parsed.js && !r.Logic) updateJs(name, parsed.js);
+      }).catch(
+        (e) => console.error(
+          "[dc-runtime] sibling fetch for <" + name + "/> threw:",
+          url,
+          e
+        )
+      );
+    }
+    let rootName = null;
+    function updateHtml(name, html) {
+      const r = registry.get(name);
+      r.html = html;
+      if (name === rootName) {
+        const mode = DESIGN_DOC_MODE_RE.exec(html)?.[1] ?? null;
+        if (mode || !r.htmlStreaming) helmet.setDesignDocMode(mode);
+      }
+      try {
+        r.tpl = compileTemplate(html, host);
+      } catch (e) {
+        console.error("[dc-runtime] template compile FAILED for", name, e);
+      }
+      registry.bump(name);
+    }
+    function updateJs(name, src) {
+      const r = registry.get(name);
+      const seq = r.jsSeq = (r.jsSeq || 0) + 1;
+      try {
+        const Cls = evalDcLogic(src);
+        if (r.jsSeq !== seq) return;
+        if (typeof Cls !== "function") {
+          r.logicError = name + ".dc.html: <script data-dc-script> must define `class Component extends DCLogic`";
+        } else {
+          r.logicError = null;
+          r.Logic = Cls;
+        }
+      } catch (e) {
+        if (r.jsSeq !== seq) return;
+        console.error(
+          "[dc-runtime] logic class eval FAILED for",
+          name,
+          "\u2014 the template renders with props only.",
+          e
+        );
+        r.logicError = name + ": " + (e instanceof Error && e.message ? e.message : String(e));
+      }
+      registry.bump(name);
+    }
+    function setStreaming(name, kind, on) {
+      const r = registry.get(name);
+      if (kind === "html") r.htmlStreaming = !!on;
+      else r.jsStreaming = !!on;
+      let any = false;
+      for (const n in registry.entries) {
+        const e = registry.entries[n];
+        if (e && (e.htmlStreaming || e.jsStreaming)) {
+          any = true;
+          break;
+        }
+      }
+      doc.documentElement.classList.toggle("sc-dc-streaming", any);
+      registry.bump(name);
+    }
+    function dcUpdate(name, kind, content, streaming) {
+      if (streaming) registry.get(name).fetched = true;
+      if (kind === "html") {
+        setStreaming(name, "html", !!streaming);
+        updateHtml(name, content);
+      } else if (kind === "js") {
+        setStreaming(name, "js", !!streaming);
+        if (!streaming) updateJs(name, content);
+      } else if (kind === "props") {
+        const { props, preview } = parseDataProps(content);
+        const r = registry.get(name);
+        r.propsMeta = props ?? void 0;
+        r.preview = preview;
+        registry.bump(name);
+      }
+    }
+    function setProps(name, overrides) {
+      registry.get(name).propOverrides = overrides && typeof overrides === "object" ? { ...overrides } : null;
+      registry.bump(name);
+    }
+    function adoptParsed(name, parsed) {
+      if (!parsed) return;
+      const r = registry.get(name);
+      if (parsed.props) r.propsMeta = parsed.props;
+      if (parsed.preview) r.preview = parsed.preview;
+      if (parsed.template) updateHtml(name, parsed.template);
+      if (parsed.js) updateJs(name, parsed.js);
+    }
+    return {
+      registry,
+      getDC: factory.getDC,
+      updateHtml,
+      updateJs,
+      dcUpdate,
+      setProps,
+      adoptParsed,
+      setRootName: (name) => {
+        rootName = name;
+      },
+      markFetched: (name) => {
+        registry.get(name).fetched = true;
+      },
+      annotatedTemplate: (name) => {
+        const r = registry.get(name);
+        return r.tpl && r.tpl.__annotated || null;
+      },
+      templateSource: (name) => registry.get(name).html || null,
+      StreamableLogic
+    };
+  }
+
+  // src/index.ts
+  var REACT_URL = "https://unpkg.com/react@18.3.1/umd/react.production.min.js";
+  var REACT_SRI = "sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z";
+  var REACT_DOM_URL = "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js";
+  var REACT_DOM_SRI = "sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1";
+  function hideRawTemplate() {
+    const s = document.createElement("style");
+    s.textContent = "x-dc{display:none!important}";
+    document.head.appendChild(s);
+  }
+  function loadScript(src, integrity) {
+    return new Promise((resolve2, reject) => {
+      //! nosemgrep: create-script-element
+      const s = document.createElement("script");
+      s.src = src;
+      s.integrity = integrity;
+      s.crossOrigin = "anonymous";
+      s.async = false;
+      s.onload = () => resolve2();
+      s.onerror = () => reject(new Error(`failed to load ${src}`));
+      document.head.appendChild(s);
+    });
+  }
+  function loadReactUmd() {
+    const w = window;
+    if (w.React && w.ReactDOM) return Promise.resolve();
+    return Promise.all([
+      loadScript(REACT_URL, REACT_SRI),
+      loadScript(REACT_DOM_URL, REACT_DOM_SRI)
+    ]).then(() => void 0);
+  }
+  function init() {
+    const runtime = createRuntime(document);
+    let rootName = "Root";
+    const baseCss = document.createElement("style");
+    baseCss.textContent = BASE_CSS;
+    document.head.prepend(baseCss);
+    const notifyHost = () => {
+      if (window.parent === window) return;
+      const r = runtime.registry.entries[rootName];
+      try {
+        window.parent.postMessage(
+          {
+            type: "__dc_booted",
+            rootName,
+            propsMeta: r && r.propsMeta || null,
+            preview: r && r.preview || null
+          },
+          "*"
+        );
+      } catch {
+      }
+    };
+    const api = {
+      __dcUpdate: (name, kind, content, streaming) => {
+        runtime.dcUpdate(name, kind, content, streaming);
+        if (name === rootName && !streaming && kind === "props") notifyHost();
+      },
+      __dcSetProps: (name, overrides) => runtime.setProps(name, overrides),
+      /** Name of the component currently mounted as the page root — DC tools
+       *  push their template-stream here when targeting "the open page". */
+      __dcRootName: () => rootName,
+      /** Editor bridge — the encoded, `data-dc-tpl`-annotated template source.
+       *  The host editor parses this into its own template DOM so it can map a
+       *  rendered node (carrying the same `data-dc-tpl`) back to the source
+       *  node that emitted it. Returns the encoded form (`<sc-comp>`,
+       *  `sc-camel-*` attrs); the editor decodes on serialize. */
+      __dcAnnotatedTemplate: (name) => runtime.annotatedTemplate(name),
+      /** Editor bridge — the *original* (decoded) template source. */
+      __dcTemplateSource: (name) => runtime.templateSource(name),
+      __dcBoot: () => {
+        rootName = boot(runtime, document) ?? rootName;
+        notifyHost();
+      },
+      __dcRegistry: runtime.registry.entries,
+      getDC: (name) => runtime.getDC(name),
+      // `DCLogic` is the documented base class name; `StreamableLogic` is the
+      // implementation alias kept for any project that already references it.
+      DCLogic: runtime.StreamableLogic,
+      StreamableLogic: runtime.StreamableLogic
+    };
+    Object.assign(window, api);
+    if (document.readyState !== "loading") api.__dcBoot();
+    else document.addEventListener("DOMContentLoaded", () => api.__dcBoot());
+  }
+  hideRawTemplate();
+  loadReactUmd().then(init).catch((err) => {
+    console.error("[dc] failed to load React or boot:", err);
+    throw err;
+  });
+})();
+
+</script>
+</head>
+<body>
+<script>(function(){
+// Workspace Hub — mock data (Lốp Studio, một agency sáng tạo ở TP.HCM)
+const FOLDERS = [
+  { id: 'vinclub',  name: 'VinClub — Chiến dịch Tết', color: '#f59e0b', shared: true },
+  { id: 'acb',      name: 'Website ACB',              color: '#3b82f6', shared: false },
+  { id: 'highlands',name: 'Khách hàng Highlands',     color: '#10b981', shared: true },
+  { id: 'tuyendung',name: 'Tuyển dụng Q3',            color: '#8b5cf6', shared: false },
+  { id: 'noibo',    name: 'Nội bộ',                   color: '#64748b', shared: false },
+];
+
+const ITEMS = [
+  // VinClub
+  { id: 1, type: 'email', folder: 'vinclub', status: 'todo', important: true, unread: true,
+    title: 'Phản hồi báo giá gói Premium cho chiến dịch Tết',
+    snippet: 'Bên em xác nhận ngân sách rồi, nhờ anh gửi lại timeline chi tiết và mốc nghiệm thu giúp em nhé.',
+    from: 'Chị Hương · VinClub', time: '9:24',
+    meta: { to: 'minh@lopstudio.vn', labels: ['Khách hàng', 'Ưu tiên'], read: false },
+    body: 'Chào anh Minh,\n\nBên em đã duyệt ngân sách cho gói Premium. Anh gửi lại giúp em timeline chi tiết, các mốc nghiệm thu và danh sách hạng mục bàn giao trước thứ Sáu nhé.\n\nCảm ơn anh.' },
+  { id: 2, type: 'email', folder: 'vinclub', status: 'doing', important: true, unread: false,
+    title: 'Nhắc thanh toán đợt 2 — hạn 30/06',
+    snippet: 'Hợp đồng VC-2026 còn một đợt thanh toán. Vui lòng hoàn tất trước ngày 30/06 để tránh gián đoạn.',
+    from: 'Phòng Kế toán', time: 'Hôm qua',
+    meta: { to: 'minh@lopstudio.vn', labels: ['Tài chính'], read: true },
+    body: 'Kính gửi anh/chị,\n\nHợp đồng VC-2026 còn đợt thanh toán thứ 2 (40% giá trị). Hạn cuối là 30/06/2026. Vui lòng hoàn tất để dự án không bị gián đoạn.' },
+  { id: 3, type: 'file', folder: 'vinclub', status: 'doing', important: true, unread: false,
+    title: 'Ngân sách chiến dịch Tết.xlsx',
+    snippet: 'Sheet · 248 KB · cập nhật 2 giờ trước',
+    from: 'Drive · Bạn', time: '11:02',
+    meta: { kind: 'Sheet', size: '248 KB', owner: 'minh@lopstudio.vn', modified: '2 giờ trước', url: 'https://drive.google.com' },
+    body: 'Bảng phân bổ ngân sách cho các hạng mục: KOL, sản xuất, media, dự phòng.' },
+  { id: 4, type: 'file', folder: 'vinclub', status: 'done', important: false, unread: false,
+    title: 'Hợp đồng VinClub 2026.pdf',
+    snippet: 'PDF · 1.2 MB · đã ký',
+    from: 'Drive · Chị Hương', time: '24/06',
+    meta: { kind: 'PDF', size: '1.2 MB', owner: 'huong@vinclub.vn', modified: '24/06/2026', url: 'https://drive.google.com' },
+    body: 'Bản hợp đồng đã ký giữa Lốp Studio và VinClub cho chiến dịch Tết 2026.' },
+  { id: 5, type: 'note', folder: 'vinclub', status: 'todo', important: false, unread: false,
+    title: 'Ý tưởng nội dung TikTok tuần 3',
+    snippet: '3 concept: hậu trường set quay, mini-game lì xì, KOL unbox quà Tết.',
+    from: 'Ghi chú · Bạn', time: 'T2',
+    meta: { author: 'minh@lopstudio.vn', updated: 'T2, 16:40' },
+    body: 'Concept 1 — Hậu trường: quay nhanh quá trình set up.\nConcept 2 — Mini-game lì xì: kêu gọi tương tác.\nConcept 3 — KOL unbox hộp quà Tết phiên bản giới hạn.' },
+  { id: 6, type: 'event', folder: 'vinclub', status: 'doing', important: false, unread: false,
+    title: 'Review nội dung Tết với VinClub',
+    snippet: 'T5, 14:00 – 15:00 · Google Meet',
+    from: 'Lịch · 4 người', time: 'T5 14:00',
+    meta: { start: 'Thứ 5, 02/07 · 14:00', end: '15:00', location: 'Google Meet', attendees: ['Hương (VinClub)', 'Minh', 'Lan', 'Khoa'] },
+    body: 'Buổi review toàn bộ nội dung tuần cho chiến dịch Tết trước khi lên lịch đăng.' },
+  { id: 7, type: 'email', folder: 'vinclub', status: 'done', important: false, unread: false,
+    title: 'Re: Bộ ảnh sản phẩm bản final',
+    snippet: 'Đã nhận đủ 48 ảnh đã retouch. Link Drive đính kèm, mọi người tải về dùng nhé.',
+    from: 'Studio Lốp', time: '23/06',
+    meta: { to: 'team@lopstudio.vn', labels: ['Sản xuất'], read: true },
+    body: 'Đã gửi đủ 48 ảnh retouch qua Drive. Mọi người kiểm tra và phản hồi nếu cần chỉnh thêm.' },
+
+  // Website ACB
+  { id: 8, type: 'event', folder: 'acb', status: 'todo', important: true, unread: false,
+    title: 'Họp kickoff dự án Website ACB',
+    snippet: 'Mai, 9:00 – 10:30 · Phòng họp A3',
+    from: 'Lịch · 6 người', time: 'Mai 9:00',
+    meta: { start: 'Thứ 3, 01/07 · 09:00', end: '10:30', location: 'Phòng họp A3, Lầu 4', attendees: ['Minh', 'Tuấn Anh', 'PO ACB', 'Lan', 'Huy', 'Trang'] },
+    body: 'Thống nhất scope phase 1, vai trò các bên và lịch sprint cho dự án Website ACB.' },
+  { id: 9, type: 'ticket', folder: 'acb', status: 'doing', important: false, unread: false,
+    title: 'Inbox list + phân trang',
+    snippet: 'FE · ưu tiên High · gán cho bạn',
+    from: 'Jira · SCRUM-44', time: '#44',
+    meta: { key: 'SCRUM-44', priority: 'High', assignee: 'Minh Nguyễn', jiraStatus: 'In Progress', reporter: 'Tuấn Anh' },
+    body: 'Dựng danh sách Item với phân trang {items,total,page,limit}. Bám API GET /api/items.' },
+  { id: 10, type: 'ticket', folder: 'acb', status: 'todo', important: false, unread: false,
+    title: 'Item detail + write-back',
+    snippet: 'FE · ưu tiên Medium · chưa gán',
+    from: 'Jira · SCRUM-46', time: '#46',
+    meta: { key: 'SCRUM-46', priority: 'Medium', assignee: 'Chưa gán', jiraStatus: 'To Do', reporter: 'Tuấn Anh' },
+    body: 'Panel chi tiết Item, ghi ngược thay đổi lên provider, xử lý 409 và 403.' },
+  { id: 11, type: 'ticket', folder: 'acb', status: 'done', important: false, unread: false,
+    title: 'Connections OAuth flow',
+    snippet: 'BE · đã merge · ưu tiên High',
+    from: 'Jira · SCRUM-43', time: '#43',
+    meta: { key: 'SCRUM-43', priority: 'High', assignee: 'Huy Trần', jiraStatus: 'Done', reporter: 'Minh Nguyễn' },
+    body: 'Luồng OAuth kết nối Google services, lưu token và refresh tự động.' },
+  { id: 12, type: 'email', folder: 'acb', status: 'doing', important: false, unread: true,
+    title: 'Re: Bản thiết kế landing page v3',
+    snippet: 'Mình thấy phần hero hơi chật, thử tăng spacing và đổi CTA sang indigo nhé.',
+    from: 'Tuấn Anh', time: '8:15',
+    meta: { to: 'minh@lopstudio.vn', labels: ['Thiết kế'], read: false },
+    body: 'Hero hơi chật, tăng spacing dọc lên ~24px. CTA đổi sang indigo cho nổi. Còn lại ổn rồi.' },
+  { id: 13, type: 'file', folder: 'acb', status: 'todo', important: false, unread: false,
+    title: 'Sơ đồ luồng đăng nhập.fig',
+    snippet: 'Figma · liên kết · 3 trang',
+    from: 'Drive · Tuấn Anh', time: 'T6',
+    meta: { kind: 'Figma', size: 'Liên kết', owner: 'tuananh@lopstudio.vn', modified: 'Thứ 6', url: 'https://figma.com' },
+    body: 'Sơ đồ luồng đăng nhập / đăng ký / quên mật khẩu cho Website ACB.' },
+  { id: 14, type: 'note', folder: 'acb', status: 'doing', important: false, unread: false,
+    title: 'Câu hỏi cho buổi kickoff',
+    snippet: 'Scope phase 1 gồm gì? Ai là PO phía ACB? Deadline go-live?',
+    from: 'Ghi chú · Bạn', time: 'T6',
+    meta: { author: 'minh@lopstudio.vn', updated: 'Thứ 6, 17:20' },
+    body: '1. Scope phase 1 gồm những trang nào?\n2. PO phía ACB là ai, quyền quyết định tới đâu?\n3. Deadline go-live mong muốn?' },
+
+  // Highlands
+  { id: 15, type: 'event', folder: 'highlands', status: 'doing', important: true, unread: false,
+    title: 'Demo sản phẩm cho Highlands',
+    snippet: 'T5, 16:00 – 16:45 · Online',
+    from: 'Lịch · 5 người', time: 'T5 16:00',
+    meta: { start: 'Thứ 5, 02/07 · 16:00', end: '16:45', location: 'Google Meet', attendees: ['Anh Khoa', 'Minh', 'Lan', 'Trang', 'Huy'] },
+    body: 'Demo bản dựng đầu tiên của microsite Highlands, lấy phản hồi vòng 1.' },
+  { id: 16, type: 'file', folder: 'highlands', status: 'done', important: false, unread: false,
+    title: 'Brand guidelines Highlands.pdf',
+    snippet: 'PDF · 4.8 MB · v2.1',
+    from: 'Drive · Highlands', time: '20/06',
+    meta: { kind: 'PDF', size: '4.8 MB', owner: 'brand@highlands.vn', modified: '20/06/2026', url: 'https://drive.google.com' },
+    body: 'Bộ nhận diện thương hiệu Highlands: logo, màu, typography, tone of voice.' },
+  { id: 17, type: 'email', folder: 'highlands', status: 'todo', important: false, unread: false,
+    title: 'Phản hồi proposal Q3',
+    snippet: 'Cảm ơn team, bên anh cần bổ sung phần KPI và cam kết tiến độ trước khi trình sếp.',
+    from: 'Anh Khoa · Highlands', time: 'T4',
+    meta: { to: 'minh@lopstudio.vn', labels: ['Khách hàng'], read: true },
+    body: 'Proposal ổn. Bổ sung giúp anh phần KPI đo lường và cam kết tiến độ theo tuần nhé.' },
+
+  // Tuyển dụng
+  { id: 18, type: 'email', folder: 'tuyendung', status: 'todo', important: true, unread: true,
+    title: 'CV ứng viên Senior Product Designer',
+    snippet: '3 hồ sơ mới từ TopCV, đính kèm portfolio. Nhờ anh review và chọn lịch phỏng vấn.',
+    from: 'tuyendung@lopstudio.vn', time: '7:50',
+    meta: { to: 'minh@lopstudio.vn', labels: ['Tuyển dụng'], read: false },
+    body: '3 hồ sơ Senior Product Designer từ TopCV. Portfolio đính kèm. Nhờ anh chọn 2 hồ sơ để mời phỏng vấn.' },
+  { id: 19, type: 'event', folder: 'tuyendung', status: 'done', important: false, unread: false,
+    title: 'Phỏng vấn vòng 2 — Ngọc Mai',
+    snippet: 'Thứ 4, 10:00 – 11:00 · đã hoàn tất',
+    from: 'Lịch · 3 người', time: '25/06',
+    meta: { start: 'Thứ 4, 25/06 · 10:00', end: '11:00', location: 'Phòng họp A1', attendees: ['Ngọc Mai', 'Minh', 'Lan'] },
+    body: 'Phỏng vấn vòng 2 vị trí Designer. Kết quả: pass, chuyển sang vòng offer.' },
+  { id: 20, type: 'note', folder: 'tuyendung', status: 'doing', important: false, unread: false,
+    title: 'Tiêu chí đánh giá Designer',
+    snippet: 'Portfolio, tư duy hệ thống, giao tiếp, độ chủ động, fit văn hoá.',
+    from: 'Ghi chú · Bạn', time: 'T3',
+    meta: { author: 'minh@lopstudio.vn', updated: 'Thứ 3, 14:00' },
+    body: 'Thang điểm: Portfolio (40%), Tư duy hệ thống (25%), Giao tiếp (15%), Chủ động (10%), Culture fit (10%).' },
+
+  // Nội bộ
+  { id: 21, type: 'event', folder: 'noibo', status: 'todo', important: false, unread: false,
+    title: '1:1 với team Design',
+    snippet: 'Thứ 6, 15:00 · lặp hàng tuần',
+    from: 'Lịch · 2 người', time: 'T6 15:00',
+    meta: { start: 'Thứ 6, 04/07 · 15:00', end: '15:30', location: 'Phòng họp nhỏ', attendees: ['Minh', 'Lan'] },
+    body: 'Buổi 1:1 hàng tuần với từng thành viên team Design.' },
+  { id: 22, type: 'note', folder: 'noibo', status: 'doing', important: false, unread: false,
+    title: 'Checklist onboarding nhân sự mới',
+    snippet: 'Tài khoản, thiết bị, buddy, tài liệu, lịch tuần đầu.',
+    from: 'Ghi chú · Bạn', time: 'T2',
+    meta: { author: 'minh@lopstudio.vn', updated: 'Thứ 2, 09:10' },
+    body: '☐ Cấp tài khoản\n☐ Chuẩn bị thiết bị\n☐ Chỉ định buddy\n☐ Gửi tài liệu nội bộ\n☐ Lên lịch tuần đầu' },
+];
+
+const CONNECTIONS = [
+  { id: 'gmail',  service: 'Gmail',           brand: '#ea4335', icon: 'mail',     status: 'active',
+    account: 'minh@lopstudio.vn', lastSynced: 'Đồng bộ 2 phút trước', desc: 'Đọc & gửi email, gắn nhãn, lưu trữ.' },
+  { id: 'gcal',   service: 'Google Calendar', brand: '#1a73e8', icon: 'calendar', status: 'active',
+    account: 'minh@lopstudio.vn', lastSynced: 'Đồng bộ 5 phút trước', desc: 'Đọc & tạo sự kiện, mời người tham gia.' },
+  { id: 'gdrive', service: 'Google Drive',    brand: '#16a34a', icon: 'file',     status: 'error',
+    account: 'minh@lopstudio.vn', lastSynced: 'Lỗi đồng bộ · 1 giờ trước', desc: 'Duyệt & quản lý tệp trong Drive.',
+    error: 'Thiếu quyền truy cập (scope). Hãy kết nối lại để cấp quyền Drive.' },
+  { id: 'jira',   service: 'Jira',            brand: '#2684ff', icon: 'ticket',   status: 'disconnected',
+    account: null, lastSynced: 'Chưa kết nối', desc: 'Đồng bộ ticket, cập nhật trạng thái & assignee.' },
+];
+
+const SCHEDULED = [
+  { id: 's1', subject: 'Gửi báo giá gói Premium', to: 'huong@vinclub.vn', when: 'Hôm nay, 17:00', status: 'pending', conn: 'Gmail · minh@lopstudio.vn' },
+  { id: 's2', subject: 'Nhắc lịch demo sản phẩm', to: 'khoa@highlands.vn', when: 'Ngày mai, 08:30', status: 'pending', conn: 'Gmail · minh@lopstudio.vn' },
+  { id: 's3', subject: 'Tổng kết tuần — team', to: 'team@lopstudio.vn', when: 'Thứ 6, 16:00', status: 'pending', conn: 'Gmail · minh@lopstudio.vn' },
+  { id: 's4', subject: 'Xác nhận phỏng vấn vòng 2', to: 'mai.nguyen@gmail.com', when: 'Hôm qua, 09:00', status: 'sent', conn: 'Gmail · minh@lopstudio.vn' },
+  { id: 's5', subject: 'Newsletter tháng 6', to: 'all@lopstudio.vn', when: '3 ngày trước', status: 'failed', conn: 'Gmail · minh@lopstudio.vn', error: 'Gmail từ chối: vượt giới hạn gửi trong ngày' },
+  { id: 's6', subject: 'Mời họp review nội bộ', to: 'team@lopstudio.vn', when: 'Đã huỷ', status: 'cancelled', conn: 'Gmail · minh@lopstudio.vn' },
+];
+
+const USERS = [
+  { id: 'u1', email: 'minh@lopstudio.vn', fullName: 'Minh Nguyễn', role: 'admin', isActive: true,  lastLoginAt: 'Hôm nay, 8:02', connectionCount: 3, itemCount: 142 },
+  { id: 'u2', email: 'lan@lopstudio.vn', fullName: 'Lan Phạm', role: 'user', isActive: true,  lastLoginAt: 'Hôm nay, 7:45', connectionCount: 2, itemCount: 88 },
+  { id: 'u3', email: 'tuananh@lopstudio.vn', fullName: 'Tuấn Anh Lê', role: 'user', isActive: true,  lastLoginAt: 'Hôm qua, 18:30', connectionCount: 3, itemCount: 121 },
+  { id: 'u4', email: 'huy@lopstudio.vn', fullName: 'Huy Trần', role: 'user', isActive: true,  lastLoginAt: 'Hôm qua, 16:10', connectionCount: 2, itemCount: 64 },
+  { id: 'u5', email: 'trang@lopstudio.vn', fullName: 'Trang Đỗ', role: 'user', isActive: false, lastLoginAt: '12/06, 09:20', connectionCount: 1, itemCount: 19 },
+  { id: 'u6', email: 'khoa@lopstudio.vn', fullName: 'Khoa Vũ', role: 'user', isActive: true,  lastLoginAt: 'Hôm nay, 9:11', connectionCount: 2, itemCount: 73 },
+  { id: 'u7', email: 'ngoc@lopstudio.vn', fullName: 'Ngọc Mai Bùi', role: 'user', isActive: true,  lastLoginAt: 'Hôm qua, 11:02', connectionCount: 1, itemCount: 41 },
+  { id: 'u8', email: 'tien@lopstudio.vn', fullName: 'Tiến Hoàng', role: 'user', isActive: false, lastLoginAt: '02/06, 14:50', connectionCount: 0, itemCount: 7 },
+  { id: 'u9', email: 'thao@lopstudio.vn', fullName: 'Thảo Nguyễn', role: 'admin', isActive: true,  lastLoginAt: 'Hôm nay, 8:40', connectionCount: 3, itemCount: 110 },
+  { id: 'u10', email: 'dat@lopstudio.vn', fullName: 'Đạt Phan', role: 'user', isActive: true,  lastLoginAt: 'Hôm qua, 20:05', connectionCount: 2, itemCount: 55 },
+];
+
+const ADMIN_STATS = {
+  totalUsers: 48, activeUsers: 45, lockedUsers: 3,
+  totalConnections: 126, connActive: 110, connError: 9, connDisconnected: 7,
+  syncErrors24h: 14,
+};
+
+const SYNC_CHART = [
+  { d: 'T2', v: 128 }, { d: 'T3', v: 96 }, { d: 'T4', v: 152 },
+  { d: 'T5', v: 118 }, { d: 'T6', v: 174 }, { d: 'T7', v: 64 }, { d: 'CN', v: 41 },
+];
+
+window.__WH_DATA = { FOLDERS, ITEMS, CONNECTIONS, SCHEDULED, USERS, ADMIN_STATS, SYNC_CHART };
+})();</script>
+
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+input, button, textarea, select { font-family: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+@keyframes wh-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@keyframes wh-slide-in { from { transform: translateX(16px); } to { transform: translateX(0); } }
+@keyframes wh-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wh-toast { from { transform: translateY(-10px); } to { transform: translateY(0); } }
+@keyframes wh-pop { from { transform: scale(.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes wh-spin { to { transform: rotate(360deg); } }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); border: 3px solid transparent; background-clip: padding-box; }
+</style>
+</helmet>
+<div style="{{ rootStyle }}">
+
+  <sc-if value="{{ showAuth }}" hint-placeholder-val="{{ true }}">
+    <div style="min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg)">
+      <div style="width:100%;max-width:404px">
+        <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:22px">
+          <div style="width:36px;height:36px;border-radius:9px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px">W</div>
+          <span style="font-size:18px;font-weight:600;color:var(--text)">Workspace Hub</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;box-shadow:var(--shadow)">
+          <h1 style="margin:0 0 4px;font-size:22px;font-weight:600;color:var(--text)">{{ authTitle }}</h1>
+          <p style="margin:0 0 20px;font-size:14px;color:var(--text-2)">{{ authSubtitle }}</p>
+
+          <sc-if value="{{ hasAuthBanner }}">
+            <div style="display:flex;gap:8px;align-items:center;background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger-border);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:16px">
+              <span style="display:flex;flex:0 0 auto">{{ icoAlert }}</span><span>{{ authBanner }}</span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isRegister }}">
+            <label style="display:block;font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">Họ và tên</label>
+            <input value="{{ authName }}" onChange="{{ onAuthName }}" placeholder="Nguyễn Văn A" style="width:100%;height:38px;padding:0 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;outline:none;margin-bottom:14px" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+          </sc-if>
+
+          <label style="display:block;font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">Email</label>
+          <input value="{{ authEmail }}" onChange="{{ onAuthEmail }}" placeholder="ban@congty.vn" style="{{ emailInputStyle }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+          <sc-if value="{{ hasErrEmail }}"><div style="font-size:12px;color:var(--danger);margin:-8px 0 12px">{{ errEmail }}</div></sc-if>
+
+          <label style="display:block;font-size:13px;font-weight:500;color:var(--text);margin:2px 0 6px">Mật khẩu</label>
+          <input value="{{ authPwd }}" onChange="{{ onAuthPwd }}" type="password" placeholder="Tối thiểu 8 ký tự" style="{{ pwdInputStyle }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+          <sc-if value="{{ hasErrPwd }}"><div style="font-size:12px;color:var(--danger);margin:-8px 0 12px">{{ errPwd }}</div></sc-if>
+
+          <sc-if value="{{ isRegister }}">
+            <label style="display:block;font-size:13px;font-weight:500;color:var(--text);margin:2px 0 6px">Nhập lại mật khẩu</label>
+            <input value="{{ authConfirm }}" onChange="{{ onAuthConfirm }}" type="password" placeholder="Nhập lại mật khẩu" style="width:100%;height:38px;padding:0 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;outline:none;margin-bottom:16px" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+          </sc-if>
+
+          <button onClick="{{ onSubmitAuth }}" style="width:100%;height:40px;border:none;border-radius:8px;background:var(--primary);color:var(--primary-fg);font-size:14px;font-weight:600;cursor:pointer;margin-top:4px;transition:background .15s" style-hover="background:var(--primary-hover)">{{ submitLabel }}</button>
+
+          <div style="display:flex;align-items:center;gap:12px;margin:18px 0">
+            <div style="flex:1;height:1px;background:var(--border)"></div>
+            <span style="font-size:12px;color:var(--text-3)">hoặc</span>
+            <div style="flex:1;height:1px;background:var(--border)"></div>
+          </div>
+
+          <button onClick="{{ onGoogle }}" style="width:100%;height:40px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-weight:500;cursor:pointer;transition:background .15s" style-hover="background:var(--surface-2)">{{ googleIcon }}<span>Đăng nhập bằng Google</span></button>
+        </div>
+
+        <p style="text-align:center;margin:16px 0 0;font-size:14px;color:var(--text-2)">{{ switchPrompt }} <button onClick="{{ onSwitchAuth }}" style="background:none;border:none;color:var(--primary);font-size:14px;font-weight:600;cursor:pointer;padding:0">{{ switchAction }}</button></p>
+
+        <sc-if value="{{ isLogin }}">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--text-3)">Xem nhanh state lỗi:</span>
+            <button onClick="{{ onDemoWrong }}" style="{{ demoBtnStyle }}" style-hover="border-color:var(--border-strong);color:var(--text-2)">Sai mật khẩu</button>
+            <button onClick="{{ onDemoExists }}" style="{{ demoBtnStyle }}" style-hover="border-color:var(--border-strong);color:var(--text-2)">Email tồn tại</button>
+            <button onClick="{{ onDemoLocked }}" style="{{ demoBtnStyle }}" style-hover="border-color:var(--border-strong);color:var(--text-2)">Bị khoá</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showApp }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ drawerOpen }}">
+      <div onClick="{{ onCloseDrawer }}" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:40"></div>
+    </sc-if>
+
+    <div style="display:flex;min-height:100dvh;align-items:flex-start">
+      <aside style="{{ sidebarStyle }}">
+        <div style="display:flex;align-items:center;gap:10px;padding:4px 8px 18px">
+          <div style="width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex:0 0 auto">W</div>
+          <span style="font-size:15px;font-weight:600;color:var(--text)">Workspace Hub</span>
+        </div>
+
+        <nav style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5">
+            <button onClick="{{ n.go }}" style="{{ n.style }}" style-hover="background:var(--surface-2)">
+              <span style="display:flex;flex:0 0 auto">{{ n.icon }}</span>
+              <span style="flex:1;text-align:left">{{ n.label }}</span>
+            </button>
+          </sc-for>
+        </nav>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 10px 8px">
+          <span style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3)">Thư mục</span>
+          <button onClick="{{ onNewFolder }}" aria-label="Thư mục mới" style="background:none;border:none;color:var(--text-3);cursor:pointer;display:flex;padding:2px;border-radius:6px" style-hover="background:var(--surface-2);color:var(--text)">{{ icoPlus }}</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1px;overflow-y:auto;flex:1;min-height:0">
+          <sc-for list="{{ folderNav }}" as="f" hint-placeholder-count="6">
+            <button onClick="{{ f.go }}" style="{{ f.style }}" style-hover="background:var(--surface-2)">
+              <span style="{{ f.dot }}"></span>
+              <span style="flex:1;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</span>
+              <span style="font-size:12px;color:var(--text-3)">{{ f.count }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 8px 4px;margin-top:8px;border-top:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:999px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:0 0 auto">{{ userInitials }}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ userName }}</div>
+            <div style="font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ userEmail }}</div>
+          </div>
+          <button onClick="{{ onLogout }}" aria-label="Đăng xuất" style="background:none;border:none;color:var(--text-3);cursor:pointer;display:flex;padding:6px;border-radius:6px;flex:0 0 auto" style-hover="background:var(--surface-2);color:var(--text)">{{ icoLogout }}</button>
+        </div>
+      </aside>
+
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:100dvh">
+        <header style="position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:60px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border)">
+          <sc-if value="{{ showHamburger }}">
+            <button onClick="{{ onHamburger }}" aria-label="Menu" style="background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;padding:6px;border-radius:8px;flex:0 0 auto" style-hover="background:var(--surface-2)">{{ icoMenu }}</button>
+          </sc-if>
+          <div style="position:relative;flex:1;max-width:420px">
+            <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);display:flex">{{ icoSearch }}</span>
+            <input value="{{ search }}" onChange="{{ onSearch }}" placeholder="Tìm email, sự kiện, tệp, ticket…" style="width:100%;height:38px;padding:0 12px 0 34px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px;outline:none" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring);background:var(--surface)" />
+          </div>
+          <div style="flex:1"></div>
+
+          <div style="display:flex;align-items:center;gap:6px;padding:3px;background:var(--bg);border:1px solid var(--border);border-radius:9px">
+            <span style="font-size:11px;color:var(--text-3);padding:0 4px 0 6px;font-weight:500">State</span>
+            <sc-for list="{{ stateSeg }}" as="s" hint-placeholder-count="4">
+              <button onClick="{{ s.go }}" style="{{ s.style }}" style-hover="color:var(--text)">{{ s.label }}</button>
+            </sc-for>
+          </div>
+
+          <button onClick="{{ onToggleTheme }}" aria-label="Đổi giao diện" style="background:none;border:1px solid var(--border);color:var(--text-2);cursor:pointer;display:flex;padding:8px;border-radius:9px;flex:0 0 auto" style-hover="background:var(--surface-2);color:var(--text)">{{ themeIcon }}</button>
+
+          <button onClick="{{ onConnect }}" style="display:flex;align-items:center;gap:7px;height:38px;padding:0 14px;border:none;border-radius:9px;background:var(--primary);color:var(--primary-fg);font-size:13px;font-weight:600;cursor:pointer;flex:0 0 auto" style-hover="background:var(--primary-hover)">{{ icoPlus }}<span style="white-space:nowrap">{{ connectLabel }}</span></button>
+
+          <button aria-label="Thông báo" style="position:relative;background:none;border:1px solid var(--border);color:var(--text-2);cursor:pointer;display:flex;padding:8px;border-radius:9px;flex:0 0 auto" style-hover="background:var(--surface-2);color:var(--text)">{{ icoBell }}<span style="position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:999px;background:var(--danger);border:1.5px solid var(--surface)"></span></button>
+
+          <div style="width:34px;height:34px;border-radius:999px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:0 0 auto">{{ userInitials }}</div>
+        </header>
+
+        <main style="flex:1;min-height:0;background:var(--bg)" data-screen-label="{{ pageLabel }}">
+          <sc-if value="{{ isInbox }}">
+            <div style="padding:20px 24px;max-width:1120px;margin:0 auto">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+                <div>
+                  <h1 style="margin:0 0 2px;font-size:22px;font-weight:600;color:var(--text)">{{ folderTitleText }}</h1>
+                  <p style="margin:0;font-size:13px;color:var(--text-2)">{{ inboxCountText }}</p>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:9px">
+                  <button style="display:flex;align-items:center;gap:6px;padding:6px 11px;border:none;border-radius:7px;background:var(--primary-soft);color:var(--primary);font-size:13px;font-weight:600;cursor:pointer">{{ icoList }}<span>Danh sách</span></button>
+                  <button onClick="{{ onViewBoard }}" style="display:flex;align-items:center;gap:6px;padding:6px 11px;border:none;border-radius:7px;background:none;color:var(--text-2);font-size:13px;font-weight:500;cursor:pointer" style-hover="background:var(--surface-2)">{{ icoBoard }}<span>Bảng</span></button>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px">
+                <sc-for list="{{ statusChips }}" as="c" hint-placeholder-count="4">
+                  <button onClick="{{ c.go }}" style="{{ c.style }}" style-hover="border-color:var(--border-strong)">{{ c.label }}</button>
+                </sc-for>
+                <div style="width:1px;height:22px;background:var(--border);margin:0 2px"></div>
+                <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="6">
+                  <button onClick="{{ c.go }}" style="{{ c.style }}" style-hover="border-color:var(--border-strong)">{{ c.label }}</button>
+                </sc-for>
+                <button onClick="{{ importantGo }}" style="{{ importantStyle }}" style-hover="border-color:var(--border-strong)">{{ importantStar }}<span>Quan trọng</span></button>
+              </div>
+
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
+                <sc-if value="{{ inboxLoading }}">
+                  <sc-for list="{{ skeletonRows }}" as="s" hint-placeholder-count="6">
+                    <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)">
+                      <div style="{{ skelTile }}"></div>
+                      <div style="flex:1"><div style="{{ skelLineA }}"></div><div style="{{ skelLineB }}"></div></div>
+                      <div style="{{ skelPill }}"></div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+
+                <sc-if value="{{ inboxError }}">
+                  <div style="padding:52px 24px;text-align:center">
+                    <div style="width:48px;height:48px;border-radius:12px;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">{{ icoAlertLg }}</div>
+                    <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Không tải được dữ liệu</div>
+                    <div style="font-size:13px;color:var(--text-2);margin-bottom:18px">Mất kết nối tới máy chủ. Vui lòng thử lại.</div>
+                    <button onClick="{{ onRetry }}" style="height:38px;padding:0 18px;border:none;border-radius:8px;background:var(--primary);color:var(--primary-fg);font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--primary-hover)">Thử lại</button>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ inboxEmpty }}">
+                  <div style="padding:52px 24px;text-align:center">
+                    <div style="width:48px;height:48px;border-radius:12px;background:var(--surface-2);color:var(--text-3);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">{{ icoInboxLg }}</div>
+                    <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Không có mục nào</div>
+                    <div style="font-size:13px;color:var(--text-2);margin-bottom:18px">Thử bỏ bớt bộ lọc, hoặc kết nối thêm dịch vụ để kéo dữ liệu về.</div>
+                    <button onClick="{{ onClearFilters }}" style="height:38px;padding:0 18px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-2)">Xoá bộ lọc</button>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ inboxShow }}">
+                  <sc-for list="{{ pageItems }}" as="item" hint-placeholder-count="6">
+                    <div onClick="{{ item.open }}" style="display:flex;align-items:center;gap:13px;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" style-hover="background:var(--surface-2)">
+                      <div style="{{ item.iconWrap }}">{{ item.icon }}</div>
+                      <div style="min-width:0;flex:1">
+                        <div style="display:flex;align-items:center;gap:7px">
+                          <sc-if value="{{ item.isUnread }}"><span style="width:7px;height:7px;border-radius:999px;background:var(--primary);flex:0 0 auto"></span></sc-if>
+                          <span style="{{ item.titleStyle }}">{{ item.title }}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0">
+                          <span style="font-size:13px;color:var(--text-2);white-space:nowrap;flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis">{{ item.from }}</span>
+                          <span style="color:var(--text-3);flex:0 0 auto">·</span>
+                          <span style="font-size:13px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ item.snippet }}</span>
+                        </div>
+                      </div>
+                      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
+                        <span style="font-size:12px;color:var(--text-3);white-space:nowrap">{{ item.time }}</span>
+                        <span style="{{ item.statusChip }}"><span style="{{ item.statusDot }}"></span>{{ item.statusLabel }}</span>
+                      </div>
+                      <button onClick="{{ item.toggleStar }}" aria-label="Đánh dấu quan trọng" style="{{ item.starBtn }}" style-hover="background:var(--surface-3)">{{ item.starIcon }}</button>
+                    </div>
+                  </sc-for>
+                </sc-if>
+              </div>
+
+              <sc-if value="{{ inboxShow }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:10px">
+                  <span style="font-size:13px;color:var(--text-2)">{{ pageRangeText }}</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <button onClick="{{ onPrevPage }}" aria-label="Trang trước" style="{{ pagePrevStyle }}" style-hover="background:var(--surface-2)">{{ icoChevL }}</button>
+                    <sc-for list="{{ pageButtons }}" as="p" hint-placeholder-count="2">
+                      <button onClick="{{ p.go }}" style="{{ p.style }}" style-hover="background:var(--surface-2)">{{ p.n }}</button>
+                    </sc-for>
+                    <button onClick="{{ onNextPage }}" aria-label="Trang sau" style="{{ pageNextStyle }}" style-hover="background:var(--surface-2)">{{ icoChevR }}</button>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isKanban }}">
+            <div style="padding:20px 24px;height:100%;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+                <div>
+                  <h1 style="margin:0 0 2px;font-size:22px;font-weight:600;color:var(--text)">Bảng Kanban</h1>
+                  <p style="margin:0;font-size:13px;color:var(--text-2)">{{ kanbanSubtitle }} · kéo-thả thẻ để đổi trạng thái</p>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:9px">
+                  <button onClick="{{ onViewListK }}" style="display:flex;align-items:center;gap:6px;padding:6px 11px;border:none;border-radius:7px;background:none;color:var(--text-2);font-size:13px;font-weight:500;cursor:pointer" style-hover="background:var(--surface-2)">{{ icoList }}<span>Danh sách</span></button>
+                  <button style="display:flex;align-items:center;gap:6px;padding:6px 11px;border:none;border-radius:7px;background:var(--primary-soft);color:var(--primary);font-size:13px;font-weight:600;cursor:pointer">{{ icoBoard }}<span>Bảng</span></button>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px">
+                <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="6">
+                  <button onClick="{{ c.go }}" style="{{ c.style }}" style-hover="border-color:var(--border-strong)">{{ c.label }}</button>
+                </sc-for>
+                <button onClick="{{ importantGo }}" style="{{ importantStyle }}" style-hover="border-color:var(--border-strong)">{{ importantStar }}<span>Quan trọng</span></button>
+              </div>
+
+              <sc-if value="{{ kanbanError }}">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:52px 24px;text-align:center">
+                  <div style="width:48px;height:48px;border-radius:12px;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">{{ icoAlertLg }}</div>
+                  <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Không tải được bảng</div>
+                  <div style="font-size:13px;color:var(--text-2);margin-bottom:18px">Mất kết nối tới máy chủ. Vui lòng thử lại.</div>
+                  <button onClick="{{ onRetry }}" style="height:38px;padding:0 18px;border:none;border-radius:8px;background:var(--primary);color:var(--primary-fg);font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--primary-hover)">Thử lại</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ kanbanShow }}">
+                <div style="display:flex;gap:16px;align-items:flex-start;overflow-x:auto;padding-bottom:10px;flex:1">
+                  <sc-for list="{{ kanbanCols }}" as="col" hint-placeholder-count="3">
+                    <div style="flex:0 0 312px;width:312px;display:flex;flex-direction:column;gap:10px">
+                      <div style="display:flex;align-items:center;gap:8px;padding:0 4px">
+                        <span style="{{ col.dot }}"></span>
+                        <span style="font-size:14px;font-weight:600;color:var(--text)">{{ col.label }}</span>
+                        <span style="font-size:12px;font-weight:600;color:var(--text-2);background:var(--surface-2);padding:1px 8px;border-radius:999px">{{ col.count }}</span>
+                      </div>
+                      <div onDragOver="{{ col.onDragOver }}" onDrop="{{ col.onDrop }}" onDragLeave="{{ col.onDragLeave }}" style="{{ col.bodyStyle }}">
+                        <sc-if value="{{ kanbanLoading }}">
+                          <sc-for list="{{ kanbanSkeleton }}" as="s" hint-placeholder-count="3">
+                            <div style="display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 12px">
+                              <div style="{{ skelPill }}"></div><div style="{{ skelLineA }}"></div><div style="{{ skelLineB }}"></div>
+                            </div>
+                          </sc-for>
+                        </sc-if>
+                        <sc-if value="{{ kanbanReady }}">
+                          <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="3">
+                            <div draggable="true" onDragStart="{{ card.onDragStart }}" onDragEnd="{{ card.onDragEnd }}" onClick="{{ card.open }}" style="{{ card.cardStyle }}" style-hover="box-shadow:var(--shadow-lg);border-color:var(--border-strong)">
+                              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                                <span style="{{ card.typeChip }}"><span style="display:flex">{{ card.typeIcon }}</span>{{ card.typeLabel }}</span>
+                                <span style="display:flex;color:var(--text-3);cursor:grab">{{ card.grip }}</span>
+                              </div>
+                              <div style="font-size:13.5px;font-weight:500;color:var(--text);line-height:1.45;margin-bottom:10px">{{ card.title }}</div>
+                              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);min-width:0">
+                                  <span style="{{ card.folderDot }}"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.folderName }}</span>
+                                </span>
+                                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-3);flex:0 0 auto">
+                                  <sc-if value="{{ card.starOn }}"><span style="color:var(--warn);display:flex">{{ card.starIcon }}</span></sc-if>
+                                  <span style="white-space:nowrap">{{ card.time }}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </sc-for>
+                          <sc-if value="{{ col.isEmpty }}">
+                            <div style="display:flex;align-items:center;justify-content:center;padding:18px;border:1.5px dashed var(--border-strong);border-radius:9px;color:var(--text-3);font-size:12.5px;text-align:center">Kéo thẻ vào đây</div>
+                          </sc-if>
+                        </sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isConnections }}">
+            <div style="padding:20px 24px;max-width:1000px;margin:0 auto">
+              <div style="margin-bottom:16px">
+                <h1 style="margin:0 0 2px;font-size:22px;font-weight:600;color:var(--text)">Kết nối dịch vụ</h1>
+                <p style="margin:0;font-size:13px;color:var(--text-2)">Cấp quyền để Workspace Hub đọc và ghi dữ liệu của bạn.</p>
+              </div>
+
+              <div style="display:flex;gap:10px;align-items:flex-start;background:var(--primary-soft);border-radius:10px;padding:12px 14px;margin-bottom:18px">
+                <span style="color:var(--primary);display:flex;flex:0 0 auto;margin-top:1px">{{ icoLock }}</span>
+                <div style="font-size:12.5px;color:var(--text-2);line-height:1.55"><strong style="color:var(--text);font-weight:600">Đăng nhập bằng Google ≠ Kết nối dịch vụ.</strong> Đăng nhập chỉ xác thực tài khoản của bạn. Để đồng bộ hai chiều, bạn cần cấp quyền (scope) riêng cho từng dịch vụ bên dưới.</div>
+              </div>
+
+              <sc-if value="{{ connError }}">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:52px 24px;text-align:center">
+                  <div style="width:48px;height:48px;border-radius:12px;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">{{ icoAlertLg }}</div>
+                  <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Không tải được kết nối</div>
+                  <div style="font-size:13px;color:var(--text-2);margin-bottom:18px">Vui lòng thử lại sau giây lát.</div>
+                  <button onClick="{{ onRetry }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">Thử lại</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ connLoading }}">
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px">
+                  <sc-for list="{{ connSkeleton }}" as="s" hint-placeholder-count="4">
+                    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px">
+                      <div style="display:flex;gap:13px;margin-bottom:14px"><div style="{{ skelTile }}"></div><div style="flex:1"><div style="{{ skelLineA }}"></div><div style="{{ skelLineB }}"></div></div></div>
+                      <div style="{{ skelLineB }}"></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ connShow }}">
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px">
+                  <sc-for list="{{ connCards }}" as="c" hint-placeholder-count="4">
+                    <div style="{{ c.cardStyle }}">
+                      <div style="display:flex;align-items:flex-start;gap:13px;margin-bottom:14px">
+                        <div style="{{ c.tile }}">{{ c.icon }}</div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text)">{{ c.name }}</div>
+                          <div style="font-size:12.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.account }}</div>
+                        </div>
+                        <span style="{{ c.statusBadge }}"><span style="{{ c.statusDot }}"></span>{{ c.statusLabel }}</span>
+                      </div>
+                      <div style="font-size:13px;color:var(--text-2);line-height:1.5;margin-bottom:13px">{{ c.desc }}</div>
+                      <sc-if value="{{ c.isError }}">
+                        <div style="display:flex;gap:8px;align-items:flex-start;background:var(--danger-bg);border-radius:8px;padding:9px 11px;margin-bottom:13px">
+                          <span style="color:var(--danger);display:flex;flex:0 0 auto;margin-top:1px">{{ icoAlert }}</span>
+                          <span style="font-size:12.5px;color:var(--danger-fg);line-height:1.45">{{ c.error }}</span>
+                        </div>
+                      </sc-if>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:4px">
+                        <span style="font-size:12px;color:var(--text-3);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.lastSynced }}</span>
+                        <div style="display:flex;gap:8px;flex:0 0 auto">
+                          <sc-if value="{{ c.isActive }}">
+                            <button onClick="{{ c.onRefresh }}" style="{{ btnSmall }}" style-hover="border-color:var(--border-strong)">{{ icoRefresh }}<span>Đồng bộ</span></button>
+                            <button onClick="{{ c.onDisconnect }}" style="{{ btnSmall }}" style-hover="border-color:var(--danger);color:var(--danger)">Ngắt</button>
+                          </sc-if>
+                          <sc-if value="{{ c.isDisconnected }}">
+                            <button onClick="{{ c.onConnect }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">{{ icoPlus }}<span>Kết nối</span></button>
+                          </sc-if>
+                          <sc-if value="{{ c.isError }}">
+                            <button onClick="{{ c.onRefresh }}" style="{{ btnSmall }}" style-hover="border-color:var(--border-strong)">{{ icoRefresh }}<span>Thử lại</span></button>
+                            <button onClick="{{ c.onConnect }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">Kết nối lại</button>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isScheduled }}">
+            <div style="padding:20px 24px;max-width:1080px;margin:0 auto">
+              <div style="margin-bottom:18px">
+                <h1 style="margin:0 0 2px;font-size:22px;font-weight:600;color:var(--text)">Email hẹn giờ</h1>
+                <p style="margin:0;font-size:13px;color:var(--text-2)">Soạn và lên lịch gửi email tự động qua Gmail đã kết nối.</p>
+              </div>
+              <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+                <div style="flex:1 1 380px;min-width:300px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow)">
+                  <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:16px">Soạn email</div>
+                  <label style="{{ fieldLabel }}">Người nhận</label>
+                  <input value="{{ cTo }}" onChange="{{ onCTo }}" placeholder="nguoinhan@email.com" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+                  <div style="display:flex;gap:10px">
+                    <div style="flex:1"><label style="{{ fieldLabel }}">Cc</label><input value="{{ cCc }}" onChange="{{ onCCc }}" placeholder="(tuỳ chọn)" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" /></div>
+                    <div style="flex:1"><label style="{{ fieldLabel }}">Bcc</label><input value="{{ cBcc }}" onChange="{{ onCBcc }}" placeholder="(tuỳ chọn)" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" /></div>
+                  </div>
+                  <label style="{{ fieldLabel }}">Tiêu đề</label>
+                  <input value="{{ cSubject }}" onChange="{{ onCSubject }}" placeholder="Tiêu đề email" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+                  <label style="{{ fieldLabel }}">Nội dung</label>
+                  <textarea value="{{ cBody }}" onChange="{{ onCBody }}" placeholder="Soạn nội dung email…" style="{{ fieldTextarea }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)"></textarea>
+                  <div style="display:flex;gap:10px">
+                    <div style="flex:1"><label style="{{ fieldLabel }}">Thời gian gửi</label><input value="{{ cWhen }}" onChange="{{ onCWhen }}" placeholder="VD: 30/06 17:00" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" /></div>
+                    <div style="flex:1"><label style="{{ fieldLabel }}">Kết nối</label><select value="{{ cConn }}" onChange="{{ onCConn }}" style="{{ selectStyle2 }}"><option value="gmail">Gmail · minh@lopstudio.vn</option></select></div>
+                  </div>
+                  <button onClick="{{ onScheduleSend }}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:40px;border:none;border-radius:8px;background:var(--primary);color:var(--primary-fg);font-size:13.5px;font-weight:600;cursor:pointer;margin-top:6px" style-hover="background:var(--primary-hover)">{{ icoSend }}<span>Lên lịch gửi</span></button>
+                </div>
+
+                <div style="flex:1 1 360px;min-width:300px">
+                  <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:14px">Lịch đã đặt</div>
+                  <sc-if value="{{ schedShowEmpty }}">
+                    <div style="background:var(--surface);border:1px dashed var(--border-strong);border-radius:12px;padding:44px 24px;text-align:center">
+                      <div style="width:48px;height:48px;border-radius:12px;background:var(--surface-2);color:var(--text-3);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">{{ icoClockLg }}</div>
+                      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Chưa có email nào được hẹn giờ</div>
+                      <div style="font-size:12.5px;color:var(--text-2)">Soạn email bên trái và đặt thời gian để lên lịch gửi.</div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ schedShowList }}">
+                    <div style="display:flex;flex-direction:column;gap:10px">
+                      <sc-for list="{{ schedList }}" as="s" hint-placeholder-count="4">
+                        <div style="background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:var(--shadow)">
+                          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:7px">
+                            <div style="font-size:14px;font-weight:500;color:var(--text);min-width:0;word-break:break-word">{{ s.subject }}</div>
+                            <span style="{{ s.statusBadge }}"><span style="{{ s.statusDot }}"></span>{{ s.statusLabel }}</span>
+                          </div>
+                          <div style="font-size:12.5px;color:var(--text-2);margin-bottom:4px">Đến: {{ s.to }}</div>
+                          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)"><span style="display:flex;flex:0 0 auto">{{ s.clockIcon }}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.when }} · {{ s.conn }}</span></div>
+                          <sc-if value="{{ s.error }}"><div style="font-size:12px;color:var(--danger);margin-top:7px">{{ s.error }}</div></sc-if>
+                          <sc-if value="{{ s.canCancel }}">
+                            <div style="display:flex;justify-content:flex-end;margin-top:11px"><button onClick="{{ s.onCancel }}" style="{{ btnSmall }}" style-hover="border-color:var(--danger);color:var(--danger)">Huỷ lịch</button></div>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isFolders }}">
+            <div style="padding:20px 24px;max-width:840px;margin:0 auto">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+                <div>
+                  <h1 style="margin:0 0 2px;font-size:22px;font-weight:600;color:var(--text)">Thư mục</h1>
+                  <p style="margin:0;font-size:13px;color:var(--text-2)">Tổ chức công việc theo dự án, khách hàng hoặc chủ đề.</p>
+                </div>
+                <button onClick="{{ onCreateFolder }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">{{ icoPlus }}<span>Thư mục mới</span></button>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
+                <sc-for list="{{ folderRows }}" as="f" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--border)">
+                    <span style="{{ f.dot }}"></span>
+                    <button onClick="{{ f.onOpen }}" style="flex:1;min-width:0;text-align:left;background:none;border:none;cursor:pointer;padding:0;font-family:inherit">
+                      <div style="font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</div>
+                      <div style="font-size:12.5px;color:var(--text-3)">{{ f.metaText }}</div>
+                    </button>
+                    <sc-if value="{{ f.isShared }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--ok);background:var(--ok-bg);padding:3px 9px;border-radius:999px;flex:0 0 auto">{{ f.shareIcon }}<span>{{ f.sharedCount }}</span></span></sc-if>
+                    <button onClick="{{ f.onShare }}" style="{{ btnSmall }}" style-hover="border-color:var(--border-strong);color:var(--text)">{{ icoShare }}<span>Chia sẻ</span></button>
+                    <button onClick="{{ f.onRename }}" aria-label="Đổi tên" style="background:none;border:none;color:var(--text-3);cursor:pointer;display:flex;padding:7px;border-radius:7px;flex:0 0 auto" style-hover="background:var(--surface-2);color:var(--text)">{{ icoEditSm }}</button>
+                    <button onClick="{{ f.onArchive }}" aria-label="Lưu trữ" style="background:none;border:none;color:var(--text-3);cursor:pointer;display:flex;padding:7px;border-radius:7px;flex:0 0 auto" style-hover="background:var(--surface-2);color:var(--text)">{{ icoArchive }}</button>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isAdmin }}">
+            <div style="padding:20px 24px;max-width:1080px;margin:0 auto">
+              <div style="margin-bottom:18px">
+                <h1 style="margin:0 0 2px;font-size:22px;font-weight:600;color:var(--text)">Quản trị</h1>
+                <p style="margin:0;font-size:13px;color:var(--text-2)">Tổng quan người dùng, kết nối và tình trạng đồng bộ.</p>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px">
+                <sc-for list="{{ adminStats }}" as="s" hint-placeholder-count="4">
+                  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                      <span style="font-size:13px;color:var(--text-2);font-weight:500">{{ s.label }}</span>
+                      <div style="{{ s.tile }}">{{ s.iconEl }}</div>
+                    </div>
+                    <div style="font-size:28px;font-weight:700;color:var(--text);line-height:1">{{ s.value }}</div>
+                    <div style="font-size:12px;color:var(--text-3);margin-top:6px">{{ s.sub }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);margin:16px 0">
+                <div style="margin-bottom:18px">
+                  <div style="font-size:15px;font-weight:600;color:var(--text)">Đồng bộ 7 ngày qua</div>
+                  <div style="font-size:12.5px;color:var(--text-3)">Số lần đồng bộ thành công mỗi ngày</div>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:12px;height:172px">
+                  <sc-for list="{{ chartBars }}" as="b" hint-placeholder-count="7">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;height:100%">
+                      <div style="font-size:11px;color:var(--text-3);font-weight:500">{{ b.v }}</div>
+                      <div style="{{ b.barStyle }}"></div>
+                      <div style="font-size:12px;color:var(--text-2)">{{ b.d }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+                  <div style="font-size:15px;font-weight:600;color:var(--text)">Người dùng</div>
+                  <div style="position:relative;width:240px;max-width:100%">
+                    <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);display:flex">{{ icoSearch }}</span>
+                    <input value="{{ userSearch }}" onChange="{{ onUserSearch }}" placeholder="Tìm theo tên hoặc email…" style="width:100%;height:36px;padding:0 12px 0 34px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13.5px;outline:none" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+                  </div>
+                </div>
+                <div style="overflow-x:auto">
+                  <table style="width:100%;border-collapse:collapse;min-width:700px">
+                    <thead>
+                      <tr>
+                        <th style="text-align:left;font-size:12px;font-weight:500;color:var(--text-3);padding:11px 16px;border-bottom:1px solid var(--border);white-space:nowrap">Người dùng</th>
+                        <th style="text-align:left;font-size:12px;font-weight:500;color:var(--text-3);padding:11px 16px;border-bottom:1px solid var(--border);white-space:nowrap">Vai trò</th>
+                        <th style="text-align:left;font-size:12px;font-weight:500;color:var(--text-3);padding:11px 16px;border-bottom:1px solid var(--border);white-space:nowrap">Trạng thái</th>
+                        <th style="text-align:left;font-size:12px;font-weight:500;color:var(--text-3);padding:11px 16px;border-bottom:1px solid var(--border);white-space:nowrap">Đăng nhập cuối</th>
+                        <th style="text-align:center;font-size:12px;font-weight:500;color:var(--text-3);padding:11px 16px;border-bottom:1px solid var(--border);white-space:nowrap">Kết nối</th>
+                        <th style="text-align:center;font-size:12px;font-weight:500;color:var(--text-3);padding:11px 16px;border-bottom:1px solid var(--border);white-space:nowrap">Mục</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <sc-for list="{{ userRows }}" as="u" hint-placeholder-count="6">
+                        <tr>
+                          <td style="padding:11px 16px;border-bottom:1px solid var(--border)">
+                            <div style="display:flex;align-items:center;gap:11px">
+                              <div style="width:32px;height:32px;border-radius:999px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:0 0 auto">{{ u.initials }}</div>
+                              <div style="min-width:0"><div style="font-size:13.5px;font-weight:500;color:var(--text);white-space:nowrap">{{ u.fullName }}</div><div style="font-size:12px;color:var(--text-3);white-space:nowrap">{{ u.email }}</div></div>
+                            </div>
+                          </td>
+                          <td style="padding:11px 16px;border-bottom:1px solid var(--border)"><span style="{{ u.roleBadge }}">{{ u.roleLabel }}</span></td>
+                          <td style="padding:11px 16px;border-bottom:1px solid var(--border)"><span style="{{ u.activeBadge }}"><span style="{{ u.activeDot }}"></span>{{ u.activeLabel }}</span></td>
+                          <td style="padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2);white-space:nowrap">{{ u.lastLoginAt }}</td>
+                          <td style="padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2);text-align:center">{{ u.connectionCount }}</td>
+                          <td style="padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2);text-align:center">{{ u.itemCount }}</td>
+                        </tr>
+                      </sc-for>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;flex-wrap:wrap;gap:10px">
+                  <span style="font-size:13px;color:var(--text-2)">{{ userRangeText }}</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <sc-for list="{{ userPages }}" as="p" hint-placeholder-count="2">
+                      <button onClick="{{ p.go }}" style="{{ p.style }}" style-hover="background:var(--surface-2)">{{ p.n }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ adminDenied }}">
+            <div style="padding:80px 24px;text-align:center;max-width:420px;margin:0 auto">
+              <div style="width:48px;height:48px;border-radius:12px;background:var(--surface-2);color:var(--text-3);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">{{ icoLock }}</div>
+              <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Không có quyền truy cập</div>
+              <div style="font-size:13px;color:var(--text-2)">Trang Quản trị chỉ dành cho tài khoản có vai trò Admin.</div>
+            </div>
+          </sc-if>
+        </main>
+      </div>
+    </div>
+
+    <sc-if value="{{ detailOpen }}">
+      <div style="position:fixed;inset:0;z-index:55">
+        <div onClick="{{ onCloseDetail }}" style="position:absolute;inset:0;background:rgba(15,23,42,.45)"></div>
+        <div style="position:absolute;top:0;right:0;bottom:0;width:min(462px,100%);background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:wh-slide-in .25s ease">
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border);flex:0 0 auto">
+            <div style="{{ detailIconWrap }}">{{ detailIcon }}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;gap:6px;margin-bottom:7px;flex-wrap:wrap">
+                <span style="{{ detailTypeChip }}">{{ detailTypeLabel }}</span>
+                <span style="{{ detailStatusChip }}"><span style="{{ detailStatusDot }}"></span>{{ detailStatusLabel }}</span>
+              </div>
+              <h2 style="margin:0;font-size:17px;font-weight:600;color:var(--text);line-height:1.4">{{ detailTitle }}</h2>
+            </div>
+            <button onClick="{{ onCloseDetail }}" aria-label="Đóng" style="background:none;border:none;color:var(--text-3);cursor:pointer;display:flex;padding:6px;border-radius:8px;flex:0 0 auto" style-hover="background:var(--surface-2);color:var(--text)">{{ icoX }}</button>
+          </div>
+
+          <sc-if value="{{ detail403 }}">
+            <div style="display:flex;gap:10px;align-items:flex-start;margin:14px 20px 0;padding:12px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:10px;flex:0 0 auto">
+              <span style="color:var(--warn);display:flex;flex:0 0 auto">{{ icoLock }}</span>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">Thiếu quyền truy cập (403)</div>
+                <div style="font-size:12.5px;color:var(--text-2);margin:2px 0 9px">Kết nối hiện chưa đủ scope để ghi lên provider. Hãy kết nối lại dịch vụ để cấp quyền.</div>
+                <button onClick="{{ onReconnect }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">Kết nối lại dịch vụ</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="flex:1;overflow-y:auto;padding:18px 20px">
+            <div style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);background:var(--surface-2);padding:5px 11px;border-radius:999px;margin-bottom:16px">
+              <span style="{{ detailFolderDot }}"></span>{{ detailFolderName }}
+            </div>
+            <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:18px">
+              <sc-for list="{{ detailFieldRows }}" as="row" hint-placeholder-count="4">
+                <div style="display:flex;gap:12px;padding:9px 13px;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12.5px;color:var(--text-3);width:118px;flex:0 0 auto">{{ row.label }}</span>
+                  <span style="font-size:12.5px;color:var(--text);flex:1;min-width:0;word-break:break-word">{{ row.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px">Nội dung</div>
+            <div style="font-size:13.5px;color:var(--text);line-height:1.65;white-space:pre-wrap;background:var(--surface-2);border-radius:10px;padding:14px">{{ detailBody }}</div>
+
+            <sc-if value="{{ isFileDetail }}">
+              <div style="margin-top:18px">
+                <label style="{{ fieldLabel }}">Tên tệp</label>
+                <input value="{{ fileName }}" onChange="{{ onFileName }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isEventDetail }}">
+              <div style="margin-top:18px">
+                <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px">Chỉnh sửa sự kiện</div>
+                <label style="{{ fieldLabel }}">Tiêu đề</label>
+                <input value="{{ evTitle }}" onChange="{{ onEvTitle }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+                <div style="display:flex;gap:10px">
+                  <div style="flex:1"><label style="{{ fieldLabel }}">Bắt đầu</label><input value="{{ evStart }}" onChange="{{ onEvStart }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" /></div>
+                  <div style="flex:1"><label style="{{ fieldLabel }}">Kết thúc</label><input value="{{ evEnd }}" onChange="{{ onEvEnd }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" /></div>
+                </div>
+                <label style="{{ fieldLabel }}">Địa điểm</label>
+                <input value="{{ evLocation }}" onChange="{{ onEvLocation }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+                <label style="{{ fieldLabel }}">Người tham gia</label>
+                <input value="{{ evAttendees }}" onChange="{{ onEvAttendees }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isTicketDetail }}">
+              <div style="margin-top:18px">
+                <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px">Chỉnh sửa ticket</div>
+                <label style="{{ fieldLabel }}">Tóm tắt</label>
+                <input value="{{ tkSummary }}" onChange="{{ onTkSummary }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+                <label style="{{ fieldLabel }}">Mô tả</label>
+                <textarea value="{{ tkDesc }}" onChange="{{ onTkDesc }}" style="{{ fieldTextarea }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)"></textarea>
+                <div style="display:flex;gap:10px">
+                  <div style="flex:1"><label style="{{ fieldLabel }}">Trạng thái</label>
+                    <select value="{{ ticketStatusValue }}" onChange="{{ onTicketStatus }}" style="{{ selectStyle }}"><option>To Do</option><option>In Progress</option><option>Done</option></select>
+                  </div>
+                  <div style="flex:1"><label style="{{ fieldLabel }}">Ưu tiên</label>
+                    <select value="{{ tkPriority }}" onChange="{{ onTkPriority }}" style="{{ selectStyle }}"><option>Low</option><option>Medium</option><option>High</option></select>
+                  </div>
+                </div>
+                <label style="{{ fieldLabel }}">Người nhận</label>
+                <input value="{{ tkAssignee }}" onChange="{{ onTkAssignee }}" style="{{ fieldInput }}" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="flex:0 0 auto;border-top:1px solid var(--border);padding:14px 20px;display:flex;flex-wrap:wrap;gap:8px">
+            <sc-if value="{{ isEmailDetail }}">
+              <button onClick="{{ onToggleRead }}" style="{{ btnSecondary }}" style-hover="background:var(--surface-2)">{{ icoEye }}<span>{{ detailUnreadLabel }}</span></button>
+              <button onClick="{{ onDetailStar }}" style="{{ btnSecondary }}" style-hover="background:var(--surface-2)">{{ detailStarIcon }}<span>{{ detailStarLabel }}</span></button>
+              <button onClick="{{ onLabel }}" style="{{ btnGhost }}" style-hover="background:var(--surface-2)">{{ icoTag }}<span>Nhãn</span></button>
+              <button onClick="{{ onCompose }}" style="{{ btnGhost }}" style-hover="background:var(--surface-2)">{{ icoSend }}<span>Soạn mới</span></button>
+              <button onClick="{{ onTrash }}" style="{{ btnDanger }}" style-hover="border-color:var(--danger)">{{ icoTrash }}</button>
+            </sc-if>
+            <sc-if value="{{ isEventDetail }}">
+              <button onClick="{{ onSaveEvent }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">{{ icoSave }}<span>Lưu thay đổi</span></button>
+              <button onClick="{{ onDeleteEvent }}" style="{{ btnDanger }}" style-hover="border-color:var(--danger)">{{ icoTrash }}<span>Xoá</span></button>
+            </sc-if>
+            <sc-if value="{{ isFileDetail }}">
+              <button onClick="{{ onRename }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">{{ icoSave }}<span>Đổi tên</span></button>
+              <button onClick="{{ onOpenDrive }}" style="{{ btnSecondary }}" style-hover="background:var(--surface-2)">{{ icoExt }}<span>Mở trên Drive</span></button>
+              <button onClick="{{ onTrash }}" style="{{ btnDanger }}" style-hover="border-color:var(--danger)">{{ icoTrash }}</button>
+            </sc-if>
+            <sc-if value="{{ isNoteDetail }}">
+              <button onClick="{{ onSaveNote }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">{{ icoSave }}<span>Lưu ghi chú</span></button>
+              <button onClick="{{ onTrash }}" style="{{ btnDanger }}" style-hover="border-color:var(--danger)">{{ icoTrash }}<span>Xoá</span></button>
+            </sc-if>
+            <sc-if value="{{ isTicketDetail }}">
+              <button onClick="{{ onSaveTicket }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">{{ icoSave }}<span>Cập nhật Jira</span></button>
+              <button onClick="{{ onComment }}" style="{{ btnGhost }}" style-hover="background:var(--surface-2)">{{ icoReply }}<span>Bình luận</span></button>
+              <button onClick="{{ onDeleteTicket }}" style="{{ btnDanger }}" style-hover="border-color:var(--danger)">{{ icoTrash }}</button>
+            </sc-if>
+          </div>
+
+          <div style="flex:0 0 auto;padding:0 20px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--text-3)">Mô phỏng write-back:</span>
+            <button onClick="{{ onDemo409 }}" style="{{ btnSmall }}" style-hover="border-color:var(--border-strong)">409 xung đột</button>
+            <button onClick="{{ onToggle403 }}" style="{{ btnSmall }}" style-hover="border-color:var(--border-strong)">403 thiếu scope</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ shareOpen }}">
+      <div style="position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:20px">
+        <div onClick="{{ onCloseShare }}" style="position:absolute;inset:0;background:rgba(15,23,42,.5)"></div>
+        <div style="position:relative;width:100%;max-width:444px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-lg);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:11px;padding:18px 20px;border-bottom:1px solid var(--border)">
+            <span style="{{ shareFolderDot }}"></span>
+            <div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;color:var(--text)">Chia sẻ thư mục</div><div style="font-size:12.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ shareFolderName }}</div></div>
+            <button onClick="{{ onCloseShare }}" aria-label="Đóng" style="background:none;border:none;color:var(--text-3);cursor:pointer;display:flex;padding:6px;border-radius:8px;flex:0 0 auto" style-hover="background:var(--surface-2);color:var(--text)">{{ icoX }}</button>
+          </div>
+          <div style="padding:18px 20px">
+            <div style="display:flex;gap:9px;align-items:flex-start;background:var(--primary-soft);border-radius:9px;padding:10px 12px;margin-bottom:16px">
+              <span style="color:var(--primary);display:flex;flex:0 0 auto;margin-top:1px">{{ icoEye }}</span>
+              <span style="font-size:12.5px;color:var(--text-2);line-height:1.5">Quyền <strong style="color:var(--text);font-weight:600">chỉ xem (Viewer)</strong>. Người được chia sẻ chỉ thấy danh sách mục, <strong style="color:var(--text);font-weight:600">không thấy nội dung body</strong> của email/ghi chú.</span>
+            </div>
+            <label style="{{ fieldLabel }}">Mời qua email</label>
+            <div style="display:flex;gap:8px;margin-bottom:20px">
+              <input value="{{ shareEmail }}" onChange="{{ onShareEmail }}" placeholder="email@congty.vn" style="flex:1;height:38px;padding:0 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;outline:none" style-focus="border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)" />
+              <button onClick="{{ onAddShare }}" style="{{ btnPrimary }}" style-hover="background:var(--primary-hover)">Thêm</button>
+            </div>
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);margin-bottom:10px">Đang chia sẻ ({{ shareCount }})</div>
+            <sc-if value="{{ shareEmpty }}"><div style="font-size:13px;color:var(--text-3);padding:6px 0 4px">Chưa chia sẻ với ai.</div></sc-if>
+            <div style="display:flex;flex-direction:column;gap:10px;max-height:220px;overflow-y:auto">
+              <sc-for list="{{ shareList }}" as="p" hint-placeholder-count="0">
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="width:30px;height:30px;border-radius:999px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:0 0 auto">{{ p.initials }}</div>
+                  <span style="flex:1;font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.email }}</span>
+                  <span style="font-size:12px;color:var(--text-3);flex:0 0 auto">Chỉ xem</span>
+                  <button onClick="{{ p.onRemove }}" aria-label="Gỡ" style="background:none;border:none;color:var(--text-3);cursor:pointer;display:flex;padding:5px;border-radius:6px;flex:0 0 auto" style-hover="background:var(--danger-bg);color:var(--danger)">{{ icoX }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <div style="position:fixed;top:16px;right:16px;z-index:70;display:flex;flex-direction:column;gap:8px;pointer-events:none">
+    <sc-for list="{{ toasts }}" as="t" hint-placeholder-count="0">
+      <div style="{{ t.style }}"><span style="display:flex;flex:0 0 auto">{{ t.icon }}</span><span style="flex:1">{{ t.msg }}</span><button onClick="{{ t.close }}" aria-label="Đóng" style="background:none;border:none;color:inherit;opacity:.6;cursor:pointer;display:flex;padding:0;pointer-events:auto">{{ t.x }}</button></div>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;admin&quot;,&quot;options&quot;:[&quot;admin&quot;,&quot;member&quot;],&quot;tsType&quot;:&quot;'admin'|'member'&quot;,&quot;section&quot;:&quot;Phân quyền&quot;},&quot;initialView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;login&quot;,&quot;options&quot;:[&quot;login&quot;,&quot;inbox&quot;,&quot;kanban&quot;,&quot;connections&quot;,&quot;scheduled&quot;,&quot;folders&quot;,&quot;admin&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Khởi tạo&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;light&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Giao diện&quot;}}">
+class Component extends DCLogic {
+  state = {
+    authed: null, view: null, theme: null,
+    dataState: 'populated',
+    folder: 'all', fStatus: 'all', fType: 'all', fImportant: false, search: '', page: 1,
+    selectedId: null, shareId: null, detail403: false,
+    drawer: false, narrow: false,
+    draggingId: null, dragOverCol: null,
+    toasts: [],
+    items: null, folders: [], connections: [], scheduled: [], users: [], stats: null, chart: [],
+    shares: { vinclub: ['huong@vinclub.vn', 'ketoan@vinclub.vn'], highlands: ['khoa@highlands.vn'] },
+    authEmail: '', authPwd: '', authName: '', authConfirm: '', errEmail: '', errPwd: '', authBanner: '',
+    cTo: '', cCc: '', cBcc: '', cSubject: '', cBody: '', cWhen: '', cConn: 'gmail',
+    shareEmail: '', userSearch: '', userPage: 1,
+    evTitle: '', evStart: '', evEnd: '', evLocation: '', evAttendees: '', tkSummary: '', tkDesc: '', tkPriority: 'Medium', tkAssignee: '', fileName: '',
+  };
+
+  ICONS = {
+    inbox: [['path',{d:'M22 12h-6l-2 3h-4l-2-3H2'}],['path',{d:'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'}]],
+    kanban: [['rect',{x:3,y:3,width:18,height:18,rx:2}],['path',{d:'M9 3v18'}],['path',{d:'M15 3v18'}]],
+    plug: [['path',{d:'M9 2v6'}],['path',{d:'M15 2v6'}],['path',{d:'M6 8h12v3a6 6 0 0 1-12 0z'}],['path',{d:'M12 17v5'}]],
+    clock: [['circle',{cx:12,cy:12,r:9}],['path',{d:'M12 7v5l3 2'}]],
+    folder: [['path',{d:'M4 5a2 2 0 0 1 2-2h3.4l2 2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z'}]],
+    dash: [['rect',{x:3,y:3,width:8,height:9,rx:1}],['rect',{x:13,y:3,width:8,height:5,rx:1}],['rect',{x:13,y:11,width:8,height:10,rx:1}],['rect',{x:3,y:15,width:8,height:6,rx:1}]],
+    search: [['circle',{cx:11,cy:11,r:7}],['path',{d:'m21 21-4.3-4.3'}]],
+    bell: [['path',{d:'M6 9a6 6 0 0 1 12 0c0 6 2.5 7 2.5 7H3.5S6 15 6 9'}],['path',{d:'M10.5 20a1.8 1.8 0 0 0 3 0'}]],
+    plus: [['path',{d:'M12 5v14'}],['path',{d:'M5 12h14'}]],
+    star: [['path',{d:'M12 3.2l2.6 5.3 5.85.85-4.23 4.12 1 5.83L12 17.6l-5.22 2.74 1-5.83L3.55 9.35l5.85-.85z'}]],
+    sun: [['circle',{cx:12,cy:12,r:4}],['path',{d:'M12 2v2'}],['path',{d:'M12 20v2'}],['path',{d:'M4 12H2'}],['path',{d:'M22 12h-2'}],['path',{d:'m5 5 1.4 1.4'}],['path',{d:'m17.6 17.6 1.4 1.4'}],['path',{d:'m19 5-1.4 1.4'}],['path',{d:'m6.4 17.6-1.4 1.4'}]],
+    moon: [['path',{d:'M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5z'}]],
+    x: [['path',{d:'M18 6 6 18'}],['path',{d:'M6 6l12 12'}]],
+    check: [['path',{d:'M20 6 9 17l-5-5'}]],
+    chevR: [['path',{d:'m9 6 6 6-6 6'}]],
+    chevL: [['path',{d:'m15 6-6 6 6 6'}]],
+    chevD: [['path',{d:'m6 9 6 6 6-6'}]],
+    refresh: [['path',{d:'M3 12a9 9 0 0 1 15-6.7L21 8'}],['path',{d:'M21 3v5h-5'}],['path',{d:'M21 12a9 9 0 0 1-15 6.7L3 16'}],['path',{d:'M3 21v-5h5'}]],
+    grip: [['circle',{cx:9,cy:6,r:1}],['circle',{cx:9,cy:12,r:1}],['circle',{cx:9,cy:18,r:1}],['circle',{cx:15,cy:6,r:1}],['circle',{cx:15,cy:12,r:1}],['circle',{cx:15,cy:18,r:1}]],
+    logout: [['path',{d:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'}],['path',{d:'m16 17 5-5-5-5'}],['path',{d:'M21 12H9'}]],
+    more: [['circle',{cx:5,cy:12,r:1.4}],['circle',{cx:12,cy:12,r:1.4}],['circle',{cx:19,cy:12,r:1.4}]],
+    trash: [['path',{d:'M3 6h18'}],['path',{d:'M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2'}],['path',{d:'M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6'}],['path',{d:'M10 11v6'}],['path',{d:'M14 11v6'}]],
+    edit: [['path',{d:'M12 20h9'}],['path',{d:'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z'}]],
+    ext: [['path',{d:'M15 3h6v6'}],['path',{d:'M10 14 21 3'}],['path',{d:'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'}]],
+    send: [['path',{d:'M22 2 11 13'}],['path',{d:'M22 2 15 22l-4-9-9-4z'}]],
+    alert: [['circle',{cx:12,cy:12,r:9}],['path',{d:'M12 8v4'}],['path',{d:'M12 16h.01'}]],
+    users: [['path',{d:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'}],['circle',{cx:9,cy:7,r:4}],['path',{d:'M22 21v-2a4 4 0 0 0-3-3.87'}],['path',{d:'M16 3.13a4 4 0 0 1 0 7.75'}]],
+    share: [['circle',{cx:18,cy:5,r:3}],['circle',{cx:6,cy:12,r:3}],['circle',{cx:18,cy:19,r:3}],['path',{d:'m8.6 13.5 6.8 4'}],['path',{d:'m15.4 6.5-6.8 4'}]],
+    archive: [['rect',{x:3,y:4,width:18,height:4,rx:1}],['path',{d:'M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8'}],['path',{d:'M10 12h4'}]],
+    menu: [['path',{d:'M3 6h18'}],['path',{d:'M3 12h18'}],['path',{d:'M3 18h18'}]],
+    mail: [['rect',{x:2,y:4,width:20,height:16,rx:2}],['path',{d:'m3 7 9 6 9-6'}]],
+    calendar: [['rect',{x:3,y:4,width:18,height:17,rx:2}],['path',{d:'M16 2v4'}],['path',{d:'M8 2v4'}],['path',{d:'M3 10h18'}]],
+    file: [['path',{d:'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z'}],['path',{d:'M14 3v5h5'}],['path',{d:'M9 13h6'}],['path',{d:'M9 17h4'}]],
+    note: [['path',{d:'M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l6-6V5a2 2 0 0 0-2-2z'}],['path',{d:'M14 21v-5a1 1 0 0 1 1-1h5'}]],
+    ticket: [['path',{d:'M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z'}],['path',{d:'M13 6v2'}],['path',{d:'M13 16v2'}],['path',{d:'M13 11v2'}]],
+    list: [['path',{d:'M8 6h13'}],['path',{d:'M8 12h13'}],['path',{d:'M8 18h13'}],['path',{d:'M3 6h.01'}],['path',{d:'M3 12h.01'}],['path',{d:'M3 18h.01'}]],
+    reply: [['path',{d:'M9 17l-5-5 5-5'}],['path',{d:'M4 12h11a5 5 0 0 1 5 5v1'}]],
+    tag: [['path',{d:'M20 12l-8 8-9-9V4a1 1 0 0 1 1-1h7z'}],['circle',{cx:7.5,cy:7.5,r:1.3}]],
+    eye: [['path',{d:'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z'}],['circle',{cx:12,cy:12,r:3}]],
+    pin: [['path',{d:'M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z'}],['circle',{cx:12,cy:10,r:3}]],
+    lock: [['rect',{x:4,y:11,width:16,height:9,rx:2}],['path',{d:'M8 11V7a4 4 0 0 1 8 0v4'}]],
+    save: [['path',{d:'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z'}],['path',{d:'M17 21v-8H7v8'}],['path',{d:'M7 3v5h8'}]],
+  };
+
+  TYPE = {
+    email: { label: 'Email', icon: 'mail', bg: 'var(--email-bg)', fg: 'var(--email-fg)' },
+    event: { label: 'Sự kiện', icon: 'calendar', bg: 'var(--event-bg)', fg: 'var(--event-fg)' },
+    file: { label: 'Tệp', icon: 'file', bg: 'var(--file-bg)', fg: 'var(--file-fg)' },
+    note: { label: 'Ghi chú', icon: 'note', bg: 'var(--note-bg)', fg: 'var(--note-fg)' },
+    ticket: { label: 'Ticket', icon: 'ticket', bg: 'var(--ticket-bg)', fg: 'var(--ticket-fg)' },
+  };
+  STATUS = {
+    todo: { label: 'Cần xem', bg: 'var(--todo-bg)', fg: 'var(--todo-fg)' },
+    doing: { label: 'Đang xử lý', bg: 'var(--doing-bg)', fg: 'var(--doing-fg)' },
+    done: { label: 'Done', bg: 'var(--done-bg)', fg: 'var(--done-fg)' },
+  };
+
+  ic(name, size = 18, sw = 1.75) {
+    const d = this.ICONS[name] || [];
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: sw, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: '0 0 auto' } }, d.map((p, i) => React.createElement(p[0], { ...p[1], key: i })));
+  }
+  icFill(name, size = 16, color = 'currentColor') {
+    const d = this.ICONS[name] || [];
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: color, stroke: 'none', style: { display: 'block', flex: '0 0 auto' } }, d.map((p, i) => React.createElement(p[0], { ...p[1], key: i })));
+  }
+  googleG(size = 18) {
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', style: { display: 'block', flex: '0 0 auto' } },
+      React.createElement('path', { key: 1, fill: '#4285F4', d: 'M22.5 12.2c0-.7-.06-1.4-.18-2.05H12v3.9h5.9a5.05 5.05 0 0 1-2.19 3.32v2.74h3.54c2.07-1.9 3.25-4.71 3.25-7.91z' }),
+      React.createElement('path', { key: 2, fill: '#34A853', d: 'M12 23c2.95 0 5.43-.98 7.24-2.64l-3.54-2.74c-.98.66-2.24 1.05-3.7 1.05-2.84 0-5.25-1.92-6.11-4.5H2.13v2.83A11 11 0 0 0 12 23z' }),
+      React.createElement('path', { key: 3, fill: '#FBBC05', d: 'M5.89 14.17a6.6 6.6 0 0 1 0-4.22V7.12H2.13a11 11 0 0 0 0 9.88z' }),
+      React.createElement('path', { key: 4, fill: '#EA4335', d: 'M12 5.45c1.6 0 3.04.55 4.17 1.63l3.13-3.13C17.43 2.18 14.95 1.2 12 1.2A11 11 0 0 0 2.13 7.12l3.76 2.83C6.75 7.37 9.16 5.45 12 5.45z' }));
+  }
+
+  themeVars(dark) {
+    return dark ? {
+      '--bg': '#0b1120', '--surface': '#141d31', '--surface-2': '#1c2740', '--surface-3': '#27324a',
+      '--border': '#27324a', '--border-strong': '#3a465f', '--text': '#e8edf6', '--text-2': '#94a3b8', '--text-3': '#64748b',
+      '--primary': '#6366f1', '--primary-hover': '#818cf8', '--primary-soft': 'rgba(99,102,241,.16)', '--primary-fg': '#fff', '--ring': 'rgba(129,140,248,.4)',
+      '--shadow': '0 1px 2px rgba(0,0,0,.4)', '--shadow-lg': '0 18px 44px -14px rgba(0,0,0,.7)',
+      '--email-bg': 'rgba(59,130,246,.16)', '--email-fg': '#93c5fd', '--event-bg': 'rgba(245,158,11,.16)', '--event-fg': '#fcd34d',
+      '--file-bg': 'rgba(16,185,129,.16)', '--file-fg': '#6ee7b7', '--note-bg': 'rgba(148,163,184,.16)', '--note-fg': '#cbd5e1',
+      '--ticket-bg': 'rgba(139,92,246,.18)', '--ticket-fg': '#c4b5fd',
+      '--todo-bg': 'rgba(148,163,184,.16)', '--todo-fg': '#cbd5e1', '--doing-bg': 'rgba(59,130,246,.16)', '--doing-fg': '#93c5fd', '--done-bg': 'rgba(16,185,129,.16)', '--done-fg': '#6ee7b7',
+      '--danger': '#f87171', '--danger-bg': 'rgba(248,113,113,.14)', '--danger-fg': '#fca5a5', '--danger-border': 'rgba(248,113,113,.3)',
+      '--warn': '#fbbf24', '--warn-bg': 'rgba(251,191,36,.14)', '--warn-fg': '#fcd34d', '--ok': '#34d399', '--ok-bg': 'rgba(16,185,129,.14)', '--ok-fg': '#6ee7b7',
+    } : {
+      '--bg': '#f8fafc', '--surface': '#ffffff', '--surface-2': '#f1f5f9', '--surface-3': '#e2e8f0',
+      '--border': '#e2e8f0', '--border-strong': '#cbd5e1', '--text': '#0f172a', '--text-2': '#64748b', '--text-3': '#94a3b8',
+      '--primary': '#4f46e5', '--primary-hover': '#4338ca', '--primary-soft': '#eef2ff', '--primary-fg': '#fff', '--ring': 'rgba(79,70,229,.28)',
+      '--shadow': '0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.05)', '--shadow-lg': '0 18px 44px -14px rgba(15,23,42,.28)',
+      '--email-bg': '#eff6ff', '--email-fg': '#1d4ed8', '--event-bg': '#fffbeb', '--event-fg': '#b45309',
+      '--file-bg': '#ecfdf5', '--file-fg': '#047857', '--note-bg': '#f1f5f9', '--note-fg': '#475569',
+      '--ticket-bg': '#f5f3ff', '--ticket-fg': '#6d28d9',
+      '--todo-bg': '#f1f5f9', '--todo-fg': '#475569', '--doing-bg': '#eff6ff', '--doing-fg': '#1d4ed8', '--done-bg': '#ecfdf5', '--done-fg': '#047857',
+      '--danger': '#dc2626', '--danger-bg': '#fef2f2', '--danger-fg': '#b91c1c', '--danger-border': '#fecaca',
+      '--warn': '#d97706', '--warn-bg': '#fffbeb', '--warn-fg': '#b45309', '--ok': '#059669', '--ok-bg': '#ecfdf5', '--ok-fg': '#047857',
+    };
+  }
+
+  curView() { return this.state.view ?? this.props.initialView ?? 'login'; }
+  curAuthed() { if (this.state.authed != null) return this.state.authed; const v = this.props.initialView; return !!(v && v !== 'login' && v !== 'register'); }
+  curTheme() { return this.state.theme ?? this.props.theme ?? 'light'; }
+  adminAllowed() { return (this.props.role ?? 'admin') === 'admin'; }
+  folderById(id) { return (this.state.folders || []).find(f => f.id === id); }
+
+  componentDidMount() {
+    Promise.resolve(window.__WH_DATA).then(m => {
+      this.setState({ items: m.ITEMS, folders: m.FOLDERS, connections: m.CONNECTIONS, scheduled: m.SCHEDULED, users: m.USERS, stats: m.ADMIN_STATS, chart: m.SYNC_CHART });
+    });
+    this._resize = () => { const n = window.innerWidth < 1024; if (n !== this.state.narrow) this.setState({ narrow: n }); };
+    this._resize();
+    window.addEventListener('resize', this._resize);
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this._resize); }
+
+  // ---- handlers ----
+  nav(v) { this.setState({ view: v, drawer: false, selectedId: null, shareId: null, detail403: false }); }
+  setField(k, e) { this.setState({ [k]: e && e.target ? e.target.value : e }); }
+  submitAuth() {
+    const { authEmail, authPwd, authConfirm } = this.state;
+    const isReg = this.curView() === 'register';
+    let eE = '', eP = '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(authEmail || '')) eE = 'Email không hợp lệ';
+    if ((authPwd || '').length < 8) eP = 'Mật khẩu cần ít nhất 8 ký tự';
+    if (isReg && !eP && authPwd !== authConfirm) eP = 'Mật khẩu nhập lại không khớp';
+    this.setState({ errEmail: eE, errPwd: eP, authBanner: '' });
+    if (eE || eP) return;
+    this.setState({ authed: true, view: 'inbox' });
+    this.toast('success', isReg ? 'Tạo tài khoản thành công' : 'Đăng nhập thành công');
+  }
+  google() { this.setState({ authed: true, view: 'inbox' }); this.toast('success', 'Đăng nhập bằng Google thành công'); }
+  demoErr(k) { const m = { wrong: 'Sai email hoặc mật khẩu', exists: 'Email đã tồn tại trong hệ thống', locked: 'Tài khoản đã bị khoá. Liên hệ quản trị viên.' }; this.setState({ authBanner: m[k] }); }
+  logout() { this.setState({ authed: false, view: 'login', authEmail: '', authPwd: '', authBanner: '', errEmail: '', errPwd: '' }); }
+  toggleTheme() { this.setState(s => ({ theme: (s.theme ?? this.props.theme ?? 'light') === 'light' ? 'dark' : 'light' })); }
+  setData(s) { this.setState({ dataState: s }); }
+  setFolder(id) { this.setState({ folder: id, page: 1, drawer: false }); }
+  toast(type, msg) { const id = Date.now() + Math.random(); this.setState(s => ({ toasts: [...s.toasts, { id, type, msg }] })); setTimeout(() => this.dismiss(id), 3400); }
+  dismiss(id) { this.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) })); }
+  toggleStar(id) {
+    let flag = false;
+    const items = (this.state.items || []).map(i => { if (i.id === id) { flag = !i.important; return { ...i, important: flag }; } return i; });
+    this.setState({ items }); this.toast('success', flag ? 'Đã đánh dấu quan trọng' : 'Đã bỏ đánh dấu quan trọng');
+  }
+  openItem(it) {
+    const m = it.meta || {};
+    this.setState({ selectedId: it.id, detail403: false, evTitle: it.title, evStart: m.start || '', evEnd: m.end || '', evLocation: m.location || '', evAttendees: (m.attendees || []).join(', '), tkSummary: it.title, tkDesc: it.body || '', tkPriority: m.priority || 'Medium', tkAssignee: m.assignee || '', fileName: it.title });
+  }
+  toggleRead(id) {
+    let nu = false;
+    const items = (this.state.items || []).map(i => { if (i.id === id) { nu = !i.unread; return { ...i, unread: nu, meta: { ...(i.meta || {}), read: !nu } }; } return i; });
+    this.setState({ items }); this.toast('success', nu ? 'Đã đánh dấu chưa đọc' : 'Đã đánh dấu đã đọc');
+  }
+  removeItem(id) {
+    const items = (this.state.items || []).filter(i => i.id !== id);
+    this.setState({ items, selectedId: this.state.selectedId === id ? null : this.state.selectedId, detail403: false });
+    this.toast('success', 'Đã chuyển vào thùng rác');
+  }
+  closeItem() { this.setState({ selectedId: null, detail403: false }); }
+  moveItem(id, status) {
+    const labels = { todo: 'Cần xem', doing: 'Đang xử lý', done: 'Done' };
+    const items = (this.state.items || []).map(i => i.id === id ? { ...i, status } : i);
+    this.setState({ items }); this.toast('success', 'Đã chuyển sang “' + labels[status] + '”');
+  }
+  onDragStart(id) { this.setState({ draggingId: id }); }
+  onDragEnd() { this.setState({ draggingId: null, dragOverCol: null }); }
+  onColOver(col, e) { if (e && e.preventDefault) e.preventDefault(); if (this.state.dragOverCol !== col) this.setState({ dragOverCol: col }); }
+  onColLeave(col) { if (this.state.dragOverCol === col) this.setState({ dragOverCol: null }); }
+  onColDrop(col) {
+    const id = this.state.draggingId;
+    this.setState({ draggingId: null, dragOverCol: null });
+    if (id != null) { const it = (this.state.items || []).find(x => x.id === id); if (it && it.status !== col) this.moveItem(id, col); }
+  }
+  getKanban() {
+    let r = this.state.items || [];
+    const { folder, fType, fImportant, search } = this.state;
+    if (folder !== 'all') r = r.filter(i => i.folder === folder);
+    if (fType !== 'all') r = r.filter(i => i.type === fType);
+    if (fImportant) r = r.filter(i => i.important);
+    const q = (search || '').trim().toLowerCase();
+    if (q) r = r.filter(i => ((i.title || '') + ' ' + (i.snippet || '') + ' ' + (i.from || '')).toLowerCase().includes(q));
+    return r;
+  }
+
+  setConn(id, patch) { const connections = (this.state.connections || []).map(c => c.id === id ? { ...c, ...patch } : c); this.setState({ connections }); }
+  connName(id) { const c = (this.state.connections || []).find(x => x.id === id); return c ? c.service : ''; }
+  connect(id) { this.setConn(id, { status: 'active', account: 'minh@lopstudio.vn', lastSynced: 'Đồng bộ vừa xong', error: null }); this.toast('success', 'Đã kết nối ' + this.connName(id)); }
+  disconnect(id) { this.setConn(id, { status: 'disconnected', account: null, lastSynced: 'Chưa kết nối' }); this.toast('success', 'Đã ngắt kết nối ' + this.connName(id)); }
+  refreshConn(id) { this.setConn(id, { status: 'active', lastSynced: 'Đồng bộ vừa xong', error: null }); this.toast('success', 'Đồng bộ thành công'); }
+
+  getFiltered() {
+    let r = this.state.items || [];
+    const { folder, fStatus, fType, fImportant, search } = this.state;
+    if (folder !== 'all') r = r.filter(i => i.folder === folder);
+    if (fStatus !== 'all') r = r.filter(i => i.status === fStatus);
+    if (fType !== 'all') r = r.filter(i => i.type === fType);
+    if (fImportant) r = r.filter(i => i.important);
+    const q = (search || '').trim().toLowerCase();
+    if (q) r = r.filter(i => ((i.title || '') + ' ' + (i.snippet || '') + ' ' + (i.from || '')).toLowerCase().includes(q));
+    return r;
+  }
+
+  chipStyle(active) {
+    return { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit', border: '1px solid ' + (active ? 'var(--primary)' : 'var(--border)'), background: active ? 'var(--primary-soft)' : 'var(--surface)', color: active ? 'var(--primary)' : 'var(--text-2)' };
+  }
+  pageBtnStyle(active) {
+    return { minWidth: 32, height: 32, padding: '0 6px', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid ' + (active ? 'var(--primary)' : 'var(--border)'), background: active ? 'var(--primary-soft)' : 'var(--surface)', color: active ? 'var(--primary)' : 'var(--text-2)' };
+  }
+  navBtn(active) {
+    return { display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit', fontWeight: active ? 600 : 500, background: active ? 'var(--primary-soft)' : 'transparent', color: active ? 'var(--primary)' : 'var(--text-2)' };
+  }
+  skel(w, h, mt) { return { width: w, height: h, marginTop: mt || 0, borderRadius: h > 20 ? 9 : 6, background: 'linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%)', backgroundSize: '400% 100%', animation: 'wh-shimmer 1.4s ease infinite' }; }
+
+  enrich(it) {
+    const tm = this.TYPE[it.type], sm = this.STATUS[it.status], f = this.folderById(it.folder);
+    const chip = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', lineHeight: 1.55 };
+    return {
+      ...it,
+      typeLabel: tm.label, icon: this.ic(tm.icon, 16), typeIcon: this.ic(tm.icon, 13),
+      iconWrap: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 9, flex: '0 0 auto', background: tm.bg, color: tm.fg },
+      typeChip: { ...chip, background: tm.bg, color: tm.fg },
+      statusLabel: sm.label, statusChip: { ...chip, background: sm.bg, color: sm.fg },
+      statusDot: { width: 6, height: 6, borderRadius: 999, background: sm.fg, flex: '0 0 auto' },
+      folderName: f ? f.name : '—', folderColor: f ? f.color : 'var(--text-3)',
+      folderDot: { width: 7, height: 7, borderRadius: 999, background: f ? f.color : 'var(--text-3)', flex: '0 0 auto' },
+      isUnread: it.type === 'email' && it.unread,
+      titleStyle: { fontSize: 14, fontWeight: (it.type === 'email' && it.unread) ? 600 : 500, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+      starOn: !!it.important, starIcon: it.important ? this.icFill('star', 16, 'var(--warn)') : this.ic('star', 16),
+      starBtn: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 6, borderRadius: 7, flex: '0 0 auto', color: it.important ? 'var(--warn)' : 'var(--text-3)' },
+      open: () => this.openItem(it),
+      toggleStar: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.toggleStar(it.id); },
+    };
+  }
+
+  scheduleSend() {
+    const { cTo, cSubject, cWhen } = this.state;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cTo || '')) { this.toast('error', 'Nhập email người nhận hợp lệ'); return; }
+    if (!cSubject) { this.toast('error', 'Nhập tiêu đề email'); return; }
+    const s = { id: 's' + Date.now(), subject: cSubject, to: cTo, when: cWhen || 'Chưa đặt giờ', status: 'pending', conn: 'Gmail · minh@lopstudio.vn' };
+    this.setState(st => ({ scheduled: [s, ...st.scheduled], cTo: '', cCc: '', cBcc: '', cSubject: '', cBody: '', cWhen: '' }));
+    this.toast('success', 'Đã lên lịch gửi email');
+  }
+  cancelScheduled(id) { const scheduled = (this.state.scheduled || []).map(s => s.id === id ? { ...s, status: 'cancelled', when: 'Đã huỷ' } : s); this.setState({ scheduled }); this.toast('success', 'Đã huỷ lịch gửi'); }
+  openShare(id) { this.setState({ shareId: id, shareEmail: '' }); }
+  closeShare() { this.setState({ shareId: null }); }
+  addShare() {
+    const { shareEmail, shareId } = this.state;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shareEmail || '')) { this.toast('error', 'Email không hợp lệ'); return; }
+    const shares = { ...this.state.shares }; shares[shareId] = [...(shares[shareId] || []), shareEmail];
+    this.setState({ shares, shareEmail: '' }); this.toast('success', 'Đã chia sẻ thư mục (chỉ xem)');
+  }
+  removeShare(email) { const id = this.state.shareId; const shares = { ...this.state.shares }; shares[id] = (shares[id] || []).filter(e => e !== email); this.setState({ shares }); this.toast('success', 'Đã gỡ quyền xem'); }
+  renameFolder(id) { this.toast('success', 'Đã đổi tên thư mục'); }
+  archiveFolder(id) { this.toast('success', 'Đã lưu trữ thư mục'); }
+
+  // ---- screen value stubs (filled in later) ----
+  kanbanVals() {
+    const all = this.getKanban();
+    const ds = this.state.dataState;
+    const loading = ds === 'loading' || !this.state.items;
+    const error = ds === 'error';
+    const cols = [['todo', 'Cần xem'], ['doing', 'Đang xử lý'], ['done', 'Done']].map(([key, label]) => {
+      const cards = all.filter(i => i.status === key).map(it => {
+        const e = this.enrich(it); const dragging = this.state.draggingId === it.id;
+        return {
+          ...e, grip: this.ic('grip', 16),
+          onDragStart: () => this.onDragStart(it.id), onDragEnd: () => this.onDragEnd(),
+          cardStyle: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 12px', cursor: 'grab', boxShadow: 'var(--shadow)', opacity: dragging ? .4 : 1, transition: 'opacity .15s, box-shadow .15s, border-color .15s' },
+        };
+      });
+      const over = this.state.dragOverCol === key;
+      return {
+        key, label, count: cards.length, cards, isEmpty: cards.length === 0,
+        dot: { width: 8, height: 8, borderRadius: 999, background: this.STATUS[key].fg, flex: '0 0 auto' },
+        onDragOver: (e) => this.onColOver(key, e), onDrop: () => this.onColDrop(key), onDragLeave: () => this.onColLeave(key),
+        bodyStyle: { display: 'flex', flexDirection: 'column', gap: 9, padding: 10, borderRadius: 12, flex: 1, minHeight: 160, background: over ? 'var(--primary-soft)' : 'var(--surface-2)', outline: over ? '2px dashed var(--primary)' : '2px dashed transparent', outlineOffset: -2, transition: 'background .15s' },
+      };
+    });
+    const fName = this.state.folder === 'all' ? 'Tất cả thư mục' : (this.folderById(this.state.folder) || {}).name;
+    return { kanbanLoading: loading, kanbanError: error, kanbanReady: !loading, kanbanShow: !error, kanbanCols: cols, kanbanSubtitle: fName, kanbanSkeleton: [1, 2, 3], onViewListK: () => this.nav('inbox') };
+  }
+  connVals() {
+    const map = { active: { label: 'Đang hoạt động', fg: 'var(--ok)', bg: 'var(--ok-bg)' }, disconnected: { label: 'Chưa kết nối', fg: 'var(--text-3)', bg: 'var(--surface-2)' }, error: { label: 'Lỗi đồng bộ', fg: 'var(--danger)', bg: 'var(--danger-bg)' } };
+    const ds = this.state.dataState;
+    const cards = (this.state.connections || []).map(c => {
+      const s = map[c.status] || map.disconnected;
+      return {
+        id: c.id, name: c.service, account: c.account || 'Chưa có tài khoản', desc: c.desc, lastSynced: c.lastSynced, error: c.error,
+        tile: { width: 46, height: 46, borderRadius: 11, background: c.brand, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' },
+        icon: this.ic(c.icon, 22),
+        statusLabel: s.label, statusBadge: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, background: s.bg, color: s.fg, flex: '0 0 auto' }, statusDot: { width: 6, height: 6, borderRadius: 999, background: s.fg, flex: '0 0 auto' },
+        isActive: c.status === 'active', isDisconnected: c.status === 'disconnected', isError: c.status === 'error',
+        cardStyle: { background: 'var(--surface)', border: '1px solid ' + (c.status === 'error' ? 'var(--danger-border)' : 'var(--border)'), borderRadius: 12, padding: 18, boxShadow: 'var(--shadow)', opacity: c.status === 'disconnected' ? 0.85 : 1, display: 'flex', flexDirection: 'column' },
+        onConnect: () => this.connect(c.id), onDisconnect: () => this.disconnect(c.id), onRefresh: () => this.refreshConn(c.id),
+      };
+    });
+    return { connCards: cards, connLoading: ds === 'loading', connError: ds === 'error', connShow: ds !== 'loading' && ds !== 'error', connSkeleton: [1, 2, 3, 4] };
+  }
+  schedVals() {
+    const map = { pending: { label: 'Chờ gửi', fg: 'var(--warn)', bg: 'var(--warn-bg)' }, sent: { label: 'Đã gửi', fg: 'var(--ok)', bg: 'var(--ok-bg)' }, failed: { label: 'Thất bại', fg: 'var(--danger)', bg: 'var(--danger-bg)' }, cancelled: { label: 'Đã huỷ', fg: 'var(--text-3)', bg: 'var(--surface-2)' } };
+    const ds = this.state.dataState;
+    const list = (this.state.scheduled || []).map(s => {
+      const m = map[s.status] || map.pending;
+      return { ...s, statusLabel: m.label, statusBadge: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, background: m.bg, color: m.fg, flex: '0 0 auto' }, statusDot: { width: 6, height: 6, borderRadius: 999, background: m.fg, flex: '0 0 auto' }, clockIcon: this.ic('clock', 13), canCancel: s.status === 'pending', onCancel: () => this.cancelScheduled(s.id) };
+    });
+    const has = list.length > 0;
+    return {
+      schedList: list,
+      schedLoading: ds === 'loading', schedError: ds === 'error',
+      schedShowList: ds !== 'loading' && ds !== 'error' && ds !== 'empty' && has,
+      schedShowEmpty: ds === 'empty' || (ds !== 'loading' && ds !== 'error' && !has),
+      cTo: this.state.cTo, cCc: this.state.cCc, cBcc: this.state.cBcc, cSubject: this.state.cSubject, cBody: this.state.cBody, cWhen: this.state.cWhen, cConn: this.state.cConn,
+      onCTo: (e) => this.setField('cTo', e), onCCc: (e) => this.setField('cCc', e), onCBcc: (e) => this.setField('cBcc', e), onCSubject: (e) => this.setField('cSubject', e), onCBody: (e) => this.setField('cBody', e), onCWhen: (e) => this.setField('cWhen', e), onCConn: (e) => this.setField('cConn', e),
+      onScheduleSend: () => this.scheduleSend(),
+      selectStyle2: { width: '100%', height: 36, padding: '0 11px', border: '1px solid var(--border-strong)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5, outline: 'none', marginBottom: 12, fontFamily: 'inherit', cursor: 'pointer' },
+      icoClockLg: this.ic('clock', 24),
+    };
+  }
+  folderScreenVals() {
+    const counts = {}; (this.state.items || []).forEach(i => counts[i.folder] = (counts[i.folder] || 0) + 1);
+    const rows = (this.state.folders || []).map(f => {
+      const shared = this.state.shares[f.id] || []; const c = counts[f.id] || 0;
+      return {
+        id: f.id, name: f.name, count: c, sharedCount: shared.length, isShared: shared.length > 0,
+        metaText: c + ' mục' + (shared.length ? ' · ' + shared.length + ' người xem' : ''),
+        dot: { width: 10, height: 10, borderRadius: 999, background: f.color, flex: '0 0 auto' }, shareIcon: this.ic('eye', 12),
+        onOpen: () => { this.setState({ folder: f.id, page: 1 }); this.nav('inbox'); }, onShare: () => this.openShare(f.id), onRename: () => this.renameFolder(f.id), onArchive: () => this.archiveFolder(f.id),
+      };
+    });
+    const sid = this.state.shareId; const sf = sid ? this.folderById(sid) : null;
+    const shareList = sf ? (this.state.shares[sid] || []).map(email => ({ email, initials: email.slice(0, 2).toUpperCase(), onRemove: () => this.removeShare(email) })) : [];
+    return {
+      folderRows: rows, onCreateFolder: () => this.toast('success', 'Đã tạo thư mục mới'),
+      shareOpen: !!sf, shareFolderName: sf ? sf.name : '', shareFolderDot: { width: 11, height: 11, borderRadius: 999, background: sf ? sf.color : 'var(--text-3)', flex: '0 0 auto' },
+      shareEmail: this.state.shareEmail, onShareEmail: (e) => this.setField('shareEmail', e), onAddShare: () => this.addShare(), onCloseShare: () => this.closeShare(),
+      shareList, shareCount: shareList.length, shareEmpty: shareList.length === 0,
+    };
+  }
+  adminVals() {
+    const st = this.state.stats || {};
+    const cardDefs = [
+      ['Tổng người dùng', st.totalUsers, '+3 trong tuần này', 'users', 'var(--primary)', 'var(--primary-soft)'],
+      ['Đang hoạt động', st.activeUsers, (st.lockedUsers || 0) + ' tài khoản bị khoá', 'check', 'var(--ok)', 'var(--ok-bg)'],
+      ['Tổng kết nối', st.totalConnections, (st.connActive || 0) + ' hoạt động · ' + (st.connError || 0) + ' lỗi · ' + (st.connDisconnected || 0) + ' ngắt', 'plug', 'var(--text)', 'var(--surface-2)'],
+      ['Lỗi đồng bộ 24h', st.syncErrors24h, 'cần được kiểm tra', 'alert', 'var(--danger)', 'var(--danger-bg)'],
+    ];
+    const adminStats = cardDefs.map(([label, value, sub, icon, tint, tintBg]) => ({ label, value, sub, iconEl: this.ic(icon, 18), tile: { width: 38, height: 38, borderRadius: 10, background: tintBg, color: tint, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' } }));
+    const chart = this.state.chart || []; const max = Math.max(1, ...chart.map(d => d.v));
+    const chartBars = chart.map(d => ({ d: d.d, v: d.v, barStyle: { width: '64%', maxWidth: 30, height: Math.round((d.v / max) * 120) + 'px', minHeight: 4, background: 'var(--primary)', borderRadius: '5px 5px 0 0' } }));
+    const badge = (bg, fg) => ({ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', background: bg, color: fg });
+    const q = (this.state.userSearch || '').trim().toLowerCase();
+    let users = (this.state.users || []).filter(u => !q || (u.email + ' ' + u.fullName).toLowerCase().includes(q));
+    const total = users.length, limit = 6, pages = Math.max(1, Math.ceil(total / limit)), page = Math.min(this.state.userPage, pages), start = (page - 1) * limit;
+    const userRows = users.slice(start, start + limit).map(u => ({
+      email: u.email, fullName: u.fullName, lastLoginAt: u.lastLoginAt, connectionCount: u.connectionCount, itemCount: u.itemCount,
+      initials: u.fullName.trim().split(/\s+/).slice(-2).map(x => x[0]).join('').toUpperCase(),
+      roleLabel: u.role === 'admin' ? 'Admin' : 'Thành viên', roleBadge: u.role === 'admin' ? badge('var(--primary-soft)', 'var(--primary)') : badge('var(--surface-2)', 'var(--text-2)'),
+      activeLabel: u.isActive ? 'Hoạt động' : 'Bị khoá', activeBadge: u.isActive ? badge('var(--ok-bg)', 'var(--ok)') : badge('var(--danger-bg)', 'var(--danger)'),
+      activeDot: { width: 6, height: 6, borderRadius: 999, background: u.isActive ? 'var(--ok)' : 'var(--danger)', flex: '0 0 auto' },
+    }));
+    const userPages = Array.from({ length: pages }, (_, i) => i + 1).map(n => ({ n, go: () => this.setState({ userPage: n }), style: this.pageBtnStyle(n === page) }));
+    const ds = this.state.dataState;
+    return { adminStats, chartBars, userRows, userSearch: this.state.userSearch, onUserSearch: (e) => this.setState({ userSearch: e.target.value, userPage: 1 }), userPages, userRangeText: total ? (start + 1) + '–' + Math.min(start + limit, total) + ' / ' + total + ' người dùng' : '0 người dùng', adminLoading: ds === 'loading', adminError: ds === 'error', adminShow: ds !== 'loading' && ds !== 'error', adminDenied: this.curView() === 'admin' && !this.adminAllowed() };
+  }
+  detailVals() {
+    const it = (this.state.items || []).find(i => i.id === this.state.selectedId);
+    if (!it) return { detailOpen: false };
+    const e = this.enrich(it), f = this.folderById(it.folder), m = it.meta || {};
+    const fields = [];
+    if (it.type === 'email') fields.push(['Từ', it.from], ['Đến', m.to || '—'], ['Nhãn', (m.labels || []).join(', ') || '—'], ['Thời gian', it.time]);
+    else if (it.type === 'event') fields.push(['Bắt đầu', m.start || '—'], ['Kết thúc', m.end || '—'], ['Địa điểm', m.location || '—'], ['Người tham gia', (m.attendees || []).join(', ') || '—']);
+    else if (it.type === 'file') fields.push(['Loại tệp', m.kind || '—'], ['Kích thước', m.size || '—'], ['Chủ sở hữu', m.owner || '—'], ['Sửa lần cuối', m.modified || '—']);
+    else if (it.type === 'note') fields.push(['Tạo bởi', m.author || '—'], ['Cập nhật', m.updated || '—']);
+    else if (it.type === 'ticket') fields.push(['Mã', m.key || '—'], ['Người báo cáo', m.reporter || '—'], ['Người nhận', m.assignee || '—'], ['Trạng thái Jira', m.jiraStatus || '—']);
+    const stMap = { todo: 'To Do', doing: 'In Progress', done: 'Done' };
+    return {
+      detailOpen: true, onCloseDetail: () => this.closeItem(),
+      detailIcon: this.ic(this.TYPE[it.type].icon, 18), detailIconWrap: e.iconWrap,
+      detailTitle: it.title, detailTypeChip: e.typeChip, detailTypeLabel: e.typeLabel,
+      detailStatusChip: e.statusChip, detailStatusLabel: e.statusLabel, detailStatusDot: e.statusDot,
+      detailFolderName: f ? f.name : '—', detailFolderDot: { width: 8, height: 8, borderRadius: 999, background: f ? f.color : 'var(--text-3)', flex: '0 0 auto' },
+      detailBody: it.body || '', detailFieldRows: fields.map(([label, value]) => ({ label, value })),
+      detailStarIcon: it.important ? this.icFill('star', 16, 'var(--warn)') : this.ic('star', 16), detailStarLabel: it.important ? 'Bỏ quan trọng' : 'Quan trọng',
+      isEmailDetail: it.type === 'email', isEventDetail: it.type === 'event', isFileDetail: it.type === 'file', isNoteDetail: it.type === 'note', isTicketDetail: it.type === 'ticket',
+      detailUnreadLabel: it.unread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc',
+      onDetailStar: () => this.toggleStar(it.id), onToggleRead: () => this.toggleRead(it.id),
+      onLabel: () => this.toast('success', 'Đã gắn nhãn cho email'), onTrash: () => this.removeItem(it.id),
+      onCompose: () => this.nav('scheduled'),
+      onSaveEvent: () => this.toast('success', 'Đã lưu, đồng bộ lên Google Calendar'), onDeleteEvent: () => this.removeItem(it.id),
+      onRename: () => this.toast('success', 'Đã đổi tên trên Drive'), onOpenDrive: () => this.toast('success', 'Đang mở trên Google Drive…'),
+      onSaveTicket: () => this.toast('success', 'Đã cập nhật, đồng bộ lên Jira'), onComment: () => this.toast('success', 'Đã thêm bình luận'), onDeleteTicket: () => this.removeItem(it.id),
+      onSaveNote: () => this.toast('success', 'Đã lưu ghi chú'),
+      detail403: this.state.detail403, onToggle403: () => this.setState({ detail403: !this.state.detail403 }), onReconnect: () => { this.setState({ detail403: false }); this.nav('connections'); },
+      onDemo409: () => this.toast('error', '409 — Bản trên provider đã đổi, đang tải lại…'),
+      evTitle: this.state.evTitle, evStart: this.state.evStart, evEnd: this.state.evEnd, evLocation: this.state.evLocation, evAttendees: this.state.evAttendees,
+      onEvTitle: (ev) => this.setField('evTitle', ev), onEvStart: (ev) => this.setField('evStart', ev), onEvEnd: (ev) => this.setField('evEnd', ev), onEvLocation: (ev) => this.setField('evLocation', ev), onEvAttendees: (ev) => this.setField('evAttendees', ev),
+      tkSummary: this.state.tkSummary, tkDesc: this.state.tkDesc, tkAssignee: this.state.tkAssignee, tkPriority: this.state.tkPriority,
+      onTkSummary: (ev) => this.setField('tkSummary', ev), onTkDesc: (ev) => this.setField('tkDesc', ev), onTkAssignee: (ev) => this.setField('tkAssignee', ev), onTkPriority: (ev) => this.setField('tkPriority', ev),
+      fileName: this.state.fileName, onFileName: (ev) => this.setField('fileName', ev),
+      ticketStatusValue: stMap[it.status] || 'To Do', onTicketStatus: (ev) => { const map = { 'To Do': 'todo', 'In Progress': 'doing', 'Done': 'done' }; this.moveItem(it.id, map[ev.target.value] || 'todo'); },
+      selectStyle: { width: '100%', height: 36, padding: '0 11px', border: '1px solid var(--border-strong)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5, outline: 'none', marginBottom: 12, fontFamily: 'inherit', cursor: 'pointer' },
+    };
+  }
+
+  coreVals() {
+    const view = this.curView(), authed = this.curAuthed(), dark = this.curTheme() === 'dark', narrow = this.state.narrow;
+    const rootStyle = { ...this.themeVars(dark), minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Inter',system-ui,sans-serif", fontSize: 14, lineHeight: 1.5 };
+    const isReg = view === 'register';
+
+    const navDefs = [['inbox', 'Inbox', 'inbox'], ['kanban', 'Kanban', 'kanban'], ['connections', 'Kết nối', 'plug'], ['scheduled', 'Hẹn giờ gửi', 'clock'], ['folders', 'Thư mục', 'folder']];
+    if (this.adminAllowed()) navDefs.push(['admin', 'Quản trị', 'dash']);
+    const navItems = navDefs.map(([key, label, icon]) => ({ key, label, icon: this.ic(icon, 18), go: () => this.nav(key), style: this.navBtn(view === key) }));
+
+    const counts = {}; (this.state.items || []).forEach(i => counts[i.folder] = (counts[i.folder] || 0) + 1);
+    const folderDefs = [{ id: 'all', name: 'Tất cả', color: 'var(--text-3)' }, ...(this.state.folders || [])];
+    const folderNav = folderDefs.map(f => ({
+      name: f.name, count: f.id === 'all' ? (this.state.items || []).length : (counts[f.id] || 0),
+      dot: { width: 8, height: 8, borderRadius: 999, background: f.color, flex: '0 0 auto' },
+      go: () => this.setFolder(f.id), style: this.navBtn(this.state.folder === f.id),
+    }));
+
+    const segDefs = [['populated', 'Dữ liệu'], ['loading', 'Tải'], ['empty', 'Trống'], ['error', 'Lỗi']];
+    const stateSeg = segDefs.map(([key, label]) => {
+      const active = this.state.dataState === key;
+      return { label, go: () => this.setData(key), style: { padding: '4px 9px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', background: active ? 'var(--surface)' : 'transparent', color: active ? 'var(--primary)' : 'var(--text-3)', boxShadow: active ? 'var(--shadow)' : 'none' } };
+    });
+
+    const titles = { inbox: 'Inbox', kanban: 'Bảng Kanban', connections: 'Kết nối dịch vụ', scheduled: 'Email hẹn giờ', folders: 'Thư mục', admin: 'Quản trị' };
+    const sidebarBase = { display: 'flex', flexDirection: 'column', width: 232, flex: '0 0 232px', background: 'var(--surface)', borderRight: '1px solid var(--border)', padding: '16px 12px', height: '100dvh' };
+    const sidebarStyle = narrow
+      ? { ...sidebarBase, position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50, transform: this.state.drawer ? 'translateX(0)' : 'translateX(-110%)', transition: 'transform .25s ease', boxShadow: this.state.drawer ? 'var(--shadow-lg)' : 'none' }
+      : { ...sidebarBase, position: 'sticky', top: 0 };
+
+    return {
+      rootStyle, showAuth: !authed, showApp: authed,
+      isLogin: !isReg, isRegister: isReg,
+      authTitle: isReg ? 'Tạo tài khoản' : 'Đăng nhập', authSubtitle: isReg ? 'Bắt đầu hợp nhất hộp thư của bạn.' : 'Chào mừng trở lại Workspace Hub.',
+      submitLabel: isReg ? 'Đăng ký' : 'Đăng nhập',
+      switchPrompt: isReg ? 'Đã có tài khoản?' : 'Chưa có tài khoản?', switchAction: isReg ? 'Đăng nhập' : 'Đăng ký',
+      onSwitchAuth: () => this.setState({ view: isReg ? 'login' : 'register', errEmail: '', errPwd: '', authBanner: '' }),
+      authEmail: this.state.authEmail, authPwd: this.state.authPwd, authName: this.state.authName, authConfirm: this.state.authConfirm,
+      onAuthEmail: (e) => this.setField('authEmail', e), onAuthPwd: (e) => this.setField('authPwd', e), onAuthName: (e) => this.setField('authName', e), onAuthConfirm: (e) => this.setField('authConfirm', e),
+      errEmail: this.state.errEmail, hasErrEmail: !!this.state.errEmail, errPwd: this.state.errPwd, hasErrPwd: !!this.state.errPwd,
+      authBanner: this.state.authBanner, hasAuthBanner: !!this.state.authBanner,
+      onSubmitAuth: () => this.submitAuth(), onGoogle: () => this.google(),
+      onDemoWrong: () => this.demoErr('wrong'), onDemoExists: () => this.demoErr('exists'), onDemoLocked: () => this.demoErr('locked'),
+      emailInputStyle: { width: '100%', height: 38, padding: '0 12px', border: '1px solid ' + (this.state.errEmail ? 'var(--danger)' : 'var(--border-strong)'), borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 14, outline: 'none', marginBottom: this.state.errEmail ? 12 : 14 },
+      pwdInputStyle: { width: '100%', height: 38, padding: '0 12px', border: '1px solid ' + (this.state.errPwd ? 'var(--danger)' : 'var(--border-strong)'), borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 14, outline: 'none', marginBottom: this.state.errPwd ? 12 : 16 },
+      demoBtnStyle: { padding: '4px 10px', borderRadius: 999, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-3)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' },
+      googleIcon: this.googleG(18), icoAlert: this.ic('alert', 16),
+
+      navItems, folderNav, onNewFolder: () => { this.nav('folders'); this.toast('success', 'Mở quản lý thư mục'); },
+      userInitials: 'MN', userName: 'Minh Nguyễn', userEmail: 'minh@lopstudio.vn', onLogout: () => this.logout(),
+      sidebarStyle, showHamburger: narrow, onHamburger: () => this.setState({ drawer: true }), drawerOpen: this.state.drawer && narrow, onCloseDrawer: () => this.setState({ drawer: false }),
+      search: this.state.search, onSearch: (e) => this.setState({ search: e.target.value, page: 1 }),
+      stateSeg, themeIcon: this.ic(dark ? 'sun' : 'moon', 18), onToggleTheme: () => this.toggleTheme(),
+      onConnect: () => this.nav('connections'), connectLabel: 'Kết nối dịch vụ',
+      icoSearch: this.ic('search', 17), icoBell: this.ic('bell', 18), icoPlus: this.ic('plus', 17), icoMenu: this.ic('menu', 20), icoLogout: this.ic('logout', 17),
+      icoList: this.ic('list', 16), icoBoard: this.ic('kanban', 16), icoChevL: this.ic('chevL', 16), icoChevR: this.ic('chevR', 16),
+      icoInboxLg: this.ic('inbox', 24), icoAlertLg: this.ic('alert', 24),
+      pageLabel: titles[view] || 'Workspace Hub',
+      isInbox: view === 'inbox', isKanban: view === 'kanban', isConnections: view === 'connections', isScheduled: view === 'scheduled', isFolders: view === 'folders', isAdmin: view === 'admin' && this.adminAllowed(),
+
+      toasts: this.state.toasts.map(t => ({
+        msg: t.msg, close: () => this.dismiss(t.id), x: this.ic('x', 14),
+        icon: t.type === 'error' ? this.ic('alert', 16) : this.ic('check', 16),
+        style: { display: 'flex', alignItems: 'center', gap: 9, minWidth: 240, maxWidth: 340, padding: '11px 13px', borderRadius: 10, fontSize: 13, fontWeight: 500, pointerEvents: 'auto', animation: 'wh-toast .22s ease both', boxShadow: 'var(--shadow-lg)', border: '1px solid ' + (t.type === 'error' ? 'var(--danger-border)' : 'var(--border)'), background: 'var(--surface)', color: t.type === 'error' ? 'var(--danger-fg)' : 'var(--text)' },
+      })),
+      skeletonRows: [1, 2, 3, 4, 5, 6],
+      skelTile: this.skel(34, 34), skelLineA: this.skel('46%', 12), skelLineB: this.skel('64%', 10, 8), skelPill: this.skel(58, 22),
+      btnPrimary: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 36, padding: '0 14px', border: 'none', borderRadius: 8, background: 'var(--primary)', color: 'var(--primary-fg)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+      btnSecondary: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 36, padding: '0 14px', border: '1px solid var(--border-strong)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+      btnGhost: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, padding: '0 10px', border: 'none', borderRadius: 8, background: 'transparent', color: 'var(--text-2)', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+      btnDanger: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 36, padding: '0 14px', border: '1px solid var(--danger-border)', borderRadius: 8, background: 'var(--danger-bg)', color: 'var(--danger-fg)', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+      btnSmall: { display: 'inline-flex', alignItems: 'center', gap: 5, height: 30, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--text-2)', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+      fieldLabel: { display: 'block', fontSize: 12.5, fontWeight: 500, color: 'var(--text-2)', margin: '0 0 5px' },
+      fieldInput: { width: '100%', height: 36, padding: '0 11px', border: '1px solid var(--border-strong)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5, outline: 'none', marginBottom: 12, fontFamily: 'inherit' },
+      fieldTextarea: { width: '100%', minHeight: 80, padding: '10px 11px', border: '1px solid var(--border-strong)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5, outline: 'none', marginBottom: 12, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 },
+      icoX: this.ic('x', 16), icoTrash: this.ic('trash', 16), icoEdit: this.ic('edit', 16), icoExt: this.ic('ext', 16), icoSend: this.ic('send', 16), icoEye: this.ic('eye', 16), icoLock: this.ic('lock', 16), icoSave: this.ic('save', 16), icoTag: this.ic('tag', 16), icoReply: this.ic('reply', 16), icoShare: this.ic('share', 16), icoArchive: this.ic('archive', 16), icoRefresh: this.ic('refresh', 16), icoMore: this.ic('more', 18), icoCheck: this.ic('check', 16), icoEditSm: this.ic('edit', 15),
+    };
+  }
+
+  inboxVals() {
+    const all = this.getFiltered();
+    const total = all.length, limit = 20;
+    const pages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(this.state.page, pages);
+    const start = (page - 1) * limit;
+    const pageItems = all.slice(start, start + limit).map(i => this.enrich(i));
+    const ds = this.state.dataState;
+    const loading = ds === 'loading' || !this.state.items;
+    const error = ds === 'error';
+    const empty = ds === 'empty' || (ds === 'populated' && !!this.state.items && total === 0);
+    const show = !loading && !error && !empty;
+
+    const statusChips = [['all', 'Tất cả'], ['todo', 'Cần xem'], ['doing', 'Đang xử lý'], ['done', 'Done']].map(([k, l]) => ({ label: l, go: () => this.setState({ fStatus: k, page: 1 }), style: this.chipStyle(this.state.fStatus === k) }));
+    const typeChips = [['all', 'Tất cả'], ['email', 'Email'], ['event', 'Sự kiện'], ['file', 'Tệp'], ['note', 'Ghi chú'], ['ticket', 'Ticket']].map(([k, l]) => ({ label: l, go: () => this.setState({ fType: k, page: 1 }), style: this.chipStyle(this.state.fType === k) }));
+    const pageButtons = Array.from({ length: pages }, (_, i) => i + 1).map(n => ({ n, go: () => this.setState({ page: n }), style: this.pageBtnStyle(n === page) }));
+
+    const fName = this.state.folder === 'all' ? 'Tất cả' : (this.folderById(this.state.folder) || {}).name;
+    return {
+      folderTitleText: fName, inboxCountText: total + ' mục · cập nhật vừa xong',
+      statusChips, typeChips,
+      importantGo: () => this.setState({ fImportant: !this.state.fImportant, page: 1 }), importantStyle: this.chipStyle(this.state.fImportant), importantStar: this.state.fImportant ? this.icFill('star', 14, 'var(--warn)') : this.ic('star', 14),
+      onViewBoard: () => this.nav('kanban'),
+      inboxLoading: loading, inboxError: error, inboxEmpty: empty, inboxShow: show,
+      pageItems, pageButtons,
+      onPrevPage: () => this.setState({ page: Math.max(1, page - 1) }), onNextPage: () => this.setState({ page: Math.min(pages, page + 1) }),
+      pagePrevStyle: this.pageBtnStyle(false), pageNextStyle: this.pageBtnStyle(false),
+      pageRangeText: total ? (start + 1) + '–' + Math.min(start + limit, total) + ' trên ' + total : '0 mục',
+      onRetry: () => this.setState({ dataState: 'populated' }),
+      onClearFilters: () => this.setState({ folder: 'all', fStatus: 'all', fType: 'all', fImportant: false, search: '', page: 1 }),
+    };
+  }
+
+  renderVals() {
+    return { ...this.coreVals(), ...this.inboxVals(), ...this.kanbanVals(), ...this.connVals(), ...this.schedVals(), ...this.folderScreenVals(), ...this.adminVals(), ...this.detailVals() };
+  }
+}
+</script>
+</body>
+</html>
