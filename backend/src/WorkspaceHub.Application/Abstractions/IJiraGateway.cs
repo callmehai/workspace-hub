@@ -33,4 +33,46 @@ public interface IJiraGateway
         Connection connection,
         string issueIdOrKey,
         CancellationToken ct = default);
+
+    // ───────────────────── Write-back (SCRUM-57) ─────────────────────
+
+    /// <summary>Update field issue (PUT /rest/api/3/issue/{key}): summary, description(→ADF), priority, labels.</summary>
+    Task UpdateIssueAsync(
+        Connection connection,
+        string issueIdOrKey,
+        UpdateJiraIssueRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>Đổi assignee (PUT /rest/api/3/issue/{key}/assignee). accountId rỗng/"-1" = unassign.</summary>
+    Task AssignIssueAsync(
+        Connection connection,
+        string issueIdOrKey,
+        string? accountId,
+        CancellationToken ct = default);
+
+    /// <summary>Danh sách transition khả dụng của issue (GET .../transitions) — để map tên→id và validate.</summary>
+    Task<IReadOnlyList<JiraTransition>> GetTransitionsAsync(
+        Connection connection,
+        string issueIdOrKey,
+        CancellationToken ct = default);
+
+    /// <summary>Thực hiện 1 transition (POST .../transitions) — đổi status. transitionId từ GetTransitions.</summary>
+    Task TransitionIssueAsync(
+        Connection connection,
+        string issueIdOrKey,
+        string transitionId,
+        CancellationToken ct = default);
+
+    /// <summary>Thêm comment (POST .../comment). body plain text → ADF.</summary>
+    Task AddCommentAsync(
+        Connection connection,
+        string issueIdOrKey,
+        string commentBody,
+        CancellationToken ct = default);
+
+    /// <summary>Xoá issue (DELETE /rest/api/3/issue/{key}?deleteSubtasks=true). Thiếu quyền → Forbidden(403).</summary>
+    Task DeleteIssueAsync(
+        Connection connection,
+        string issueIdOrKey,
+        CancellationToken ct = default);
 }

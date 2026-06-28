@@ -43,7 +43,15 @@ public record PatchItemRequest(
     DateTimeOffset? End = null,
     string? Location = null,
     List<string>? Attendees = null,
-    string? Name = null
+    string? Name = null,
+    // ── Jira (Type=Ticket) — SCRUM-57. Nội dung Jira SỬA ĐƯỢC (khác Email immutable).
+    string? Summary = null,
+    string? Description = null,
+    string? Assignee = null,            // accountId
+    string? Priority = null,            // tên priority
+    string? StatusTransition = null,    // id hoặc tên transition (đổi status qua transition)
+    List<string>? Labels = null,        // set toàn bộ labels (thay vì add/remove)
+    string? Comment = null              // thêm comment (thao tác riêng, không sửa field)
 );
 
 public record CreateEventRequest(

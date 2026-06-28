@@ -43,3 +43,17 @@ public record CreateJiraIssueRequest(
 
 /// <summary>Kết quả thô của POST /rest/api/3/issue.</summary>
 public record JiraCreatedIssue(string Id, string Key);
+
+/// <summary>
+/// Payload update issue (SCRUM-57). Chỉ field nào != null mới gửi lên Jira.
+/// Summary/Description sửa được (khác Email). Description plain text → ADF ở gateway.
+/// Assignee/Priority/StatusTransition/Comment xử lý qua endpoint riêng — KHÔNG nằm trong PUT fields.
+/// </summary>
+public record UpdateJiraIssueRequest(
+    string? Summary = null,
+    string? Description = null,
+    string? PriorityName = null,
+    IReadOnlyList<string>? Labels = null);
+
+/// <summary>1 transition khả dụng của issue (đổi status). Id dùng để POST transition.</summary>
+public record JiraTransition(string Id, string Name, string? ToStatusName);

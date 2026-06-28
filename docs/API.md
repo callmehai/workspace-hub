@@ -92,7 +92,7 @@ Mô hình B: mỗi service authorize riêng, tạo 1 Connection.
 
 > Bỏ /api/services/* (mô hình A). Toggle = connect/disconnect cả Connection.
 
-### Jira / Atlassian — ✅ OAuth (SCRUM-54) + sync đọc (SCRUM-55); write CRUD ⏳ (SCRUM-56→60)
+### Jira / Atlassian — ✅ CRUD đầy đủ: OAuth (54) + sync đọc (55) + tạo (56) + update (57) + xoá (58); còn lại ⏳ (metadata 59 / contacts 60)
 Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B. Sync issue → Item(Type=Ticket) đi qua `POST /api/connections/{id}/sync` (không có endpoint riêng):
 - `POST /api/connections/oauth/start` — `{integrationKey: "atlassian", serviceType: "Jira", redirectUri}` → `{authorizationUrl, state}`. Scope read-write Jira (`read:jira-work write:jira-work read:jira-user offline_access`).
 - `POST /api/connections/oauth/callback` — `{code, state}` → đổi token, gọi `/oauth/token/accessible-resources` lấy **cloudId**, lưu `ProviderAccountId = cloudId`, tạo 1 Connection ServiceType=Jira. (400 CSRF/scope thiếu, 409 trùng cloudId)
@@ -113,11 +113,11 @@ Không đổi. Xem bản trước. List endpoint `GET /api/folders`, `GET /api/t
   - Email: `{isUnread?, isStarred?, labels?[], isTrashed?}` (KHÔNG sửa nội dung)
   - Event: `{title?, start?, end?, location?, attendees?[]}`
   - File: `{name?, isTrashed?}`
-  - Ticket ⏳ **phase Jira (SCRUM-57, chưa implement):** `{summary?, description?, assignee?, priority?, statusTransition?, comment?}` — **nội dung sửa được** (khác Email immutable). `description` markdown ↔ ADF. `statusTransition` = id/tên transition (Jira đổi status qua transition, không set trực tiếp). `comment` = thêm comment (không sửa field). Đi qua cùng `IWriteBackGuard` của SCRUM-38; Jira không có HTTP ETag → version-token = `fields.updated` lưu trong `Items.ETag`.
-  - → đẩy lên provider. (403 thiếu scope, 409 conflict ETag/version, 502 provider lỗi)
+  - Ticket ✅ **SCRUM-57:** `{summary?, description?, assignee?(accountId), priority?, statusTransition?, labels?[], comment?}` — **nội dung sửa được** (khác Email immutable). `description` plain text → ADF (`AdfConverter.FromPlainText`). `summary/description/priority/labels` qua `PUT /issue`; `assignee` qua `PUT /issue/{key}/assignee`; `statusTransition` = id/tên transition (Jira đổi status qua transition, không set field trực tiếp — không khả dụng theo workflow → 422); `comment` = thêm comment (`POST /comment`, không sửa field). Đi qua cùng `IWriteBackGuard` của SCRUM-38; Jira không có HTTP ETag → version-token = `fields.updated` lưu trong `Items.ETag`. Reject field Google trên ticket → 422.
+  - → đẩy lên provider, fetch lại + cập nhật ETag/metadata local. (400 validation, 403 thiếu scope, 409 conflict version, 422 transition/field không hợp lệ, 502 provider lỗi)
 - `PATCH /api/items/{id}/status` — Kanban (local only).
 - `PATCH /api/items/{id}/archive` — local only.
-- `DELETE /api/items/{id}` ⭐ — trash/xoá trên provider + local. Type=Ticket ⏳ **phase Jira (SCRUM-58, chưa implement):** xoá issue trên Jira (`DELETE /rest/api/3/issue/{key}`) + local. (403 thiếu quyền, 502 provider lỗi)
+- `DELETE /api/items/{id}` ⭐ — trash/xoá trên provider + local. Type=Ticket ✅ **SCRUM-58:** xoá issue trên Jira (`DELETE /rest/api/3/issue/{key}?deleteSubtasks=true`) **rồi mới** xoá Item local — Jira lỗi (403 thiếu quyền / 502) thì Item local giữ nguyên (không xoá lệch). Owner check (không phải owner → 404). (403 thiếu quyền, 404 không tồn tại/không phải owner, 502 provider lỗi)
 
 ### Jira metadata helpers — ⏳ phase Jira (SCRUM-59, chưa implement)
 Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt buộc, ServiceType=Jira):

@@ -141,6 +141,142 @@ public class JiraGateway : IJiraGateway
         return ParseIssue(doc, connection.ProviderAccountId);
     }
 
+    // ───────────────────── Write-back (SCRUM-57) ─────────────────────
+
+    public async Task UpdateIssueAsync(Connection connection, string issueIdOrKey, UpdateJiraIssueRequest request, CancellationToken ct = default)
+    {
+        var fields = new Dictionary<string, object?>();
+
+        if (request.Summary != null)
+            fields["summary"] = request.Summary;
+
+        if (request.Description != null)
+        {
+            // Description rỗng → ADF doc rỗng (xoá nội dung); có text → ADF.
+            fields["description"] = AdfConverter.FromPlainText(request.Description)
+                                    ?? AdfConverter.FromPlainText(" "); // ADF không nhận null cho field đang set
+        }
+
+        if (request.PriorityName != null)
+            fields["priority"] = new { name = request.PriorityName };
+
+        if (request.Labels != null)
+            fields["labels"] = request.Labels;
+
+        if (fields.Count == 0)
+            return;
+
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}";
+        await SendWriteAsync(connection, HttpMethod.Put, url, new { fields }, ct);
+    }
+
+    public async Task AssignIssueAsync(Connection connection, string issueIdOrKey, string? accountId, CancellationToken ct = default)
+    {
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/assignee";
+        // accountId null/"-1" → unassign (Jira nhận accountId=null để bỏ assignee).
+        var body = string.IsNullOrWhiteSpace(accountId) || accountId == "-1"
+            ? (object)new { accountId = (string?)null }
+            : new { accountId };
+        await SendWriteAsync(connection, HttpMethod.Put, url, body, ct);
+    }
+
+    public async Task<IReadOnlyList<JiraTransition>> GetTransitionsAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/transitions";
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.GetAsync(url, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex);
+        }
+
+        await EnsureSuccessAsync(response, ct);
+
+        var doc = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        var list = new List<JiraTransition>();
+        if (doc.TryGetProperty("transitions", out var arr) && arr.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var t in arr.EnumerateArray())
+            {
+                var id = GetString(t, "id");
+                var name = GetString(t, "name");
+                if (id is null || name is null) continue;
+                var toStatus = t.TryGetProperty("to", out var to) && to.ValueKind == JsonValueKind.Object
+                    ? GetString(to, "name")
+                    : null;
+                list.Add(new JiraTransition(id, name, toStatus));
+            }
+        }
+        return list;
+    }
+
+    public async Task TransitionIssueAsync(Connection connection, string issueIdOrKey, string transitionId, CancellationToken ct = default)
+    {
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/transitions";
+        await SendWriteAsync(connection, HttpMethod.Post, url, new { transition = new { id = transitionId } }, ct);
+    }
+
+    public async Task AddCommentAsync(Connection connection, string issueIdOrKey, string commentBody, CancellationToken ct = default)
+    {
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/comment";
+        var body = new { body = AdfConverter.FromPlainText(commentBody) };
+        await SendWriteAsync(connection, HttpMethod.Post, url, body, ct);
+    }
+
+    public async Task DeleteIssueAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}?deleteSubtasks=true";
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.DeleteAsync(url, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex);
+        }
+
+        // EnsureSuccess map 403→Forbidden, 404→NotFound, còn lại→Provider(502). KHÔNG nuốt lỗi (AC SCRUM-58).
+        await EnsureSuccessAsync(response, ct);
+    }
+
+    private static string ApiBase(Connection connection) => string.Format(ApiBaseFormat, connection.ProviderAccountId);
+
+    /// <summary>Gửi PUT/POST write tới Jira. 400 = field/transition không hợp lệ → BusinessRule (422).</summary>
+    private async Task SendWriteAsync(Connection connection, HttpMethod method, string url, object body, CancellationToken ct)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        using var msg = new HttpRequestMessage(method, url)
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.SendAsync(msg, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex);
+        }
+
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var detail = await SafeReadBodyAsync(response, ct);
+            throw new BusinessRuleException($"Jira từ chối thao tác (field/transition không hợp lệ): {detail}");
+        }
+
+        await EnsureSuccessAsync(response, ct);
+    }
+
     private async Task<HttpClient> BuildClientAsync(Connection connection, CancellationToken ct)
     {
         var accessToken = await _tokenService.GetFreshAccessTokenAsync(connection, ct);
