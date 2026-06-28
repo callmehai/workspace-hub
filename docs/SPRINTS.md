@@ -71,7 +71,7 @@
 | SCRUM-27 | API testing + Postman collection | Huy | — | ⏳ To Do |
 | SCRUM-28 | README backend + setup guide | Dũng | — | ⏳ To Do |
 | SCRUM-29 | Unit test cho service chính | Hải | — | ⏳ To Do |
-| SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ⏳ To Do — `POST /api/scheduled-emails` (422 nếu Connection ≠ Gmail, 400 nếu sendAt quá khứ); list phân trang; cancel |
+| SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ✅ Done — `POST /api/scheduled-emails` (422 nếu Connection ≠ Gmail, 400 nếu sendAt quá khứ); list phân trang; cancel |
 | SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | ⏳ To Do |
 | SCRUM-38 | Conflict resolution chung (ETag → 409) | Lộc | 37 — **chốt interface `IWriteBackGuard` với Vũ trước khi code** | ⏳ To Do |
 | SCRUM-41 | FE: API layer (axios + JWT interceptor + TanStack Query) | Vũ | — | ⏳ To Do |

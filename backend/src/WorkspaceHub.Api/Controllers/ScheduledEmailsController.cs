@@ -12,7 +12,6 @@ namespace WorkspaceHub.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/scheduled-emails")]
-[ODataIgnored]
 public class ScheduledEmailsController : ApiControllerBase
 {
     private readonly IScheduledEmailsService _service;

@@ -91,9 +91,9 @@ public class ScheduledEmailsService : IScheduledEmailsService
             throw new NotFoundException("ScheduledEmail", id);
         }
 
-        if (email.Status == ScheduledEmailStatus.Sent)
+        if (email.Status is ScheduledEmailStatus.Sent or ScheduledEmailStatus.Failed)
         {
-            throw new BusinessRuleException("Cannot cancel an email that has already been sent.");
+            throw new BusinessRuleException($"Cannot cancel an email with status '{email.Status}'.");
         }
 
         if (email.Status == ScheduledEmailStatus.Cancelled)
