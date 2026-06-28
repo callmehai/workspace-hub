@@ -29,6 +29,12 @@ public interface IItemRepository : IGenericRepository<Item>
     Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default);
 
     /// <summary>
+    /// Lấy items của 1 connection dạng tracked, key theo ExternalId — để sync cập nhật item đã tồn tại
+    /// (vd Jira issue đổi title/status sau khi đã sync). Bỏ qua item có ExternalId null.
+    /// </summary>
+    Task<Dictionary<string, Item>> GetTrackedByConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Tìm Item theo ID và User, dùng để check ownership trước khi update/delete.
     /// </summary>
     Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);

@@ -34,6 +34,13 @@ public static class AdfConverter
         };
     }
 
+    /// <summary>
+    /// Như <see cref="FromPlainText"/> nhưng text rỗng → ADF doc RỖNG (content: []) thay vì null.
+    /// Dùng khi set field description: gửi empty doc để XOÁ nội dung trên Jira (không gửi paragraph " ").
+    /// </summary>
+    public static object FromPlainTextOrEmptyDoc(string? text) =>
+        FromPlainText(text) ?? new { type = "doc", version = 1, content = Array.Empty<object>() };
+
     /// <summary>Trích plain text từ document ADF. Trả chuỗi rỗng nếu null/không parse được.</summary>
     public static string ToPlainText(JsonElement? adf)
     {
@@ -61,7 +68,7 @@ public static class AdfConverter
             return;
         }
 
-        // "hardBreak" → newline; "mention" → @name; "emoji" → text fallback
+        // "hardBreak" → newline; "mention" → @name; "emoji" → text/shortName fallback
         switch (type)
         {
             case "hardBreak":
@@ -71,6 +78,13 @@ public static class AdfConverter
                                 && mAttrs.TryGetProperty("text", out var mText)
                                 && mText.ValueKind == JsonValueKind.String:
                 sb.Append(mText.GetString());
+                return;
+            case "emoji" when node.TryGetProperty("attrs", out var eAttrs):
+                // Ưu tiên "text" (ký tự emoji thật), fallback "shortName" (vd :smile:).
+                if (eAttrs.TryGetProperty("text", out var eText) && eText.ValueKind == JsonValueKind.String)
+                    sb.Append(eText.GetString());
+                else if (eAttrs.TryGetProperty("shortName", out var eShort) && eShort.ValueKind == JsonValueKind.String)
+                    sb.Append(eShort.GetString());
                 return;
         }
 
@@ -87,5 +101,6 @@ public static class AdfConverter
 
     private static bool IsBlockNode(string? type) => type is
         "paragraph" or "heading" or "listItem" or "blockquote"
-        or "codeBlock" or "rule" or "panel";
+        or "codeBlock" or "rule" or "panel"
+        or "bulletList" or "orderedList";
 }

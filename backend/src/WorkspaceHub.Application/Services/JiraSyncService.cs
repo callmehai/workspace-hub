@@ -47,7 +47,8 @@ public class JiraSyncService : IJiraSyncService
         if (connection.ServiceType != ServiceType.Jira)
             throw new BusinessRuleException("Kết nối này không phải Jira");
 
-        var existing = await _items.GetExistingExternalIdsAsync(connection.Id, ct);
+        // Tracked existing items keyed theo ExternalId → cập nhật được item đã sync (issue đổi title/status...).
+        var existingItems = await _items.GetTrackedByConnectionIdAsync(connection.Id, ct);
         var jql = BuildJql(connection);
 
         var newItems = new List<Item>();
@@ -69,14 +70,18 @@ public class JiraSyncService : IJiraSyncService
                 if (issue.Updated.HasValue && (maxUpdated is null || issue.Updated > maxUpdated))
                     maxUpdated = issue.Updated;
 
-                if (existing.Contains(issue.Id))
+                var mapped = _mapper.ToItem(issue, connection.UserId, connection.Id);
+
+                if (existingItems.TryGetValue(issue.Id, out var existing))
                 {
+                    // Issue đã sync nhưng có thể đã đổi → cập nhật field (giữ nguyên Id/Status Kanban/folders local).
+                    ApplyProviderFields(existing, mapped);
                     skipped++;
                     continue;
                 }
 
-                newItems.Add(_mapper.ToItem(issue, connection.UserId, connection.Id));
-                existing.Add(issue.Id);
+                newItems.Add(mapped);
+                existingItems[issue.Id] = mapped;
                 created++;
             }
 
@@ -97,6 +102,20 @@ public class JiraSyncService : IJiraSyncService
         await _connections.SaveChangesAsync(ct);
 
         return new SyncResult(scanned, created, skipped, connection.CursorValue);
+    }
+
+    /// <summary>
+    /// Cập nhật field do provider quyết lên item đã tồn tại (re-sync issue đổi).
+    /// GIỮ NGUYÊN field local: Id, Status (cột Kanban user kéo), IsArchived, folders/tags.
+    /// </summary>
+    private static void ApplyProviderFields(Item existing, Item mapped)
+    {
+        existing.Title = mapped.Title;
+        existing.Snippet = mapped.Snippet;
+        existing.MetadataJson = mapped.MetadataJson;
+        existing.ETag = mapped.ETag;
+        existing.OccurredAt = mapped.OccurredAt;
+        existing.IsImportant = mapped.IsImportant;
     }
 
     /// <summary>Lưu items; nếu vi phạm UNIQUE(ConnectionId, ExternalId) thì lưu lại từng cái, không hỏng cả batch.</summary>

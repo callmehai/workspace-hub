@@ -28,11 +28,15 @@ public class JiraSyncServiceTests
         _service = new JiraSyncService(
             _gatewayMock.Object, _mapperMock.Object, _itemsMock.Object, _connectionsMock.Object);
 
-        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<string>());
+        _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item>());
 
         _mapperMock.Setup(m => m.ToItem(It.IsAny<JiraIssue>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
-            .Returns((JiraIssue i, Guid u, Guid c) => new Item { ExternalId = i.Id, ConnectionId = c, UserId = u });
+            .Returns((JiraIssue i, Guid u, Guid c) => new Item
+            {
+                ExternalId = i.Id, ConnectionId = c, UserId = u,
+                Title = i.Summary ?? "", Snippet = "", MetadataJson = "{}"
+            });
     }
 
     private static Connection JiraConnection(string? cursor = null, CursorType? cursorType = null) =>
@@ -88,20 +92,24 @@ public class JiraSyncServiceTests
     }
 
     [Fact]
-    public async Task ReSync_DedupesExistingIds()
+    public async Task ReSync_ExistingIssue_UpdatedNotRecreated()
     {
         var conn = JiraConnection();
-        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(conn.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<string> { "1" });
+        // Issue "1" đã tồn tại local (tracked) → re-sync cập nhật, không tạo trùng.
+        var existing1 = new Item { ExternalId = "1", ConnectionId = conn.Id, UserId = conn.UserId, Title = "old title", Snippet = "", MetadataJson = "{}" };
+        _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(conn.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item> { ["1"] = existing1 });
 
         _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new JiraSearchResult(
-                new List<JiraIssue> { Issue("1"), Issue("2") }, null, true));
+                new List<JiraIssue> { Issue("1", null) with { Summary = "new title" }, Issue("2") }, null, true));
 
         var result = await _service.SyncConnectionAsync(conn);
 
-        result.Created.Should().Be(1);
-        result.Skipped.Should().Be(1);
+        result.Created.Should().Be(1);   // chỉ issue "2" là mới
+        result.Skipped.Should().Be(1);   // issue "1" không tạo mới (đã update)
+        // Item cũ được cập nhật field từ provider (mapper trả Title = Summary).
+        existing1.Title.Should().Be("new title");
     }
 
     [Fact]

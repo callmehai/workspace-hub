@@ -180,4 +180,92 @@ public class AdfConverterTests
 
         AdfConverter.ToPlainText(el).Should().Be(original);
     }
+
+    // ───────────────────── FromPlainTextOrEmptyDoc (clear description — review #4) ─────────────────────
+
+    [Fact]
+    public void FromPlainTextOrEmptyDoc_Empty_ReturnsEmptyDoc_NotSpaceParagraph()
+    {
+        var adf = AdfConverter.FromPlainTextOrEmptyDoc("");
+        var el = JsonDocument.Parse(JsonSerializer.Serialize(adf)).RootElement;
+
+        el.GetProperty("type").GetString().Should().Be("doc");
+        el.GetProperty("content").GetArrayLength().Should().Be(0); // doc rỗng → xoá description, không phải paragraph " "
+    }
+
+    [Fact]
+    public void FromPlainTextOrEmptyDoc_Null_ReturnsEmptyDoc()
+    {
+        var adf = AdfConverter.FromPlainTextOrEmptyDoc(null);
+        var el = JsonDocument.Parse(JsonSerializer.Serialize(adf)).RootElement;
+        el.GetProperty("content").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public void FromPlainTextOrEmptyDoc_WithText_ProducesParagraph()
+    {
+        var adf = AdfConverter.FromPlainTextOrEmptyDoc("hello");
+        var el = JsonDocument.Parse(JsonSerializer.Serialize(adf)).RootElement;
+        el.GetProperty("content")[0].GetProperty("content")[0].GetProperty("text").GetString().Should().Be("hello");
+    }
+
+    // ───────────────────── Emoji + list (review #8) ─────────────────────
+
+    [Fact]
+    public void ToPlainText_Emoji_UsesTextThenShortName()
+    {
+        var adf = Parse("""
+        {
+          "type": "doc",
+          "content": [
+            { "type": "paragraph", "content": [
+              { "type": "text", "text": "nice " },
+              { "type": "emoji", "attrs": { "shortName": ":smile:", "text": "😄" } }
+            ] }
+          ]
+        }
+        """);
+
+        AdfConverter.ToPlainText(adf).Should().Be("nice 😄");
+    }
+
+    [Fact]
+    public void ToPlainText_Emoji_NoText_FallsBackToShortName()
+    {
+        var adf = Parse("""
+        {
+          "type": "doc",
+          "content": [
+            { "type": "paragraph", "content": [ { "type": "emoji", "attrs": { "shortName": ":fire:" } } ] }
+          ]
+        }
+        """);
+
+        AdfConverter.ToPlainText(adf).Should().Be(":fire:");
+    }
+
+    [Fact]
+    public void ToPlainText_BulletList_SeparatesFromSurroundingText()
+    {
+        var adf = Parse("""
+        {
+          "type": "doc",
+          "content": [
+            { "type": "paragraph", "content": [ { "type": "text", "text": "intro" } ] },
+            { "type": "bulletList", "content": [
+              { "type": "listItem", "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "item1" } ] } ] }
+            ] },
+            { "type": "paragraph", "content": [ { "type": "text", "text": "outro" } ] }
+          ]
+        }
+        """);
+
+        var result = AdfConverter.ToPlainText(adf);
+        // bulletList giờ là block node → có separator; intro/item1/outro không bị dính liền.
+        result.Should().Contain("intro");
+        result.Should().Contain("item1");
+        result.Should().Contain("outro");
+        result.Should().NotContain("introitem1");
+        result.Should().NotContain("item1outro");
+    }
 }

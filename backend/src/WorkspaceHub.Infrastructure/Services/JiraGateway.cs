@@ -63,7 +63,7 @@ public class JiraGateway : IJiraGateway
         await EnsureSuccessAsync(response, ct);
 
         var doc = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
-        return ParseSearch(doc, connection.ProviderAccountId);
+        return ParseSearch(doc);
     }
 
     public async Task<JiraCreatedIssue> CreateIssueAsync(
@@ -138,7 +138,7 @@ public class JiraGateway : IJiraGateway
         await EnsureSuccessAsync(response, ct);
 
         var doc = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
-        return ParseIssue(doc, connection.ProviderAccountId);
+        return ParseIssue(doc);
     }
 
     // ───────────────────── Write-back (SCRUM-57) ─────────────────────
@@ -152,9 +152,8 @@ public class JiraGateway : IJiraGateway
 
         if (request.Description != null)
         {
-            // Description rỗng → ADF doc rỗng (xoá nội dung); có text → ADF.
-            fields["description"] = AdfConverter.FromPlainText(request.Description)
-                                    ?? AdfConverter.FromPlainText(" "); // ADF không nhận null cho field đang set
+            // Description rỗng → ADF doc RỖNG (content:[]) để xoá nội dung; có text → ADF.
+            fields["description"] = AdfConverter.FromPlainTextOrEmptyDoc(request.Description);
         }
 
         if (request.PriorityName != null)
@@ -384,9 +383,8 @@ public class JiraGateway : IJiraGateway
     private async Task<HttpClient> BuildClientAsync(Connection connection, CancellationToken ct)
     {
         var accessToken = await _tokenService.GetFreshAccessTokenAsync(connection, ct);
-        var http = _httpClientFactory.CreateClient("Jira");
+        var http = _httpClientFactory.CreateClient("Jira"); // Accept header đã cấu hình ở DI
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return http;
     }
 
@@ -413,14 +411,14 @@ public class JiraGateway : IJiraGateway
         catch { return response.ReasonPhrase ?? "unknown"; }
     }
 
-    private static JiraSearchResult ParseSearch(JsonElement doc, string cloudId)
+    private static JiraSearchResult ParseSearch(JsonElement doc)
     {
         var issues = new List<JiraIssue>();
 
         if (doc.TryGetProperty("issues", out var issuesEl) && issuesEl.ValueKind == JsonValueKind.Array)
         {
             foreach (var issueEl in issuesEl.EnumerateArray())
-                issues.Add(ParseIssue(issueEl, cloudId));
+                issues.Add(ParseIssue(issueEl));
         }
 
         string? nextPageToken = doc.TryGetProperty("nextPageToken", out var tokEl) && tokEl.ValueKind == JsonValueKind.String
@@ -434,7 +432,7 @@ public class JiraGateway : IJiraGateway
         return new JiraSearchResult(issues, nextPageToken, isLast);
     }
 
-    private static JiraIssue ParseIssue(JsonElement issueEl, string cloudId)
+    private static JiraIssue ParseIssue(JsonElement issueEl)
     {
         var id = GetString(issueEl, "id") ?? string.Empty;
         var key = GetString(issueEl, "key") ?? string.Empty;
@@ -459,11 +457,12 @@ public class JiraGateway : IJiraGateway
         if (!string.IsNullOrEmpty(updatedStr) && DateTimeOffset.TryParse(updatedStr, out var parsed))
             updated = parsed;
 
-        var issueUrl = $"https://api.atlassian.com/ex/jira/{cloudId}/browse/{key}";
-
+        // KHÔNG build issueUrl ở đây: browse URL của Jira Cloud là https://{site}.atlassian.net/browse/{KEY},
+        // cần TÊN SITE — không phải cloudId (UUID). Connection chỉ lưu cloudId nên chưa dựng được link đúng.
+        // Để null thay vì emit link sai (api.atlassian.com/.../browse → API error khi click). Site URL: phase sau.
         return new JiraIssue(
             id, key, projectKey, summary, description,
-            statusName, assignee, priorityName, issueTypeName, issueUrl, updated);
+            statusName, assignee, priorityName, issueTypeName, null, updated);
     }
 
     private static string? GetString(JsonElement el, string prop) =>

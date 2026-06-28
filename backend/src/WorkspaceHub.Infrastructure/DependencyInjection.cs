@@ -48,7 +48,13 @@ public static class DependencyInjection
         services.AddDistributedMemoryCache();
 
         services.AddHttpClient("OAuthToken");
-        services.AddHttpClient("Jira");
+        services.AddHttpClient("Jira", c =>
+        {
+            // Accept header cấu hình 1 lần ở DI (tránh .Add tích luỹ mỗi request nếu handler được pool).
+            // Authorization vẫn set per-request vì token đổi theo connection.
+            c.DefaultRequestHeaders.Accept.Add(
+                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+        });
         services.AddScoped<IOAuthTokenClient, HttpOAuthTokenClient>();
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
