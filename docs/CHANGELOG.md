@@ -2,6 +2,25 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [Target — chưa code, chưa có ticket] OData query cho GET collection
+
+- **Quyết định:** bật **OData query options** (`Microsoft.AspNetCore.OData` v8, `[EnableQuery]`) cho các endpoint **GET đọc collection trên `IQueryable` EF**: `GET /api/items`, `/api/admin/users`, `/api/scheduled-emails`, `/api/folders`, `/api/tags`, `/api/integrations`. Cho phép `$filter/$orderby/$select/$top/$skip/$count`; **không** `$expand`.
+- **Lý do:** giảm số query param thủ công + bộ filter rời rạc; client tự chọn field/sort/paging, đẩy xuống SQL. Hợp tiêu chí PRN232 (REST + truy vấn linh hoạt).
+- **Phạm vi (cố ý hẹp):** **KHÔNG** bật cho endpoint trả **live provider data** (item detail, Jira metadata helpers), **mask/decrypt token** (connections), single-resource, aggregate (admin/stats), và mọi write. Lý do: OData chỉ an toàn + có nghĩa trên `IQueryable` thuần dịch được sang SQL.
+- **Bảo mật (chốt):** luôn scope theo `CurrentUserId`/role **server-side TRƯỚC** rồi mới `[EnableQuery]`. Giới hạn `MaxTop=100`, `PageSize=20`. Action trả `IQueryable<TDto>` (`AsNoTracking` + projection DTO, KHÔNG Entity).
+- **Ảnh hưởng shape:** endpoint nào bật OData thì `$count` thay `total`, `$top/$skip` thay `page/limit` của envelope cũ — FE cập nhật khi wire. Chi tiết: `docs/API.md` (mục "OData query") + `docs/CONVENTIONS.md`.
+- **Status:** mới là **target tài liệu, chưa code, chưa có ticket Jira** — cần tạo ticket trước khi làm.
+
+## [Phase Jira — kế hoạch, chưa code] Tích hợp Jira / Atlassian (SCRUM-54→60)
+
+- **Bối cảnh:** board Jira đã tạo **7 ticket SCRUM-54→60** mở lại **phase Jira/Atlassian integration** (CRUD đầy đủ issue). Đây là **kế hoạch** — tất cả To Do, ở backlog, **chưa viết code**. Current phase vẫn dừng ở SCRUM-38 (write-back Google + conflict). Bắt đầu phase Jira sau khi Sprint 3 ổn định.
+- **Cụm ticket:** 54 = Atlassian Integration + OAuth 3LO (cloudId), mô hình B (Khánh) · 55 = client + đọc/sync issue → Item(Type=Ticket) (Vũ) · 56 = tạo issue `POST /api/items/ticket` (Vũ) · 57 = write-back update `PATCH /api/items/{id}` Type=Ticket qua `IWriteBackGuard` (Vũ + Lộc guard) · 58 = xoá issue `DELETE /api/items/{id}` Type=Ticket (Vũ) · 59 = metadata helpers projects/issue-types/transitions/assignable-users/priorities (Huy) · 60 = ImportantContacts JiraAccount + Notification type, optional (Huy).
+- **Tái dùng mô hình B nguyên vẹn:** Atlassian = 1 Integration (key=`atlassian`), mỗi Jira account = 1 Connection (ServiceType=Jira, `ProviderAccountId` = **cloudId** từ `/oauth/token/accessible-resources`). Credentials đọc config `OAuth:atlassian:...` (như SCRUM-39, không lưu DB). CursorType thêm `JqlUpdated` (poll issue có `fields.updated` sau mốc cursor).
+- **Lưu ý kỹ thuật (a) — conflict không có ETag:** Jira REST **không trả HTTP ETag**. Dùng **`fields.updated` làm version-token** lưu trong `Items.ETag`, so sánh trước khi ghi; lệch → 409. Đi qua **cùng `IWriteBackGuard` của SCRUM-38** (không thêm cơ chế conflict riêng cho Jira) — guard chỉ cần coi ETag là "version-token mờ", không giả định đó là ETag HTTP.
+- **Lưu ý kỹ thuật (b) — ADF:** description của Jira là **ADF (Atlassian Document Format)** — JSON cấu trúc, **không phải markdown thuần**. Cần **convert 2 chiều** (đọc: ADF → markdown để hiển thị/lưu Note-style; ghi: markdown → ADF trước khi PATCH). Đặt ở service layer.
+- **Khác Gmail (quan trọng):** nội dung Jira (**summary + description**) **sửa được** qua write-back — KHÁC Email immutable (Gmail chỉ cho label/read/star/trash). Đổi status đi qua **transition** (không set field status trực tiếp). Thêm comment là thao tác riêng, không phải sửa field.
+- **Vẫn ngoài scope:** webhook Jira (push realtime) — chưa có ticket; đọc Jira vẫn on-demand như Google.
+
 ## [2026-06-21] Đồng bộ lại tài liệu theo Jira (đánh số ticket thay đổi)
 
 - **Bối cảnh:** Jira được tổ chức lại; đánh số sau SCRUM-38 đổi hẳn so với các bản tài liệu trước. Cập nhật SPRINTS.md + CLAUDE.md + các file này cho khớp.
@@ -78,8 +97,9 @@ Thay cho backlog "Webhook & Jira" cũ (đã bỏ khỏi Jira):
 - **Sprint 3:** hoàn thiện write-back (37) + conflict (38), scheduled email (30/31), refactor service (26), API testing (27), README backend (28), unit test (29), bắt đầu FE (41–43).
 - **Sprint 4:** FE đầy đủ (44–50), deploy prod (51), finalize Swagger + E2E (52), defense (53).
 
-## [Ngoài scope — KHÔNG có ticket] Webhook & Jira
-- Webhook Gmail/Calendar/Drive (watch + Pub/Sub) thay sync on-demand; Jira OAuth Atlassian, sync issue→Item(Ticket), write-back. **Không nằm trong Jira hiện tại** — định hướng tương lai, đừng code, đừng tái dùng số SCRUM-39→46 cho mục đích này.
+## [Cập nhật scope] Webhook vs Jira
+- **Jira/Atlassian:** ĐÃ chuyển từ "ngoài scope" sang **phase có kế hoạch = SCRUM-54→60** (xem entry "[Phase Jira]" đầu file) — chưa code. Đừng tái dùng số SCRUM-39→46 cho Jira (số đó là việc khác).
+- **Webhook Gmail/Calendar/Drive/Jira (watch + Pub/Sub)** thay sync on-demand: **vẫn ngoài scope, chưa có ticket** — định hướng tương lai, đừng code.
 
 ## [Sprint 1 — đã xong] Nền tảng (tham khảo)
 Auth email/password (JWT, RBAC), OAuth Google, sync Gmail/Calendar/Drive (on-demand), Folder/Item/Kanban/Tag/filter, Admin (users+stats), FE skeleton. SCRUM-5→23.
