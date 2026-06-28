@@ -4,7 +4,7 @@
 >
 > **Status:** ✅ schema này ĐÃ áp dụng vào code — migration `ModelBConnections` (SCRUM-34, sau `InitialCreate` + `UsersMultiAuth`). DB là **SQL Server**: JSON lưu `nvarchar(max)`, datetime `datetime2` UTC, enum lưu string.
 >
-> Ghi chú: các giá trị `Jira` / `JiraAccount` / `Ticket` bên dưới được **seed sẵn trong enum** nhưng Jira/Atlassian **không nằm trong scope hiện tại** (không có ticket Jira) — chỉ là chỗ trống cho tương lai, đừng implement.
+> Ghi chú: các giá trị `Jira` / `JiraAccount` / `Ticket` bên dưới được **seed sẵn trong enum**. Jira/Atlassian giờ **đã có phase lên kế hoạch (SCRUM-54→60)** nhưng **chưa code** — current phase vẫn dừng ở SCRUM-38. Phần dưới mô tả schema target cho phase Jira (đánh dấu rõ "phase Jira"); đừng implement tới khi tới lượt.
 
 ## Quan hệ tổng quan
 ```
@@ -46,17 +46,19 @@ KHÔNG có bảng Roles/UserRoles (code thật dùng cột `Users.Role` string `
 ---
 
 ## Integrations
-Catalog provider. Seed Google. (Atlassian là chỗ trống tương lai — không seed/không dùng ở scope hiện tại.)
+Catalog provider. Seed Google. (Atlassian seed ở **phase Jira** — SCRUM-54, chưa code.)
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
-| Key | string UNIQUE | google (/ atlassian — tương lai) |
+| Key | string UNIQUE | google (/ atlassian — phase Jira, SCRUM-54) |
 | DisplayName, IconUrl, Description | string | |
-| Provider | string | Google (/ Atlassian — tương lai) |
+| Provider | string | Google (/ Atlassian — phase Jira) |
 | AuthorizationEndpoint, TokenEndpoint | string | |
-| SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` |
+| SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` (/ `["Jira"]` — phase Jira) |
 | IsEnabled | bool | |
+
+> **Phase Jira (SCRUM-54, target):** seed thêm 1 row `Integrations` key=`atlassian`, Provider=`Atlassian`, OAuth 3LO endpoint của Atlassian. `ProviderAccountId` của Connection tương ứng = **cloudId** (id của Jira Cloud site sau khi `/oauth/token/accessible-resources`). Credentials đọc từ config `OAuth:atlassian:ClientId/Secret` như Google (SCRUM-39), không lưu DB.
 
 > Bỏ cột DefaultScopes — scope suy từ ServiceType trong code (`GoogleScopes.BuildRequestScopes`).
 > Không có cột ClientId/ClientSecret — OAuth credentials đọc từ config `OAuth:{key}:...`, không lưu DB (SCRUM-39).
@@ -72,13 +74,13 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 | UserId | uuid FK→Users | CASCADE |
 | IntegrationId | uuid FK→Integrations | |
 | Provider | enum string | Google (Atlassian — chỗ trống tương lai) |
-| ServiceType | enum string | Gmail / GCal / Drive (Jira — seed sẵn, chưa dùng) |
-| ProviderAccountId | string | account nào (email/sub) |
+| ServiceType | enum string | Gmail / GCal / Drive (Jira — seed sẵn; bật ở phase Jira SCRUM-54) |
+| ProviderAccountId | string | account nào (email/sub Google; **cloudId** cho Jira — phase Jira) |
 | AccessTokenEncrypted | string | Data Protection |
 | RefreshTokenEncrypted | string | Data Protection; **chuỗi rỗng `""` = provider không trả refresh token** (vd Google re-consent) — check `IsNullOrEmpty`, không check null |
 | ExpiresAt | datetime | refresh nếu < 5 phút |
 | Status | enum string | Active / Disconnected / Error |
-| CursorType | enum string null | HistoryId / PageToken / SyncToken |
+| CursorType | enum string null | HistoryId / PageToken / SyncToken (/ **JqlUpdated** — phase Jira: cursor theo `fields.updated`, poll issue đổi sau mốc đó) |
 | CursorValue | string null | null = sync lần đầu |
 | LastSyncedAt | datetime null | cập nhật sau mỗi lần sync on-demand |
 | LastError | string null | |
@@ -104,7 +106,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 |---|---|---|
 | Id | uuid PK | |
 | UserId | uuid FK→Users | CASCADE |
-| Type | enum string | Email / Event / File / Note (Ticket — chỗ trống tương lai) |
+| Type | enum string | Email / Event / File / Note (Ticket — phase Jira SCRUM-55) |
 | Title | string | |
 | Snippet | string | ~200 ký tự |
 | ExternalId | string null | ID gốc provider; NULL cho Note |
@@ -122,7 +124,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 - Event: `{start, end, location, attendees[], meetUrl}`
 - File: `{mimeType, size, webViewLink, iconLink}`
 - Note: `{contentMarkdown}`
-- Ticket (tương lai, nếu làm Jira): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`
+- Ticket (phase Jira, SCRUM-55): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}` (description gốc là ADF — convert ↔ markdown ở service, xem CHANGELOG)
 
 **Constraint:** UNIQUE(ConnectionId, ExternalId). **Index:** (UserId, Status, OccurredAt DESC).
 
@@ -132,8 +134,8 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 Không đổi cấu trúc.
 - Tags (UserId, Name không unique toàn hệ thống, Color).
 - TagAssignments composite PK.
-- ImportantContacts (Type: Email; tương lai có thể thêm JiraAccount; UNIQUE(UserId,Type,Identifier)).
-- Notifications (Type: share_invite/important_email/sync_error/schedule_sent; tương lai thêm friend_request/automation_triggered nếu làm).
+- ImportantContacts (Type: Email; **phase Jira khôi phục Type=JiraAccount** — SCRUM-60, Identifier=accountId/email Jira; UNIQUE(UserId,Type,Identifier)).
+- Notifications (Type: share_invite/important_email/sync_error/schedule_sent; **phase Jira (SCRUM-60, optional) thêm type cho Jira** — vd jira_assigned/jira_mention; tương lai thêm friend_request/automation_triggered nếu làm).
 
 ## ScheduledEmails
 Đổi tham chiếu sang Connections.

@@ -31,17 +31,19 @@ App đồng bộ **2 chiều** với Google (đọc + ghi ngược). Triển kha
 ### Sprint 4 — Frontend đầy đủ + deploy + nghiệm thu
 Inbox/Kanban/write-back UI/scheduled UI/admin dashboard (44→50), deploy prod (51), finalize Swagger+E2E (52), defense (53). Đừng nhảy vào trừ khi Sprint 3 xong.
 
+### Phase Jira — đã lên kế hoạch, CHƯA bắt đầu code (SCRUM-54→60)
+Tích hợp **Jira / Atlassian** (CRUD đầy đủ) đã có 7 ticket trên board (SCRUM-54→60, To Do, backlog) nhưng **chưa code** — current phase vẫn dừng ở SCRUM-38. Mô hình B áp dụng nguyên: Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). Gồm OAuth 3LO + cloudId (54), client + sync issue → Item(Ticket) (55), tạo issue (56), write-back update qua `IWriteBackGuard` (57), xoá issue (58), metadata helpers (59), ImportantContacts JiraAccount + Notification (60). Chi tiết + dependency: `docs/SPRINTS.md` (bảng "Phase Jira"); quyết định kỹ thuật (ADF 2 chiều, `fields.updated` làm version-token thay ETag): `docs/CHANGELOG.md`. **Đừng bắt đầu khi Sprint 3 chưa xong — hỏi trước.**
+
 ### Mô hình sync (quan trọng — đừng nhầm)
 - **Đọc = on-demand.** KHÔNG có background service pull định kỳ (đã bỏ hẳn timer/cron đọc), KHÔNG webhook trong MVP. Khi user CRUD/mở list của một connection mới check connection còn Active + Enabled + token còn hạn (refresh nếu cần) rồi pull. (SCRUM-16)
 - **Cron chỉ dùng cho gửi scheduled email** (`/api/internal/process-scheduled`, SCRUM-31) — không liên quan đọc dữ liệu.
 - **Ghi = write-back synchronous** ngay khi user thao tác (SCRUM-37).
 
-### NGOÀI scope — KHÔNG còn ticket Jira (đừng code, đừng gán số SCRUM)
-- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch).
-- Jira / Atlassian integration.
+### NGOÀI scope — chưa có ticket (đừng code, đừng gán số SCRUM)
+- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch).
 - Social / friend system, AI workflow.
 
-> ⚠️ Số SCRUM-39→46 **không còn** là webhook/Jira — đó là việc đã/đang làm khác (xem SPRINTS.md). Nếu một task có vẻ cần webhook hoặc Jira, **dừng lại và hỏi** — gần như chắc chắn vượt scope.
+> ⚠️ Số SCRUM-39→46 **không còn** là webhook/Jira — đó là việc đã/đang làm khác (xem SPRINTS.md). **Jira/Atlassian giờ ĐÃ có ticket = SCRUM-54→60** (phase Jira đã lên kế hoạch, chưa code). **Webhook** vẫn chưa có ticket. Nếu một task có vẻ cần webhook, hoặc đụng phase Jira khi Sprint 3 chưa xong, **dừng lại và hỏi**.
 
 ## Tech Stack
 

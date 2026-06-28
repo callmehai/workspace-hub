@@ -1,6 +1,8 @@
 # Sprints & Tickets — Workspace Hub
 
-> Cập nhật 2026-06-21: đồng bộ lại toàn bộ theo Jira (export mới). Backlog Webhook/Jira cũ (SCRUM-39→46) đã **bị bỏ** khỏi Jira — số đó nay là việc khác (xem bảng). Sprint hiện hành: **Sprint 3**. Lịch sử quyết định: CHANGELOG.md.
+> Cập nhật 2026-06-21: đồng bộ lại toàn bộ theo Jira (export mới). Số SCRUM-39→46 **KHÔNG** còn là Webhook/Jira — đó là việc khác (39=bỏ DB credentials, 40=admin toggle, 41→50=FE, 51=deploy, 52=finalize, 53=defense — xem bảng). Sprint hiện hành: **Sprint 3**. Lịch sử quyết định: CHANGELOG.md.
+>
+> Cập nhật 2026-06-28: board Jira đã tạo **7 ticket mới SCRUM-54→60** cho **phase Jira/Atlassian integration** (xem bảng "Phase Jira" cuối file). Tất cả To Do, ở backlog, **chưa code** — current phase vẫn dừng ở SCRUM-38.
 >
 > **Quy tắc:** sau khi hoàn thành task code nào, cập nhật status ticket đó trong file này (và các .md liên quan).
 
@@ -16,7 +18,7 @@
 
 > ⚠️ **Đánh số đã đổi so với bản trước.** Các "ticket tạm" 47*/48*/49* nay có số Jira thật:
 > bỏ DB credentials = **SCRUM-39**, admin toggle integration = **SCRUM-40**, admin users+stats = **SCRUM-23**.
-> Webhook & Jira/Atlassian **không còn ticket** (ngoài scope đồ án, không nằm trong Jira nữa).
+> **Jira/Atlassian giờ ĐÃ có ticket = SCRUM-54→60** (phase Jira, chưa code — xem bảng cuối file). **Webhook** vẫn **không còn ticket** (ngoài scope đồ án).
 
 ---
 
@@ -93,12 +95,27 @@
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
 
+## Phase Jira — Atlassian integration (SCRUM-54→60)
+
+> **Cụm task BE cho tích hợp Jira (CRUD đầy đủ).** Đã lên kế hoạch + tạo ticket trên board (To Do, backlog) nhưng **chưa bắt đầu code** — current phase vẫn dừng ở SCRUM-38. Bắt đầu sau khi Sprint 3 (write-back Google + conflict) ổn định. Mô hình B áp dụng nguyên: Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). Quyết định + lưu ý kỹ thuật (ADF, version-token thay ETag): xem CHANGELOG.md.
+
+| Ticket | Việc | Assignee | Dependency | Status |
+|---|---|---|---|---|
+| SCRUM-54 | Jira: Atlassian Integration + OAuth 3LO (cloudId), mô hình B | Khánh | — | ⏳ To Do |
+| SCRUM-55 | Jira: client + đọc/sync issue → Item(Type=Ticket) | Vũ | 54 | ⏳ To Do |
+| SCRUM-56 | Jira: tạo issue (`POST /api/items/ticket`) | Vũ | 55, 59 | ⏳ To Do |
+| SCRUM-57 | Jira: write-back update (`PATCH /api/items/{id}`, Type=Ticket) qua `IWriteBackGuard` | Vũ + Lộc (guard) | 55, 38 | ⏳ To Do |
+| SCRUM-58 | Jira: xoá issue (`DELETE /api/items/{id}`, Type=Ticket) | Vũ | 55 | ⏳ To Do |
+| SCRUM-59 | Jira: metadata helpers (projects / issue-types / transitions / assignable-users / priorities) | Huy | 54 | ⏳ To Do |
+| SCRUM-60 | Jira: ImportantContacts `JiraAccount` + Notification type (optional) | Huy | 54 | ⏳ To Do |
+
+**Phối hợp:** 54 mở đường (Integration + OAuth + cloudId) cho tất cả. 57 tái dùng `IWriteBackGuard` của SCRUM-38 (Jira không có HTTP ETag → dùng `fields.updated` làm version-token lưu trong `Items.ETag`). 56 cần 59 (metadata để chọn project/issue-type/priority khi tạo). Khác Gmail: nội dung Jira (summary/description) **sửa được**, không immutable.
+
 ---
 
-## Ngoài scope (KHÔNG còn ticket Jira)
+## Ngoài scope (KHÔNG có ticket Jira)
 
-Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — chỉ là định hướng tương lai, đừng code, đừng gán số SCRUM (số 39–46 nay đã dùng cho việc khác):
+Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — chỉ là định hướng tương lai, đừng code, đừng gán số SCRUM (số 39–46 nay đã dùng cho việc khác; Jira giờ là 54→60):
 
-- Webhook / push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch) thay sync on-demand.
-- Jira / Atlassian integration (OAuth cloudId, sync issue → Item(Ticket), write-back, webhook).
+- Webhook / push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) thay sync on-demand.
 - Social / friend system, AI workflow.
