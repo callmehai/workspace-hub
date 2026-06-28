@@ -28,6 +28,12 @@ export interface OAuthCallbackRequest {
   state: string;
 }
 
+export interface OAuthCallbackResponse {
+  integrationKey: string;
+  providerAccountId: string;
+  connections: { id: string; serviceType: string; status: string }[];
+}
+
 export const connectionsApi = {
   getConnections: async (): Promise<ConnectionDto[]> => {
     const response = await api.get('/connections');
@@ -39,7 +45,7 @@ export const connectionsApi = {
     return response.data;
   },
 
-  oauthCallback: async (data: OAuthCallbackRequest): Promise<unknown> => {
+  oauthCallback: async (data: OAuthCallbackRequest): Promise<OAuthCallbackResponse> => {
     const response = await api.post('/connections/oauth/callback', data);
     return response.data;
   },

@@ -87,6 +87,7 @@ export const Integrations = () => {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Connected Services</h1>
         <p className="text-gray-600">
           Manage third-party tools linked to your workspace
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
