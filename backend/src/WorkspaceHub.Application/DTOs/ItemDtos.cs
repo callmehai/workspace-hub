@@ -55,6 +55,21 @@ public record CreateEventRequest(
     List<string>? Attendees = null
 );
 
+/// <summary>
+/// POST /api/items/ticket — tạo issue Jira mới (SCRUM-56).
+/// connectionId phải là Connection ServiceType=Jira. assignee = accountId; description = plain text (service → ADF).
+/// </summary>
+public record CreateTicketRequest(
+    Guid ConnectionId,
+    string ProjectKey,
+    string IssueType,
+    string Summary,
+    string? Description = null,
+    string? Assignee = null,
+    string? Priority = null,
+    List<string>? Labels = null
+);
+
 // ───────────────────────── Response DTO ─────────────────────────
 
 /// <summary>

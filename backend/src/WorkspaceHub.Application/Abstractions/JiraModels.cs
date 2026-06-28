@@ -27,3 +27,19 @@ public record JiraSearchResult(
     IReadOnlyList<JiraIssue> Issues,
     string? NextPageToken,
     bool IsLast);
+
+/// <summary>
+/// Payload tạo issue gửi xuống gateway. Description là plain text — gateway convert sang ADF.
+/// Assignee = accountId; Priority/IssueType = tên hiển thị; Labels không chứa khoảng trắng (ràng buộc Jira).
+/// </summary>
+public record CreateJiraIssueRequest(
+    string ProjectKey,
+    string IssueType,
+    string Summary,
+    string? Description = null,
+    string? AssigneeAccountId = null,
+    string? PriorityName = null,
+    IReadOnlyList<string>? Labels = null);
+
+/// <summary>Kết quả thô của POST /rest/api/3/issue.</summary>
+public record JiraCreatedIssue(string Id, string Key);

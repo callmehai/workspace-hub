@@ -4,13 +4,36 @@ using System.Text.Json;
 namespace WorkspaceHub.Application.Mapping;
 
 /// <summary>
-/// Chuyển ADF (Atlassian Document Format — description của Jira) sang plain text.
+/// Chuyển đổi 2 chiều giữa ADF (Atlassian Document Format — description của Jira) và plain text.
 /// ADF là cây JSON: node gốc có "content"[], mỗi node có "type" + "text"/"content".
-/// Đọc về chỉ cần text để hiển thị/Snippet; ghi ngược (text→ADF) làm ở SCRUM-57.
+/// Đọc: ADF → text (Snippet/hiển thị). Ghi: text → ADF tối giản (mỗi dòng = 1 paragraph) trước khi gửi Jira.
 /// Tham khảo: https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
 /// </summary>
 public static class AdfConverter
 {
+    /// <summary>
+    /// Build document ADF tối giản từ plain text: mỗi dòng (\n) thành 1 paragraph.
+    /// Dòng rỗng vẫn giữ paragraph rỗng để bảo toàn khoảng cách. Trả null nếu text null/rỗng.
+    /// </summary>
+    public static object? FromPlainText(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return null;
+
+        var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+        var paragraphs = lines.Select(line => string.IsNullOrEmpty(line)
+            ? new { type = "paragraph", content = Array.Empty<object>() }
+            : new { type = "paragraph", content = new object[] { new { type = "text", text = line } } });
+
+        return new
+        {
+            type = "doc",
+            version = 1,
+            content = paragraphs.ToArray()
+        };
+    }
+
     /// <summary>Trích plain text từ document ADF. Trả chuỗi rỗng nếu null/không parse được.</summary>
     public static string ToPlainText(JsonElement? adf)
     {

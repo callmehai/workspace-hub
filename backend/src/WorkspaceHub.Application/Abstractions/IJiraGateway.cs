@@ -18,4 +18,19 @@ public interface IJiraGateway
         string? pageToken,
         int maxResults,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Tạo issue mới (POST /rest/api/3/issue). Trả về id + key của issue vừa tạo.
+    /// description (plain text) được convert sang ADF trước khi gửi.
+    /// </summary>
+    Task<JiraCreatedIssue> CreateIssueAsync(
+        Connection connection,
+        CreateJiraIssueRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>Lấy 1 issue đầy đủ field (GET /rest/api/3/issue/{idOrKey}) để map sang Item sau khi tạo.</summary>
+    Task<JiraIssue> GetIssueAsync(
+        Connection connection,
+        string issueIdOrKey,
+        CancellationToken ct = default);
 }

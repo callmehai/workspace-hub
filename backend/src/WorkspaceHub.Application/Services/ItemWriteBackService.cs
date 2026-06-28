@@ -4,6 +4,7 @@ using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
+using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
 
@@ -17,6 +18,8 @@ public class ItemWriteBackService : IItemWriteBackService
     private readonly IGmailGateway _gmailGateway;
     private readonly ICalendarGateway _calendarGateway;
     private readonly IDriveGateway _driveGateway;
+    private readonly IJiraGateway _jiraGateway;
+    private readonly IJiraItemMapper _jiraMapper;
 
     public ItemWriteBackService(
         IItemRepository items,
@@ -24,7 +27,9 @@ public class ItemWriteBackService : IItemWriteBackService
         IWriteBackGuard guard,
         IGmailGateway gmailGateway,
         ICalendarGateway calendarGateway,
-        IDriveGateway driveGateway)
+        IDriveGateway driveGateway,
+        IJiraGateway jiraGateway,
+        IJiraItemMapper jiraMapper)
     {
         _items = items;
         _connections = connections;
@@ -32,6 +37,8 @@ public class ItemWriteBackService : IItemWriteBackService
         _gmailGateway = gmailGateway;
         _calendarGateway = calendarGateway;
         _driveGateway = driveGateway;
+        _jiraGateway = jiraGateway;
+        _jiraMapper = jiraMapper;
     }
 
     private async Task<Connection> GetConnectionAsync(Guid? connectionId, CancellationToken ct)
@@ -234,6 +241,37 @@ public class ItemWriteBackService : IItemWriteBackService
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson);
+    }
+
+    public async Task<ItemResponse> CreateTicketAsync(Guid userId, CreateTicketRequest payload, CancellationToken ct = default)
+    {
+        var conn = await _connections.GetByIdAsync(payload.ConnectionId, ct);
+        if (conn == null) throw new NotFoundException("Connection", payload.ConnectionId);
+        if (conn.UserId != userId) throw new ForbiddenException("Not your connection.");
+        if (conn.ServiceType != ServiceType.Jira) throw new BusinessRuleException("Connection is not for Jira.");
+        if (conn.Status != ConnectionStatus.Active) throw new BusinessRuleException("Jira connection is not active. Please reconnect.");
+
+        var createRequest = new CreateJiraIssueRequest(
+            payload.ProjectKey,
+            payload.IssueType,
+            payload.Summary,
+            payload.Description,
+            payload.Assignee,
+            payload.Priority,
+            payload.Labels);
+
+        // 1. Tạo issue trên Jira → lấy id + key.
+        var created = await _jiraGateway.CreateIssueAsync(conn, createRequest, ct);
+
+        // 2. Fetch lại issue đầy đủ field để map sang Item (status/priority/updated... do Jira quyết).
+        var issue = await _jiraGateway.GetIssueAsync(conn, created.Key, ct);
+
+        var item = _jiraMapper.ToItem(issue, userId, conn.Id);
+
+        await _items.AddAsync(item, ct);
+        await _items.SaveChangesAsync(ct);
+
         return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson);
     }
 

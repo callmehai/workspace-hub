@@ -105,9 +105,10 @@ Không đổi. Xem bản trước. List endpoint `GET /api/folders`, `GET /api/t
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
 - `POST /api/items/note` — tạo Note.
 - `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar.
-- `POST /api/items/ticket` ⏳ **phase Jira (SCRUM-56, chưa implement)** — tạo issue mới → đẩy lên Jira.
-  - Body: `{connectionId, projectKey, issueType, summary, description?, assignee?, priority?}` (connection phải ServiceType=Jira). `description` nhận markdown, service convert sang **ADF** trước khi gửi.
-  - → 201 tạo Item(Type=Ticket) + issue trên Jira. (404 connection, 422 connection không phải Jira / projectKey-issueType không hợp lệ, 502 provider lỗi)
+- `POST /api/items/ticket` ✅ **SCRUM-56** — tạo issue mới → đẩy lên Jira.
+  - Body: `{connectionId, projectKey, issueType, summary, description?, assignee?(accountId), priority?, labels?[]}` (connection phải ServiceType=Jira + Active). `description` nhận plain text, service convert sang **ADF** (`AdfConverter.FromPlainText`) trước khi gửi. `labels` không chứa khoảng trắng.
+  - Tạo trên Jira (`POST /rest/api/3/issue`) → fetch lại issue → tạo Item(Type=Ticket) local (kèm issueKey + metadata + ETag=`fields.updated`).
+  - → 201 (CreatedAtAction → GetItemById). (400 validation, 403 connection của user khác / thiếu scope write, 404 connection, 422 connection không phải Jira / Jira reject field-project-issueType, 502 provider lỗi)
 - `PATCH /api/items/{id}` ⭐ — write-back, body theo Type:
   - Email: `{isUnread?, isStarred?, labels?[], isTrashed?}` (KHÔNG sửa nội dung)
   - Event: `{title?, start?, end?, location?, attendees?[]}`

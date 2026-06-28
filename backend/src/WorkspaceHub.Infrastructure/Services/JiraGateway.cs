@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Domain.Entities;
 
 namespace WorkspaceHub.Infrastructure.Services;
@@ -63,6 +64,81 @@ public class JiraGateway : IJiraGateway
 
         var doc = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
         return ParseSearch(doc, connection.ProviderAccountId);
+    }
+
+    public async Task<JiraCreatedIssue> CreateIssueAsync(
+        Connection connection,
+        CreateJiraIssueRequest request,
+        CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var apiBase = string.Format(ApiBaseFormat, connection.ProviderAccountId);
+
+        var fields = new Dictionary<string, object?>
+        {
+            ["project"]   = new { key = request.ProjectKey },
+            ["issuetype"] = new { name = request.IssueType },
+            ["summary"]   = request.Summary
+        };
+
+        var adf = AdfConverter.FromPlainText(request.Description);
+        if (adf is not null)
+            fields["description"] = adf;
+
+        if (!string.IsNullOrWhiteSpace(request.AssigneeAccountId))
+            fields["assignee"] = new { accountId = request.AssigneeAccountId };
+
+        if (!string.IsNullOrWhiteSpace(request.PriorityName))
+            fields["priority"] = new { name = request.PriorityName };
+
+        if (request.Labels is { Count: > 0 })
+            fields["labels"] = request.Labels;
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.PostAsJsonAsync($"{apiBase}/issue", new { fields }, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex);
+        }
+
+        // 400 từ Jira khi tạo = field/project/issueType không hợp lệ → BusinessRule (422) cho client.
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var detail = await SafeReadBodyAsync(response, ct);
+            throw new BusinessRuleException($"Jira từ chối tạo issue (field không hợp lệ): {detail}");
+        }
+
+        await EnsureSuccessAsync(response, ct);
+
+        var doc = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        var id = GetString(doc, "id") ?? string.Empty;
+        var key = GetString(doc, "key") ?? string.Empty;
+        return new JiraCreatedIssue(id, key);
+    }
+
+    public async Task<JiraIssue> GetIssueAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var apiBase = string.Format(ApiBaseFormat, connection.ProviderAccountId);
+        var fieldsQuery = string.Join(",", RequestedFields);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.GetAsync($"{apiBase}/issue/{Uri.EscapeDataString(issueIdOrKey)}?fields={fieldsQuery}", ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex);
+        }
+
+        await EnsureSuccessAsync(response, ct);
+
+        var doc = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        return ParseIssue(doc, connection.ProviderAccountId);
     }
 
     private async Task<HttpClient> BuildClientAsync(Connection connection, CancellationToken ct)
