@@ -2,6 +2,15 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [Target — chưa code, chưa có ticket] OData query cho GET collection
+
+- **Quyết định:** bật **OData query options** (`Microsoft.AspNetCore.OData` v8, `[EnableQuery]`) cho các endpoint **GET đọc collection trên `IQueryable` EF**: `GET /api/items`, `/api/admin/users`, `/api/scheduled-emails`, `/api/folders`, `/api/tags`, `/api/integrations`. Cho phép `$filter/$orderby/$select/$top/$skip/$count`; **không** `$expand`.
+- **Lý do:** giảm số query param thủ công + bộ filter rời rạc; client tự chọn field/sort/paging, đẩy xuống SQL. Hợp tiêu chí PRN232 (REST + truy vấn linh hoạt).
+- **Phạm vi (cố ý hẹp):** **KHÔNG** bật cho endpoint trả **live provider data** (item detail, Jira metadata helpers), **mask/decrypt token** (connections), single-resource, aggregate (admin/stats), và mọi write. Lý do: OData chỉ an toàn + có nghĩa trên `IQueryable` thuần dịch được sang SQL.
+- **Bảo mật (chốt):** luôn scope theo `CurrentUserId`/role **server-side TRƯỚC** rồi mới `[EnableQuery]`. Giới hạn `MaxTop=100`, `PageSize=20`. Action trả `IQueryable<TDto>` (`AsNoTracking` + projection DTO, KHÔNG Entity).
+- **Ảnh hưởng shape:** endpoint nào bật OData thì `$count` thay `total`, `$top/$skip` thay `page/limit` của envelope cũ — FE cập nhật khi wire. Chi tiết: `docs/API.md` (mục "OData query") + `docs/CONVENTIONS.md`.
+- **Status:** mới là **target tài liệu, chưa code, chưa có ticket Jira** — cần tạo ticket trước khi làm.
+
 ## [Phase Jira — kế hoạch, chưa code] Tích hợp Jira / Atlassian (SCRUM-54→60)
 
 - **Bối cảnh:** board Jira đã tạo **7 ticket SCRUM-54→60** mở lại **phase Jira/Atlassian integration** (CRUD đầy đủ issue). Đây là **kế hoạch** — tất cả To Do, ở backlog, **chưa viết code**. Current phase vẫn dừng ở SCRUM-38 (write-back Google + conflict). Bắt đầu phase Jira sau khi Sprint 3 ổn định.
