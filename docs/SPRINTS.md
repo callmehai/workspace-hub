@@ -102,12 +102,12 @@
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
 | SCRUM-54 | Jira: Atlassian Integration + OAuth 3LO (cloudId), mô hình B | Khánh | — | ✅ Done — `JiraStrategy` + `JiraScopes` (scope `read:jira-work write:jira-work manage:jira-project read:jira-user read:me offline_access`); seed Integration `atlassian` (IsEnabled=false, migration `AddAtlassianIntegrationSeed`); `JiraTokenResponse`; DI đăng ký `JiraStrategy`; `CursorType.JqlUpdated` + `ItemType.Ticket` thêm vào enum. OAuth flow tái dùng `ConnectionsService` + `ProviderStrategyContext` hiện có (`/api/connections/oauth/start` + `/oauth/callback`). |
-| SCRUM-55 | Jira: client + đọc/sync issue → Item(Type=Ticket) | Vũ | 54 | ⏳ To Do |
-| SCRUM-56 | Jira: tạo issue (`POST /api/items/ticket`) | Vũ | 55, 59 | ⏳ To Do |
-| SCRUM-57 | Jira: write-back update (`PATCH /api/items/{id}`, Type=Ticket) qua `IWriteBackGuard` | Vũ + Lộc (guard) | 55, 38 | ⏳ To Do |
-| SCRUM-58 | Jira: xoá issue (`DELETE /api/items/{id}`, Type=Ticket) | Vũ | 55 | ⏳ To Do |
-| SCRUM-59 | Jira: metadata helpers (projects / issue-types / transitions / assignable-users / priorities) | Huy | 54 | ⏳ To Do |
-| SCRUM-60 | Jira: ImportantContacts `JiraAccount` + Notification type (optional) | Huy | 54 | ⏳ To Do |
+| SCRUM-55 | Jira: client + đọc/sync issue → Item(Type=Ticket) | Lộc | 54 | ✅ Done — `IJiraGateway` + `JiraGateway` (search JQL qua `POST /rest/api/3/search/jql`, phân trang `nextPageToken`, base URL theo cloudId); `IJiraSyncService` + `JiraSyncService` (sync on-demand, JQL `assignee/reporter = currentUser()` + `updated >= cursor`, dedupe UNIQUE(ConnectionId,ExternalId), cursor `JqlUpdated` = mốc `fields.updated` max); `IJiraItemMapper` + `JiraItemMapper` (issue→Item Type=Ticket, ETag=`fields.updated`, metadata đủ); `AdfConverter` (ADF→plain text cho Snippet); `IAtlassianTokenService` + `AtlassianTokenService` (refresh offline_access, rotate refresh token); wired vào `ConnectionSyncDispatcher` (`ServiceType.Jira`). Unit test: `JiraSyncServiceTests`, `JiraItemMapperTests`, `AdfConverterTests`. |
+| SCRUM-56 | Jira: tạo issue (`POST /api/items/ticket`) | Lộc | 55, 59 | ⏳ To Do |
+| SCRUM-57 | Jira: write-back update (`PATCH /api/items/{id}`, Type=Ticket) qua `IWriteBackGuard` | Lộc | 55, 38 | ⏳ To Do |
+| SCRUM-58 | Jira: xoá issue (`DELETE /api/items/{id}`, Type=Ticket) | Lộc | 55 | ⏳ To Do |
+| SCRUM-59 | Jira: metadata helpers (projects / issue-types / transitions / assignable-users / priorities) | Lộc | 54 | ⏳ To Do |
+| SCRUM-60 | Jira: ImportantContacts `JiraAccount` + Notification type (optional) | Lộc | 54 | ⏳ To Do |
 
 **Phối hợp:** 54 mở đường (Integration + OAuth + cloudId) cho tất cả. 57 tái dùng `IWriteBackGuard` của SCRUM-38 (Jira không có HTTP ETag → dùng `fields.updated` làm version-token lưu trong `Items.ETag`). 56 cần 59 (metadata để chọn project/issue-type/priority khi tạo). Khác Gmail: nội dung Jira (summary/description) **sửa được**, không immutable.
 

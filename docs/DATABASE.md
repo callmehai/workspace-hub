@@ -80,7 +80,7 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 | RefreshTokenEncrypted | string | Data Protection; **chuỗi rỗng `""` = provider không trả refresh token** (vd Google re-consent) — check `IsNullOrEmpty`, không check null |
 | ExpiresAt | datetime | refresh nếu < 5 phút |
 | Status | enum string | Active / Disconnected / Error |
-| CursorType | enum string null | HistoryId / PageToken / SyncToken / **JqlUpdated** (Jira: cursor theo `fields.updated`, poll issue đổi sau mốc đó — seed sẵn trong enum, dùng ở SCRUM-55) |
+| CursorType | enum string null | HistoryId / PageToken / SyncToken / **JqlUpdated** (Jira: cursor theo `fields.updated` lưu ISO-8601 UTC mốc max; JQL lần sau `updated >= cursor`. ✅ dùng ở `JiraSyncService` — SCRUM-55) |
 | CursorValue | string null | null = sync lần đầu |
 | LastSyncedAt | datetime null | cập nhật sau mỗi lần sync on-demand |
 | LastError | string null | |
@@ -106,7 +106,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 |---|---|---|
 | Id | uuid PK | |
 | UserId | uuid FK→Users | CASCADE |
-| Type | enum string | Email / Event / File / Note / Ticket (Jira — enum seeded, dùng ở SCRUM-55) |
+| Type | enum string | Email / Event / File / Note / Ticket (Jira — ✅ dùng ở `JiraSyncService`, SCRUM-55) |
 | Title | string | |
 | Snippet | string | ~200 ký tự |
 | ExternalId | string null | ID gốc provider; NULL cho Note |
@@ -124,7 +124,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 - Event: `{start, end, location, attendees[], meetUrl}`
 - File: `{mimeType, size, webViewLink, iconLink}`
 - Note: `{contentMarkdown}`
-- Ticket (phase Jira, SCRUM-55): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}` (description gốc là ADF — convert ↔ markdown ở service, xem CHANGELOG)
+- Ticket (Jira, ✅ SCRUM-55): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`. `ETag` = `fields.updated` (ISO-8601 UTC) làm version-token cho conflict (SCRUM-57). Description gốc là ADF → `AdfConverter.ToPlainText` lấy Snippet (đọc); ghi ngược (text→ADF) ở SCRUM-57. Xem CHANGELOG.
 
 **Constraint:** UNIQUE(ConnectionId, ExternalId). **Index:** (UserId, Status, OccurredAt DESC).
 

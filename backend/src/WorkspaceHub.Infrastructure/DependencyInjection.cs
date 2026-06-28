@@ -48,6 +48,7 @@ public static class DependencyInjection
         services.AddDistributedMemoryCache();
 
         services.AddHttpClient("OAuthToken");
+        services.AddHttpClient("Jira");
         services.AddScoped<IOAuthTokenClient, HttpOAuthTokenClient>();
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
@@ -60,6 +61,8 @@ public static class DependencyInjection
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
 
         services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IAtlassianTokenService, WorkspaceHub.Infrastructure.Services.AtlassianTokenService>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IJiraGateway, WorkspaceHub.Infrastructure.Services.JiraGateway>();
         
         // Gateways dùng cho luồng Writeback (Ghi/Cập nhật dữ liệu hai chiều)
         services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();

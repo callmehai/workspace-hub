@@ -88,12 +88,12 @@ Mô hình B: mỗi service authorize riêng, tạo 1 Connection.
 - `GET /api/connections` — array (token mask). Mỗi row = 1 service. ✅ SCRUM-14.
 - `POST /api/connections/{id}/refresh` — refresh token. (422 invalid→Error) ✅ SCRUM-14.
 - `DELETE /api/connections/{id}` — 204, xoá đúng service đó. Items giữ lại (ConnectionId=NULL). KHÔNG ảnh hưởng login hay service khác. ✅ SCRUM-14.
-- `POST /api/connections/{id}/sync` — 202 trigger thủ công (fallback).
+- `POST /api/connections/{id}/sync` — 202 trigger thủ công (fallback). Dispatcher route theo ServiceType: Gmail/GCal/Drive (Google) + **Jira → `JiraSyncService` ✅ SCRUM-55** (search JQL → Item Type=Ticket, dedupe, cursor `JqlUpdated`).
 
 > Bỏ /api/services/* (mô hình A). Toggle = connect/disconnect cả Connection.
 
-### Jira / Atlassian — ⏳ phase Jira (SCRUM-54, chưa implement)
-Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B:
+### Jira / Atlassian — ✅ OAuth (SCRUM-54) + sync đọc (SCRUM-55); write CRUD ⏳ (SCRUM-56→60)
+Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B. Sync issue → Item(Type=Ticket) đi qua `POST /api/connections/{id}/sync` (không có endpoint riêng):
 - `POST /api/connections/oauth/start` — `{integrationKey: "atlassian", serviceType: "Jira", redirectUri}` → `{authorizationUrl, state}`. Scope read-write Jira (`read:jira-work write:jira-work read:jira-user offline_access`).
 - `POST /api/connections/oauth/callback` — `{code, state}` → đổi token, gọi `/oauth/token/accessible-resources` lấy **cloudId**, lưu `ProviderAccountId = cloudId`, tạo 1 Connection ServiceType=Jira. (400 CSRF/scope thiếu, 409 trùng cloudId)
 

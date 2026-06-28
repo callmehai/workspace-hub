@@ -1,0 +1,185 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using FluentAssertions;
+using Moq;
+using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Mapping;
+using WorkspaceHub.Application.Services;
+using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Domain.Enums;
+using Xunit;
+
+namespace WorkspaceHub.Tests.Services;
+
+public class JiraSyncServiceTests
+{
+    private readonly Mock<IJiraGateway> _gatewayMock = new();
+    private readonly Mock<IJiraItemMapper> _mapperMock = new();
+    private readonly Mock<IItemRepository> _itemsMock = new();
+    private readonly Mock<IConnectionRepository> _connectionsMock = new();
+    private readonly JiraSyncService _service;
+
+    public JiraSyncServiceTests()
+    {
+        _service = new JiraSyncService(
+            _gatewayMock.Object, _mapperMock.Object, _itemsMock.Object, _connectionsMock.Object);
+
+        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<string>());
+
+        _mapperMock.Setup(m => m.ToItem(It.IsAny<JiraIssue>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .Returns((JiraIssue i, Guid u, Guid c) => new Item { ExternalId = i.Id, ConnectionId = c, UserId = u });
+    }
+
+    private static Connection JiraConnection(string? cursor = null, CursorType? cursorType = null) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            ServiceType = ServiceType.Jira,
+            ProviderAccountId = "cloud-1",
+            CursorValue = cursor,
+            CursorType = cursorType
+        };
+
+    private static JiraIssue Issue(string id, DateTimeOffset? updated = null) =>
+        new(id, $"K-{id}", "K", $"Summary {id}", null, "To Do", null, null, "Task", null, updated);
+
+    [Fact]
+    public async Task NonJiraConnection_Throws()
+    {
+        var conn = JiraConnection();
+        conn.ServiceType = ServiceType.Gmail;
+
+        var act = () => _service.SyncConnectionAsync(conn);
+
+        await act.Should().ThrowAsync<BusinessRuleException>();
+    }
+
+    [Fact]
+    public async Task FirstSync_CreatesAllItems_AndSetsCursorToMaxUpdated()
+    {
+        var conn = JiraConnection();
+        var older = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var newer = new DateTimeOffset(2026, 6, 28, 0, 0, 0, TimeSpan.Zero);
+
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JiraSearchResult(
+                new List<JiraIssue> { Issue("1", older), Issue("2", newer) }, null, true));
+
+        var result = await _service.SyncConnectionAsync(conn);
+
+        result.Created.Should().Be(2);
+        result.Skipped.Should().Be(0);
+        result.Scanned.Should().Be(2);
+
+        conn.CursorType.Should().Be(CursorType.JqlUpdated);
+        conn.CursorValue.Should().Be(newer.UtcDateTime.ToString("O"));
+        conn.Status.Should().Be(ConnectionStatus.Active);
+        conn.LastSyncedAt.Should().NotBeNull();
+        conn.LastError.Should().BeNull();
+
+        _itemsMock.Verify(m => m.AddRangeAsync(It.Is<IEnumerable<Item>>(x => true), It.IsAny<CancellationToken>()), Times.Once);
+        _connectionsMock.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReSync_DedupesExistingIds()
+    {
+        var conn = JiraConnection();
+        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(conn.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<string> { "1" });
+
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JiraSearchResult(
+                new List<JiraIssue> { Issue("1"), Issue("2") }, null, true));
+
+        var result = await _service.SyncConnectionAsync(conn);
+
+        result.Created.Should().Be(1);
+        result.Skipped.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Pagination_FollowsNextPageTokenUntilLast()
+    {
+        var conn = JiraConnection();
+
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JiraSearchResult(new List<JiraIssue> { Issue("1") }, "tok", false));
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), "tok", It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JiraSearchResult(new List<JiraIssue> { Issue("2") }, null, true));
+
+        var result = await _service.SyncConnectionAsync(conn);
+
+        result.Created.Should().Be(2);
+        _gatewayMock.Verify(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), "tok", It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task IncrementalSync_WithCursor_BuildsJqlWithUpdatedFilter()
+    {
+        var cursor = new DateTimeOffset(2026, 6, 20, 8, 30, 0, TimeSpan.Zero);
+        var conn = JiraConnection(cursor.UtcDateTime.ToString("O"), CursorType.JqlUpdated);
+
+        string? capturedJql = null;
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback((Connection _, string? jql, string? _, int _, CancellationToken _) => capturedJql = jql)
+            .ReturnsAsync(new JiraSearchResult(new List<JiraIssue>(), null, true));
+
+        await _service.SyncConnectionAsync(conn);
+
+        capturedJql.Should().NotBeNull();
+        capturedJql.Should().Contain("updated >=");
+        capturedJql.Should().Contain("ORDER BY updated ASC");
+    }
+
+    [Fact]
+    public async Task FirstSync_NoCursor_JqlHasNoUpdatedFilter()
+    {
+        var conn = JiraConnection();
+
+        string? capturedJql = null;
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback((Connection _, string? jql, string? _, int _, CancellationToken _) => capturedJql = jql)
+            .ReturnsAsync(new JiraSearchResult(new List<JiraIssue>(), null, true));
+
+        await _service.SyncConnectionAsync(conn);
+
+        capturedJql.Should().NotContain("updated >=");
+    }
+
+    [Fact]
+    public async Task EmptyResult_DoesNotAddRange_ButUpdatesConnection()
+    {
+        var conn = JiraConnection();
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JiraSearchResult(new List<JiraIssue>(), null, true));
+
+        var result = await _service.SyncConnectionAsync(conn);
+
+        result.Created.Should().Be(0);
+        result.Scanned.Should().Be(0);
+        _itemsMock.Verify(m => m.AddRangeAsync(It.IsAny<IEnumerable<Item>>(), It.IsAny<CancellationToken>()), Times.Never);
+        conn.LastSyncedAt.Should().NotBeNull();
+        _connectionsMock.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task EmptyResult_KeepsPreviousCursor()
+    {
+        var prevCursor = new DateTimeOffset(2026, 6, 20, 8, 30, 0, TimeSpan.Zero).UtcDateTime.ToString("O");
+        var conn = JiraConnection(prevCursor, CursorType.JqlUpdated);
+
+        _gatewayMock.Setup(m => m.SearchIssuesAsync(conn, It.IsAny<string>(), null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JiraSearchResult(new List<JiraIssue>(), null, true));
+
+        await _service.SyncConnectionAsync(conn);
+
+        conn.CursorValue.Should().Be(prevCursor);
+    }
+}
