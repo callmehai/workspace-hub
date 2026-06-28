@@ -247,6 +247,110 @@ public class JiraGateway : IJiraGateway
         await EnsureSuccessAsync(response, ct);
     }
 
+    // ───────────────────── Metadata helpers (SCRUM-59) ─────────────────────
+
+    public async Task<IReadOnlyList<JiraProject>> GetProjectsAsync(Connection connection, CancellationToken ct = default)
+    {
+        // /project/search phân trang; lấy tối đa 100 project đầu (đủ cho dropdown đồ án).
+        var doc = await GetJsonAsync(connection, $"{ApiBase(connection)}/project/search?maxResults=100", ct);
+
+        var list = new List<JiraProject>();
+        if (doc.TryGetProperty("values", out var values) && values.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var p in values.EnumerateArray())
+            {
+                var id = GetString(p, "id");
+                var key = GetString(p, "key");
+                var name = GetString(p, "name");
+                if (id is null || key is null) continue;
+                list.Add(new JiraProject(id, key, name ?? key));
+            }
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<JiraIssueType>> GetIssueTypesAsync(Connection connection, string projectKey, CancellationToken ct = default)
+    {
+        // GET /project/{key} trả về object có "issueTypes"[].
+        var doc = await GetJsonAsync(connection, $"{ApiBase(connection)}/project/{Uri.EscapeDataString(projectKey)}", ct);
+
+        var list = new List<JiraIssueType>();
+        if (doc.TryGetProperty("issueTypes", out var types) && types.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var t in types.EnumerateArray())
+            {
+                var id = GetString(t, "id");
+                var name = GetString(t, "name");
+                if (id is null || name is null) continue;
+                bool subtask = t.TryGetProperty("subtask", out var st) && st.ValueKind == JsonValueKind.True;
+                list.Add(new JiraIssueType(id, name, subtask));
+            }
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<JiraPriority>> GetPrioritiesAsync(Connection connection, CancellationToken ct = default)
+    {
+        // GET /priority trả về mảng phẳng.
+        var doc = await GetJsonAsync(connection, $"{ApiBase(connection)}/priority", ct);
+
+        var list = new List<JiraPriority>();
+        if (doc.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var p in doc.EnumerateArray())
+            {
+                var id = GetString(p, "id");
+                var name = GetString(p, "name");
+                if (id is null || name is null) continue;
+                list.Add(new JiraPriority(id, name));
+            }
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<JiraUser>> GetAssignableUsersAsync(Connection connection, string projectKey, string? query, CancellationToken ct = default)
+    {
+        var url = $"{ApiBase(connection)}/user/assignable/search?project={Uri.EscapeDataString(projectKey)}&maxResults=50";
+        if (!string.IsNullOrWhiteSpace(query))
+            url += $"&query={Uri.EscapeDataString(query)}";
+
+        var doc = await GetJsonAsync(connection, url, ct);
+
+        var list = new List<JiraUser>();
+        if (doc.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var u in doc.EnumerateArray())
+            {
+                var accountId = GetString(u, "accountId");
+                if (accountId is null) continue;
+                var displayName = GetString(u, "displayName") ?? accountId;
+                var email = GetString(u, "emailAddress");
+                bool active = u.TryGetProperty("active", out var a) && a.ValueKind == JsonValueKind.True;
+                list.Add(new JiraUser(accountId, displayName, email, active));
+            }
+        }
+        return list;
+    }
+
+    /// <summary>GET JSON từ Jira + map status code chuẩn (403/404/502).</summary>
+    private async Task<JsonElement> GetJsonAsync(Connection connection, string url, CancellationToken ct)
+    {
+        var http = await BuildClientAsync(connection, ct);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.GetAsync(url, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex);
+        }
+
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+    }
+
     private static string ApiBase(Connection connection) => string.Format(ApiBaseFormat, connection.ProviderAccountId);
 
     /// <summary>Gửi PUT/POST write tới Jira. 400 = field/transition không hợp lệ → BusinessRule (422).</summary>

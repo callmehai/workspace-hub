@@ -57,3 +57,17 @@ public record UpdateJiraIssueRequest(
 
 /// <summary>1 transition khả dụng của issue (đổi status). Id dùng để POST transition.</summary>
 public record JiraTransition(string Id, string Name, string? ToStatusName);
+
+// ───────────────────── Metadata helpers (SCRUM-59) ─────────────────────
+
+/// <summary>1 project Jira (cho dropdown chọn project khi tạo issue).</summary>
+public record JiraProject(string Id, string Key, string Name);
+
+/// <summary>1 issue type của project (Task/Bug/Story...).</summary>
+public record JiraIssueType(string Id, string Name, bool Subtask);
+
+/// <summary>1 priority Jira (High/Medium/Low...).</summary>
+public record JiraPriority(string Id, string Name);
+
+/// <summary>1 user gán được cho issue/project (cho dropdown assignee). AccountId dùng khi assign.</summary>
+public record JiraUser(string AccountId, string DisplayName, string? Email, bool Active);

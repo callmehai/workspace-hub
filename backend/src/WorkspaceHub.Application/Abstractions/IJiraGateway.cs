@@ -75,4 +75,18 @@ public interface IJiraGateway
         Connection connection,
         string issueIdOrKey,
         CancellationToken ct = default);
+
+    // ───────────────────── Metadata helpers (SCRUM-59) ─────────────────────
+
+    /// <summary>List project user truy cập được (GET /rest/api/3/project/search).</summary>
+    Task<IReadOnlyList<JiraProject>> GetProjectsAsync(Connection connection, CancellationToken ct = default);
+
+    /// <summary>Issue type hợp lệ của 1 project (GET /rest/api/3/project/{key} → issueTypes).</summary>
+    Task<IReadOnlyList<JiraIssueType>> GetIssueTypesAsync(Connection connection, string projectKey, CancellationToken ct = default);
+
+    /// <summary>Danh sách priority (GET /rest/api/3/priority).</summary>
+    Task<IReadOnlyList<JiraPriority>> GetPrioritiesAsync(Connection connection, CancellationToken ct = default);
+
+    /// <summary>User gán được cho 1 project (GET /rest/api/3/user/assignable/search), lọc theo query nếu có.</summary>
+    Task<IReadOnlyList<JiraUser>> GetAssignableUsersAsync(Connection connection, string projectKey, string? query, CancellationToken ct = default);
 }

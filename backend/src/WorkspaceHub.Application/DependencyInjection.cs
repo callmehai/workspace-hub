@@ -43,6 +43,8 @@ public static class DependencyInjection
         // Đăng ký cho Jira (SCRUM-55)
         services.AddScoped<IJiraItemMapper, JiraItemMapper>();
         services.AddScoped<IJiraSyncService, JiraSyncService>();
+        // Jira metadata helpers (SCRUM-59)
+        services.AddScoped<IJiraMetadataService, JiraMetadataService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
 
         return services;

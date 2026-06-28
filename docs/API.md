@@ -119,14 +119,14 @@ Không đổi. Xem bản trước. List endpoint `GET /api/folders`, `GET /api/t
 - `PATCH /api/items/{id}/archive` — local only.
 - `DELETE /api/items/{id}` ⭐ — trash/xoá trên provider + local. Type=Ticket ✅ **SCRUM-58:** xoá issue trên Jira (`DELETE /rest/api/3/issue/{key}?deleteSubtasks=true`) **rồi mới** xoá Item local — Jira lỗi (403 thiếu quyền / 502) thì Item local giữ nguyên (không xoá lệch). Owner check (không phải owner → 404). (403 thiếu quyền, 404 không tồn tại/không phải owner, 502 provider lỗi)
 
-### Jira metadata helpers — ⏳ phase Jira (SCRUM-59, chưa implement)
-Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt buộc, ServiceType=Jira):
-- `GET /api/jira/projects?connectionId=` — list project (`{key, name, id}`).
-- `GET /api/jira/issue-types?connectionId=&projectKey=` — issue type hợp lệ của project.
-- `GET /api/jira/transitions?connectionId=&itemId=` — transition khả dụng cho issue hiện tại (đổi status).
-- `GET /api/jira/assignable-users?connectionId=&projectKey=&query=` — user gán được.
-- `GET /api/jira/priorities?connectionId=` — danh sách priority.
-- (404 connection, 422 connection không phải Jira, 502 provider lỗi)
+### Jira metadata helpers — ✅ SCRUM-59
+Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt buộc, ServiceType=Jira + Active). Trả dữ liệu live (KHÔNG OData). Cache nhẹ TTL 5' cho project/issue-type/priority; transitions + assignable-users không cache.
+- `GET /api/jira/projects?connectionId=` — list project (`{id, key, name}`).
+- `GET /api/jira/issue-types?connectionId=&projectKey=` — issue type hợp lệ của project (`{id, name, subtask}`).
+- `GET /api/jira/transitions?connectionId=&itemId=` — transition khả dụng cho issue hiện tại (`{id, name, toStatusName}`), đổi status.
+- `GET /api/jira/assignable-users?connectionId=&projectKey=&query=` — user gán được (`{accountId, displayName, email, active}`).
+- `GET /api/jira/priorities?connectionId=` — danh sách priority (`{id, name}`).
+- (404 connection (cả của user khác), 422 connection không phải Jira / không active / projectKey thiếu, 502 provider lỗi)
 
 ## Item-Folder — không đổi
 `POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.
