@@ -9,6 +9,28 @@
 - DateTime ISO 8601 UTC. Pagination ?page&limit (default 20, max 100).
 - Collection lớn → envelope `{items,total,page,limit}`; nhỏ → array.
 
+## OData query — ⏳ target, chưa implement (chưa có ticket)
+Bật **OData query options** cho các endpoint **GET đọc collection trên `IQueryable` EF** (filter/sort/paging đẩy xuống SQL). Đánh dấu `OData ⊕` ở từng endpoint bên dưới.
+
+- **Package:** `Microsoft.AspNetCore.OData` (v8) + `[EnableQuery]` trên action (endpoint routing, KHÔNG cần EDM cho query thuần).
+- **Option cho phép:** `$filter` · `$orderby` · `$select` · `$top` · `$skip` · `$count`. **KHÔNG** cho `$expand` (tránh lộ nav + N+1). Cấu hình an toàn: `[EnableQuery(MaxTop = 100, PageSize = 20, AllowedQueryOptions = Select|Filter|OrderBy|Top|Skip|Count)]`.
+- **Bảo mật (bắt buộc):** scope theo `CurrentUserId` (và role) **server-side TRƯỚC**, rồi mới trả `IQueryable<TDto>` cho `[EnableQuery]` áp lên. OData **không được** vượt qua lọc theo user.
+- **Shape:** action trả `IQueryable<TDto>` đã `AsNoTracking()` + projection sang DTO (KHÔNG trả Entity). `$count` thay `total`, `$top/$skip` thay `page/limit` của envelope — endpoint nào bật OData thì dùng cơ chế OData thay cho query param thủ công cũ.
+- **KHÔNG bật OData cho:** endpoint trả **dữ liệu live từ provider** (item detail, Jira metadata helpers), endpoint **mask/decrypt token** (connections), single-resource GET, aggregate (admin/stats), và mọi POST/PATCH/DELETE/write-back.
+
+| Endpoint | OData | $filter (vd) | $orderby (vd) |
+|---|---|---|---|
+| `GET /api/items` | ⊕ | status, type, isImportant, isArchived, connectionId | occurredAt, dueAt, title |
+| `GET /api/admin/users` | ⊕ | role, isActive, email, fullName | createdAt, lastLoginAt |
+| `GET /api/scheduled-emails` | ⊕ | status | sendAt |
+| `GET /api/folders` | ⊕ | isArchived, name | sortOrder, name |
+| `GET /api/tags` | ⊕ | name | name |
+| `GET /api/integrations` | ⊕ | isEnabled, provider | displayName |
+| `GET /api/connections` | ✗ | — (mask token ở service) | — |
+| `GET /api/items/{id}/detail` | ✗ | — (body live provider) | — |
+| `GET /api/jira/*` (metadata) | ✗ | — (proxy Jira API) | — |
+| `GET /api/admin/stats` | ✗ | — (scalar tổng hợp) | — |
+
 ## Error format chuẩn (SCRUM-24 ✅)
 Mọi lỗi (4xx/5xx) đi qua `ExceptionMiddleware` → trả body thống nhất:
 ```json
@@ -37,7 +59,7 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 > KHÔNG tạo Connection. Chỉ tạo/tìm User. Auto-link nếu email trùng.
 
 ## Admin — ✅ Implemented (SCRUM-49 2026-06-19)
-`GET /api/admin/users` — danh sách user phân trang + search, Admin only.
+`GET /api/admin/users` — danh sách user phân trang + search, Admin only. **OData ⊕** (target — $filter/$orderby/$top/$skip/$count; Admin-only vẫn enforce trước).
 - Query: `?search=` (Email|FullName, case-insensitive, max 200 chars), `?page=1`, `?limit=20` (max 100).
 - Response 200: `{ items: AdminUserDto[], total, page, limit }`. AdminUserDto gồm: id, email, fullName, role, isActive, lastLoginAt, createdAt, connectionCount (tất cả connection), itemCount.
 - Status: 200 · 400 (validation) · 401 · 403.
@@ -51,7 +73,7 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 `GET /api/admin/users/{id}`, `PATCH /users/{id}/lock`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
-- `GET /api/integrations` — catalog cho user.
+- `GET /api/integrations` — catalog cho user. **OData ⊕** (target — $filter isEnabled/provider, $orderby).
 - `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (422). ✅ SCRUM-48.
   - Request: `{ "isEnabled": true | false }`
   - Response 200: `{ "id", "key", "displayName", "isEnabled" }`
@@ -76,10 +98,10 @@ Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B:
 - `POST /api/connections/oauth/callback` — `{code, state}` → đổi token, gọi `/oauth/token/accessible-resources` lấy **cloudId**, lưu `ProviderAccountId = cloudId`, tạo 1 Connection ServiceType=Jira. (400 CSRF/scope thiếu, 409 trùng cloudId)
 
 ## Folders / Folder Shares / Tags / Important Contacts / Notifications
-Không đổi. Xem bản trước.
+Không đổi. Xem bản trước. List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (target — $filter/$orderby trên IQueryable, scope theo CurrentUserId trước).
 
 ## Items (thêm write-back ⭐)
-- `GET /api/items?folderId&status&type&isImportant&search&page&limit` — envelope. Trả kèm ETag.
+- `GET /api/items?folderId&status&type&isImportant&search&page&limit` — envelope. Trả kèm ETag. **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
 - `POST /api/items/note` — tạo Note.
 - `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar.
@@ -110,6 +132,6 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 
 ## Scheduled Emails (đổi ConnectionId ⭐)
 - `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (404 connection, 422 connection không phải Gmail)
-- `GET /api/scheduled-emails?status&page&limit` — envelope.
+- `GET /api/scheduled-emails?status&page&limit` — envelope. **OData ⊕** (target — $filter status, $orderby sendAt, $top/$skip/$count).
 - `PATCH /api/scheduled-emails/{id}/cancel` — (422 đã gửi).
 - `POST /api/internal/process-scheduled` — X-Cron-Secret. Lấy token từ Connections (Gmail).

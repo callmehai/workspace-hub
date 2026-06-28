@@ -28,6 +28,13 @@ PascalCase (class/method/property), camelCase (local/param), `I` prefix (interfa
 - Composite PK junction.
 - Read-only query luôn `AsNoTracking()`. List nhiều collection `Include` → cân nhắc `AsSplitQuery()`/projection tránh cartesian explosion & N+1.
 
+## OData query (⏳ target — chưa implement)
+- Bật `[EnableQuery]` (`Microsoft.AspNetCore.OData` v8) **chỉ cho GET đọc collection trên `IQueryable` EF**: `GET /api/items`, `/api/admin/users`, `/api/scheduled-emails`, `/api/folders`, `/api/tags`, `/api/integrations`. Danh sách + per-endpoint: `docs/API.md`.
+- **Option cho phép:** `$filter/$orderby/$select/$top/$skip/$count`. **KHÔNG** `$expand`. Giới hạn: `[EnableQuery(MaxTop = 100, PageSize = 20, AllowedQueryOptions = Select|Filter|OrderBy|Top|Skip|Count)]`.
+- **Bảo mật:** lọc theo `CurrentUserId`/role **server-side TRƯỚC**, rồi mới trả `IQueryable<TDto>` cho `[EnableQuery]`. OData không được vượt scoping theo user.
+- Action trả `IQueryable<TDto>` đã `AsNoTracking()` + projection sang DTO (KHÔNG trả Entity). `$count` thay `total`, `$top/$skip` thay `page/limit`.
+- **KHÔNG** bật OData cho endpoint trả live provider data (item detail, Jira metadata), mask/decrypt token (connections), single-resource, aggregate (admin/stats), hay mọi write (POST/PATCH/DELETE).
+
 ## Logging (SCRUM-25)
 - Dùng built-in `ILogger<T>` (chưa cần Serilog). Message template dùng placeholder có tên (`{UserId}`, `{StatusCode}`...) để structured — KHÔNG nội suy chuỗi (`$"..."`).
 - **Request/response:** `RequestLoggingMiddleware` log 1 dòng completion mỗi request (method, path, status, elapsed ms, userId): Information cho <400, Warning cho ≥400. Đặt NGOÀI CÙNG pipeline (trước `ExceptionMiddleware`) để đo trọn thời gian và đọc đúng status 5xx (ExceptionMiddleware nuốt exception + set status).
