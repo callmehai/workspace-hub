@@ -101,7 +101,7 @@
 
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
-| SCRUM-54 | Jira: Atlassian Integration + OAuth 3LO (cloudId), mô hình B | Khánh | — | ⏳ To Do |
+| SCRUM-54 | Jira: Atlassian Integration + OAuth 3LO (cloudId), mô hình B | Khánh | — | ✅ Done — `JiraStrategy` + `JiraScopes` (scope `read:jira-work write:jira-work manage:jira-project read:jira-user read:me offline_access`); seed Integration `atlassian` (IsEnabled=false, migration `AddAtlassianIntegrationSeed`); `JiraTokenResponse`; DI đăng ký `JiraStrategy`; `CursorType.JqlUpdated` + `ItemType.Ticket` thêm vào enum. OAuth flow tái dùng `ConnectionsService` + `ProviderStrategyContext` hiện có (`/api/connections/oauth/start` + `/oauth/callback`). |
 | SCRUM-55 | Jira: client + đọc/sync issue → Item(Type=Ticket) | Vũ | 54 | ⏳ To Do |
 | SCRUM-56 | Jira: tạo issue (`POST /api/items/ticket`) | Vũ | 55, 59 | ⏳ To Do |
 | SCRUM-57 | Jira: write-back update (`PATCH /api/items/{id}`, Type=Ticket) qua `IWriteBackGuard` | Vũ + Lộc (guard) | 55, 38 | ⏳ To Do |

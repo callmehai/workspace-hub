@@ -42,9 +42,10 @@ public enum ServiceType
 /// <summary>Loại cursor cho incremental sync, tuỳ provider.</summary>
 public enum CursorType
 {
-    HistoryId, // Gmail
-    PageToken, // Drive
-    SyncToken  // Google Calendar
+    HistoryId,   // Gmail
+    PageToken,   // Drive
+    SyncToken,   // Google Calendar
+    JqlUpdated   // Jira — lưu mốc fields.updated gần nhất, poll issue đổi sau đó
 }
 
 /// <summary>Loại Item — đồng nhất 4 nguồn về 1 model.</summary>
@@ -53,7 +54,8 @@ public enum ItemType
     Email,
     Event,
     File,
-    Note
+    Note,
+    Ticket  // Jira issue — phase Jira (SCRUM-55)
 }
 
 /// <summary>Cột Kanban hiện tại của Item.</summary>

@@ -46,19 +46,19 @@ KHÔNG có bảng Roles/UserRoles (code thật dùng cột `Users.Role` string `
 ---
 
 ## Integrations
-Catalog provider. Seed Google. (Atlassian seed ở **phase Jira** — SCRUM-54, chưa code.)
+Catalog provider. Seed Google + Atlassian. (Atlassian seed đã có từ migration `AddAtlassianIntegrationSeed` — SCRUM-54 Done; `IsEnabled=false` cho đến khi admin bật qua `/api/admin/integrations/atlassian/enable` và cấu hình `OAuth:atlassian:ClientId/Secret`.)
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | Id | uuid PK | |
-| Key | string UNIQUE | google (/ atlassian — phase Jira, SCRUM-54) |
+| Key | string UNIQUE | google / atlassian (đã seed cả 2 — SCRUM-54) |
 | DisplayName, IconUrl, Description | string | |
-| Provider | string | Google (/ Atlassian — phase Jira) |
+| Provider | string | Google / Atlassian |
 | AuthorizationEndpoint, TokenEndpoint | string | |
-| SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` (/ `["Jira"]` — phase Jira) |
+| SupportedServices | nvarchar(max) (JSON) | `["Gmail","GCal","Drive"]` / `["Jira"]` |
 | IsEnabled | bool | |
 
-> **Phase Jira (SCRUM-54, target):** seed thêm 1 row `Integrations` key=`atlassian`, Provider=`Atlassian`, OAuth 3LO endpoint của Atlassian. `ProviderAccountId` của Connection tương ứng = **cloudId** (id của Jira Cloud site sau khi `/oauth/token/accessible-resources`). Credentials đọc từ config `OAuth:atlassian:ClientId/Secret` như Google (SCRUM-39), không lưu DB.
+> **SCRUM-54 Done:** row `atlassian` đã seed (`IsEnabled=false`). `ProviderAccountId` của Connection = **cloudId** (id của Jira Cloud site từ `GET /oauth/token/accessible-resources`). Credentials đọc từ config `OAuth:atlassian:ClientId/Secret` (như Google, SCRUM-39). Bật integration qua admin API khi có credentials.
 
 > Bỏ cột DefaultScopes — scope suy từ ServiceType trong code (`GoogleScopes.BuildRequestScopes`).
 > Không có cột ClientId/ClientSecret — OAuth credentials đọc từ config `OAuth:{key}:...`, không lưu DB (SCRUM-39).
@@ -80,7 +80,7 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 | RefreshTokenEncrypted | string | Data Protection; **chuỗi rỗng `""` = provider không trả refresh token** (vd Google re-consent) — check `IsNullOrEmpty`, không check null |
 | ExpiresAt | datetime | refresh nếu < 5 phút |
 | Status | enum string | Active / Disconnected / Error |
-| CursorType | enum string null | HistoryId / PageToken / SyncToken (/ **JqlUpdated** — phase Jira: cursor theo `fields.updated`, poll issue đổi sau mốc đó) |
+| CursorType | enum string null | HistoryId / PageToken / SyncToken / **JqlUpdated** (Jira: cursor theo `fields.updated`, poll issue đổi sau mốc đó — seed sẵn trong enum, dùng ở SCRUM-55) |
 | CursorValue | string null | null = sync lần đầu |
 | LastSyncedAt | datetime null | cập nhật sau mỗi lần sync on-demand |
 | LastError | string null | |
@@ -106,7 +106,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 |---|---|---|
 | Id | uuid PK | |
 | UserId | uuid FK→Users | CASCADE |
-| Type | enum string | Email / Event / File / Note (Ticket — phase Jira SCRUM-55) |
+| Type | enum string | Email / Event / File / Note / Ticket (Jira — enum seeded, dùng ở SCRUM-55) |
 | Title | string | |
 | Snippet | string | ~200 ký tự |
 | ExternalId | string null | ID gốc provider; NULL cho Note |

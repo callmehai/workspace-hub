@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
 {
     /// <summary>Guid cố định cho seed integration Google (deterministic migration).</summary>
     public static readonly Guid GoogleIntegrationId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    /// <summary>Guid cố định cho seed integration Atlassian/Jira (deterministic migration — SCRUM-54).</summary>
+    public static readonly Guid AtlassianIntegrationId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -244,19 +246,34 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ---------- Seed: 1 Integration Google ----------
-        b.Entity<Integration>().HasData(new Integration
-        {
-            Id = GoogleIntegrationId,
-            Key = "google",
-            DisplayName = "Google Workspace",
-            IconUrl = "https://www.google.com/favicon.ico",
-            Description = "Gmail · Calendar · Drive",
-            Provider = "Google",
-            AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
-            TokenEndpoint = "https://oauth2.googleapis.com/token",
-            SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",
-            IsEnabled = true
-        });
+        // ---------- Seed: Integration Google + Atlassian ----------
+        b.Entity<Integration>().HasData(
+            new Integration
+            {
+                Id = GoogleIntegrationId,
+                Key = "google",
+                DisplayName = "Google Workspace",
+                IconUrl = "https://www.google.com/favicon.ico",
+                Description = "Gmail · Calendar · Drive",
+                Provider = "Google",
+                AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
+                TokenEndpoint = "https://oauth2.googleapis.com/token",
+                SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",
+                IsEnabled = true
+            },
+            // Atlassian / Jira — phase Jira (SCRUM-54). IsEnabled=false cho đến khi cấu hình OAuth:atlassian:ClientId/Secret.
+            new Integration
+            {
+                Id = AtlassianIntegrationId,
+                Key = "atlassian",
+                DisplayName = "Atlassian Jira",
+                IconUrl = "https://www.atlassian.com/favicon.ico",
+                Description = "Jira",
+                Provider = "Atlassian",
+                AuthorizationEndpoint = "https://auth.atlassian.com/authorize",
+                TokenEndpoint = "https://auth.atlassian.com/oauth/token",
+                SupportedServices = "[\"Jira\"]",
+                IsEnabled = false
+            });
     }
 }
