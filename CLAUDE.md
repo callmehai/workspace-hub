@@ -21,12 +21,14 @@ App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provid
   - Conflict qua `Items.ETag` → 409.
 - Kế tiếp: SCRUM-37 + 38 (song song), rồi 30/31 (scheduled email). **Phase hiện tại dừng ở SCRUM-38.** Status chi tiết: `docs/SPRINTS.md`.
 
-### NGOÀI scope phase này (đừng code, chỉ tham khảo roadmap)
-- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive watch) → phase sau (SCRUM-39→41).
-- Jira / Atlassian integration → phase sau (SCRUM-42→46).
+### Phase Jira — đã lên kế hoạch, CHƯA bắt đầu code (SCRUM-54→60)
+Tích hợp **Jira / Atlassian** (CRUD đầy đủ) đã có ticket trên board (SCRUM-54→60, To Do, backlog) nhưng **chưa code** — current phase vẫn dừng ở SCRUM-38. Làm theo mô hình B: Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). Gồm: OAuth 3LO + cloudId (54), client + sync issue → Item(Ticket) (55), tạo issue (56), write-back update qua `IWriteBackGuard` (57), xoá issue (58), metadata helpers (59), ImportantContacts JiraAccount + Notification (60). Chi tiết + dependency: `docs/SPRINTS.md` (bảng "Phase Jira"); quyết định kỹ thuật (ADF, version-token thay ETag): `docs/CHANGELOG.md`. **Đừng bắt đầu khi chưa chốt xong Sprint 3 — hỏi trước.**
+
+### NGOÀI scope (đừng code, chỉ tham khảo roadmap)
+- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) → phase sau, **chưa có ticket**.
 - Social / friend system, AI workflow → future.
 
-Nếu một task có vẻ cần webhook hoặc Jira, **dừng lại và hỏi** — nhiều khả năng đang vượt phase.
+Nếu một task có vẻ cần webhook, **dừng lại và hỏi** — nhiều khả năng đang vượt phase. Jira đã có ticket (54→60) nhưng vẫn chưa tới lượt — cũng hỏi trước khi code.
 
 ## Tech Stack
 
