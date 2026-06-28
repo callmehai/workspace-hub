@@ -17,4 +17,13 @@ public class ScheduledEmailRepository : GenericRepository<ScheduledEmail>, ISche
             .Where(se => se.ConnectionId == connectionId)
             .ExecuteDeleteAsync(ct);
     }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ScheduledEmail>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
+    {
+        return await Set.AsNoTracking()
+            .Where(se => se.UserId == userId)
+            .OrderByDescending(se => se.SendAt)
+            .ToListAsync(ct);
+    }
 }
