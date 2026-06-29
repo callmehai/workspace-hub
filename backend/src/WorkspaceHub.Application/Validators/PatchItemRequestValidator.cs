@@ -11,7 +11,10 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .Must(x => x.IsUnread.HasValue || x.IsStarred.HasValue || x.AddLabels != null || x.RemoveLabels != null ||
                        x.IsTrashed.HasValue || x.Title != null || x.Start.HasValue ||
                        x.End.HasValue || x.Location != null || x.Attendees != null ||
-                       x.Name != null)
+                       x.Name != null ||
+                       // Jira (SCRUM-57)
+                       x.Summary != null || x.Description != null || x.Assignee != null ||
+                       x.Priority != null || x.StatusTransition != null || x.Labels != null || x.Comment != null)
             .WithMessage("Request body must contain at least one field to update.");
 
         RuleFor(x => x.Start)
@@ -38,5 +41,17 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .Must(name => name != null && name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) < 0)
             .When(x => x.Name != null)
             .WithMessage("Name contains invalid characters.");
+
+        // Jira (SCRUM-57): summary không rỗng nếu có gửi; label không chứa khoảng trắng.
+        RuleFor(x => x.Summary)
+            .NotEmpty().When(x => x.Summary != null)
+            .WithMessage("Summary cannot be empty.")
+            .MaximumLength(255).When(x => x.Summary != null)
+            .WithMessage("Summary must be at most 255 characters.");
+
+        RuleFor(x => x.Labels)
+            .Must(labels => labels!.All(l => !string.IsNullOrWhiteSpace(l) && !l.Any(char.IsWhiteSpace)))
+            .When(x => x.Labels != null)
+            .WithMessage("Labels cannot be empty or contain whitespace.");
     }
 }

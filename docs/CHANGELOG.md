@@ -2,6 +2,18 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-06-28] Fix code-review phase Jira (PR #46)
+
+- **`ProviderAccountId` Jira = cloudId (KHÔNG phải account_id):** `JiraStrategy` trước lưu `account_id` từ `/me`, nhưng base URL gọi Jira REST là `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3` → sai giá trị làm mọi call 404. Đổi sang gọi `GET /oauth/token/accessible-resources`, lấy `id` (cloudId) của site đầu tiên làm `ProviderAccountId`. **Đây là bug chặn — Jira integration không thể hoạt động nếu không có fix này.**
+- **Race condition rotating refresh token:** Atlassian xoay vòng refresh token. 2 request đồng thời cùng refresh → request thứ 2 dùng token đã vô hiệu. `AtlassianTokenService` thêm `SemaphoreSlim` per-connection (static `ConcurrentDictionary<Guid,...>`) + double-check (đọc lại tracked connection sau khi acquire lock) → chỉ 1 refresh chạy.
+- **Refresh fail → 422 thay vì 500:** đổi `InvalidOperationException` (map 500) sang `BusinessRuleException`/`ProviderException` để client nhận tín hiệu re-auth đúng (422/502).
+- **`issueUrl` để null:** browse URL Jira là `https://{site}.atlassian.net/browse/{KEY}` cần TÊN SITE, không phải cloudId. Connection chỉ lưu cloudId → để `null` thay vì emit link sai (`api.atlassian.com/.../browse` → API error). Site URL persist ở phase sau nếu cần.
+- **Clear description dùng ADF doc rỗng:** `AdfConverter.FromPlainTextOrEmptyDoc` trả `{type:doc,version:1,content:[]}` khi text rỗng → thật sự xoá description (trước gửi paragraph chứa " ").
+- **Sync cập nhật issue đã tồn tại:** `JiraSyncService` trước skip hẳn issue đã sync → local Item stale mãi. Giờ fetch tracked items (`IItemRepository.GetTrackedByConnectionIdAsync`), re-sync cập nhật field provider (Title/Snippet/ETag/OccurredAt/IsImportant/Metadata) nhưng GIỮ field local (Status Kanban, folders, IsArchived).
+- **Accept header ở DI:** `AddHttpClient("Jira", ...)` set `Accept: application/json` 1 lần (tránh `.Add` tích luỹ per-request); Authorization vẫn set per-request.
+- **ADF reader bổ sung:** emoji (`text`→`shortName` fallback), `bulletList`/`orderedList` là block node (có separator).
+- **Feedback KHÔNG áp dụng:** (a) "thiếu OAuth start/callback cho Atlassian" — thực ra ĐÃ có (dùng chung `ConnectionsController` + `JiraStrategy`); vấn đề thật là cloudId, đã fix ở trên. (b) "dispatcher không catch Jira exceptions" — `JiraGateway` đã throw typed exceptions (ProviderException→502, Forbidden→403...) middleware map đúng; lỗ hổng thật chỉ ở `AtlassianTokenService` ném `InvalidOperationException`, đã đổi sang typed.
+
 ## [Target — chưa code, chưa có ticket] OData query cho GET collection
 
 - **Quyết định:** bật **OData query options** (`Microsoft.AspNetCore.OData` v8, `[EnableQuery]`) cho các endpoint **GET đọc collection trên `IQueryable` EF**: `GET /api/items`, `/api/admin/users`, `/api/scheduled-emails`, `/api/folders`, `/api/tags`, `/api/integrations`. Cho phép `$filter/$orderby/$select/$top/$skip/$count`; **không** `$expand`.

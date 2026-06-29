@@ -48,6 +48,13 @@ public static class DependencyInjection
         services.AddDistributedMemoryCache();
 
         services.AddHttpClient("OAuthToken");
+        services.AddHttpClient("Jira", c =>
+        {
+            // Accept header cấu hình 1 lần ở DI (tránh .Add tích luỹ mỗi request nếu handler được pool).
+            // Authorization vẫn set per-request vì token đổi theo connection.
+            c.DefaultRequestHeaders.Accept.Add(
+                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+        });
         services.AddScoped<IOAuthTokenClient, HttpOAuthTokenClient>();
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
@@ -60,6 +67,8 @@ public static class DependencyInjection
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
 
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();
+        services.AddScoped<IJiraGateway, JiraGateway>();
         
         // Gateways dùng cho luồng Writeback (Ghi/Cập nhật dữ liệu hai chiều)
         services.AddScoped<IGmailGateway, GmailGateway>();

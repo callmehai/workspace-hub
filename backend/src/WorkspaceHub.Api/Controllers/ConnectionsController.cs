@@ -9,13 +9,16 @@ namespace WorkspaceHub.Api.Controllers;
 public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
+    private readonly IConnectionSyncDispatcher _syncDispatcher;
     private readonly IGmailSyncService _gmailSync;
 
     public ConnectionsController(
         IConnectionsService connections,
+        IConnectionSyncDispatcher syncDispatcher,
         IGmailSyncService gmailSync)
     {
         _connections = connections;
+        _syncDispatcher = syncDispatcher;
         _gmailSync = gmailSync;
     }
 
@@ -99,14 +102,5 @@ public class ConnectionsController : ApiControllerBase
 
     [HttpPost("{id:guid}/sync")]
     public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
-    {
-        var result = await _connections.TriggerManualSyncAsync(id, CurrentUserId, ct);
-        
-        return result.StatusCode switch
-        {
-            429 => StatusCode(429),
-            202 => Accepted(new { jobId = result.JobId }),
-            _ => StatusCode(500)
-        };
-    }
+        => Ok(await _syncDispatcher.SyncAsync(id, CurrentUserId, ct));
 }

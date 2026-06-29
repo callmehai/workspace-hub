@@ -13,19 +13,23 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
     private readonly IGmailSyncService _gmailSync;
     private readonly ICalendarSyncService _calendarSync;
     private readonly IDriveSyncService _driveSync;
+    private readonly IJiraSyncService _jiraSync;
 
     private const int GmailDefaultBatchSize = 50;
+    private const int JiraDefaultBatchSize = 50;
 
     public ConnectionSyncDispatcher(
         IConnectionRepository connections,
         IGmailSyncService gmailSync,
         ICalendarSyncService calendarSync,
-        IDriveSyncService driveSync)
+        IDriveSyncService driveSync,
+        IJiraSyncService jiraSync)
     {
         _connections = connections;
         _gmailSync = gmailSync;
         _calendarSync = calendarSync;
         _driveSync = driveSync;
+        _jiraSync = jiraSync;
     }
 
     public async Task<SyncResult> SyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
@@ -41,6 +45,7 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
                 ServiceType.Gmail  => await _gmailSync.SyncConnectionAsync(connection, GmailDefaultBatchSize, ct),
                 ServiceType.GCal   => await _calendarSync.SyncConnectionAsync(connection, ct),
                 ServiceType.Drive  => await _driveSync.SyncConnectionAsync(connection, ct),
+                ServiceType.Jira   => await _jiraSync.SyncConnectionAsync(connection, JiraDefaultBatchSize, ct),
                 _ => throw new BusinessRuleException("Service type không hỗ trợ đồng bộ.")
             };
         }
