@@ -110,5 +110,14 @@ public class ConnectionsController : ApiControllerBase
 
     [HttpPost("{id:guid}/sync")]
     public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
-        => Ok(await _syncDispatcher.SyncAsync(id, CurrentUserId, ct));
+    {
+        var result = await _connections.TriggerManualSyncAsync(id, CurrentUserId, ct);
+        
+        return result.StatusCode switch
+        {
+            429 => StatusCode(429),
+            202 => Accepted(new { jobId = result.JobId }),
+            _ => StatusCode(500)
+        };
+    }
 }
