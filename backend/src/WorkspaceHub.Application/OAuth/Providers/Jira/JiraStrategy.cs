@@ -17,7 +17,7 @@ public class JiraStrategy(
     IHttpClientFactory httpClientFactory) : IProviderStrategy
 {
     private const string AtlassianAudience = "api.atlassian.com";
-    private const string MeEndpoint = "https://api.atlassian.com/me";
+    private const string AccessibleResourcesEndpoint = "https://api.atlassian.com/oauth/token/accessible-resources";
 
 
     public string ProviderKey => "jira";
@@ -71,26 +71,30 @@ public class JiraStrategy(
         var token = JsonSerializer.Deserialize<JiraTokenResponse>(json)
             ?? throw new BusinessRuleException("Atlassian từ chối code");
 
-        // Step 2: GET /me → account_id (không có id_token như Google)
+        // Step 2: GET /oauth/token/accessible-resources → cloudId của Jira site.
+        // QUAN TRỌNG: ProviderAccountId phải là cloudId (KHÔNG phải account_id), vì base URL gọi Jira REST
+        // là https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3 (xem JiraGateway). Lưu account_id sẽ làm mọi call 404.
         var http = httpClientFactory.CreateClient("OAuthToken");
         http.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token.AccessToken);
 
-        JsonElement me;
+        JsonElement resources;
         try
         {
-            me = await http.GetFromJsonAsync<JsonElement>(MeEndpoint, ct);
+            resources = await http.GetFromJsonAsync<JsonElement>(AccessibleResourcesEndpoint, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
-            throw new BusinessRuleException("Không lấy được thông tin tài khoản từ Atlassian");
+            throw new BusinessRuleException("Không lấy được danh sách Jira site từ Atlassian");
         }
 
-        if (!me.TryGetProperty("account_id", out var accountIdEl))
-            throw new BusinessRuleException("Không lấy được accountId từ Atlassian");
+        if (resources.ValueKind != JsonValueKind.Array || resources.GetArrayLength() == 0)
+            throw new BusinessRuleException("Tài khoản Atlassian chưa có quyền truy cập Jira site nào");
 
-        var accountId = accountIdEl.GetString()
-            ?? throw new BusinessRuleException("Không lấy được accountId từ Atlassian");
+        // MVP: lấy site đầu tiên. (Multi-site có thể cho user chọn ở phase sau.)
+        var firstSite = resources[0];
+        if (!firstSite.TryGetProperty("id", out var cloudIdEl) || cloudIdEl.GetString() is not { Length: > 0 } cloudId)
+            throw new BusinessRuleException("Không lấy được cloudId từ Atlassian");
 
         // Step 3: validate scopes — Jira all-or-nothing, không phụ thuộc ServiceType được request.
         var grantedServices = JiraScopes.ValidateAndExtract(token.Scope);
@@ -100,7 +104,7 @@ public class JiraStrategy(
             token.RefreshToken,
             token.ExpiresIn,
             token.Scope,
-            accountId,
+            cloudId,
             grantedServices);
     }
 }

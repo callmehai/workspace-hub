@@ -22,6 +22,7 @@ public class ItemsController : ApiControllerBase
     private readonly IValidator<UpdateItemStatusRequest> _updateStatusValidator;
     private readonly IValidator<CreateNoteRequest> _createNoteValidator;
     private readonly IValidator<CreateEventRequest> _createEventValidator;
+    private readonly IValidator<CreateTicketRequest> _createTicketValidator;
     private readonly IValidator<PatchItemRequest> _patchItemValidator;
 
     public ItemsController(
@@ -31,6 +32,7 @@ public class ItemsController : ApiControllerBase
         IValidator<UpdateItemStatusRequest> updateStatusValidator,
         IValidator<CreateNoteRequest> createNoteValidator,
         IValidator<CreateEventRequest> createEventValidator,
+        IValidator<CreateTicketRequest> createTicketValidator,
         IValidator<PatchItemRequest> patchItemValidator)
     {
         _itemService = itemService;
@@ -39,6 +41,7 @@ public class ItemsController : ApiControllerBase
         _updateStatusValidator = updateStatusValidator;
         _createNoteValidator = createNoteValidator;
         _createEventValidator = createEventValidator;
+        _createTicketValidator = createTicketValidator;
         _patchItemValidator = patchItemValidator;
     }
 
@@ -123,6 +126,19 @@ public class ItemsController : ApiControllerBase
     {
         await _createEventValidator.ValidateAndThrowAsync(request, ct);
         var created = await _writeBackService.CreateEventAsync(CurrentUserId, request, ct);
+        return CreatedAtAction(nameof(GetItemById), new { id = created.Id }, created);
+    }
+
+    /// <summary>
+    /// POST /api/items/ticket — tạo issue Jira mới (SCRUM-56).
+    /// </summary>
+    [HttpPost("ticket")]
+    public async Task<ActionResult<ItemResponse>> CreateTicket(
+        [FromBody] CreateTicketRequest request,
+        CancellationToken ct = default)
+    {
+        await _createTicketValidator.ValidateAndThrowAsync(request, ct);
+        var created = await _writeBackService.CreateTicketAsync(CurrentUserId, request, ct);
         return CreatedAtAction(nameof(GetItemById), new { id = created.Id }, created);
     }
 

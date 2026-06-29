@@ -92,6 +92,16 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         return new HashSet<string>(ids);
     }
 
+    public async Task<Dictionary<string, Item>> GetTrackedByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        // Tracked (KHÔNG AsNoTracking) để cập nhật item persist khi SaveChanges.
+        var items = await Set
+            .Where(i => i.ConnectionId == connectionId && i.ExternalId != null)
+            .ToListAsync(ct);
+
+        return items.ToDictionary(i => i.ExternalId!, i => i);
+    }
+
     public async Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default)
     {
         await Set.AddRangeAsync(items, ct);

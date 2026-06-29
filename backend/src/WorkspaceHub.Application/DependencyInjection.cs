@@ -20,7 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IConnectionsService, ConnectionsService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IItemWriteBackService, ItemWriteBackService>();
-        services.AddScoped<IWriteBackGuard, TempWriteBackGuard>();
+        services.AddScoped<IWriteBackGuard, WriteBackGuard>();
         services.AddScoped<IScheduledEmailsService, ScheduledEmailsService>();
 
         // Register OAuth Provider Strategies
@@ -40,6 +40,13 @@ public static class DependencyInjection
         // Đăng ký cho Drive
         services.AddScoped<IDriveItemMapper, DriveItemMapper>();
         services.AddScoped<IDriveSyncService, DriveSyncService>();
+        // Đăng ký cho Jira (SCRUM-55)
+        services.AddScoped<IJiraItemMapper, JiraItemMapper>();
+        services.AddScoped<IJiraSyncService, JiraSyncService>();
+        // Jira metadata helpers (SCRUM-59)
+        services.AddScoped<IJiraMetadataService, JiraMetadataService>();
+        // Important contacts (SCRUM-60)
+        services.AddScoped<IImportantContactService, ImportantContactService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
 
         return services;
