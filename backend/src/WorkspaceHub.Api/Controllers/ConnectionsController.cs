@@ -9,16 +9,13 @@ namespace WorkspaceHub.Api.Controllers;
 public class ConnectionsController : ApiControllerBase
 {
     private readonly IConnectionsService _connections;
-    private readonly IConnectionSyncDispatcher _syncDispatcher;
     private readonly IGmailSyncService _gmailSync;
 
     public ConnectionsController(
         IConnectionsService connections,
-        IConnectionSyncDispatcher syncDispatcher,
         IGmailSyncService gmailSync)
     {
         _connections = connections;
-        _syncDispatcher = syncDispatcher;
         _gmailSync = gmailSync;
     }
 

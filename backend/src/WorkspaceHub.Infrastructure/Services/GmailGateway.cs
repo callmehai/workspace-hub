@@ -147,8 +147,7 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
-            return null; // unreachable — Handle always throws
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
         }
     }
 
@@ -162,8 +161,7 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
-            return null; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
         }
     }
 
@@ -177,8 +175,7 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
-            return null; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
         }
     }
 
@@ -194,8 +191,7 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
-            return null; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
         }
     }
 

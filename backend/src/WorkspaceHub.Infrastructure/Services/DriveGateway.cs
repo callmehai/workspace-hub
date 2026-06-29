@@ -40,9 +40,8 @@ public class DriveGateway : IDriveGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId,
+            throw GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId,
                 forbiddenMessage: "Insufficient permissions to access this file.");
-            return null!; // unreachable — Handle always throws
         }
     }
 
@@ -59,8 +58,7 @@ public class DriveGateway : IDriveGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId);
-            return null!; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId);
         }
     }
 
@@ -77,8 +75,7 @@ public class DriveGateway : IDriveGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId);
-            return null!; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId);
         }
     }
 
@@ -95,8 +92,7 @@ public class DriveGateway : IDriveGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId);
-            return null!; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId);
         }
     }
 

@@ -37,8 +37,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId, forbiddenMessage: "Cần reconnect.");
-            return null!; // unreachable — Handle always throws
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId, forbiddenMessage: "Cần reconnect.");
         }
     }
 
@@ -62,8 +61,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
-            return null!; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
         }
     }
 
@@ -88,8 +86,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Calendar", "Calendar", calendarId);
-            return null!; // unreachable
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Calendar", calendarId);
         }
     }
 

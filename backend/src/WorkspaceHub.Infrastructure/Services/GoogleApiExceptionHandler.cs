@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using Google;
 using WorkspaceHub.Application.Common;
@@ -17,14 +18,13 @@ internal static class GoogleApiExceptionHandler
 {
     /// <summary>
     /// Chuyển <see cref="GoogleApiException"/> thành domain exception tương ứng.
-    /// Luôn throw — method này KHÔNG return bình thường.
     /// </summary>
     /// <param name="ex">Exception từ Google SDK.</param>
     /// <param name="apiName">Tên API để hiển thị trong ProviderException (vd "Gmail", "Calendar", "Drive").</param>
     /// <param name="resourceType">Loại resource để hiển thị trong NotFoundException (vd "Message", "Event", "File").</param>
     /// <param name="resourceId">ID resource gây lỗi.</param>
     /// <param name="forbiddenMessage">Message tùy chỉnh cho ForbiddenException. Mặc định gợi ý reconnect.</param>
-    public static void Handle(
+    public static Exception Handle(
         GoogleApiException ex,
         string apiName,
         string resourceType,
@@ -32,12 +32,12 @@ internal static class GoogleApiExceptionHandler
         string forbiddenMessage = "Cần reconnect với quyền ghi.")
     {
         if (ex.HttpStatusCode == HttpStatusCode.NotFound)
-            throw new NotFoundException(resourceType, resourceId);
+            return new NotFoundException(resourceType, resourceId);
 
         if (IsInsufficientPermissions(ex))
-            throw new ForbiddenException(forbiddenMessage);
+            return new ForbiddenException(forbiddenMessage);
 
-        throw new ProviderException($"{apiName} API error: {ex.Message}", ex);
+        return new ProviderException($"{apiName} API error: {ex.Message}", ex);
     }
 
     private static bool IsInsufficientPermissions(GoogleApiException ex)
