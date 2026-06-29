@@ -99,7 +99,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
         }
     }
 

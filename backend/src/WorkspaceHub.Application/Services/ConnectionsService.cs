@@ -422,7 +422,7 @@ public class ConnectionsService : IConnectionsService
     /// Mask token: trả về "********" để giấu ciphertext.
     /// CONVENTIONS.md: "Token response luôn mask"
     /// </summary>
-    private static string MaskToken(string encryptedToken)
+    private static string MaskToken(string _)
     {
         return "********";
     }
