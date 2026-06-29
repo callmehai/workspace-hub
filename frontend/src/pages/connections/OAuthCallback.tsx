@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 import { connectionsApi } from '../../lib/connectionsApi';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
 
 export const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
@@ -21,7 +21,7 @@ export const OAuthCallback = () => {
     },
     onError: (err) => {
       console.log(err);
-      const message = (err as any)?.response?.data?.message || 'Failed to establish connection';
+      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to establish connection';
       toast.error(message);
     },
   });
@@ -37,7 +37,7 @@ export const OAuthCallback = () => {
       return;
     }
     callbackMutation.mutate({ code, state });
-  }, [code, state]);
+  }, [code, state, callbackMutation]);
 
   const isError = callbackMutation.isError || (!code || !state);
 

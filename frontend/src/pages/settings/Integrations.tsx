@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 import { connectionsApi } from '../../lib/connectionsApi';
 import toast from 'react-hot-toast';
 import { Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
@@ -60,7 +61,7 @@ export const Integrations = () => {
     },
     onError: (err) => {
       console.log(err);
-      const message = (err as any)?.response?.data?.message || 'Failed to disconnect';
+      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to disconnect';
       toast.error(message);
     },
   });
@@ -73,7 +74,7 @@ export const Integrations = () => {
     },
     onError: (err) => {
       console.log(err);
-      const message = (err as any)?.response?.data?.message || 'Failed to start connection';
+      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to start connection';
       toast.error(message);
     },
   });
