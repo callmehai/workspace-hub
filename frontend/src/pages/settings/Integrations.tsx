@@ -61,16 +61,21 @@ export const Integrations = () => {
     onError: () => toast.error('Failed to disconnect'),
   });
 
-  const handleConnect = async (integrationKey: string, serviceType: string) => {
-    try {
-      const redirectUri = `${window.location.origin}/oauth/callback`;
-      const res = await connectionsApi.startOAuth({ integrationKey, serviceType, redirectUri });
+  const connectMutation = useMutation({
+    mutationFn: (params: { integrationKey: string; serviceType: string; redirectUri: string }) =>
+      connectionsApi.startOAuth(params),
+    onSuccess: (res) => {
+      window.location.assign(res.authorizationUrl);
+    },
+    onError: (err) => {
+      console.log(err);
+      toast.error('Failed to start connection');
+    },
+  });
 
-      window.location.href = res.authorizationUrl;
-    } catch (err) {
-      const e = err as { response?: { data?: { message?: string } } };
-      toast.error(e.response?.data?.message || 'Failed to start connection');
-    }
+  const handleConnect = (integrationKey: string, serviceType: string) => {
+    const redirectUri = `${window.location.origin}/oauth/callback`;
+    connectMutation.mutate({ integrationKey, serviceType, redirectUri });
   };
 
   if (loading) {
@@ -154,9 +159,17 @@ export const Integrations = () => {
                 ) : (
                   <button
                     onClick={() => handleConnect(service.integrationKey, service.serviceType)}
-                    className="w-full py-2 px-4 rounded-md text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+                    disabled={connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType}
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    Connect
+                    {connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Connecting...</span>
+                      </>
+                    ) : (
+                      <span>Connect</span>
+                    )}
                   </button>
                 )}
               </div>
