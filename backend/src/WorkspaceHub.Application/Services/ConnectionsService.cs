@@ -97,7 +97,7 @@ public class ConnectionsService : IConnectionsService
         return await strategy.BuildAuthUrlAsync(request, ct);
     }
 
-    public async Task<CompleteConnectionResult> CompleteConnectionAsync(
+    public async Task<CompleteConnectionResponse> CompleteConnectionAsync(
         string code,
         string state,
         Guid userId,
@@ -152,7 +152,7 @@ public class ConnectionsService : IConnectionsService
         var provider = Enum.Parse<ProviderType>(integration.Provider);
 
         // Bước 6 — Tạo một Connection riêng cho mỗi service được cấp quyền.
-        var results = new List<ConnectionResult>();
+        var results = new List<ConnectionItem>();
         foreach (var svcType in tokenResult.GrantedServices)
         {
             var existing = await _connections.GetByUniqueKeyAsync(
@@ -179,14 +179,14 @@ public class ConnectionsService : IConnectionsService
             };
             await _connections.AddAsync(connection, ct);
 
-            results.Add(new ConnectionResult(
+            results.Add(new ConnectionItem(
                 connection.Id, connection.ServiceType.ToString(), connection.Status.ToString()));
         }
 
         // Bước 7 — Lưu tất cả vào DB.
         await _connections.SaveChangesAsync(ct);
 
-        return new CompleteConnectionResult(integrationKey, tokenResult.ProviderAccountId, results);
+        return new CompleteConnectionResponse(integrationKey, tokenResult.ProviderAccountId, results);
     }
 
     public async Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default)
@@ -206,19 +206,7 @@ public class ConnectionsService : IConnectionsService
     public async Task<IReadOnlyList<ConnectionDto>> GetConnectionsAsync(Guid userId, CancellationToken ct = default)
     {
         var connections = await _connections.GetByUserIdAsync(userId, ct);
-
-        return connections.Select(c => new ConnectionDto
-        {
-            Id = c.Id,
-            Provider = c.Provider.ToString(),
-            ServiceType = c.ServiceType.ToString(),
-            ProviderAccountId = c.ProviderAccountId,
-            MaskedToken = MaskToken(c.AccessTokenEncrypted),
-            Status = c.Status.ToString(),
-            ExpiresAt = c.ExpiresAt,
-            LastSyncedAt = c.LastSyncedAt,
-            CreatedAt = c.CreatedAt
-        }).ToList().AsReadOnly();
+        return connections.Select(MapToConnectionDto).ToList().AsReadOnly();
     }
 
     public async Task DisconnectAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
@@ -434,9 +422,25 @@ public class ConnectionsService : IConnectionsService
     /// Mask token: trả về "********" để giấu ciphertext.
     /// CONVENTIONS.md: "Token response luôn mask"
     /// </summary>
-    private static string MaskToken(string encryptedToken)
+    private static string MaskToken(string _)
     {
         return "********";
+    }
+
+    private static ConnectionDto MapToConnectionDto(Connection connection)
+    {
+        return new ConnectionDto
+        {
+            Id = connection.Id,
+            Provider = connection.Provider.ToString(),
+            ServiceType = connection.ServiceType.ToString(),
+            ProviderAccountId = connection.ProviderAccountId,
+            MaskedToken = MaskToken(connection.AccessTokenEncrypted),
+            Status = connection.Status.ToString(),
+            ExpiresAt = connection.ExpiresAt,
+            LastSyncedAt = connection.LastSyncedAt,
+            CreatedAt = connection.CreatedAt
+        };
     }
 }
 
