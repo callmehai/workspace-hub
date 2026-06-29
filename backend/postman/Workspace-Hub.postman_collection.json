@@ -818,11 +818,61 @@
               "}"
             ] } }
           ]
+        },
+        {
+          "name": "Admin toggle integration \u2014 user token (403)",
+          "description": "SCRUM-40: PATCH /api/admin/integrations/{key}/enable \u2014 endpoint ch\u1ec9 cho Admin. D\u00f9ng token user th\u01b0\u1eddng ph\u1ea3i tr\u1ea3 403 Forbidden.",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"isEnabled\": true }" },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/integrations/gmail/enable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "integrations", "gmail", "enable"]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden \u2014 user token cannot toggle integration', function () {",
+              "  pm.response.to.have.status(403);",
+              "});",
+              "pm.test('error = ForbiddenError', function () {",
+              "  pm.expect(pm.response.json().error).to.eql('ForbiddenError');",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Admin toggle integration \u2014 non-existent key (404) [needs adminToken]",
+          "description": "SCRUM-40: d\u00f9ng adminToken nh\u01b0ng key kh\u00f4ng t\u1ed3n t\u1ea1i \u2192 404 NotFoundError.",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"isEnabled\": true }" },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/integrations/nonexistent-service-key/enable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "integrations", "nonexistent-service-key", "enable"]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('adminToken')) {",
+              "  pm.test.skip('skipped \u2014 set adminToken to run admin 404 case');",
+              "} else {",
+              "  pm.test('404 Not Found \u2014 integration key does not exist', function () {",
+              "    pm.response.to.have.status(404);",
+              "  });",
+              "}"
+            ] } }
+          ]
         }
       ]
     },
     {
-      "name": "08 — Provider-dependent (manual)",
+      "name": "08 \u2014 Provider-dependent (manual)",
       "description": "Happy-path cần OAuth Google/Jira thật (gửi email, tạo event/ticket, sync). Điền `gmailConnectionId`/`gcalConnectionId` rồi chạy tay. Không assert cứng để Collection Runner vẫn xanh khi chưa có connection.",
       "item": [
         {

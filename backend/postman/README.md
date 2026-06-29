@@ -6,7 +6,7 @@ Bộ Postman collection kiểm thử toàn bộ endpoint chính của backend, l
 
 | File | Mô tả |
 |------|-------|
-| `Workspace-Hub.postman_collection.json` | Collection 48 request, 10 nhóm, có test script tự assert status code + tự lưu token/id. |
+| `Workspace-Hub.postman_collection.json` | Collection 60 request, 11 nhóm (00–09 + 99), có test script tự assert status code + tự lưu token/id. |
 | `Workspace-Hub.postman_environment.json` | Environment `Workspace Hub — Local` (baseUrl + token + biến id). |
 
 ## Chạy bằng Postman (GUI)
@@ -53,14 +53,14 @@ newman run backend/postman/Workspace-Hub.postman_collection.json \
 | **204** | Logout, Delete item/folder/contact, Remove item from folder |
 | **400** | Register short password, bad hex color, status enum sai, event end<start, scheduled thiếu recipient |
 | **401** | Get me không token, Login sai mật khẩu, Google callback invalid |
-| **403** | Admin users/stats với token user thường (sai role) |
-| **404** | Get item/folder/connection/scheduled với id không tồn tại |
+| **403** | Admin users/stats/toggle-integration với token user thường (sai role) |
+| **404** | Get item/folder/connection/scheduled với id không tồn tại, Jira metadata connectionId không tồn tại, admin toggle-integration key sai |
 | **409** | Register trùng email, Important contact trùng |
 | **422** | OAuth start serviceType không hợp lệ, create event/scheduled connection sai loại |
 
 ## Phủ nhóm endpoint
 
-Auth (register/login/me/logout/google) · Connections (list/oauth-start/refresh/disconnect) · Folders (CRUD + item-folder) · Items (list/filter/get/note/event/status/delete) · Scheduled-emails (list/create/cancel) · Important-contacts (CRUD) · Admin (users/stats + RBAC) · Health.
+Auth (register/login/me/logout/google) · Connections (list/oauth-start/refresh/disconnect) · Folders (CRUD + item-folder) · Items (list/filter/get/note/event/status/delete) · Scheduled-emails (list/create/cancel) · Important-contacts (CRUD) · Admin (users/stats/toggle-integration + RBAC) · Jira (projects/issue-types/priorities/assignable-users/transitions/ticket CRUD error-cases) · Health.
 
 ## Ghi chú
 
