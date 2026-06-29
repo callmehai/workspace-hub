@@ -67,7 +67,7 @@
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
 | SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done — map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack ở prod; traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
-| SCRUM-26 | Refactor services + clean architecture | Khánh | — | ⏳ To Do |
+| SCRUM-26 | Refactor services + clean architecture | Khánh | — | ✅ Done |
 | SCRUM-27 | API testing + Postman collection | Huy | — | ⏳ To Do |
 | SCRUM-28 | README backend + setup guide | Dũng | — | ⏳ To Do |
 | SCRUM-29 | Unit test cho service chính | Hải | — | ⏳ To Do |
