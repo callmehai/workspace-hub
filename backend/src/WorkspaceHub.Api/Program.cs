@@ -33,6 +33,28 @@ builder.Services.AddControllers()
         .SkipToken()
         .AddRouteComponents("api", edmBuilder.GetEdmModel()));
 
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var traceId = context.HttpContext.TraceIdentifier;
+        var details = context.ModelState
+            .Where(ms => ms.Value.Errors.Any())
+            .SelectMany(ms => ms.Value.Errors.Select(e => $"{ms.Key}: {e.ErrorMessage}"))
+            .ToArray();
+
+        var body = new
+        {
+            error = "ValidationError",
+            message = "One or more validation errors occurred.",
+            details,
+            traceId
+        };
+
+        return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(body);
+    };
+});
+
 builder.Services.AddMemoryCache();
 
 // Swagger.

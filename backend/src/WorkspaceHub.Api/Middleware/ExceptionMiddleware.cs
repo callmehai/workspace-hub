@@ -47,6 +47,33 @@ public class ExceptionMiddleware
         catch (Exception ex)
         {
             await HandleExceptionAsync(context, ex);
+            return;
+        }
+
+        // Xử lý status code 401/403 trả về từ framework (Authentication/Authorization middleware)
+        // hoặc từ các controller Action trả về Unauthorized() / Forbid() mà chưa ghi body.
+        if ((context.Response.StatusCode == (int)HttpStatusCode.Unauthorized || 
+             context.Response.StatusCode == (int)HttpStatusCode.Forbidden) && 
+            !context.Response.HasStarted)
+        {
+            var traceId = context.TraceIdentifier;
+            var error = context.Response.StatusCode == (int)HttpStatusCode.Unauthorized 
+                ? "UnauthorizedError" 
+                : "ForbiddenError";
+            var message = context.Response.StatusCode == (int)HttpStatusCode.Unauthorized 
+                ? "Authentication is required to access this resource." 
+                : "You do not have permission to access this resource.";
+
+            var body = new
+            {
+                error,
+                message,
+                details = Array.Empty<string>(),
+                traceId
+            };
+
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(body, JsonOptions));
         }
     }
 

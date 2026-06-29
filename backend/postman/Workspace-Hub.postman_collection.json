@@ -80,6 +80,15 @@
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('userEmail', 'wh_scrum27_' + Date.now() + '@test.local');"
+                ]
+              }
+            },
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
               "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
               "var b = pm.response.json();",
@@ -872,7 +881,13 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
+              "pm.environment.unset('userEmail');",
+              "pm.environment.unset('accessToken');",
+              "pm.environment.unset('userId');",
+              "pm.environment.unset('folderId');",
+              "pm.environment.unset('noteItemId');",
+              "pm.environment.unset('contactId');"
             ] } }
           ]
         }
