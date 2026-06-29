@@ -46,6 +46,7 @@ public class ConnectionsController : ApiControllerBase
         });
     }
 
+    /// <summary>POST /api/connections/oauth/callback — exchange code, lưu Connections (mô hình B).</summary>
     [HttpPost("oauth/callback")]
     public async Task<IActionResult> CompleteConnection(
         [FromBody] CompleteConnectionRequest request,
@@ -55,7 +56,14 @@ public class ConnectionsController : ApiControllerBase
 
         var result = await _connections.CompleteConnectionAsync(request.Code, request.State, userId, ct);
 
-        return StatusCode(201, result);
+        var response = new CompleteConnectionResponse(
+            result.IntegrationKey,
+            result.ProviderAccountId,
+            result.Connections
+                .Select(c => new ConnectionItem(c.Id, c.ServiceType, c.Status))
+                .ToList());
+
+        return StatusCode(201, response);
     }
 
     // ───────────── SCRUM-14: List / Disconnect / Refresh ─────────────

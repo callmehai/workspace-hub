@@ -66,18 +66,18 @@ public static class DependencyInjection
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
 
-        services.AddScoped<ITokenService, TokenService>();
-        services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();
-        services.AddScoped<IJiraGateway, JiraGateway>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IAtlassianTokenService, WorkspaceHub.Infrastructure.Services.AtlassianTokenService>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IJiraGateway, WorkspaceHub.Infrastructure.Services.JiraGateway>();
         
         // Gateways dùng cho luồng Writeback (Ghi/Cập nhật dữ liệu hai chiều)
-        services.AddScoped<IGmailGateway, GmailGateway>();
-        services.AddScoped<ICalendarGateway, CalendarGateway>();
-        services.AddScoped<IDriveGateway, DriveGateway>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.ICalendarGateway, WorkspaceHub.Infrastructure.Services.CalendarGateway>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IDriveGateway, WorkspaceHub.Infrastructure.Services.DriveGateway>();
         
         // Gateways dùng cho luồng Sync (Đọc/Đồng bộ background job)
-        services.AddScoped<IGoogleCalendarGateway, GoogleCalendarGateway>();
-        services.AddScoped<IGoogleDriveGateway, GoogleDriveGateway>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IGoogleCalendarGateway, WorkspaceHub.Infrastructure.Services.GoogleCalendarGateway>();
+        services.AddScoped<WorkspaceHub.Application.Abstractions.IGoogleDriveGateway, WorkspaceHub.Infrastructure.Services.GoogleDriveGateway>();
         // AdminService đặt tại Infrastructure vì cần inject AppDbContext trực tiếp
         // (EF projection no-N+1 cho ConnectionCount/ItemCount — xem AdminService.cs).
         services.AddScoped<IAdminService, AdminService>();

@@ -20,7 +20,7 @@ public interface IConnectionsService
     /// <summary>
     /// Verify CSRF state, exchange code → token, persist Connections (mô hình B: 1 row mỗi service được cấp).
     /// </summary>
-    Task<CompleteConnectionResponse> CompleteConnectionAsync(
+    Task<CompleteConnectionResult> CompleteConnectionAsync(
         string code,
         string state,
         Guid userId,

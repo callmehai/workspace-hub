@@ -35,7 +35,7 @@ public class FolderService : IFolderService
         // Map owned folders → response DTO
         foreach (var folder in ownedFolders)
         {
-            result.Add(MapToDto(folder, userId));
+            result.Add(MapToResponse(folder, userId));
         }
 
         // 2. Folders shared with user (tuỳ chọn)
@@ -49,7 +49,7 @@ public class FolderService : IFolderService
                 if (result.Any(r => r.Id == folder.Id))
                     continue;
 
-                result.Add(MapToDto(folder, userId));
+                result.Add(MapToResponse(folder, userId));
             }
         }
 
@@ -80,7 +80,7 @@ public class FolderService : IFolderService
         // Reload with Owner navigation for response mapping
         var created = await _folderRepo.GetByIdWithOwnerAsync(folder.Id, ct)
             ?? throw new InvalidOperationException($"Folder {folder.Id} vừa tạo nhưng không reload được.");
-        return MapToDto(created, userId);
+        return MapToResponse(created, userId);
     }
 
     /// <inheritdoc/>
@@ -103,7 +103,7 @@ public class FolderService : IFolderService
         _folderRepo.Update(folder);
         await _folderRepo.SaveChangesAsync(ct);
 
-        return MapToDto(folder, userId);
+        return MapToResponse(folder, userId);
     }
 
     /// <inheritdoc/>
@@ -181,7 +181,7 @@ public class FolderService : IFolderService
     /// <summary>
     /// Map Folder entity → FolderResponse DTO với computed fields.
     /// </summary>
-    private static FolderResponse MapToDto(Folder folder, Guid currentUserId)
+    private static FolderResponse MapToResponse(Folder folder, Guid currentUserId)
     {
         var isOwner = folder.OwnerId == currentUserId;
 

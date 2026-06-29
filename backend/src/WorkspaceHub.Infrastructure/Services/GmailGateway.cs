@@ -3,6 +3,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Application.Common;
 
 namespace WorkspaceHub.Infrastructure.Services;
 
@@ -59,7 +60,10 @@ public class GmailGateway : IGmailGateway
         using var gmail = await BuildGmailServiceAsync(connection, ct);
         var request = gmail.Users.Messages.Get("me", messageId);
         
-        // FormatEnum.Full lấy đầy đủ cấu trúc payload để kiểm tra attachment chính xác.
+        // Giải thích Format: 
+        // FormatEnum.Metadata CÓ trả về headers (payload.headers), nhưng KHÔNG trả về danh sách các phần tử (payload.parts).
+        // Yêu cầu "HasAttachment = true nếu có bất kỳ Payload.Parts nào có Filename khác rỗng" bắt buộc phải quét qua Parts.
+        // Do đó, dùng FormatEnum.Full sẽ lấy đầy đủ cấu trúc để ta có thể kiểm tra attachment chính xác.
         request.Format = Google.Apis.Gmail.v1.UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
 
         var msg = await request.ExecuteAsync(ct);
@@ -72,6 +76,20 @@ public class GmailGateway : IGmailGateway
         var toList = string.IsNullOrEmpty(toHeader) 
             ? (IReadOnlyList<string>)new List<string>() 
             : toHeader.Split(',').Select(x => x.Trim()).ToList();
+
+        // Đệ quy tìm xem có Part nào chứa attachment (có filename)
+        bool CheckHasAttachment(Google.Apis.Gmail.v1.Data.MessagePart part)
+        {
+            if (!string.IsNullOrEmpty(part.Filename)) return true;
+            if (part.Parts != null)
+            {
+                foreach (var child in part.Parts)
+                {
+                    if (CheckHasAttachment(child)) return true;
+                }
+            }
+            return false;
+        }
 
         bool hasAttachment = msg.Payload != null && CheckHasAttachment(msg.Payload);
 
@@ -147,7 +165,12 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
     }
 
@@ -161,7 +184,12 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
     }
 
@@ -175,7 +203,12 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
+            {
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
+            }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
     }
 
@@ -191,23 +224,13 @@ public class GmailGateway : IGmailGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
-        }
-    }
-
-    // ───────────────────────── Private helpers ─────────────────────────
-
-    /// <summary>Đệ quy tìm xem có Part nào chứa attachment (có filename).</summary>
-    private static bool CheckHasAttachment(Google.Apis.Gmail.v1.Data.MessagePart part)
-    {
-        if (!string.IsNullOrEmpty(part.Filename)) return true;
-        if (part.Parts != null)
-        {
-            foreach (var child in part.Parts)
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Message", messageId);
+            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
             {
-                if (CheckHasAttachment(child)) return true;
+                throw new ForbiddenException("Cần reconnect với quyền ghi.");
             }
+            throw new ProviderException($"Gmail API error: {ex.Message}");
         }
-        return false;
     }
 }
+
