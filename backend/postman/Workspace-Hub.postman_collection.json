@@ -1,0 +1,882 @@
+{
+  "info": {
+    "_postman_id": "wh-scrum27-collection",
+    "name": "Workspace Hub API (SCRUM-27)",
+    "description": "API testing collection cho Workspace Hub backend (ASP.NET Core 8).\n\n## Cách chạy\n1. Import file này + `Workspace-Hub.postman_environment.json`, chọn environment **Workspace Hub — Local**.\n2. Chạy backend: `dotnet run --project src/WorkspaceHub.Api` (mặc định http://localhost:5118).\n3. Mở **Collection Runner** → chọn collection → Run. Các request đã sắp đúng thứ tự, tự đăng ký user mới, tự lưu `accessToken` + các id, và tự assert status code.\n\n## Biến môi trường\n- `baseUrl` — URL backend (mặc định http://localhost:5118).\n- `accessToken` — JWT của user thường, tự set sau khi Login.\n- `adminToken` — JWT của tài khoản **Admin** (tự điền tay nếu muốn chạy nhóm Admin success). Để trống vẫn chạy được phần còn lại.\n- `gmailConnectionId` / `gcalConnectionId` — chỉ cần khi test happy-path provider (cần OAuth thật). Để trống thì các request đó vẫn minh hoạ case lỗi 404/422.\n\n## Phủ status code\n200 · 201 · 204 · 400 (validation) · 401 (no/invalid JWT) · 403 (sai role/không phải owner) · 404 (không tồn tại) · 409 (trùng) · 422 (business rule). Mỗi nhóm endpoint có cả case thành công và case lỗi.\n\n## Lưu ý\nCác happy-path cần provider Google/Jira thật (gửi email, tạo event, tạo ticket, oauth callback, sync) nằm trong folder **Provider-dependent (manual)** — không assert cứng để Runner vẫn xanh khi chưa có connection thật.\n\nWire format: **camelCase**, enum dạng string. Auth: `Authorization: Bearer {{accessToken}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Seed a unique test user once per environment so the run is repeatable.",
+          "if (!pm.environment.get('userEmail')) {",
+          "  pm.environment.set('userEmail', 'wh_scrum27_' + Date.now() + '@test.local');",
+          "}",
+          "if (!pm.environment.get('userPassword')) {",
+          "  pm.environment.set('userPassword', 'Password123!');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global: every response should carry the standard error envelope on 4xx/5xx.",
+          "if (pm.response.code >= 400) {",
+          "  pm.test('error body has standard shape {error,message,traceId}', function () {",
+          "    var b = {}; try { b = pm.response.json(); } catch (e) {}",
+          "    pm.expect(b).to.have.property('error');",
+          "    pm.expect(b).to.have.property('message');",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 — Health",
+      "item": [
+        {
+          "name": "GET /api/health (200)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('reports status + database', function () {",
+              "  var b = pm.response.json();",
+              "  pm.expect(b).to.have.property('status');",
+              "  pm.expect(b).to.have.property('database');",
+              "});"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — Auth",
+      "item": [
+        {
+          "name": "Register (201)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"SCRUM-27 Test User\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+              "var b = pm.response.json();",
+              "pm.test('returns accessToken + user', function () {",
+              "  pm.expect(b).to.have.property('accessToken').that.is.a('string');",
+              "  pm.expect(b.user).to.have.property('id');",
+              "  pm.expect(b.user.role).to.eql('User');",
+              "});",
+              "pm.environment.set('accessToken', b.accessToken);",
+              "pm.environment.set('userId', b.user.id);"
+            ] } }
+          ]
+        },
+        {
+          "name": "Register duplicate email (409)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"Duplicate\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('409 Conflict', function () { pm.response.to.have.status(409); });",
+              "pm.test('error = ConflictError', function () { pm.expect(pm.response.json().error).to.eql('ConflictError'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Register invalid — short password (400)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"123\",\n  \"fullName\": \"\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request', function () { pm.response.to.have.status(400); });",
+              "pm.test('details[] lists field errors', function () {",
+              "  pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty;",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Login (200)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "var b = pm.response.json();",
+              "pm.test('returns accessToken', function () { pm.expect(b.accessToken).to.be.a('string'); });",
+              "pm.environment.set('accessToken', b.accessToken);",
+              "pm.environment.set('userId', b.user.id);"
+            ] } }
+          ]
+        },
+        {
+          "name": "Login wrong password (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"wrong-password\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 Unauthorized', function () { pm.response.to.have.status(401); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Get me (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('id matches logged-in user', function () {",
+              "  pm.expect(pm.response.json().id).to.eql(pm.environment.get('userId'));",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Get me — no token (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 Unauthorized', function () { pm.response.to.have.status(401); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Google start (200)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/google/start", "host": ["{{baseUrl}}"], "path": ["api", "auth", "google", "start"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('returns authorizationUrl + state', function () {",
+              "  var b = pm.response.json();",
+              "  pm.expect(b).to.have.property('authorizationUrl');",
+              "  pm.expect(b).to.have.property('state');",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Google callback invalid (400/401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"invalid-code\",\n  \"state\": \"invalid-state\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/google/callback", "host": ["{{baseUrl}}"], "path": ["api", "auth", "google", "callback"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('rejected (400 CSRF or 401 invalid token)', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([400, 401]);",
+              "});"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Folders",
+      "item": [
+        {
+          "name": "Create folder (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"SCRUM-27 Folder\",\n  \"color\": \"#4f46e5\",\n  \"icon\": \"folder\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/folders", "host": ["{{baseUrl}}"], "path": ["api", "folders"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+              "var b = pm.response.json();",
+              "pm.test('owner flag true', function () { pm.expect(b.isOwner).to.eql(true); });",
+              "pm.environment.set('folderId', b.id);"
+            ] } }
+          ]
+        },
+        {
+          "name": "List folders (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/folders", "host": ["{{baseUrl}}"], "path": ["api", "folders"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('array contains created folder', function () {",
+              "  var arr = pm.response.json();",
+              "  pm.expect(arr).to.be.an('array');",
+              "  pm.expect(arr.map(function (f) { return f.id; })).to.include(pm.environment.get('folderId'));",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "List folders — OData $filter (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/folders?$filter=isArchived eq false&$orderby=name",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "folders"],
+              "query": [
+                { "key": "$filter", "value": "isArchived eq false" },
+                { "key": "$orderby", "value": "name" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create folder invalid — bad color (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"\",\n  \"color\": \"not-a-hex\",\n  \"icon\": \"folder\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/folders", "host": ["{{baseUrl}}"], "path": ["api", "folders"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request', function () { pm.response.to.have.status(400); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Update folder (200)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"SCRUM-27 Folder (renamed)\",\n  \"color\": \"#10b981\",\n  \"icon\": \"folder\",\n  \"sortOrder\": 1\n}" },
+            "url": { "raw": "{{baseUrl}}/api/folders/{{folderId}}", "host": ["{{baseUrl}}"], "path": ["api", "folders", "{{folderId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('name updated', function () { pm.expect(pm.response.json().name).to.include('renamed'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Update folder — not found (404)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"X\",\n  \"color\": \"#4f46e5\",\n  \"icon\": \"folder\",\n  \"sortOrder\": 0\n}" },
+            "url": { "raw": "{{baseUrl}}/api/folders/{{missingId}}", "host": ["{{baseUrl}}"], "path": ["api", "folders", "{{missingId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 (or 403 — not owner of a non-existent row)', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([403, 404]);",
+              "});"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Items",
+      "item": [
+        {
+          "name": "Create note (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Ghi chú SCRUM-27\",\n  \"contentMarkdown\": \"# Test\\n\\nNội dung ghi chú.\",\n  \"folderId\": \"{{folderId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/items/note", "host": ["{{baseUrl}}"], "path": ["api", "items", "note"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+              "var b = pm.response.json();",
+              "pm.test('type = Note', function () { pm.expect(b.type).to.eql('Note'); });",
+              "pm.environment.set('noteItemId', b.id);"
+            ] } }
+          ]
+        },
+        {
+          "name": "List items (200, envelope)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('paged envelope {items,total,page,limit}', function () {",
+              "  var b = pm.response.json();",
+              "  pm.expect(b).to.have.property('items').that.is.an('array');",
+              "  pm.expect(b).to.have.property('total');",
+              "  pm.expect(b.page).to.eql(1);",
+              "  pm.expect(b.limit).to.eql(20);",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "List items — filter type=Note (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items?type=Note&isImportant=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items"],
+              "query": [
+                { "key": "type", "value": "Note" },
+                { "key": "isImportant", "value": "false" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('all returned items are Note', function () {",
+              "  pm.response.json().items.forEach(function (i) { pm.expect(i.type).to.eql('Note'); });",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Get item by id (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/items/{{noteItemId}}", "host": ["{{baseUrl}}"], "path": ["api", "items", "{{noteItemId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('id matches', function () { pm.expect(pm.response.json().id).to.eql(pm.environment.get('noteItemId')); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Get item — not found (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/items/{{missingId}}", "host": ["{{baseUrl}}"], "path": ["api", "items", "{{missingId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Patch status -> Doing (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Doing\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/items/{{noteItemId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "items", "{{noteItemId}}", "status"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('status = Doing', function () { pm.expect(pm.response.json().status).to.eql('Doing'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Patch status — invalid value (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Banana\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/items/{{noteItemId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "items", "{{noteItemId}}", "status"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request', function () { pm.response.to.have.status(400); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Add item to folder (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"itemId\": \"{{noteItemId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/folders/{{folderId}}/items", "host": ["{{baseUrl}}"], "path": ["api", "folders", "{{folderId}}", "items"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created (or 409 if already linked)', function () { pm.expect(pm.response.code).to.be.oneOf([201, 409]); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Remove item from folder (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/folders/{{folderId}}/items/{{noteItemId}}", "host": ["{{baseUrl}}"], "path": ["api", "folders", "{{folderId}}", "items", "{{noteItemId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create event — connection not found (404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{missingId}}\",\n  \"title\": \"Họp test\",\n  \"start\": \"2026-12-01T09:00:00Z\",\n  \"end\": \"2026-12-01T10:00:00Z\",\n  \"location\": \"Online\",\n  \"attendees\": [\"a@test.local\"]\n}" },
+            "url": { "raw": "{{baseUrl}}/api/items/event", "host": ["{{baseUrl}}"], "path": ["api", "items", "event"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 connection (or 422 wrong service type)', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([404, 422]);",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create event — invalid (end before start) (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{missingId}}\",\n  \"title\": \"\",\n  \"start\": \"2026-12-01T10:00:00Z\",\n  \"end\": \"2026-12-01T09:00:00Z\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/items/event", "host": ["{{baseUrl}}"], "path": ["api", "items", "event"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request (validation)', function () { pm.response.to.have.status(400); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Delete item (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/items/{{noteItemId}}", "host": ["{{baseUrl}}"], "path": ["api", "items", "{{noteItemId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Connections",
+      "item": [
+        {
+          "name": "List connections (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/connections", "host": ["{{baseUrl}}"], "path": ["api", "connections"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('returns array (token masked)', function () {",
+              "  var arr = pm.response.json();",
+              "  pm.expect(arr).to.be.an('array');",
+              "  arr.forEach(function (c) { pm.expect(c).to.not.have.property('accessToken'); });",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "OAuth start — invalid serviceType (422)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"integrationKey\": \"gmail\",\n  \"serviceType\": \"Banana\",\n  \"redirectUri\": \"http://localhost:5173/oauth/callback\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/connections/oauth/start", "host": ["{{baseUrl}}"], "path": ["api", "connections", "oauth", "start"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('422 / 400 / 404 rejected', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([400, 404, 422]);",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Refresh connection — not found (404)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/connections/{{missingId}}/refresh", "host": ["{{baseUrl}}"], "path": ["api", "connections", "{{missingId}}", "refresh"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Disconnect — not found (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/connections/{{missingId}}", "host": ["{{baseUrl}}"], "path": ["api", "connections", "{{missingId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Scheduled Emails",
+      "item": [
+        {
+          "name": "List scheduled emails (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/scheduled-emails", "host": ["{{baseUrl}}"], "path": ["api", "scheduled-emails"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create scheduled — connection not found (404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{missingId}}\",\n  \"to\": [\"recipient@test.local\"],\n  \"cc\": [],\n  \"bcc\": [],\n  \"subject\": \"Hẹn giờ test\",\n  \"bodyHtml\": \"<p>Xin chào</p>\",\n  \"sendAt\": \"2026-12-31T09:00:00Z\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/scheduled-emails", "host": ["{{baseUrl}}"], "path": ["api", "scheduled-emails"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 connection (or 422 non-Gmail)', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([404, 422]);",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create scheduled — validation (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{missingId}}\",\n  \"to\": [],\n  \"subject\": \"\",\n  \"bodyHtml\": \"\",\n  \"sendAt\": \"2026-12-31T09:00:00Z\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/scheduled-emails", "host": ["{{baseUrl}}"], "path": ["api", "scheduled-emails"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request (no recipient/subject)', function () { pm.response.to.have.status(400); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Cancel scheduled — not found (404)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/scheduled-emails/{{missingId}}/cancel", "host": ["{{baseUrl}}"], "path": ["api", "scheduled-emails", "{{missingId}}", "cancel"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Important Contacts",
+      "item": [
+        {
+          "name": "Create contact (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"Email\",\n  \"identifier\": \"vip-{{userId}}@test.local\",\n  \"label\": \"Khách VIP\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/importantcontacts", "host": ["{{baseUrl}}"], "path": ["api", "importantcontacts"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+              "pm.environment.set('contactId', pm.response.json().id);"
+            ] } }
+          ]
+        },
+        {
+          "name": "List contacts (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/importantcontacts?type=Email",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "importantcontacts"],
+              "query": [{ "key": "type", "value": "Email" }]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create contact duplicate (409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"Email\",\n  \"identifier\": \"vip-{{userId}}@test.local\",\n  \"label\": \"Trùng\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/importantcontacts", "host": ["{{baseUrl}}"], "path": ["api", "importantcontacts"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('409 Conflict', function () { pm.response.to.have.status(409); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Delete contact (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/importantcontacts/{{contactId}}", "host": ["{{baseUrl}}"], "path": ["api", "importantcontacts", "{{contactId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 — Admin (RBAC)",
+      "item": [
+        {
+          "name": "Admin users as normal user (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden (normal user token)', function () { pm.response.to.have.status(403); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Admin stats as normal user (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/admin/stats", "host": ["{{baseUrl}}"], "path": ["api", "admin", "stats"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden (normal user token)', function () { pm.response.to.have.status(403); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Admin users (200) [needs adminToken]",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('adminToken')) {",
+              "  pm.test.skip('skipped — set adminToken to run admin success case');",
+              "} else {",
+              "  pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "  pm.test('paged envelope of AdminUserDto', function () {",
+              "    var b = pm.response.json();",
+              "    pm.expect(b).to.have.property('items').that.is.an('array');",
+              "    pm.expect(b).to.have.property('total');",
+              "  });",
+              "}"
+            ] } }
+          ]
+        },
+        {
+          "name": "Admin stats (200) [needs adminToken]",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/admin/stats", "host": ["{{baseUrl}}"], "path": ["api", "admin", "stats"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('adminToken')) {",
+              "  pm.test.skip('skipped — set adminToken to run admin success case');",
+              "} else {",
+              "  pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "  pm.test('activeUsers + lockedUsers == totalUsers', function () {",
+              "    var b = pm.response.json();",
+              "    pm.expect(b.activeUsers + b.lockedUsers).to.eql(b.totalUsers);",
+              "  });",
+              "}"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 — Provider-dependent (manual)",
+      "description": "Happy-path cần OAuth Google/Jira thật (gửi email, tạo event/ticket, sync). Điền `gmailConnectionId`/`gcalConnectionId` rồi chạy tay. Không assert cứng để Collection Runner vẫn xanh khi chưa có connection.",
+      "item": [
+        {
+          "name": "Create scheduled email — real Gmail (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{gmailConnectionId}}\",\n  \"to\": [\"recipient@example.com\"],\n  \"cc\": [],\n  \"bcc\": [],\n  \"subject\": \"Hẹn giờ gửi (SCRUM-27)\",\n  \"bodyHtml\": \"<p>Nội dung email hẹn giờ.</p>\",\n  \"sendAt\": \"2026-12-31T09:00:00Z\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/scheduled-emails", "host": ["{{baseUrl}}"], "path": ["api", "scheduled-emails"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('gmailConnectionId')) { pm.test.skip('skipped — set gmailConnectionId'); }",
+              "else { pm.test('201 Created', function () { pm.response.to.have.status(201); }); }"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create event — real Calendar (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{gcalConnectionId}}\",\n  \"title\": \"Họp dự án (SCRUM-27)\",\n  \"start\": \"2026-12-01T09:00:00Z\",\n  \"end\": \"2026-12-01T10:00:00Z\",\n  \"location\": \"Google Meet\",\n  \"attendees\": [\"teammate@example.com\"]\n}" },
+            "url": { "raw": "{{baseUrl}}/api/items/event", "host": ["{{baseUrl}}"], "path": ["api", "items", "event"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('gcalConnectionId')) { pm.test.skip('skipped — set gcalConnectionId'); }",
+              "else { pm.test('201 Created', function () { pm.response.to.have.status(201); }); }"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "99 — Session",
+      "item": [
+        {
+          "name": "Cleanup — delete test folder (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/folders/{{folderId}}", "host": ["{{baseUrl}}"], "path": ["api", "folders", "{{folderId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Logout (204)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        }
+      ]
+    }
+  ]
+}
