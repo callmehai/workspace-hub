@@ -20,18 +20,18 @@ public static class DependencyInjection
         services.AddScoped<IConnectionsService, ConnectionsService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IItemWriteBackService, ItemWriteBackService>();
-        services.AddScoped<IWriteBackGuard, TempWriteBackGuard>();
+        services.AddScoped<IWriteBackGuard, WriteBackGuard>();
         services.AddScoped<IScheduledEmailsService, ScheduledEmailsService>();
 
         // Register OAuth Provider Strategies
         services.AddScoped<IProviderStrategy, GoogleStrategy>();
         services.AddScoped<IProviderStrategy, JiraStrategy>();
 
-        // Quét toàn bộ validator trong assembly này (hiện chưa có — sẽ thêm từ SCRUM-9).
+        // Quét toàn bộ validator (FluentValidation) trong assembly này.
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 
-        services.AddScoped<WorkspaceHub.Application.Mapping.IGmailItemMapper, WorkspaceHub.Application.Mapping.GmailItemMapper>();
-        services.AddScoped<WorkspaceHub.Application.Interfaces.Services.IGmailSyncService, WorkspaceHub.Application.Services.GmailSyncService>();
+        services.AddScoped<IGmailItemMapper, GmailItemMapper>();
+        services.AddScoped<IGmailSyncService, GmailSyncService>();
         services.AddScoped<IConnectionHealthChecker, ConnectionHealthChecker>();
 
         // Đăng ký cho Calendar
