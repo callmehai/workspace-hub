@@ -57,7 +57,7 @@ public class GoogleStrategy : IProviderStrategy
 
         var googleToken = JsonSerializer.Deserialize<GoogleTokenResponse>(json)
             ?? throw new BusinessRuleException("Google từ chối code");
-        // TODO: bỏ fallback khi test thật với Google account.
+        // SCRUM-26: dev-placeholder fallback — xoá khi deploy production với Google account thật.
         var providerAccountId = googleToken.IdToken is not null
             ? IdTokenParser.ExtractProviderAccountId(googleToken.IdToken)
             : "dev-placeholder@gmail.com";
