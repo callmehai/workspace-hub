@@ -58,7 +58,11 @@ export const Integrations = () => {
       toast.success('Disconnected successfully');
       refetch();
     },
-    onError: () => toast.error('Failed to disconnect'),
+    onError: (err) => {
+      console.log(err);
+      const message = (err as any)?.response?.data?.message || 'Failed to disconnect';
+      toast.error(message);
+    },
   });
 
   const connectMutation = useMutation({
@@ -69,7 +73,8 @@ export const Integrations = () => {
     },
     onError: (err) => {
       console.log(err);
-      toast.error('Failed to start connection');
+      const message = (err as any)?.response?.data?.message || 'Failed to start connection';
+      toast.error(message);
     },
   });
 

@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { connectionsApi } from '../../lib/connectionsApi';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import axios from 'axios';
+
 
 export const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
@@ -20,21 +20,24 @@ export const OAuthCallback = () => {
       navigate('/settings/integrations');
     },
     onError: (err) => {
-      const message = axios.isAxiosError(err)
-        ? err.response?.data?.message || 'Failed to establish connection'
-        : 'Failed to establish connection';
+      console.log(err);
+      const message = (err as any)?.response?.data?.message || 'Failed to establish connection';
       toast.error(message);
     },
   });
 
+  const called = useRef(false);
+
   useEffect(() => {
+    if (called.current) return;
+    called.current = true;
+
     if (!code || !state) {
       toast.error('Invalid callback parameters');
       return;
     }
     callbackMutation.mutate({ code, state });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [code, state]);
 
   const isError = callbackMutation.isError || (!code || !state);
 
