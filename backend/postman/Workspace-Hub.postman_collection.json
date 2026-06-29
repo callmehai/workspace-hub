@@ -36,6 +36,7 @@
           "    var b = {}; try { b = pm.response.json(); } catch (e) {}",
           "    pm.expect(b).to.have.property('error');",
           "    pm.expect(b).to.have.property('message');",
+          "    pm.expect(b).to.have.property('traceId');",
           "  });",
           "}"
         ]
@@ -857,7 +858,231 @@
       ]
     },
     {
-      "name": "99 — Session",
+      "name": "09 \u2014 Jira (error-cases)",
+      "description": "Error-case tests cho c\u00e1c Jira endpoints \u0111\u00e3 implement (SCRUM-54\u219260 Done).\nKh\u00f4ng c\u1ea7n k\u1ebft n\u1ed1i Jira th\u1eadt \u2014 c\u00e1c case d\u01b0\u1edbi \u0111\u00e2y ch\u1ec9 ki\u1ec3m tra 400/404/422 response khi thi\u1ebfu/sai connectionId.\nHappy-path c\u1ea7n Jira th\u1eadt n\u1eb1m trong folder 08.",
+      "item": [
+        {
+          "name": "GET /api/jira/projects — connectionId omitted → Guid.Empty bound (404)",
+          "description": "Khi b\u1ecf ?connectionId, ASP.NET bind Guid.Empty (default) v\u00ec Guid l\u00e0 value type.\nService g\u1ecdi GetByIdAsync(Guid.Empty) \u2192 null \u2192 NotFoundException \u2192 404.\nKh\u00f4ng tr\u1ea3 400 v\u00ec kh\u00f4ng c\u00f3 [Required] hay validator query-param.",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jira/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jira", "projects"]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found \u2014 Guid.Empty connection not in DB', function () {",
+              "  pm.response.to.have.status(404);",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /api/jira/projects — non-existent connectionId (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jira/projects?connectionId=00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jira", "projects"],
+              "query": [{ "key": "connectionId", "value": "00000000-0000-0000-0000-000000000000" }]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /api/jira/issue-types — non-existent connectionId (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jira/issue-types?connectionId=00000000-0000-0000-0000-000000000000&projectKey=TEST",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jira", "issue-types"],
+              "query": [
+                { "key": "connectionId", "value": "00000000-0000-0000-0000-000000000000" },
+                { "key": "projectKey",   "value": "TEST" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /api/jira/priorities — non-existent connectionId (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jira/priorities?connectionId=00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jira", "priorities"],
+              "query": [{ "key": "connectionId", "value": "00000000-0000-0000-0000-000000000000" }]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /api/jira/assignable-users — non-existent connectionId (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jira/assignable-users?connectionId=00000000-0000-0000-0000-000000000000&projectKey=TEST",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jira", "assignable-users"],
+              "query": [
+                { "key": "connectionId", "value": "00000000-0000-0000-0000-000000000000" },
+                { "key": "projectKey",   "value": "TEST" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /api/items/ticket — missing body (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/items/ticket",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items", "ticket"]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request — validation', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+              "});",
+              "pm.test('details[] lists field errors', function () {",
+              "  pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty;",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /api/items/ticket — Guid.Empty connectionId (400 validation)",
+          "description": "Guid.Empty (00000000-...) bị FluentValidation NotEmpty() reject trước khi chạm service → 400 ValidationError.\nKhông phải 404 vì validator chạy trước.",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"00000000-0000-0000-0000-000000000000\",\n  \"projectKey\": \"TEST\",\n  \"issueType\": \"10001\",\n  \"summary\": \"Test ticket (SCRUM-27 error case)\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/items/ticket",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items", "ticket"]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request — Guid.Empty rejected by validator', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "pm.test('error = ValidationError', function () {",
+              "  pm.expect(pm.response.json().error).to.eql('ValidationError');",
+              "});",
+              "pm.test('details[] is non-empty array', function () {",
+              "  pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty;",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /api/items/ticket — non-existent connectionId (404)",
+          "description": "Guid hợp lệ (non-empty) nhưng không tồn tại trong DB → vượt qua validator → service throw NotFoundException → 404.",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"ffffffff-ffff-ffff-ffff-ffffffffffff\",\n  \"projectKey\": \"TEST\",\n  \"issueType\": \"Bug\",\n  \"summary\": \"Test ticket (SCRUM-27 error case)\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/items/ticket",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items", "ticket"]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found — connection does not exist', function () {",
+              "  pm.response.to.have.status(404);",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /api/items/ticket — wrong service type (422)",
+          "description": "Gửi request với connectionId của Gmail (không phải Jira) — phải trả 422 BusinessRuleError.",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{gmailConnectionId}}\",\n  \"projectKey\": \"TEST\",\n  \"issueType\": \"Bug\",\n  \"summary\": \"Wrong service type test\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/items/ticket",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items", "ticket"]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('gmailConnectionId')) {",
+              "  pm.test.skip('skipped — set gmailConnectionId to run wrong-service-type case');",
+              "} else {",
+              "  pm.test('422 Unprocessable Entity — wrong service type', function () {",
+              "    pm.response.to.have.status(422);",
+              "  });",
+              "  pm.test('error = BusinessRuleError', function () {",
+              "    pm.expect(pm.response.json().error).to.eql('BusinessRuleError');",
+              "  });",
+              "}"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /api/jira/transitions — non-existent connectionId (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jira/transitions?connectionId=00000000-0000-0000-0000-000000000000&issueKey=TEST-1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jira", "transitions"],
+              "query": [
+                { "key": "connectionId", "value": "00000000-0000-0000-0000-000000000000" },
+                { "key": "issueKey",     "value": "TEST-1" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "99 \u2014 Session",
       "item": [
         {
           "name": "Cleanup — delete test folder (204)",
