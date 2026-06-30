@@ -9,7 +9,7 @@ import { KanbanBoard } from './pages/KanbanBoard';
 import { Integrations } from './pages/settings/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
 import { ScheduledEmails } from './pages/ScheduledEmails';
-
+import { GoogleCallback } from './pages/auth/GoogleCallback';
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -18,6 +18,10 @@ export const router = createBrowserRouter([
   {
     path: '/oauth/callback',
     element: <OAuthCallback />,
+  },
+  {
+    path: '/auth/google/callback',
+    element: <GoogleCallback />,
   },
   {
     path: '/register',
