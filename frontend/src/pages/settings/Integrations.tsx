@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { connectionsApi } from '../../lib/connectionsApi';
 import toast from 'react-hot-toast';
@@ -48,7 +48,9 @@ const SERVICES = [
 ];
 
 export const Integrations = () => {
-  const { data: connections = [], isLoading: loading, refetch } = useQuery({
+  const queryClient = useQueryClient();
+
+  const { data: connections = [], isLoading: loading } = useQuery({
     queryKey: ['connections'],
     queryFn: connectionsApi.getConnections,
   });
@@ -57,10 +59,10 @@ export const Integrations = () => {
     mutationFn: connectionsApi.disconnect,
     onSuccess: () => {
       toast.success('Disconnected successfully');
-      refetch();
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
     onError: (err) => {
-      console.log(err);
+      console.error(err);
       const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to disconnect';
       toast.error(message);
     },
@@ -73,7 +75,7 @@ export const Integrations = () => {
       window.location.assign(res.authorizationUrl);
     },
     onError: (err) => {
-      console.log(err);
+      console.error(err);
       const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to start connection';
       toast.error(message);
     },
@@ -158,9 +160,17 @@ export const Integrations = () => {
                 {isConnected ? (
                   <button
                     onClick={() => disconnectMutation.mutate(connection.id)}
-                    className="w-full py-2 px-4 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                    disabled={disconnectMutation.isPending && disconnectMutation.variables === connection.id}
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    Disconnect
+                    {disconnectMutation.isPending && disconnectMutation.variables === connection.id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Disconnecting...</span>
+                      </>
+                    ) : (
+                      <span>Disconnect</span>
+                    )}
                   </button>
                 ) : (
                   <button

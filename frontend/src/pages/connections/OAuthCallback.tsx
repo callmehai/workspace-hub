@@ -13,14 +13,14 @@ export const OAuthCallback = () => {
   const code = searchParams.get('code');
   const state = searchParams.get('state');
 
-  const callbackMutation = useMutation({
+  const { mutate: triggerCallback, isError: isMutationError } = useMutation({
     mutationFn: connectionsApi.oauthCallback,
     onSuccess: () => {
       toast.success('Connection successfully established');
       navigate('/settings/integrations');
     },
     onError: (err) => {
-      console.log(err);
+      console.error(err);
       const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to establish connection';
       toast.error(message);
     },
@@ -36,10 +36,10 @@ export const OAuthCallback = () => {
       toast.error('Invalid callback parameters');
       return;
     }
-    callbackMutation.mutate({ code, state });
-  }, [code, state, callbackMutation]);
+    triggerCallback({ code, state });
+  }, [code, state, triggerCallback]);
 
-  const isError = callbackMutation.isError || (!code || !state);
+  const isError = isMutationError || (!code || !state);
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-gray-50">
