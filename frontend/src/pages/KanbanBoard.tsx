@@ -99,15 +99,19 @@ export const KanbanBoard = () => {
   const createEvent = useMutation({
     mutationFn: () => {
       if (!eventForm.connectionId) throw new Error('Vui lòng chọn tài khoản Google Calendar');
+      const startIso = new Date(eventForm.start).toISOString();
+      const endIso = new Date(eventForm.end).toISOString();
+      const attendeesArray = eventForm.attendees 
+        ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
+        : undefined;
+
       return itemsApi.createEvent({
         connectionId: eventForm.connectionId,
         title: eventForm.title,
-        start: new Date(eventForm.start).toISOString(),
-        end: new Date(eventForm.end).toISOString(),
+        start: startIso,
+        end: endIso,
         location: eventForm.location || undefined,
-        attendees: eventForm.attendees 
-          ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
-          : undefined
+        attendees: attendeesArray
       });
     },
     onSuccess: () => {
@@ -120,6 +124,34 @@ export const KanbanBoard = () => {
       handleApiError(err, 'Không thể tạo sự kiện', { navigate });
     }
   });
+
+  const handleCreateEvent = () => {
+    if (!eventForm.connectionId || !eventForm.title || !eventForm.start || !eventForm.end) {
+      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+      return;
+    }
+
+    const startIso = new Date(eventForm.start).toISOString();
+    const endIso = new Date(eventForm.end).toISOString();
+    
+    if (new Date(startIso) >= new Date(endIso)) {
+      toast.error('Thời gian bắt đầu phải trước thời gian kết thúc');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const attendeesArray = eventForm.attendees
+      ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
+      : [];
+
+    const invalidEmails = attendeesArray.filter(email => !emailRegex.test(email));
+    if (invalidEmails.length > 0) {
+      toast.error(`Email không hợp lệ: ${invalidEmails.join(', ')}`);
+      return;
+    }
+
+    createEvent.mutate();
+  };
 
   // Drag and Drop handlers
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -409,7 +441,7 @@ export const KanbanBoard = () => {
                 Hủy
               </button>
               <button 
-                onClick={() => createEvent.mutate()}
+                onClick={handleCreateEvent}
                 disabled={!eventForm.connectionId || !eventForm.title || !eventForm.start || !eventForm.end || createEvent.isPending}
                 className="bg-emerald-600 hover:bg-emerald-750 disabled:bg-gray-700 disabled:text-gray-500 text-white px-5 py-2 rounded-lg font-medium transition-all flex items-center space-x-1.5"
               >
