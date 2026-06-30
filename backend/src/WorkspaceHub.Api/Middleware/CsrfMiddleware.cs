@@ -53,7 +53,14 @@ public class CsrfMiddleware
         if (!MutatingMethods.Contains(context.Request.Method))
             return false;
 
-        // Không có cookie access → không phải phiên cookie (Bearer) → không cần CSRF.
+        // Request dùng Bearer header → không thể bị CSRF (attacker không gắn được
+        // Authorization header cross-site) → skip. Mirror logic OnMessageReceived (Program.cs):
+        // khi có cả cookie lẫn Bearer (vd Swagger mở cùng browser đã login), Bearer thắng.
+        var authHeader = context.Request.Headers.Authorization.ToString();
+        if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Không có cookie access → không phải phiên cookie → không cần CSRF.
         if (!context.Request.Cookies.ContainsKey(AuthCookieService.AccessCookieName))
             return false;
 
