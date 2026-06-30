@@ -102,7 +102,10 @@ export const Integrations = () => {
   return (
     <div className="p-5 md:p-8 max-w-5xl mx-auto text-gray-800">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Kết nối dịch vụ</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">
+          Kết nối dịch vụ
+          {isFetching && !loading && <Loader2 className="w-4 h-4 animate-spin inline-block ml-2 text-gray-400" />}
+        </h1>
         <p className="text-sm text-gray-500">
           Cấp quyền để Workspace Hub đọc và ghi dữ liệu của bạn.
         </p>
@@ -116,7 +119,7 @@ export const Integrations = () => {
         </div>
       </div>
 
-      {loading || isFetching ? (
+      {loading ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
         </div>
@@ -145,7 +148,7 @@ export const Integrations = () => {
             const isConnected = !!connection;
             const status = connection?.status || 'Disconnected';
             const isActive = status.toLowerCase() === 'active';
-            const isError = status.toLowerCase() === 'error';
+            const isConnectionError = status.toLowerCase() === 'error';
 
             let statusBg = 'bg-gray-100';
             let statusFg = 'text-gray-600';
@@ -158,7 +161,7 @@ export const Integrations = () => {
                 statusFg = 'text-green-700';
                 statusDot = 'bg-green-500';
                 statusLabel = 'Đang hoạt động';
-              } else if (isError) {
+              } else if (isConnectionError) {
                 statusBg = 'bg-red-100';
                 statusFg = 'text-red-700';
                 statusDot = 'bg-red-500';
@@ -181,7 +184,7 @@ export const Integrations = () => {
               (connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType);
 
             return (
-              <div key={`${service.integrationKey}-${service.serviceType}`} className={`bg-white rounded-xl border flex flex-col p-5 shadow-sm transition-shadow hover:shadow-md ${isError ? 'border-red-200' : 'border-gray-200'}`}>
+              <div key={`${service.integrationKey}-${service.serviceType}`} className={`bg-white rounded-xl border flex flex-col p-5 shadow-sm transition-shadow hover:shadow-md ${isConnectionError ? 'border-red-200' : 'border-gray-200'}`}>
 
                 <div className="flex items-start gap-3.5 mb-3.5">
                   <div className={`w-11 h-11 rounded-xl ${service.bgColor} flex items-center justify-center border border-gray-100 flex-shrink-0`}>
@@ -223,7 +226,7 @@ export const Integrations = () => {
                             <span>Đồng bộ</span>
                           </button>
                         )}
-                        {(isActive || isError) && (
+                        {(isActive || isConnectionError) && (
                           <button
                             onClick={() => disconnectMutation.mutate(connection.id)}
                             disabled={isLoadingAction}
@@ -232,7 +235,7 @@ export const Integrations = () => {
                             Ngắt
                           </button>
                         )}
-                        {isError && (
+                        {isConnectionError && (
                           <button
                             onClick={() => handleConnect(service.integrationKey, service.serviceType)}
                             disabled={isLoadingAction}

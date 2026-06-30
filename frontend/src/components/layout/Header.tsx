@@ -1,4 +1,4 @@
-import { Search, Bell, Settings, Plus } from 'lucide-react';
+import { Search, Bell, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { Link } from 'react-router-dom';
 
