@@ -18,6 +18,7 @@
 
 ### Quyết định 2 — **Refresh token + Redis** (SCRUM-63)
 - App chuyển từ **stateless → có refresh token server-side**. Access token TTL ngắn (vd 15 phút); refresh token TTL dài (vd 7 ngày) lưu **Redis** (key `refresh:{jti}` → userId + metadata), set vào cookie `wh_refresh` (HttpOnly, `Path=/api/auth/refresh`).
+- **Luồng = sơ đồ Client/Cookie/Redis (chốt 2026-06-30):** access + refresh token đều ở **HttpOnly cookie** phía client; refresh có **bản đối chiếu ở Redis**. Cách đối chiếu = **JWT refresh + `jti`** (Redis lưu `jti → metadata`, verify = check chữ ký JWT + tra jti còn sống) — KHÔNG dùng opaque-token-hash. Chọn jti để thống nhất hạ tầng JWT sẵn có; revoke vẫn bằng xoá key Redis như cách hash.
 - **Rotation:** mỗi lần `/auth/refresh` cấp access mới + **xoay refresh token mới**, revoke token cũ (xoá key Redis). Phát hiện reuse token đã revoke → revoke cả family (chống token theft).
 - **Hạ tầng:** thêm Redis qua **docker-compose** (`wh-redis`), đổi `AddDistributedMemoryCache` → `AddStackExchangeRedisCache` (dev fallback in-memory nếu thiếu Redis, log warning). OTP (QĐ 3) cũng dùng Redis store này.
 - **Logout giờ STATEFUL:** revoke refresh token trong Redis + clear cả 3 cookie. (Khác MVP cũ "client tự xoá token".)
