@@ -54,7 +54,7 @@ public static class DependencyInjection
             services.AddStackExchangeRedisCache(o =>
             {
                 o.Configuration = redisConnection;
-                o.InstanceName = "wh:";
+                o.InstanceName = RefreshTokenService.RedisInstanceName; // 1 nguồn — khớp GETDEL atomic
             });
             // IConnectionMultiplexer cho thao tác atomic (GETDEL refresh jti — chống TOCTOU).
             services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(
@@ -88,6 +88,7 @@ public static class DependencyInjection
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
 
+        services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();

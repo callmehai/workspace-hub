@@ -35,14 +35,21 @@ public class RefreshTokenService : IRefreshTokenService
     private readonly IUserRepository _users;
     private readonly ILogger<RefreshTokenService> _logger;
     private readonly IConnectionMultiplexer? _redis;
+    private readonly IJwtTokenFactory _jwt; // nguồn duy nhất sinh access token (review #3)
 
     private const string FamilyClaim = "fam";
 
+    /// <summary>
+    /// Prefix Redis của IDistributedCache (phải KHỚP AddStackExchangeRedisCache InstanceName ở DI).
+    /// Đặt 1 chỗ vì thao tác GETDEL atomic gọi thẳng Redis nên cần key đầy đủ (gồm prefix).
+    /// </summary>
+    public const string RedisInstanceName = "wh:";
+
     // JWT config đọc 1 lần (review #4) — config không đổi trong vòng đời service (Scoped).
+    // Chỉ dùng cho refresh JWT (build + validate); access token do IJwtTokenFactory sinh.
     private readonly SymmetricSecurityKey _signingKey;
     private readonly string _issuer;
     private readonly string _audience;
-    private readonly int _accessTtl;
     private readonly int _refreshTtl;
 
     // GETDEL atomic: trả value cũ nếu key tồn tại rồi xoá; không tồn tại → nil.
@@ -53,11 +60,13 @@ public class RefreshTokenService : IRefreshTokenService
         IDistributedCache cache,
         IUserRepository users,
         ILogger<RefreshTokenService> logger,
+        IJwtTokenFactory jwtFactory,
         IConnectionMultiplexer? redis = null)
     {
         _cache = cache;
         _users = users;
         _logger = logger;
+        _jwt = jwtFactory;
         _redis = redis;
 
         var jwt = config.GetSection("Jwt");
@@ -68,7 +77,6 @@ public class RefreshTokenService : IRefreshTokenService
         _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         _issuer = jwt["Issuer"] ?? "WorkspaceHub";
         _audience = jwt["Audience"] ?? "WorkspaceHub";
-        _accessTtl = int.TryParse(jwt["ExpiresIn"], out var a) ? a : 900;          // khớp config mặc định 15'
         _refreshTtl = int.TryParse(jwt["RefreshExpiresIn"], out var r) ? r : 60 * 60 * 24 * 7; // 7 ngày
     }
 
@@ -134,7 +142,7 @@ public class RefreshTokenService : IRefreshTokenService
 
         // 5. Rotation: cấp access + refresh mới (cùng family). jti cũ đã bị xoá atomic ở bước 2.
         var (newRefresh, _) = await CreateAndStoreRefreshTokenAsync(userId, familyId, ct);
-        var (accessToken, accessExpiresIn) = GenerateAccessToken(user);
+        var (accessToken, accessExpiresIn) = _jwt.CreateAccessToken(user);
 
         _logger.LogInformation("Rotated refresh token. UserId={UserId}, Family={Family}", userId, familyId);
 
@@ -171,8 +179,8 @@ public class RefreshTokenService : IRefreshTokenService
         if (_redis is not null)
         {
             var db = _redis.GetDatabase();
-            // InstanceName của AddStackExchangeRedisCache là "wh:" → key thật có prefix.
-            var fullKey = $"wh:{JtiKey(jti)}";
+            // IDistributedCache thêm InstanceName vào trước key → key thật có prefix.
+            var fullKey = $"{RedisInstanceName}{JtiKey(jti)}";
             var result = await db.ScriptEvaluateAsync(GetDelScript, new RedisKey[] { fullKey });
             return !result.IsNull;
         }
@@ -217,21 +225,6 @@ public class RefreshTokenService : IRefreshTokenService
             issuer: _issuer, audience: _audience, claims: claims,
             expires: DateTime.UtcNow.AddSeconds(expiresIn), signingCredentials: creds);
         return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
-    private (string token, int expiresIn) GenerateAccessToken(User user)
-    {
-        var creds = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
-        };
-        var token = new JwtSecurityToken(
-            issuer: _issuer, audience: _audience, claims: claims,
-            expires: DateTime.UtcNow.AddSeconds(_accessTtl), signingCredentials: creds);
-        return (new JwtSecurityTokenHandler().WriteToken(token), _accessTtl);
     }
 
     private ClaimsPrincipal ValidateToken(string token)

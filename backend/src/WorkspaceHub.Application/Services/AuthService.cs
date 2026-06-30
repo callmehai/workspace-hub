@@ -29,6 +29,7 @@ public class AuthService : IAuthService
     private readonly IDistributedCache _cache;
     private readonly IOAuthTokenClient _tokenClient;
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
+    private readonly IJwtTokenFactory _jwt;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -40,7 +41,8 @@ public class AuthService : IAuthService
         IValidator<LoginRequest> loginValidator,
         IDistributedCache cache,
         IOAuthTokenClient tokenClient,
-        IGoogleTokenVerifier googleTokenVerifier)
+        IGoogleTokenVerifier googleTokenVerifier,
+        IJwtTokenFactory jwt)
     {
         _users = users;
         _config = config;
@@ -49,6 +51,7 @@ public class AuthService : IAuthService
         _cache = cache;
         _tokenClient = tokenClient;
         _googleTokenVerifier = googleTokenVerifier;
+        _jwt = jwt;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
@@ -76,7 +79,7 @@ public class AuthService : IAuthService
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
 
-        var (token, expiresIn) = GenerateJwtToken(user);
+        var (token, expiresIn) = _jwt.CreateAccessToken(user);
         return new AuthResponse(token, expiresIn, MapToDto(user));
     }
 
@@ -236,7 +239,7 @@ public class AuthService : IAuthService
         await _users.AddAsync(newUser, ct);
         await _users.SaveChangesAsync(ct);
 
-        var (token, expiresIn) = GenerateJwtToken(newUser);
+        var (token, expiresIn) = _jwt.CreateAccessToken(newUser);
         return new AuthResponse(token, expiresIn, MapToDto(newUser));
     }
 
@@ -254,41 +257,8 @@ public class AuthService : IAuthService
         user.LastLoginAt = DateTime.UtcNow;
         await _users.SaveChangesAsync(ct);
 
-        var (token, expiresIn) = GenerateJwtToken(user);
+        var (token, expiresIn) = _jwt.CreateAccessToken(user);
         return new AuthResponse(token, expiresIn, MapToDto(user));
-    }
-
-    private (string token, int expiresIn) GenerateJwtToken(User user)
-    {
-        var jwtSection = _config.GetSection("Jwt");
-
-        var secret = jwtSection["Secret"]
-            ?? throw new InvalidOperationException("Jwt:Secret is not configured");
-        if (secret.Length < 32)
-            throw new InvalidOperationException("Jwt:Secret must be at least 32 characters");
-
-        var issuer = jwtSection["Issuer"];
-        var audience = jwtSection["Audience"];
-        var expiresIn = int.TryParse(jwtSection["ExpiresIn"], out var e) ? e : 3600;
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
-        };
-
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddSeconds(expiresIn),
-            signingCredentials: creds);
-
-        return (new JwtSecurityTokenHandler().WriteToken(token), expiresIn);
     }
 
     private static UserDto MapToDto(User user)

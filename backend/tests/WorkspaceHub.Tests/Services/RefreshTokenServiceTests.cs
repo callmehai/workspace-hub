@@ -50,7 +50,9 @@ public class RefreshTokenServiceTests
         var users = new Mock<IUserRepository>();
         users.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         var cache = CreateCache();
-        var service = new RefreshTokenService(CreateConfig(), cache, users.Object, NullLogger<RefreshTokenService>.Instance);
+        var config = CreateConfig();
+        var service = new RefreshTokenService(config, cache, users.Object,
+            NullLogger<RefreshTokenService>.Instance, new JwtTokenFactory(config));
         return (service, users, cache);
     }
 
@@ -132,7 +134,9 @@ public class RefreshTokenServiceTests
         var users = new Mock<IUserRepository>();
         users.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new User { Id = userId, Email = "u@t.com", FullName = "U", Role = UserRole.User, IsActive = false });
-        var service = new RefreshTokenService(CreateConfig(), CreateCache(), users.Object, NullLogger<RefreshTokenService>.Instance);
+        var config = CreateConfig();
+        var service = new RefreshTokenService(config, CreateCache(), users.Object,
+            NullLogger<RefreshTokenService>.Instance, new JwtTokenFactory(config));
 
         var issued = await service.IssueAsync(userId);
 

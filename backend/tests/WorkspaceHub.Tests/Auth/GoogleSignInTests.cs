@@ -73,6 +73,8 @@ public class GoogleSignInTests
         var config = CreateConfig();
         var (regVal, loginVal) = CreateDummyValidators();
 
+        var jwtFactory = new WorkspaceHub.Infrastructure.Services.JwtTokenFactory(config);
+
         var service = new AuthService(
             users.Object,
             config,
@@ -80,7 +82,8 @@ public class GoogleSignInTests
             loginVal,
             cache,
             tokenClient.Object,
-            verifier.Object);
+            verifier.Object,
+            jwtFactory);
 
         return (service, users, tokenClient, verifier, cache);
     }
