@@ -4,7 +4,7 @@ import { scheduledEmailsApi, type CreateScheduledEmailRequest, type ScheduledEma
 import { connectionsApi } from '../lib/connectionsApi';
 import { Send, Clock, ChevronLeft, ChevronRight, AlertCircle, X, Mail, Users, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
+import { handleApiError } from '../lib/errorUtils';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { vi } from 'date-fns/locale/vi';
@@ -209,14 +209,7 @@ export const ScheduledEmails = () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-emails'] });
       setPage(1);
     },
-    onError: (err: AxiosError<{ message?: string; details?: string[] }>) => {
-      const details = err.response?.data?.details;
-      if (details && details.length > 0) {
-        details.forEach(d => toast.error(d));
-      } else {
-        toast.error(err.response?.data?.message || 'Không thể lên lịch gửi email');
-      }
-    }
+    onError: (err) => handleApiError(err, 'Không thể lên lịch gửi email')
   });
 
   const cancelMutation = useMutation({
@@ -225,10 +218,7 @@ export const ScheduledEmails = () => {
       toast.success('Đã huỷ lịch gửi!');
       queryClient.invalidateQueries({ queryKey: ['scheduled-emails'] });
     },
-    onError: (err: AxiosError<{ message?: string }>) => {
-      const msg = err.response?.data?.message || 'Không thể huỷ lịch gửi';
-      toast.error(msg);
-    }
+    onError: (err) => handleApiError(err, 'Không thể huỷ lịch gửi')
   });
 
   const handleScheduleSend = () => {

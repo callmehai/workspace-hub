@@ -4,6 +4,7 @@ import { itemsApi, foldersApi } from '../lib/itemsApi';
 import type { ItemStatus } from '../types/items';
 import { Plus, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { handleApiError } from '../lib/errorUtils';
 
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
@@ -37,7 +38,7 @@ export const KanbanBoard = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: () => toast.error('Failed to update status')
+    onError: (err) => handleApiError(err, 'Không thể cập nhật trạng thái')
   });
 
   const createNote = useMutation({
@@ -49,9 +50,9 @@ export const KanbanBoard = () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       setIsNoteModalOpen(false);
       setNoteForm({ title: '', contentMarkdown: '' });
-      toast.success('Note created');
+      toast.success('Đã tạo ghi chú');
     },
-    onError: () => toast.error('Failed to create note')
+    onError: (err) => handleApiError(err, 'Không thể tạo ghi chú')
   });
 
   // Drag and Drop handlers
