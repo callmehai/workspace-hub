@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Services;
 
@@ -16,28 +17,42 @@ namespace WorkspaceHub.Infrastructure.Services;
 ///
 /// Lưu HMAC-SHA256(code, key=userId) thay vì mã thô — Redis lộ cũng không suy ra OTP
 /// (và keyed theo userId nên không build được rainbow table dùng chung).
+///
+/// Chống TOCTOU (review #2): cooldown được "đặt chỗ" ATOMIC bằng SET NX (Lua) khi có Redis
+/// thật — 2 request đồng thời cùng userId thì chỉ 1 cái set được key, cái còn lại bị từ chối
+/// → đúng 1 SMS. Dev fallback (in-memory) dùng get+set không atomic (chấp nhận single-instance).
 /// </summary>
 public class OtpService : IOtpService
 {
     private readonly IDistributedCache _cache;
     private readonly ISmsSender _sms;
     private readonly ILogger<OtpService> _logger;
+    private readonly IConnectionMultiplexer? _redis;
 
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
     private const int CooldownSeconds = 60;
     private const int MaxAttempts = 5;
 
-    public OtpService(IDistributedCache cache, ISmsSender sms, ILogger<OtpService> logger)
+    // SET key value NX EX ttl: chỉ set nếu chưa tồn tại; trả "OK" khi đặt được, nil nếu đã có.
+    private const string SetCooldownNxScript =
+        "return redis.call('SET', KEYS[1], '1', 'NX', 'EX', ARGV[1])";
+
+    public OtpService(
+        IDistributedCache cache,
+        ISmsSender sms,
+        ILogger<OtpService> logger,
+        IConnectionMultiplexer? redis = null)
     {
         _cache = cache;
         _sms = sms;
         _logger = logger;
+        _redis = redis;
     }
 
     public async Task<int> SendAsync(Guid userId, string phoneE164, CancellationToken ct = default)
     {
-        // Cooldown: chặn spam gửi lại.
-        if (await _cache.GetStringAsync(CooldownKey(userId), ct) is not null)
+        // Cooldown: chặn spam gửi lại. Đặt chỗ ATOMIC → false nghĩa là đang trong cooldown.
+        if (!await TryAcquireCooldownAsync(userId, ct))
             throw new BusinessRuleException($"Vui lòng đợi {CooldownSeconds}s trước khi gửi lại mã.");
 
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
@@ -46,13 +61,35 @@ public class OtpService : IOtpService
 
         await _cache.SetStringAsync(OtpKey(userId), $"{hash}:0:{expiry.UtcTicks}",
             new DistributedCacheEntryOptions { AbsoluteExpiration = expiry }, ct);
-        await _cache.SetStringAsync(CooldownKey(userId), "1",
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(CooldownSeconds) }, ct);
 
         await _sms.SendAsync(phoneE164, $"Mã xác minh Workspace Hub của bạn là: {code} (hết hạn sau 5 phút).", ct);
         _logger.LogInformation("Đã gửi OTP. UserId={UserId}", userId);
 
         return CooldownSeconds;
+    }
+
+    /// <summary>
+    /// "Đặt chỗ" cooldown: true nếu set được (chưa trong cooldown), false nếu đã có.
+    /// Redis thật → SET NX atomic (chống TOCTOU 2 request đồng thời); in-memory dev → get+set.
+    /// </summary>
+    private async Task<bool> TryAcquireCooldownAsync(Guid userId, CancellationToken ct)
+    {
+        if (_redis is not null)
+        {
+            var db = _redis.GetDatabase();
+            // IDistributedCache thêm InstanceName vào trước key → key thật có prefix.
+            var fullKey = $"{RefreshTokenService.RedisInstanceName}{CooldownKey(userId)}";
+            var result = await db.ScriptEvaluateAsync(
+                SetCooldownNxScript, new RedisKey[] { fullKey }, new RedisValue[] { CooldownSeconds });
+            return !result.IsNull; // "OK" → set được; nil → đã tồn tại.
+        }
+
+        // Fallback dev (in-memory): không atomic — chấp nhận cho single-instance.
+        if (await _cache.GetStringAsync(CooldownKey(userId), ct) is not null)
+            return false;
+        await _cache.SetStringAsync(CooldownKey(userId), "1",
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(CooldownSeconds) }, ct);
+        return true;
     }
 
     public async Task<bool> VerifyAsync(Guid userId, string code, CancellationToken ct = default)

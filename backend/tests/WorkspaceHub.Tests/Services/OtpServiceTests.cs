@@ -38,6 +38,56 @@ public class OtpServiceTests
         return (service, sms);
     }
 
+    /// <summary>
+    /// Cache spy: ghi lại AbsoluteExpiration của mỗi lần Set theo key — để test verify rằng
+    /// nhập sai KHÔNG gia hạn cửa sổ TTL của OTP (regression guard cho bug review #1).
+    /// </summary>
+    private sealed class ExpiryCapturingCache : IDistributedCache
+    {
+        private readonly IDistributedCache _inner = CreateCache();
+        public readonly Dictionary<string, DateTimeOffset?> LastAbsoluteExpiration = new();
+
+        public byte[]? Get(string key) => _inner.Get(key);
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => _inner.GetAsync(key, token);
+        public void Refresh(string key) => _inner.Refresh(key);
+        public Task RefreshAsync(string key, CancellationToken token = default) => _inner.RefreshAsync(key, token);
+        public void Remove(string key) => _inner.Remove(key);
+        public Task RemoveAsync(string key, CancellationToken token = default) => _inner.RemoveAsync(key, token);
+
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+        {
+            LastAbsoluteExpiration[key] = options.AbsoluteExpiration;
+            _inner.Set(key, value, options);
+        }
+
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+        {
+            LastAbsoluteExpiration[key] = options.AbsoluteExpiration;
+            return _inner.SetAsync(key, value, options, token);
+        }
+    }
+
+    [Fact]
+    public async Task Wrong_attempt_does_not_extend_ttl()
+    {
+        var userId = Guid.NewGuid();
+        var cache = new ExpiryCapturingCache();
+        var sms = new CapturingSms();
+        var service = new OtpService(cache, sms, NullLogger<OtpService>.Instance);
+
+        await service.SendAsync(userId, "+84901234567");
+        var otpKey = $"otp:{userId}";
+        var expiryAfterSend = cache.LastAbsoluteExpiration[otpKey];
+
+        // Nhập sai → entry được ghi lại (tăng attempts) nhưng phải GIỮ NGUYÊN absolute expiry.
+        var ok = await service.VerifyAsync(userId, "000000");
+        ok.Should().BeFalse();
+        var expiryAfterWrong = cache.LastAbsoluteExpiration[otpKey];
+
+        expiryAfterWrong.Should().Be(expiryAfterSend,
+            "lần nhập sai không được gia hạn cửa sổ tấn công của OTP");
+    }
+
     [Fact]
     public async Task Send_then_verify_correct_code_succeeds()
     {
