@@ -123,7 +123,8 @@ public class ScheduledEmailsService : IScheduledEmailsService
             Status = email.Status.ToString(),
             RetryCount = email.RetryCount,
             LastError = email.LastError,
-            SentAt = email.SentAt
+            SentAt = email.SentAt,
+            CreatedAt = email.CreatedAt
         };
     }
 }

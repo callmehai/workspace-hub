@@ -18,6 +18,7 @@ public class ScheduledEmail
     public int RetryCount { get; set; }
     public string? LastError { get; set; }
     public DateTime? SentAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
     public User User { get; set; } = null!;

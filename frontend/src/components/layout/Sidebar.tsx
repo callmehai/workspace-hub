@@ -10,7 +10,8 @@ import {
   Settings, 
   HelpCircle,
   Plus,
-  LayoutGrid
+  LayoutGrid,
+  Clock
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -89,6 +90,17 @@ export const Sidebar = () => {
           >
             <CalendarIcon className="w-4 h-4" />
             <span>Calendar</span>
+          </NavLink>
+          <NavLink
+            to="/scheduled-emails"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
+              }`
+            }
+          >
+            <Clock className="w-4 h-4" />
+            <span>Hẹn giờ gửi</span>
           </NavLink>
         </nav>
 

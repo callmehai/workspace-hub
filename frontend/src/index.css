@@ -9,3 +9,52 @@ body,
 #root {
   height: 100%;
 }
+
+@layer components {
+  .html-content {
+    @apply text-sm text-gray-800 leading-relaxed;
+  }
+
+  .html-content h1,
+  .html-content h2,
+  .html-content h3,
+  .html-content h4 {
+    @apply font-bold text-gray-900 mt-4 mb-2;
+  }
+
+  .html-content h1 {
+    @apply text-2xl;
+  }
+
+  .html-content h2 {
+    @apply text-xl;
+  }
+
+  .html-content h3 {
+    @apply text-lg;
+  }
+
+  .html-content p {
+    @apply mb-3 last:mb-0;
+  }
+
+  .html-content ul {
+    @apply list-disc list-outside ml-5 mb-4 space-y-1;
+  }
+
+  .html-content ol {
+    @apply list-decimal list-outside ml-5 mb-4 space-y-1;
+  }
+
+  .html-content a {
+    @apply text-blue-600 hover:underline;
+  }
+
+  .html-content blockquote {
+    @apply border-l-4 border-gray-200 pl-4 italic text-gray-600 my-4;
+  }
+
+  .html-content img {
+    @apply max-w-full h-auto rounded-lg my-4;
+  }
+}
