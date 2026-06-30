@@ -6,7 +6,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { Inbox } from './pages/Inbox';
 import { Projects } from './pages/Projects';
 import { KanbanBoard } from './pages/KanbanBoard';
-import { Integrations } from './pages/settings/Integrations';
+import { Integrations } from './pages/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
 import { GoogleCallback } from './pages/auth/GoogleCallback';
 
@@ -47,7 +47,7 @@ export const router = createBrowserRouter([
             element: <KanbanBoard />,
           },
           {
-            path: 'settings/integrations',
+            path: 'integrations',
             element: <Integrations />,
           },
           {

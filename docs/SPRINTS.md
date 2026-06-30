@@ -87,13 +87,14 @@
 | SCRUM-44 | FE: Inbox/Items view (list + filter + search + pagination) | Huy | ⏳ To Do |
 | SCRUM-45 | FE: Kanban 3 cột (drag-drop) + Folder sidebar | Huy | ⏳ To Do |
 | SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ⏳ To Do |
-| SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Vũ | ⏳ To Do |
+| SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Khánh | ⏳ To Do |
 | SCRUM-48 | FE: Loading/error/toast chuẩn | Khánh | ⏳ To Do |
 | SCRUM-49 | FE: Admin dashboard (users list + stats charts) | Huy | ⏳ To Do |
 | SCRUM-50 | FE: Responsive polish + dashboard chart + dark mode | Dũng | ⏳ To Do |
 | SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do |
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
+| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | ⏳ To Do |
 
 ## Phase Jira — Atlassian integration (SCRUM-54→60)
 
