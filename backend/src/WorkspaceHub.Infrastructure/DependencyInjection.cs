@@ -92,10 +92,15 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IOtpService, OtpService>();
 
-        // SMS sender (SCRUM-64): có Sms:Twilio:AccountSid → Twilio thật; thiếu → LogSmsSender
-        // (ghi OTP ra log cho dev/demo). Đăng ký HttpClient "Twilio" cho TwilioSmsSender.
+        // SMS sender (SCRUM-64): dùng Twilio thật CHỈ khi đủ AccountSid + AuthToken + FromNumber.
+        // Thiếu bất kỳ cái nào (vd FromNumber trống vì Twilio trial chưa mua số) → LogSmsSender
+        // ghi OTP ra console cho dev/demo, KHÔNG gọi Twilio. Đăng ký HttpClient "Twilio" sẵn.
         services.AddHttpClient("Twilio");
-        if (!string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]))
+        var twilioConfigured =
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AuthToken"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:FromNumber"]);
+        if (twilioConfigured)
             services.AddScoped<ISmsSender, TwilioSmsSender>();
         else
             services.AddScoped<ISmsSender, LogSmsSender>();
