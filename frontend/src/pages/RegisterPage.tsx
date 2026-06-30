@@ -6,9 +6,9 @@ import toast from 'react-hot-toast';
 import { AlertCircle } from 'lucide-react';
 import api from '../lib/api';
 import { authApi } from '../lib/authApi';
+import { EMAIL_RE } from '../lib/validation';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 import type { ApiError } from '../types/auth';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ export const RegisterPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [errFullName, setErrFullName] = useState('');
   const [errEmail, setErrEmail] = useState('');
   const [errPwd, setErrPwd] = useState('');
   const [errConfirm, setErrConfirm] = useState('');
@@ -50,18 +51,15 @@ export const RegisterPage = () => {
     e.preventDefault();
     setBanner('');
 
+    const eFullName = fullName.trim().length === 0 ? 'Vui lòng nhập họ tên' : '';
     const eEmail = !EMAIL_RE.test(email) ? 'Email không hợp lệ' : '';
     const ePwd = password.length < 8 ? 'Mật khẩu phải từ 8 ký tự trở lên' : '';
     const eConfirm = confirm !== password ? 'Mật khẩu nhập lại không khớp' : '';
+    setErrFullName(eFullName);
     setErrEmail(eEmail);
     setErrPwd(ePwd);
     setErrConfirm(eConfirm);
-
-    if (fullName.trim().length === 0) {
-      toast.error('Vui lòng nhập họ tên');
-      return;
-    }
-    if (eEmail || ePwd || eConfirm) return;
+    if (eFullName || eEmail || ePwd || eConfirm) return;
 
     register.mutate();
   };
@@ -90,16 +88,21 @@ export const RegisterPage = () => {
           )}
 
           <form onSubmit={handleRegister} noValidate>
-            <label className="mb-1.5 block text-[13px] font-medium text-gray-900">Họ và tên</label>
+            <label htmlFor="fullName" className="mb-1.5 block text-[13px] font-medium text-gray-900">Họ và tên</label>
             <input
+              id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Nguyễn Văn A"
-              className="mb-3.5 h-[38px] w-full rounded-lg border border-gray-300 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
+              className={`h-[38px] w-full rounded-lg border px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
+                errFullName ? 'border-red-400' : 'border-gray-300'
+              }`}
             />
+            {errFullName && <div className="mt-1 text-xs text-red-600">{errFullName}</div>}
 
-            <label className="mb-1.5 block text-[13px] font-medium text-gray-900">Email</label>
+            <label htmlFor="email" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Email</label>
             <input
+              id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -110,8 +113,9 @@ export const RegisterPage = () => {
             />
             {errEmail && <div className="mt-1 text-xs text-red-600">{errEmail}</div>}
 
-            <label className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Mật khẩu</label>
+            <label htmlFor="password" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Mật khẩu</label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -122,8 +126,9 @@ export const RegisterPage = () => {
             />
             {errPwd && <div className="mt-1 text-xs text-red-600">{errPwd}</div>}
 
-            <label className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Nhập lại mật khẩu</label>
+            <label htmlFor="confirm" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Nhập lại mật khẩu</label>
             <input
+              id="confirm"
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -150,23 +155,14 @@ export const RegisterPage = () => {
             <div className="h-px flex-1 bg-gray-200" />
           </div>
 
-          <button
-            type="button"
+          <GoogleSignInButton
+            isPending={googleMutation.isPending}
             onClick={() => {
               setBanner('');
               googleMutation.mutate();
             }}
-            disabled={googleMutation.isPending}
-            className="flex h-10 w-full items-center justify-center gap-2.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 disabled:opacity-50"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-            </svg>
-            <span>{googleMutation.isPending ? 'Đang chuyển hướng...' : 'Đăng ký bằng Google'}</span>
-          </button>
+            label="Đăng ký"
+          />
         </div>
 
         <p className="mt-4 text-center text-sm text-gray-500">

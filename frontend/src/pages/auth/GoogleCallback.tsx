@@ -42,10 +42,11 @@ export const GoogleCallback = () => {
 
     if (!code || !state) {
       toast.error('Tham số callback không hợp lệ');
+      setTimeout(() => navigate('/login', { replace: true }), 2000);
       return;
     }
     mutate();
-  }, [code, state, mutate]);
+  }, [code, state, mutate, navigate]);
 
   const failed = isError || !code || !state;
 
