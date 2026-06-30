@@ -47,11 +47,14 @@ public class AuthController : ApiControllerBase
     public async Task<ActionResult<UserDto>> Me(CancellationToken ct)
         => Ok(await _auth.GetMeAsync(CurrentUserId, ct));
 
-    /// <summary>POST /api/auth/logout — xoá cookie auth (SCRUM-62).</summary>
+    /// <summary>
+    /// POST /api/auth/logout — xoá cookie auth (SCRUM-62).
+    /// AllowAnonymous: access token có thể đã hết hạn nhưng cookie vẫn còn → vẫn phải
+    /// clear được cookie (và sau SCRUM-63: revoke refresh token) thay vì trả 401.
+    /// </summary>
     [HttpPost("logout")]
-    [Authorize]
+    [AllowAnonymous]
     [ProducesResponseType(204)]
-    [ProducesResponseType(401)]
     public IActionResult Logout()
     {
         _cookies.ClearAuthCookies(Response);

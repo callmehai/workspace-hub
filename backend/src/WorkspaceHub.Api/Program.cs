@@ -125,17 +125,21 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 
-    // SCRUM-62: ưu tiên đọc JWT từ HttpOnly cookie wh_access. Vẫn fallback header
-    // Authorization: Bearer (đã có sẵn) để Swagger/Postman/server-to-server dùng được.
+    // SCRUM-62: đọc JWT từ HttpOnly cookie wh_access. ƯU TIÊN header Authorization: Bearer
+    // (Swagger/Postman/server-to-server) — chỉ dùng cookie khi KHÔNG có Bearer.
+    // Lưu ý: OnMessageReceived fire TRƯỚC khi handler tự đọc header nên ctx.Token luôn rỗng
+    // lúc này → phải tự kiểm tra header, không thể dựa vào ctx.Token.
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = ctx =>
         {
-            if (string.IsNullOrEmpty(ctx.Token) &&
-                ctx.Request.Cookies.TryGetValue(AuthCookieService.AccessCookieName, out var cookieToken))
-            {
+            var authHeader = ctx.Request.Headers.Authorization.ToString();
+            if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                return Task.CompletedTask; // có Bearer → để handler tự đọc header
+
+            if (ctx.Request.Cookies.TryGetValue(AuthCookieService.AccessCookieName, out var cookieToken))
                 ctx.Token = cookieToken;
-            }
+
             return Task.CompletedTask;
         }
     };

@@ -58,7 +58,9 @@ public class CsrfMiddleware
             return false;
 
         var path = context.Request.Path.Value ?? string.Empty;
-        return !ExemptPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+        // Exact match (không StartsWith) — tránh exempt nhầm endpoint tương lai như
+        // /api/auth/login-history vô tình khớp prefix /api/auth/login.
+        return !ExemptPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsValid(HttpContext context)

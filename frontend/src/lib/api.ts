@@ -1,4 +1,5 @@
 import axios from 'axios'
+import toast from 'react-hot-toast'
 
 const CSRF_COOKIE = 'wh_csrf'
 const CSRF_HEADER = 'X-CSRF-Token'
@@ -28,14 +29,20 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// 401 → đẩy về /login (cookie đã hết hạn / chưa đăng nhập). Backend tự xoá cookie.
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    // 401 → đẩy về /login (cookie đã hết hạn / chưa đăng nhập). Backend tự xoá cookie.
+    if (status === 401) {
       if (window.location.pathname !== '/login') {
         window.location.assign('/login')
       }
+    }
+    // 403 CsrfError → cookie CSRF thiếu/lệch (bị xoá tay hoặc trình duyệt chặn cookie).
+    // Báo rõ thay vì để 403 im lặng khó debug.
+    else if (status === 403 && error.response?.data?.error === 'CsrfError') {
+      toast.error('Phiên bảo mật không hợp lệ. Vui lòng tải lại trang và thử lại.')
     }
     return Promise.reject(error)
   },
