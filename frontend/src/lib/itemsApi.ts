@@ -2,7 +2,7 @@ import api from './api';
 import type { 
   PagedResult, ItemResponse, UpdateItemStatusRequest, CreateNoteRequest, 
   FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType,
-  PatchItemRequest, CreateEventRequest, CreateTicketRequest
+  PatchItemRequest, CreateEventRequest
 } from '../types/items';
 
 export interface GetItemsParams {
@@ -15,35 +15,7 @@ export interface GetItemsParams {
   limit?: number;
 }
 
-export interface JiraProject {
-  id: string;
-  key: string;
-  name: string;
-}
 
-export interface JiraIssueType {
-  id: string;
-  name: string;
-  subtask: boolean;
-}
-
-export interface JiraPriority {
-  id: string;
-  name: string;
-}
-
-export interface JiraUser {
-  accountId: string;
-  displayName: string;
-  email?: string;
-  active: boolean;
-}
-
-export interface JiraTransition {
-  id: string;
-  name: string;
-  toStatusName: string;
-}
 
 export const itemsApi = {
   getItems: async (params?: GetItemsParams): Promise<PagedResult<ItemResponse>> => {
@@ -71,10 +43,7 @@ export const itemsApi = {
     return response.data;
   },
 
-  createTicket: async (request: CreateTicketRequest): Promise<ItemResponse> => {
-    const response = await api.post('/items/ticket', request);
-    return response.data;
-  },
+
 
   patchItem: async (id: string, request: PatchItemRequest): Promise<ItemResponse> => {
     const response = await api.patch(`/items/${id}`, request);
@@ -102,26 +71,5 @@ export const foldersApi = {
   }
 };
 
-export const jiraApi = {
-  getProjects: async (connectionId: string): Promise<JiraProject[]> => {
-    const response = await api.get('/jira/projects', { params: { connectionId } });
-    return response.data;
-  },
-  getIssueTypes: async (connectionId: string, projectKey: string): Promise<JiraIssueType[]> => {
-    const response = await api.get('/jira/issue-types', { params: { connectionId, projectKey } });
-    return response.data;
-  },
-  getPriorities: async (connectionId: string): Promise<JiraPriority[]> => {
-    const response = await api.get('/jira/priorities', { params: { connectionId } });
-    return response.data;
-  },
-  getAssignableUsers: async (connectionId: string, projectKey: string, query?: string): Promise<JiraUser[]> => {
-    const response = await api.get('/jira/assignable-users', { params: { connectionId, projectKey, query } });
-    return response.data;
-  },
-  getTransitions: async (connectionId: string, itemId: string): Promise<JiraTransition[]> => {
-    const response = await api.get('/jira/transitions', { params: { connectionId, itemId } });
-    return response.data;
-  }
-};
+
 

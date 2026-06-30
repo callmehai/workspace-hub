@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Filter, Loader2, AlertCircle, Calendar, FileText, Mail, MessageSquare, StickyNote, Star } from 'lucide-react';
 import { itemsApi } from '../lib/itemsApi';
@@ -7,16 +7,28 @@ import { ItemDetail } from '../components/ItemDetail';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
+const useDebounce = <T,>(value: T, delay: number): T => {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+};
+
 export const Inbox = () => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'important'>('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
 
   // Fetch Items
   const { data: pagedResult, isLoading, isError, refetch } = useQuery({
-    queryKey: ['items', search],
+    queryKey: ['items', debouncedSearch],
     queryFn: () => itemsApi.getItems({ 
-      search: search.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
       limit: 100 
     })
   });

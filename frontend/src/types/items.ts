@@ -67,15 +67,6 @@ export interface PatchItemRequest {
   location?: string;
   attendees?: string[];
   name?: string;
-  
-  // Jira Ticket (SCRUM-57)
-  summary?: string;
-  description?: string;
-  assignee?: string;
-  priority?: string;
-  statusTransition?: string;
-  labels?: string[];
-  comment?: string;
 }
 
 export interface CreateEventRequest {
@@ -85,15 +76,4 @@ export interface CreateEventRequest {
   end: string;
   location?: string;
   attendees?: string[];
-}
-
-export interface CreateTicketRequest {
-  connectionId: string;
-  projectKey: string;
-  issueType: string;
-  summary: string;
-  description?: string;
-  assignee?: string;
-  priority?: string;
-  labels?: string[];
 }

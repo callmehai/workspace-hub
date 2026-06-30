@@ -3,10 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { 
   Star, Mail, MailOpen, Trash2, Edit3, Save, X, Calendar, MapPin, 
-  Users, FileText, ExternalLink, MessageSquare, Plus, Tag, Loader2, 
-  AlertCircle, ChevronRight, CheckCircle
+  Users, FileText, ExternalLink, Plus, Tag, Loader2, 
+  AlertCircle, CheckCircle
 } from 'lucide-react';
-import { itemsApi, jiraApi, type JiraPriority, type JiraTransition } from '../lib/itemsApi';
+import { itemsApi } from '../lib/itemsApi';
 import { type PatchItemRequest } from '../types/items';
 import { handleApiError } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -24,7 +24,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isEditing, setIsEditing] = useState(false);
   const [newLabelName, setNewLabelName] = useState('');
   const [isAddingLabel, setIsAddingLabel] = useState(false);
-  const [commentText, setCommentText] = useState('');
+
 
   // Event form edit state
   const [eventForm, setEventForm] = useState({
@@ -39,15 +39,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [fileName, setFileName] = useState('');
   const [isRenamingFile, setIsRenamingFile] = useState(false);
 
-  // Jira Ticket edit state
-  const [jiraForm, setJiraForm] = useState({
-    summary: '',
-    description: '',
-    assignee: '',
-    priority: '',
-    labels: '',
-    statusTransition: ''
-  });
+
 
   // Fetch item by ID
   const { data: item, isLoading, isError, refetch } = useQuery({
@@ -65,7 +57,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       setIsRenamingFile(false);
       setNewLabelName('');
       setIsAddingLabel(false);
-      setCommentText('');
+
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
@@ -100,21 +92,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     }
   });
 
-  // Fetch Jira Transitions helper if Jira Ticket
-  const isJira = item?.type === 'Ticket';
-  const connectionId = item?.metadataJson ? JSON.parse(item.metadataJson).connectionId || (item as unknown as { connectionId?: string }).connectionId : undefined;
-  
-  const { data: transitions = [] } = useQuery({
-    queryKey: ['jiraTransitions', itemId, connectionId],
-    queryFn: () => jiraApi.getTransitions(connectionId, itemId),
-    enabled: isJira && !!connectionId && !!itemId,
-  });
 
-  const { data: priorities = [] } = useQuery({
-    queryKey: ['jiraPriorities', connectionId],
-    queryFn: () => jiraApi.getPriorities(connectionId),
-    enabled: isJira && !!connectionId,
-  });
 
   if (isLoading) {
     return (
@@ -143,7 +121,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     );
   }
 
-  const metadata = item.metadataJson ? JSON.parse(item.metadataJson) : {};
+  const metadata = (() => {
+    try {
+      return item?.metadataJson ? JSON.parse(item.metadataJson) : {};
+    } catch {
+      return {};
+    }
+  })();
 
   // Setup Event initial form values
   const startEditingEvent = () => {
@@ -178,15 +162,22 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const attendeesArray = eventForm.attendees
       ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
       : [];
+
+    const invalidEmails = attendeesArray.filter(email => !emailRegex.test(email));
+    if (invalidEmails.length > 0) {
+      toast.error(`Email không hợp lệ: ${invalidEmails.join(', ')}`);
+      return;
+    }
 
     patchMutation.mutate({
       title: eventForm.title,
       start: startIso,
       end: endIso,
-      location: eventForm.location || null,
+      location: eventForm.location || undefined,
       attendees: attendeesArray
     });
   };
@@ -211,53 +202,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
-  // Setup Jira initial edit values
-  const startEditingJira = () => {
-    setJiraForm({
-      summary: item.title,
-      description: item.snippet,
-      assignee: metadata.assignee || '',
-      priority: metadata.priority || '',
-      labels: metadata.labels ? metadata.labels.join(', ') : '',
-      statusTransition: ''
-    });
-    setIsEditing(true);
-  };
 
-  const handleSaveJira = () => {
-    if (!jiraForm.summary.trim()) {
-      toast.error('Tiêu đề không được để trống');
-      return;
-    }
-    
-    const labelsArray = jiraForm.labels
-      ? jiraForm.labels.split(',').map(l => l.trim()).filter(l => l.length > 0)
-      : [];
-
-    patchMutation.mutate({
-      summary: jiraForm.summary,
-      description: jiraForm.description || null,
-      assignee: jiraForm.assignee || null,
-      priority: jiraForm.priority || null,
-      labels: labelsArray
-    });
-  };
-
-  // Add Comment for Jira
-  const handleAddComment = () => {
-    if (!commentText.trim()) return;
-    patchMutation.mutate({
-      comment: commentText.trim()
-    });
-  };
-
-  // Transition Jira status
-  const handleTransitionStatus = (transitionNameOrId: string) => {
-    if (!transitionNameOrId) return;
-    patchMutation.mutate({
-      statusTransition: transitionNameOrId
-    });
-  };
 
   // Labels Add/Remove for Email
   const handleAddLabel = () => {
@@ -358,18 +303,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             </>
           )}
 
-          {item.type === 'Ticket' && !isEditing && (
-            <>
-              {/* Edit Ticket */}
-              <button 
-                onClick={startEditingJira}
-                className="p-1.5 rounded-lg text-gray-500 hover:text-white transition-colors hover:bg-gray-800"
-                title="Sửa Ticket"
-              >
-                <Edit3 className="w-5 h-5" />
-              </button>
-            </>
-          )}
+
 
           {/* Delete Permanently (all types except Note) */}
           {item.type !== 'Note' && (
@@ -479,79 +413,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               </div>
             )}
 
-            {item.type === 'Ticket' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Summary (Tóm tắt)</label>
-                  <input 
-                    type="text" 
-                    value={jiraForm.summary}
-                    onChange={e => setJiraForm({...jiraForm, summary: e.target.value})}
-                    className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Mô tả (Description)</label>
-                  <textarea 
-                    value={jiraForm.description}
-                    onChange={e => setJiraForm({...jiraForm, description: e.target.value})}
-                    className="w-full h-32 bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm resize-none font-sans"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Priority (Độ ưu tiên)</label>
-                    <select
-                      value={jiraForm.priority}
-                      onChange={e => setJiraForm({...jiraForm, priority: e.target.value})}
-                      className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                    >
-                      <option value="">Chọn độ ưu tiên...</option>
-                      {priorities.map((p: JiraPriority) => (
-                        <option key={p.id} value={p.name}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Assignee ID (AccountId)</label>
-                    <input 
-                      type="text" 
-                      value={jiraForm.assignee}
-                      onChange={e => setJiraForm({...jiraForm, assignee: e.target.value})}
-                      placeholder="VD: 5f1c2438abc123"
-                      className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Labels (Cách nhau bởi dấu phẩy)</label>
-                  <input 
-                    type="text" 
-                    value={jiraForm.labels}
-                    onChange={e => setJiraForm({...jiraForm, labels: e.target.value})}
-                    placeholder="label1, label2"
-                    className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                  />
-                </div>
-                
-                <div className="flex justify-end space-x-3 pt-2">
-                  <button 
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 border border-gray-800 text-gray-400 hover:text-white rounded-lg text-sm transition-colors"
-                  >
-                    Hủy
-                  </button>
-                  <button 
-                    onClick={handleSaveJira}
-                    disabled={patchMutation.isPending}
-                    className="px-5 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors flex items-center space-x-1.5"
-                  >
-                    {patchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    <span>Lưu</span>
-                  </button>
-                </div>
-              </div>
-            )}
+
           </div>
         ) : (
           <div className="space-y-4">
@@ -581,7 +443,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   }}
                   onBlur={handleRenameFile}
                 />
-                <button onClick={handleRenameFile} className="p-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600">
+                <button 
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={handleRenameFile} 
+                  className="p-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600"
+                >
                   <CheckCircle className="w-5 h-5" />
                 </button>
               </div>
@@ -678,41 +544,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               </div>
             )}
 
-            {/* Jira Ticket details */}
-            {item.type === 'Ticket' && (
-              <div className="bg-[#1c1d2c] border border-gray-800 rounded-xl p-5 space-y-4 text-sm">
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div><span className="block text-gray-500 font-semibold mb-0.5">Mã Ticket</span> <a href={metadata.issueUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline inline-flex items-center space-x-1 font-mono font-bold text-sm">{metadata.issueKey || 'N/A'} <ExternalLink className="w-3 h-3 ml-0.5 inline" /></a></div>
-                  <div><span className="block text-gray-500 font-semibold mb-0.5">Dự án</span> <span className="text-gray-200 font-medium text-sm">{metadata.projectKey || 'N/A'}</span></div>
-                  <div><span className="block text-gray-500 font-semibold mb-0.5">Người giải quyết (Assignee)</span> <span className="text-gray-200 text-sm font-medium">{metadata.assignee || 'Unassigned'}</span></div>
-                  <div><span className="block text-gray-500 font-semibold mb-0.5">Độ ưu tiên (Priority)</span> <span className="text-gray-200 text-sm font-medium">{metadata.priority || 'Medium'}</span></div>
-                </div>
 
-                <div className="border-t border-gray-800 pt-3">
-                  <span className="block text-xs text-gray-500 font-semibold mb-2">Trạng thái hiện tại: <span className="text-brand-400 font-bold ml-1">{metadata.status || 'To Do'}</span></span>
-                  
-                  {transitions.length > 0 ? (
-                    <div className="space-y-1.5">
-                      <span className="block text-xs text-gray-400">Đổi trạng thái:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {transitions.map((t: JiraTransition) => (
-                          <button
-                            key={t.id}
-                            onClick={() => handleTransitionStatus(t.id)}
-                            disabled={patchMutation.isPending}
-                            className="text-xs bg-[#0f1019] hover:bg-brand-500/10 hover:border-brand-500/30 text-gray-300 border border-gray-800 rounded-lg px-2.5 py-1.5 font-medium transition-colors"
-                          >
-                            {t.name} <ChevronRight className="w-3.5 h-3.5 inline text-gray-500" /> <span className="text-gray-500 text-[10px]">{t.toStatusName}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-600 italic">Không có chuyển đổi trạng thái nào khả dụng từ Jira.</span>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -768,7 +600,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         )}
 
         {/* Content Snippet / Description Box */}
-        {(!isEditing || item.type !== 'Ticket') && (
+        {!isEditing && (
           <div className="border-t border-gray-800 pt-5 space-y-2 flex-1">
             <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Nội dung</h4>
             <div className="bg-[#1c1d2c] border border-gray-800 rounded-xl p-5 text-sm font-sans leading-relaxed text-gray-300 max-h-[300px] overflow-y-auto whitespace-pre-wrap">
@@ -778,39 +610,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               ) : (
                 item.snippet || <span className="text-gray-500 italic">Không có nội dung mô tả.</span>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Jira Comments area */}
-        {item.type === 'Ticket' && !isEditing && (
-          <div className="border-t border-gray-800 pt-5 space-y-4">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Bình luận Jira</span>
-            </h4>
-
-            {/* Comments list if comments are in metadata or mock */}
-            <div className="space-y-3">
-              {/* Add Comment Input */}
-              <div className="flex flex-col space-y-2 bg-[#1c1d2c] border border-gray-800 p-3 rounded-xl">
-                <textarea 
-                  value={commentText}
-                  onChange={e => setCommentText(e.target.value)}
-                  placeholder="Thêm bình luận lên Jira..."
-                  className="w-full h-16 bg-[#0f1019] border border-gray-800 rounded-lg p-2.5 text-xs focus:outline-none focus:border-brand-500 resize-none font-sans text-gray-300 leading-normal"
-                />
-                <div className="flex justify-end">
-                  <button 
-                    onClick={handleAddComment}
-                    disabled={!commentText.trim() || patchMutation.isPending}
-                    className="px-3.5 py-1.5 bg-brand-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-xs font-medium hover:bg-brand-600 transition-colors flex items-center space-x-1"
-                  >
-                    {patchMutation.isPending && patchMutation.variables?.comment ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                    <span>Gửi bình luận</span>
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         )}

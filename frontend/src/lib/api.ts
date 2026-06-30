@@ -104,7 +104,7 @@ export const handleApiError = (
 ) => {
   if (isAxiosError(error)) {
     const status = error.response?.status;
-    const errorData = error.response?.data as { message?: string } | undefined;
+    const errorData = error.response?.data as { error?: string; message?: string } | undefined;
 
     if (status === 409) {
       toast.error('Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại...');
@@ -115,6 +115,9 @@ export const handleApiError = (
     }
 
     if (status === 403) {
+      if (errorData?.error === 'CsrfError') {
+        return;
+      }
       toast.error('Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại tài khoản.');
       if (options?.navigate) {
         options.navigate('/integrations');
