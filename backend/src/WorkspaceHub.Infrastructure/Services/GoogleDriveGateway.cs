@@ -9,6 +9,7 @@ namespace WorkspaceHub.Infrastructure.Services;
 public class GoogleDriveGateway : IGoogleDriveGateway
 {
     private readonly ITokenService _tokenService;
+    private const int InitialSyncPageSize = 100; // MVP: chỉ lấy N file mới nhất ở lần sync đầu tiên
 
     public GoogleDriveGateway(ITokenService tokenService)
     {
@@ -37,7 +38,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             if (string.IsNullOrEmpty(pageToken))
             {
                 var listRequest = service.Files.List();
-                listRequest.PageSize = 100; // Chỉ lấy 100 file mới nhất ở lần đầu tiên (MVP)
+                listRequest.PageSize = InitialSyncPageSize;
                 listRequest.Fields = "files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
                 listRequest.OrderBy = "modifiedTime desc";
 
@@ -46,10 +47,15 @@ public class GoogleDriveGateway : IGoogleDriveGateway
                 {
                     foreach (var file in response.Files)
                         filesDto.Add(MapToDto(file));
+                    // [Info] Silent truncation warning: nếu Drive có > InitialSyncPageSize file,
+                    // user sẽ không thấy toàn bộ — chấp nhận được ở MVP.
+                    if ((response.Files?.Count ?? 0) >= InitialSyncPageSize)
+                        Console.WriteLine($"[DriveSyncWarning] Fetched {InitialSyncPageSize} files — Drive may have more. Silent truncation in effect (MVP).");
                 }
 
                 var tokenResponse = await service.Changes.GetStartPageToken().ExecuteAsync(ct);
-                nextToken = tokenResponse.StartPageTokenValue;
+                nextToken = tokenResponse.StartPageTokenValue
+                    ?? throw new InvalidOperationException("Drive API returned null start page token.");
 
                 return new DriveSyncResult(false, filesDto, nextToken); // nextToken = NewStartPageToken (sync cursor)
             }
