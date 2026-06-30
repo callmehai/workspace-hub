@@ -130,7 +130,7 @@ export const Sidebar = () => {
           }
         >
           <Settings className="w-4 h-4" />
-          <span>Settings</span>
+          <span>Kết nối dịch vụ</span>
         </NavLink>
         <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
           <HelpCircle className="w-4 h-4" />
