@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api, { tokenStore } from '../lib/api';
+import { authApi } from '../lib/authApi';
 import type { UserDto } from '../types/auth';
 import { AuthContext } from './auth-context';
 
@@ -25,8 +26,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    // Best-effort báo backend (stateless MVP — không chặn việc xoá token local nếu lỗi).
+    void authApi.logout().catch(() => undefined);
     tokenStore.clear();
     queryClient.setQueryData(ME_QUERY_KEY, null);
+    queryClient.clear();
   };
 
   return (

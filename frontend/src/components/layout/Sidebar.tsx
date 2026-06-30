@@ -1,19 +1,31 @@
-import { NavLink } from 'react-router-dom';
-import { 
-  Inbox, 
-  CheckCircle2, 
-  FileText, 
-  Calendar as CalendarIcon, 
-  Code, 
-  MessageSquare, 
-  Briefcase, 
-  Settings, 
+import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  Inbox,
+  CheckCircle2,
+  FileText,
+  Calendar as CalendarIcon,
+  Code,
+  MessageSquare,
+  Briefcase,
+  Settings,
   HelpCircle,
   Plus,
-  LayoutGrid
+  LayoutGrid,
+  LogOut
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '../../hooks/useAuth';
 
 export const Sidebar = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    toast.success('Đã đăng xuất');
+    navigate('/login', { replace: true });
+  };
+
   return (
     <aside className="w-64 bg-gray-50 border-r border-gray-200 text-gray-700 flex flex-col h-full shrink-0">
       <div className="p-4 flex items-center space-x-3">
@@ -136,6 +148,26 @@ export const Sidebar = () => {
           <HelpCircle className="w-4 h-4" />
           <span>Help</span>
         </button>
+
+        <div className="flex items-center gap-2.5 pt-3 mt-2 border-t border-gray-200">
+          <div className="h-8 w-8 flex-none rounded-full bg-brand-50 text-brand-600 flex items-center justify-center text-sm font-semibold">
+            {user?.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-gray-900">
+              {user?.fullName ?? 'Người dùng'}
+            </div>
+            <div className="truncate text-xs text-gray-500">{user?.email}</div>
+          </div>
+          <button
+            onClick={handleLogout}
+            aria-label="Đăng xuất"
+            title="Đăng xuất"
+            className="flex-none rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </aside>
   );

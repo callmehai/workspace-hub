@@ -17,7 +17,8 @@
     "ExpiresIn": 3600
   },
   "Google": {
-    "RedirectUri": "http://localhost:5173/oauth/callback"
+    "RedirectUri": "http://localhost:5173/oauth/callback",
+    "SignInRedirectUri": "http://localhost:5173/auth/google/callback"
   },
   "OAuth": {
     "google": {
