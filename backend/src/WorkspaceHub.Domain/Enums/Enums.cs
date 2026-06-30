@@ -42,9 +42,10 @@ public enum ServiceType
 /// <summary>Loại cursor cho incremental sync, tuỳ provider.</summary>
 public enum CursorType
 {
-    HistoryId, // Gmail
-    PageToken, // Drive
-    SyncToken  // Google Calendar
+    HistoryId,   // Gmail
+    PageToken,   // Drive
+    SyncToken,   // Google Calendar
+    JqlUpdated   // Jira — lưu mốc fields.updated gần nhất, poll issue đổi sau đó
 }
 
 /// <summary>Loại Item — đồng nhất 4 nguồn về 1 model.</summary>
@@ -53,7 +54,8 @@ public enum ItemType
     Email,
     Event,
     File,
-    Note
+    Note,
+    Ticket  // Jira issue — phase Jira (SCRUM-55)
 }
 
 /// <summary>Cột Kanban hiện tại của Item.</summary>
@@ -79,10 +81,11 @@ public enum ScheduledEmailStatus
     Cancelled
 }
 
-/// <summary>Loại liên hệ quan trọng. MVP chỉ Email.</summary>
+/// <summary>Loại liên hệ quan trọng. Email (Gmail) + JiraAccount (phase Jira — SCRUM-60).</summary>
 public enum ImportantContactType
 {
-    Email
+    Email,
+    JiraAccount   // Jira accountId — đánh dấu 1 account Jira là liên hệ quan trọng
 }
 
 /// <summary>Phân loại thông báo in-app.</summary>

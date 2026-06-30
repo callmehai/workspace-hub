@@ -4,7 +4,6 @@ using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Services;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
-using WorkspaceHub.Application.Common;
 
 namespace WorkspaceHub.Infrastructure.Services;
 
@@ -28,22 +27,6 @@ public class CalendarGateway : ICalendarGateway
         });
     }
 
-    private CalendarEvent MapToDto(Event ev)
-    {
-        DateTimeOffset? start = ev.Start?.DateTimeDateTimeOffset ?? (ev.Start?.Date != null ? DateTimeOffset.Parse(ev.Start.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
-        DateTimeOffset? end = ev.End?.DateTimeDateTimeOffset ?? (ev.End?.Date != null ? DateTimeOffset.Parse(ev.End.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
-
-        return new CalendarEvent(
-            ev.Id,
-            ev.ETag,
-            ev.Summary,
-            ev.Description,
-            start,
-            end,
-            ev.Location,
-            ev.Attendees?.Select(a => a.Email).ToList());
-    }
-
     public async Task<CalendarEvent> GetEventAsync(Connection connection, string calendarId, string eventId, CancellationToken ct = default)
     {
         try
@@ -54,15 +37,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                throw new NotFoundException("Event", eventId);
-            }
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
-            {
-                throw new ForbiddenException("Cần reconnect.");
-            }
-            throw new ProviderException($"Calendar API error: {ex.Message}");
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId, forbiddenMessage: "Cần reconnect.");
         }
     }
 
@@ -86,12 +61,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Event", eventId);
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
-            {
-                throw new ForbiddenException("Cần reconnect với quyền ghi.");
-            }
-            throw new ProviderException($"Calendar API error: {ex.Message}");
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
         }
     }
 
@@ -116,12 +86,7 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Calendar", calendarId);
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
-            {
-                throw new ForbiddenException("Cần reconnect với quyền ghi.");
-            }
-            throw new ProviderException($"Calendar API error: {ex.Message}");
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Calendar", calendarId);
         }
     }
 
@@ -134,13 +99,25 @@ public class CalendarGateway : ICalendarGateway
         }
         catch (Google.GoogleApiException ex)
         {
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) throw new NotFoundException("Event", eventId);
-            if (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden || (ex.Error != null && ex.Error.Errors != null && ex.Error.Errors.Any(e => e.Reason != null && e.Reason.Contains("insufficientPermissions", StringComparison.OrdinalIgnoreCase))))
-            {
-                throw new ForbiddenException("Cần reconnect với quyền ghi.");
-            }
-            throw new ProviderException($"Calendar API error: {ex.Message}");
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
         }
     }
-}
 
+    // ───────────────────────── Private helpers ─────────────────────────
+
+    private static CalendarEvent MapToDto(Event ev)
+    {
+        DateTimeOffset? start = ev.Start?.DateTimeDateTimeOffset ?? (ev.Start?.Date != null ? DateTimeOffset.Parse(ev.Start.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
+        DateTimeOffset? end = ev.End?.DateTimeDateTimeOffset ?? (ev.End?.Date != null ? DateTimeOffset.Parse(ev.End.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
+
+        return new CalendarEvent(
+            ev.Id,
+            ev.ETag,
+            ev.Summary,
+            ev.Description,
+            start,
+            end,
+            ev.Location,
+            ev.Attendees?.Select(a => a.Email).ToList());
+    }
+}

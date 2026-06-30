@@ -257,6 +257,19 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                             Provider = "Google",
                             SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",
                             TokenEndpoint = "https://oauth2.googleapis.com/token"
+                        },
+                        new
+                        {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            AuthorizationEndpoint = "https://auth.atlassian.com/authorize",
+                            Description = "Jira",
+                            DisplayName = "Atlassian Jira",
+                            IconUrl = "https://www.atlassian.com/favicon.ico",
+                            IsEnabled = false,
+                            Key = "atlassian",
+                            Provider = "Atlassian",
+                            SupportedServices = "[\"Jira\"]",
+                            TokenEndpoint = "https://auth.atlassian.com/oauth/token"
                         });
                 });
 

@@ -20,18 +20,18 @@ public static class DependencyInjection
         services.AddScoped<IConnectionsService, ConnectionsService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IItemWriteBackService, ItemWriteBackService>();
-        services.AddScoped<IWriteBackGuard, TempWriteBackGuard>();
+        services.AddScoped<IWriteBackGuard, WriteBackGuard>();
         services.AddScoped<IScheduledEmailsService, ScheduledEmailsService>();
 
         // Register OAuth Provider Strategies
         services.AddScoped<IProviderStrategy, GoogleStrategy>();
         services.AddScoped<IProviderStrategy, JiraStrategy>();
 
-        // Quét toàn bộ validator trong assembly này (hiện chưa có — sẽ thêm từ SCRUM-9).
+        // Quét toàn bộ validator (FluentValidation) trong assembly này.
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 
-        services.AddScoped<WorkspaceHub.Application.Mapping.IGmailItemMapper, WorkspaceHub.Application.Mapping.GmailItemMapper>();
-        services.AddScoped<WorkspaceHub.Application.Interfaces.Services.IGmailSyncService, WorkspaceHub.Application.Services.GmailSyncService>();
+        services.AddScoped<IGmailItemMapper, GmailItemMapper>();
+        services.AddScoped<IGmailSyncService, GmailSyncService>();
         services.AddScoped<IConnectionHealthChecker, ConnectionHealthChecker>();
 
         // Đăng ký cho Calendar
@@ -40,6 +40,13 @@ public static class DependencyInjection
         // Đăng ký cho Drive
         services.AddScoped<IDriveItemMapper, DriveItemMapper>();
         services.AddScoped<IDriveSyncService, DriveSyncService>();
+        // Đăng ký cho Jira (SCRUM-55)
+        services.AddScoped<IJiraItemMapper, JiraItemMapper>();
+        services.AddScoped<IJiraSyncService, JiraSyncService>();
+        // Jira metadata helpers (SCRUM-59)
+        services.AddScoped<IJiraMetadataService, JiraMetadataService>();
+        // Important contacts (SCRUM-60)
+        services.AddScoped<IImportantContactService, ImportantContactService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
 
         return services;

@@ -47,6 +47,28 @@ public class ExceptionMiddleware
         catch (Exception ex)
         {
             await HandleExceptionAsync(context, ex);
+            return;
+        }
+
+        // Xử lý status code 401/403 trả về từ framework (JWT Bearer middleware / [Authorize])
+        // hoặc từ Action trả về Unauthorized() / Forbid() mà không ghi body.
+        // Lúc này response chưa có body nhưng status code đã được set đúng bởi framework.
+        if ((context.Response.StatusCode == (int)HttpStatusCode.Unauthorized ||
+             context.Response.StatusCode == (int)HttpStatusCode.Forbidden) &&
+            !context.Response.HasStarted)
+        {
+            var traceId = context.TraceIdentifier;
+            var isUnauthorized = context.Response.StatusCode == (int)HttpStatusCode.Unauthorized;
+            var error   = isUnauthorized ? "UnauthorizedError" : "ForbiddenError";
+            var message = isUnauthorized
+                ? "Authentication is required to access this resource."
+                : "You do not have permission to access this resource.";
+
+            _logger.LogWarning(
+                "Framework-level {StatusCode} returned without body. ErrorType={ErrorType}, TraceId={TraceId}",
+                context.Response.StatusCode, error, traceId);
+
+            await WriteUnauthenticatedResponseAsync(context, error, message, traceId);
         }
     }
 
@@ -119,10 +141,42 @@ public class ExceptionMiddleware
             traceId
         };
 
+        // Clear() xoá cả header lẫn body buffer — cần thiết khi exception middleware tự set status code mới.
         context.Response.Clear();
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)statusCode;
 
+        await context.Response.WriteAsync(JsonSerializer.Serialize(body, JsonOptions));
+    }
+
+    /// <summary>
+    /// Helper dành riêng cho trường hợp framework (JWT Bearer / [Authorize]) đã set 401/403 và
+    /// các header liên quan (ví dụ <c>WWW-Authenticate: Bearer error="invalid_token"</c> với 401).
+    /// Khác với <see cref="WriteResponseAsync"/>, helper này KHÔNG gọi <c>Clear()</c> để giữ nguyên
+    /// các header đó — RFC 7235 §3.1 yêu cầu <c>WWW-Authenticate</c> bắt buộc trên 401 response.
+    /// Status code đã đúng nên không cần set lại, chỉ ghi body JSON.
+    /// </summary>
+    private async Task WriteUnauthenticatedResponseAsync(
+        HttpContext context, string error, string message, string traceId)
+    {
+        if (context.Response.HasStarted)
+        {
+            _logger.LogWarning(
+                "Cannot write unauthenticated response — response already started. ErrorType={ErrorType}, TraceId={TraceId}",
+                error, traceId);
+            return;
+        }
+
+        var body = new
+        {
+            error,
+            message,
+            details = Array.Empty<string>(),
+            traceId
+        };
+
+        // Không Clear() — giữ nguyên WWW-Authenticate header do framework đã gắn (RFC 7235 §3.1).
+        context.Response.ContentType = "application/json";
         await context.Response.WriteAsync(JsonSerializer.Serialize(body, JsonOptions));
     }
 }

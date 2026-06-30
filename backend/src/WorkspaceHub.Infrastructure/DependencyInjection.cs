@@ -48,6 +48,13 @@ public static class DependencyInjection
         services.AddDistributedMemoryCache();
 
         services.AddHttpClient("OAuthToken");
+        services.AddHttpClient("Jira", c =>
+        {
+            // Accept header cấu hình 1 lần ở DI (tránh .Add tích luỹ mỗi request nếu handler được pool).
+            // Authorization vẫn set per-request vì token đổi theo connection.
+            c.DefaultRequestHeaders.Accept.Add(
+                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+        });
         services.AddScoped<IOAuthTokenClient, HttpOAuthTokenClient>();
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
@@ -59,16 +66,18 @@ public static class DependencyInjection
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
 
-        services.AddScoped<WorkspaceHub.Application.Abstractions.ITokenService, WorkspaceHub.Infrastructure.Services.TokenService>();
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();
+        services.AddScoped<IJiraGateway, JiraGateway>();
         
         // Gateways dùng cho luồng Writeback (Ghi/Cập nhật dữ liệu hai chiều)
-        services.AddScoped<WorkspaceHub.Application.Abstractions.IGmailGateway, WorkspaceHub.Infrastructure.Services.GmailGateway>();
-        services.AddScoped<WorkspaceHub.Application.Abstractions.ICalendarGateway, WorkspaceHub.Infrastructure.Services.CalendarGateway>();
-        services.AddScoped<WorkspaceHub.Application.Abstractions.IDriveGateway, WorkspaceHub.Infrastructure.Services.DriveGateway>();
+        services.AddScoped<IGmailGateway, GmailGateway>();
+        services.AddScoped<ICalendarGateway, CalendarGateway>();
+        services.AddScoped<IDriveGateway, DriveGateway>();
         
         // Gateways dùng cho luồng Sync (Đọc/Đồng bộ background job)
-        services.AddScoped<WorkspaceHub.Application.Abstractions.IGoogleCalendarGateway, WorkspaceHub.Infrastructure.Services.GoogleCalendarGateway>();
-        services.AddScoped<WorkspaceHub.Application.Abstractions.IGoogleDriveGateway, WorkspaceHub.Infrastructure.Services.GoogleDriveGateway>();
+        services.AddScoped<IGoogleCalendarGateway, GoogleCalendarGateway>();
+        services.AddScoped<IGoogleDriveGateway, GoogleDriveGateway>();
         // AdminService đặt tại Infrastructure vì cần inject AppDbContext trực tiếp
         // (EF projection no-N+1 cho ConnectionCount/ItemCount — xem AdminService.cs).
         services.AddScoped<IAdminService, AdminService>();
