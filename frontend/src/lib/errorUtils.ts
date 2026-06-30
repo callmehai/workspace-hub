@@ -13,16 +13,25 @@ export interface ApiErrorResponse {
  * Ưu tiên: details[] > message > fallbackMessage
  */
 export const handleApiError = (err: unknown, fallbackMessage: string): void => {
+  if (import.meta.env.DEV) {
+    console.error('[API Error]:', err);
+  }
+
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as ApiErrorResponse | undefined;
     
     if (data?.details && data.details.length > 0) {
-      data.details.forEach(d => toast.error(d));
+      toast.error(data.details[0]); // Chỉ hiển thị lỗi đầu tiên tránh spam toast
       return;
     }
     
     if (data?.message) {
       toast.error(data.message);
+      return;
+    }
+
+    if (data?.error) {
+      toast.error(data.error);
       return;
     }
   }
