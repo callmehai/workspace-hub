@@ -67,11 +67,16 @@ api.interceptors.response.use(
     const original = error.config as RetriableConfig | undefined
     const url: string = original?.url ?? ''
 
+    // /auth/me là PROBE "tôi là ai" — 401 ở đây nghĩa là CHƯA đăng nhập (bình thường),
+    // KHÔNG phải hết phiên. Không refresh, KHÔNG redirect (nếu không sẽ đá người dùng đang
+    // ở trang public như /verify-otp, /login về /login khi đổi tab → query refetch on focus).
+    const isProbe = url.includes('/auth/me')
+
     // 401 → thử refresh 1 lần rồi retry. Không refresh cho chính endpoint auth
-    // (login/refresh/logout) và không retry lần 2 (_retried).
+    // (login/refresh/logout/google) hay probe /auth/me, và không retry lần 2 (_retried).
     const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh') ||
       url.includes('/auth/logout') || url.includes('/auth/google')
-    if (status === 401 && original && !original._retried && !isAuthEndpoint) {
+    if (status === 401 && original && !original._retried && !isAuthEndpoint && !isProbe) {
       original._retried = true
       try {
         await runRefresh()
@@ -82,8 +87,8 @@ api.interceptors.response.use(
       }
     }
 
-    // 401 còn lại (kể cả refresh fail) → về /login.
-    if (status === 401) {
+    // 401 còn lại (kể cả refresh fail) → về /login. Trừ probe /auth/me (chưa-login là bình thường).
+    if (status === 401 && !isProbe) {
       redirectToLogin()
     }
     // 403 CsrfError → cookie CSRF thiếu/lệch (bị xoá tay hoặc trình duyệt chặn cookie).

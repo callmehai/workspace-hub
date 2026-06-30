@@ -69,7 +69,8 @@ public static class DependencyInjection
                 "Refresh token (SCRUM-63) sẽ mất khi restart. Xem docs/SETUP.md.");
         }
 
-        services.AddHttpClient("OAuthToken");
+        // OAuth token exchange (Google/Jira). Timeout rõ ràng để không treo theo default 100s.
+        services.AddHttpClient("OAuthToken", c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient("Jira", c =>
         {
             // Accept header cấu hình 1 lần ở DI (tránh .Add tích luỹ mỗi request nếu handler được pool).

@@ -233,6 +233,11 @@ public class AuthService : IAuthService
         {
             throw new BusinessRuleException("Google rejected the authorization code");
         }
+        // Timeout HttpClient (30s) khi đổi code → TaskCanceledException. Trả lỗi rõ thay vì 500.
+        catch (OperationCanceledException)
+        {
+            throw new BusinessRuleException("Timed out exchanging the Google authorization code. Please try again.");
+        }
 
         GoogleSignInTokenResponse tokenResponse;
         try

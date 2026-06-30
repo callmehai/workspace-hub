@@ -122,9 +122,16 @@ public class AuthController : ApiControllerBase
     [ProducesResponseType(400)]
     [ProducesResponseType(401)]
     public async Task<ActionResult<AuthResultDto>> GoogleCallback(
-        [FromBody] GoogleCallbackRequest request,
-        CancellationToken ct)
-        => Ok(await IssueCookiesAsync(await _auth.GoogleCallbackAsync(request.Code, request.State, ct), ct));
+        [FromBody] GoogleCallbackRequest request)
+    {
+        // Google authorization code là DÙNG-MỘT-LẦN. Nếu trình duyệt huỷ request giữa chừng
+        // (unmount/redirect/proxy reset), HttpContext.RequestAborted sẽ cancel cả chuỗi
+        // exchange→verify→DB upsert → code đã "tiêu" mà không phát được token, retry cũng fail.
+        // → CHẠY TRỌN không phụ thuộc client còn kết nối hay không (dùng CancellationToken.None).
+        // Có timeout HttpClient (30s) + SQL command timeout làm chặn an toàn.
+        var result = await _auth.GoogleCallbackAsync(request.Code, request.State, CancellationToken.None);
+        return Ok(await IssueCookiesAsync(result, CancellationToken.None));
+    }
 
     /// <summary>
     /// Set access token (cookie wh_access, SCRUM-62) + phát refresh token mới (cookie
