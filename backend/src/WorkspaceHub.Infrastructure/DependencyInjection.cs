@@ -45,7 +45,26 @@ public static class DependencyInjection
         services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
         services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 
-        services.AddDistributedMemoryCache();
+        // SCRUM-63: Redis làm distributed cache (refresh token + OTP + OAuth state).
+        // Có ConnectionStrings:Redis → dùng Redis; thiếu → fallback in-memory (dev),
+        // log cảnh báo vì refresh token sẽ mất khi restart + không chia sẻ giữa instance.
+        var redisConnection = config.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redisConnection))
+        {
+            services.AddStackExchangeRedisCache(o =>
+            {
+                o.Configuration = redisConnection;
+                o.InstanceName = "wh:";
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+            // Không có ILogger lúc cấu hình DI → ghi ra console để cảnh báo rõ.
+            Console.WriteLine(
+                "[WARN] ConnectionStrings:Redis chưa cấu hình — dùng in-memory cache. " +
+                "Refresh token (SCRUM-63) sẽ mất khi restart. Xem docs/SETUP.md.");
+        }
 
         services.AddHttpClient("OAuthToken");
         services.AddHttpClient("Jira", c =>
@@ -66,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
 
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();
         services.AddScoped<IJiraGateway, JiraGateway>();

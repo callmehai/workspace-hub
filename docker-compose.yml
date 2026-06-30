@@ -1,0 +1,29 @@
+# Dev infrastructure cho Workspace Hub.
+#   docker compose up -d            # chạy cả SQL Server + Redis
+#   docker compose up -d wh-redis   # chỉ Redis (SCRUM-63)
+#
+# SQL Server: khớp connection string trong appsettings.Development.json (xem docs/SETUP.md).
+# Redis: refresh token (SCRUM-63) + OTP (SCRUM-64) + OAuth state.
+services:
+  wh-sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: wh-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Workspace#2026Dev"
+    ports:
+      - "1433:1433"
+    volumes:
+      - wh-sqlserver-data:/var/opt/mssql
+
+  wh-redis:
+    image: redis:7-alpine
+    container_name: wh-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - wh-redis-data:/data
+
+volumes:
+  wh-sqlserver-data:
+  wh-redis-data:
