@@ -38,7 +38,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             {
                 var listRequest = service.Files.List();
                 listRequest.PageSize = 100; // Chỉ lấy 100 file mới nhất ở lần đầu tiên (MVP)
-                listRequest.Fields = "nextPageToken, files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
+                listRequest.Fields = "files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
                 listRequest.OrderBy = "modifiedTime desc";
 
                 var response = await listRequest.ExecuteAsync(ct);
