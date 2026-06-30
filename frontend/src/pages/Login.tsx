@@ -28,8 +28,19 @@ export const Login = () => {
       toast.success('Đăng nhập thành công!');
       navigate('/', { replace: true });
     },
-    onError: (error) => {
+    onError: async (error) => {
       const data = isAxiosError<ApiError>(error) ? error.response?.data : undefined;
+      // SCRUM-64: 403 PHONE_NOT_VERIFIED → gửi lại OTP + sang màn xác minh.
+      if (data?.message === 'PHONE_NOT_VERIFIED') {
+        try {
+          const cooldown = await authApi.sendOtp(email);
+          toast('Tài khoản chưa xác minh — đã gửi mã OTP.', { icon: '📱' });
+          navigate('/verify-otp', { state: { email, cooldown } });
+        } catch {
+          navigate('/verify-otp', { state: { email } });
+        }
+        return;
+      }
       // 401 (sai thông tin / account bị khoá) hiển thị ở banner; còn lại fallback chung.
       setBanner(data?.message ?? 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
     },

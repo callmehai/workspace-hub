@@ -69,7 +69,8 @@ public static class DependencyInjection
                 "Refresh token (SCRUM-63) sẽ mất khi restart. Xem docs/SETUP.md.");
         }
 
-        services.AddHttpClient("OAuthToken");
+        // OAuth token exchange (Google/Jira). Timeout rõ ràng để không treo theo default 100s.
+        services.AddHttpClient("OAuthToken", c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient("Jira", c =>
         {
             // Accept header cấu hình 1 lần ở DI (tránh .Add tích luỹ mỗi request nếu handler được pool).
@@ -90,6 +91,21 @@ public static class DependencyInjection
 
         services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IOtpService, OtpService>();
+
+        // SMS sender (SCRUM-64): dùng Twilio thật CHỈ khi đủ AccountSid + AuthToken + FromNumber.
+        // Thiếu bất kỳ cái nào (vd FromNumber trống vì Twilio trial chưa mua số) → LogSmsSender
+        // ghi OTP ra console cho dev/demo, KHÔNG gọi Twilio. Đăng ký HttpClient "Twilio" sẵn.
+        services.AddHttpClient("Twilio");
+        var twilioConfigured =
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AuthToken"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:FromNumber"]);
+        if (twilioConfigured)
+            services.AddScoped<ISmsSender, TwilioSmsSender>();
+        else
+            services.AddScoped<ISmsSender, LogSmsSender>();
+
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();
         services.AddScoped<IJiraGateway, JiraGateway>();

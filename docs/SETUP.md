@@ -11,6 +11,7 @@
 
 Cách gọn nhất — chạy cả SQL Server + Redis một lệnh (xem `docker-compose.yml` ở repo root):
 ```bash
+cp .env.example .env            # SA password cho SQL Server (gitignored; đổi nếu cần)
 docker compose up -d            # SQL Server (wh-sqlserver) + Redis (wh-redis)
 docker compose up -d wh-redis   # chỉ Redis (SCRUM-63)
 ```
@@ -41,13 +42,16 @@ dotnet user-secrets set "OAuth:google:ClientId" "<client-id>" --project src/Work
 dotnet user-secrets set "OAuth:google:ClientSecret" "<client-secret>" --project src/WorkspaceHub.Api
 dotnet user-secrets set "Cron:Secret" "<cron-secret>" --project src/WorkspaceHub.Api
 
-# 3. Apply migrations (tạo DB) — hiện có 4 migration: InitialCreate, UsersMultiAuth, ModelBConnections, RemoveClientCredentialsFromIntegration
+# 3. Apply migrations (tạo DB). Gồm: InitialCreate, UsersMultiAuth, ModelBConnections,
+#    RemoveClientCredentialsFromIntegration, ... , AddUserPhoneOtp (SCRUM-64: Users.Phone/PhoneVerified)
 dotnet ef database update --project src/WorkspaceHub.Infrastructure --startup-project src/WorkspaceHub.Api
 
-# 4. Run
-dotnet run --project src/WorkspaceHub.Api
-# Swagger: http://localhost:5118/swagger (https: 7010)
+# 4. Run (profile https — FE proxy trỏ tới https://localhost:7010)
+dotnet run --project src/WorkspaceHub.Api --launch-profile https
+# Swagger: https://localhost:7010/swagger (http vẫn mở ở 5118)
 ```
+
+> **HTTPS dev:** Vite proxy (`frontend/vite.config.ts`) trỏ `/api` → `https://localhost:7010` (`secure:false` để chấp nhận dev cert tự ký). Chạy BE bằng `--launch-profile https`. Lần đầu cần tin tưởng dev cert: `dotnet dev-certs https --trust`. Nếu muốn chạy http-only thì đổi target proxy về `http://localhost:5118`.
 
 > **Gotcha `dotnet ef`:** design-time factory đọc connection string theo thứ tự env `WORKSPACEHUB_CONNECTION` → appsettings của thư mục hiện tại. Nếu chạy `dotnet ef` từ thư mục Infrastructure (không có `--startup-project`), nó không thấy appsettings của Api và rơi về fallback `Trusted_Connection` (lỗi Kerberos trên macOS). Cách chắc nhất: luôn dùng `--startup-project src/WorkspaceHub.Api`, hoặc set env `WORKSPACEHUB_CONNECTION`.
 
@@ -70,7 +74,7 @@ dotnet run --project src/WorkspaceHub.Api
 | `Google:SignInRedirectUri` | callback URL Google Sign-In (`/auth/google/callback`) — tách khỏi connect flow |
 | `Cron:Secret` | bảo vệ /api/internal/process-scheduled (X-Cron-Secret) |
 | `ConnectionStrings:Redis` | Redis cho refresh token + OTP + OAuth state (SCRUM-63, vd `localhost:6379`) |
-| `Sms:Twilio:AccountSid` / `Sms:Twilio:AuthToken` / `Sms:Twilio:FromNumber` | Twilio SMS gửi OTP (SCRUM-64; thiếu → dev fallback `LogSmsSender` ghi OTP ra log) |
+| `Sms:Twilio:AccountSid` / `Sms:Twilio:AuthToken` / `Sms:Twilio:FromNumber` | Twilio SMS gửi OTP (SCRUM-64). Cần **đủ cả 3** mới gọi Twilio thật; thiếu bất kỳ cái nào (vd `FromNumber` trống) → fallback `LogSmsSender` ghi OTP ra console |
 | `Cors:AllowedOrigins` | (prod) origin FE cho cookie auth cross-site, vd `https://app.example.com` |
 
 > **Auth overhaul (SCRUM-62→64) — chưa merge, đang làm theo nhánh:** access token sẽ chuyển sang **HttpOnly cookie** (bỏ localStorage), refresh token lưu **Redis** với rotation, đăng ký thêm **OTP SMS qua Twilio**. Chi tiết quyết định: CHANGELOG.md mục [2026-06-30]. Khi các nhánh merge: cần chạy `docker compose up -d wh-redis`, set `ConnectionStrings:Redis` + `Sms:Twilio:*`, và chạy migration thêm cột `Users.Phone/PhoneVerified`.
@@ -99,6 +103,23 @@ Scope dùng (2 chiều, mô hình B — mỗi service xin riêng full scope):
 - Google Sign-In (đăng nhập): `openid email profile` (riêng, không tạo Connection)
 
 > Connection cũ connect bằng scope readonly (mô hình A) sau migration SCRUM-34 vẫn giữ token cũ → phải **reconnect** mới dùng được write-back.
+
+## Setup Twilio SMS OTP (SCRUM-64)
+
+OTP đăng ký gửi qua Twilio. Dev có thể bỏ qua → `LogSmsSender` ghi OTP ra **console** để demo.
+
+> **Điều kiện bật Twilio thật:** chỉ khi cấu hình **đủ cả 3** `Sms:Twilio:AccountSid` + `AuthToken` + `FromNumber`. Thiếu bất kỳ cái nào (vd Twilio trial chưa mua số nên `FromNumber` trống) → tự fallback `LogSmsSender` (log console, KHÔNG gọi Twilio). Tiện cho team test khi chưa có số gửi.
+
+Dùng SMS thật (Twilio trial — đủ cho đồ án):
+1. Đăng ký https://www.twilio.com/try-twilio → lấy **Account SID** + **Auth Token** (Console Dashboard).
+2. Trial cấp 1 số gửi (**From**) + phải **verify số nhận** trong "Verified Caller IDs" (giới hạn của trial).
+3. Set config (user-secrets / env):
+```bash
+dotnet user-secrets set "Sms:Twilio:AccountSid" "ACxxxx" --project src/WorkspaceHub.Api
+dotnet user-secrets set "Sms:Twilio:AuthToken" "xxxx" --project src/WorkspaceHub.Api
+dotnet user-secrets set "Sms:Twilio:FromNumber" "+1xxxxxxxxxx" --project src/WorkspaceHub.Api
+```
+SĐT nhập khi đăng ký phải dạng E.164 (vd `+84901234567`).
 
 ## Cron cho scheduled email (SCRUM-31)
 

@@ -21,6 +21,13 @@
   "Auth": {
     "CrossSiteCookies": false
   },
+  "Sms": {
+    "Twilio": {
+      "AccountSid": "",
+      "AuthToken": "",
+      "FromNumber": ""
+    }
+  },
   "Google": {
     "RedirectUri": "http://localhost:5173/oauth/callback",
     "SignInRedirectUri": "http://localhost:5173/auth/google/callback"

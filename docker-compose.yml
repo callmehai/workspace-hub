@@ -2,6 +2,7 @@
 #   docker compose up -d            # chạy cả SQL Server + Redis
 #   docker compose up -d wh-redis   # chỉ Redis (SCRUM-63)
 #
+# SA password đọc từ .env (gitignored) — copy .env.example → .env. Mặc định dev nếu thiếu.
 # SQL Server: khớp connection string trong appsettings.Development.json (xem docs/SETUP.md).
 # Redis: refresh token (SCRUM-63) + OTP (SCRUM-64) + OAuth state.
 services:
@@ -10,7 +11,7 @@ services:
     container_name: wh-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "Workspace#2026Dev"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Workspace#2026Dev}"
     ports:
       - "1433:1433"
     volumes:
