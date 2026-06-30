@@ -127,20 +127,17 @@ public class RefreshTokenServiceTests
     [Fact]
     public async Task Inactive_user_rejected_on_rotate()
     {
-        var user = ActiveUser();
+        // IssueAsync không gọi repo; chỉ rotate mới load user → trả user inactive là đủ.
+        var userId = Guid.NewGuid();
         var users = new Mock<IUserRepository>();
-        // Issue khi còn active...
-        var activeSnapshot = ActiveUser(user.Id);
-        users.SetupSequence(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new User { Id = user.Id, Email = "u@t.com", FullName = "U", Role = UserRole.User, IsActive = false });
-        var cache = CreateCache();
-        var service = new RefreshTokenService(CreateConfig(), cache, users.Object, NullLogger<RefreshTokenService>.Instance);
+        users.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { Id = userId, Email = "u@t.com", FullName = "U", Role = UserRole.User, IsActive = false });
+        var service = new RefreshTokenService(CreateConfig(), CreateCache(), users.Object, NullLogger<RefreshTokenService>.Instance);
 
-        var issued = await service.IssueAsync(user.Id);
+        var issued = await service.IssueAsync(userId);
 
         var act = () => service.ValidateAndRotateAsync(issued.RefreshToken);
         await act.Should().ThrowAsync<UnauthorizedException>();
-        _ = activeSnapshot;
     }
 
     [Fact]

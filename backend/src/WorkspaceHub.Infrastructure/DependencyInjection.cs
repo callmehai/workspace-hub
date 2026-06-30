@@ -56,6 +56,9 @@ public static class DependencyInjection
                 o.Configuration = redisConnection;
                 o.InstanceName = "wh:";
             });
+            // IConnectionMultiplexer cho thao tác atomic (GETDEL refresh jti — chống TOCTOU).
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(
+                _ => StackExchange.Redis.ConnectionMultiplexer.Connect(redisConnection));
         }
         else
         {

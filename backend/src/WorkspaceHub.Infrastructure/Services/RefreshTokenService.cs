@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -16,41 +17,67 @@ namespace WorkspaceHub.Infrastructure.Services;
 /// SCRUM-63 — refresh token service (JWT + jti, danh sách hiệu lực ở Redis qua IDistributedCache).
 ///
 /// Khoá Redis:
-///   refresh:{jti}    → "{userId}:{familyId}"   (1 refresh token còn sống)
-///   refreshfam:{fam} → "1"                       (marker family; xoá = revoke cả family)
+///   refresh:{jti}    → "1"   (1 refresh token còn sống; chỉ cần tồn-tại/không, claim đã ký trong JWT)
+///   refreshfam:{fam} → "1"   (marker family; xoá = revoke cả family)
 ///
 /// Rotation: mỗi lần refresh cấp jti mới (cùng family) + xoá jti cũ.
 /// Reuse detection: token ký hợp lệ + chưa hết hạn nhưng jti KHÔNG còn trong Redis
-///   → coi là token đã bị dùng lại (theft) → revoke cả family (xoá marker) → mọi
-///   refresh token cùng family thành vô hiệu.
+///   → coi là token đã bị dùng lại (theft) → revoke cả family (xoá marker).
+///
+/// Chống TOCTOU (SCRUM-63 review): khi có Redis thật, "tiêu thụ" jti bằng thao tác
+/// ATOMIC GETDEL (Lua) — 2 request đồng thời cùng token thì chỉ 1 cái xoá được key,
+/// cái còn lại thấy null → bị từ chối. Dev fallback (in-memory, không có
+/// IConnectionMultiplexer) dùng get+remove không atomic (chấp nhận cho single-instance dev).
 /// </summary>
 public class RefreshTokenService : IRefreshTokenService
 {
-    private readonly IConfiguration _config;
     private readonly IDistributedCache _cache;
     private readonly IUserRepository _users;
     private readonly ILogger<RefreshTokenService> _logger;
+    private readonly IConnectionMultiplexer? _redis;
 
     private const string FamilyClaim = "fam";
+
+    // JWT config đọc 1 lần (review #4) — config không đổi trong vòng đời service (Scoped).
+    private readonly SymmetricSecurityKey _signingKey;
+    private readonly string _issuer;
+    private readonly string _audience;
+    private readonly int _accessTtl;
+    private readonly int _refreshTtl;
+
+    // GETDEL atomic: trả value cũ nếu key tồn tại rồi xoá; không tồn tại → nil.
+    private const string GetDelScript = "local v = redis.call('GET', KEYS[1]); if v then redis.call('DEL', KEYS[1]) end; return v";
 
     public RefreshTokenService(
         IConfiguration config,
         IDistributedCache cache,
         IUserRepository users,
-        ILogger<RefreshTokenService> logger)
+        ILogger<RefreshTokenService> logger,
+        IConnectionMultiplexer? redis = null)
     {
-        _config = config;
         _cache = cache;
         _users = users;
         _logger = logger;
+        _redis = redis;
+
+        var jwt = config.GetSection("Jwt");
+        var secret = jwt["Secret"] ?? throw new InvalidOperationException("Jwt:Secret is not configured");
+        if (secret.Length < 32)
+            throw new InvalidOperationException("Jwt:Secret must be at least 32 characters");
+
+        _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        _issuer = jwt["Issuer"] ?? "WorkspaceHub";
+        _audience = jwt["Audience"] ?? "WorkspaceHub";
+        _accessTtl = int.TryParse(jwt["ExpiresIn"], out var a) ? a : 900;          // khớp config mặc định 15'
+        _refreshTtl = int.TryParse(jwt["RefreshExpiresIn"], out var r) ? r : 60 * 60 * 24 * 7; // 7 ngày
     }
 
     public async Task<IssuedRefreshToken> IssueAsync(Guid userId, CancellationToken ct = default)
     {
         var familyId = Guid.NewGuid().ToString("N");
-        var (token, _, expiresIn) = await CreateAndStoreRefreshTokenAsync(userId, familyId, ct);
+        var (token, _) = await CreateAndStoreRefreshTokenAsync(userId, familyId, ct);
         _logger.LogInformation("Issued refresh token. UserId={UserId}, Family={Family}", userId, familyId);
-        return new IssuedRefreshToken(token, expiresIn);
+        return new IssuedRefreshToken(token, _refreshTtl);
     }
 
     public async Task<RotatedTokens> ValidateAndRotateAsync(string refreshToken, CancellationToken ct = default)
@@ -78,11 +105,11 @@ public class RefreshTokenService : IRefreshTokenService
             throw new UnauthorizedException("Malformed refresh token");
         }
 
-        // 2. jti còn trong Redis? Không → token đã xoay/revoke/reuse.
-        var stored = await _cache.GetStringAsync(JtiKey(jti), ct);
-        if (stored is null)
+        // 2. Tiêu thụ jti ATOMIC (chống TOCTOU). consumed=false → jti không còn → reuse/revoke.
+        var consumed = await ConsumeJtiAsync(jti, ct);
+        if (!consumed)
         {
-            // Family còn marker mà jti mất → reuse (token theft) → revoke cả family.
+            // Family còn marker mà jti đã mất → reuse (token theft) → revoke cả family.
             if (await _cache.GetStringAsync(FamilyKey(familyId), ct) is not null)
             {
                 await _cache.RemoveAsync(FamilyKey(familyId), ct);
@@ -101,20 +128,19 @@ public class RefreshTokenService : IRefreshTokenService
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null || !user.IsActive)
         {
-            await RevokeFamilyAsync(familyId, jti, ct);
+            await _cache.RemoveAsync(FamilyKey(familyId), ct); // revoke family (jti đã tiêu thụ ở B2)
             throw new UnauthorizedException("User not found or inactive");
         }
 
-        // 5. Rotation: xoá jti cũ, cấp access + refresh mới (cùng family).
-        await _cache.RemoveAsync(JtiKey(jti), ct);
-        var (newRefresh, _, refreshExpiresIn) = await CreateAndStoreRefreshTokenAsync(userId, familyId, ct);
+        // 5. Rotation: cấp access + refresh mới (cùng family). jti cũ đã bị xoá atomic ở bước 2.
+        var (newRefresh, _) = await CreateAndStoreRefreshTokenAsync(userId, familyId, ct);
         var (accessToken, accessExpiresIn) = GenerateAccessToken(user);
 
         _logger.LogInformation("Rotated refresh token. UserId={UserId}, Family={Family}", userId, familyId);
 
         return new RotatedTokens(
             accessToken, accessExpiresIn,
-            newRefresh, refreshExpiresIn,
+            newRefresh, _refreshTtl,
             new UserId(user.Id, user.Email, user.FullName, user.Role.ToString()));
     }
 
@@ -128,83 +154,88 @@ public class RefreshTokenService : IRefreshTokenService
 
         var jti = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
         var familyId = principal.FindFirst(FamilyClaim)?.Value;
-        if (!string.IsNullOrEmpty(jti) && !string.IsNullOrEmpty(familyId))
-            await RevokeFamilyAsync(familyId, jti, ct);
+        if (!string.IsNullOrEmpty(jti))
+            await _cache.RemoveAsync(JtiKey(jti), ct);
+        if (!string.IsNullOrEmpty(familyId))
+            await _cache.RemoveAsync(FamilyKey(familyId), ct);
     }
 
     // ── helpers ──────────────────────────────────────────────────────
 
-    private async Task RevokeFamilyAsync(string familyId, string jti, CancellationToken ct)
+    /// <summary>
+    /// "Tiêu thụ" jti: trả true nếu key tồn tại VÀ đã xoá thành công (chỉ 1 caller thắng).
+    /// Redis thật → GETDEL atomic; in-memory dev → get+remove (best-effort, single-instance).
+    /// </summary>
+    private async Task<bool> ConsumeJtiAsync(string jti, CancellationToken ct)
     {
+        if (_redis is not null)
+        {
+            var db = _redis.GetDatabase();
+            // InstanceName của AddStackExchangeRedisCache là "wh:" → key thật có prefix.
+            var fullKey = $"wh:{JtiKey(jti)}";
+            var result = await db.ScriptEvaluateAsync(GetDelScript, new RedisKey[] { fullKey });
+            return !result.IsNull;
+        }
+
+        // Fallback dev (in-memory): không atomic — chấp nhận cho single-instance.
+        var stored = await _cache.GetStringAsync(JtiKey(jti), ct);
+        if (stored is null) return false;
         await _cache.RemoveAsync(JtiKey(jti), ct);
-        await _cache.RemoveAsync(FamilyKey(familyId), ct);
+        return true;
     }
 
-    private async Task<(string token, string jti, int expiresIn)> CreateAndStoreRefreshTokenAsync(
+    private async Task<(string token, string jti)> CreateAndStoreRefreshTokenAsync(
         Guid userId, string familyId, CancellationToken ct)
     {
         var jti = Guid.NewGuid().ToString("N");
-        var expiresIn = RefreshExpiresInSeconds();
-        var token = BuildRefreshJwt(userId, jti, familyId, expiresIn);
+        var token = BuildRefreshJwt(userId, jti, familyId, _refreshTtl);
 
         var options = new DistributedCacheEntryOptions
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(expiresIn)
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_refreshTtl)
         };
-        await _cache.SetStringAsync(JtiKey(jti), $"{userId}:{familyId}", options, ct);
+        // Value chỉ cần "tồn tại/không" — userId/family đã ký trong JWT (review #5).
+        await _cache.SetStringAsync(JtiKey(jti), "1", options, ct);
+        // Family TTL được "trượt" (gia hạn) mỗi lần rotate: session đang hoạt động giữ family
+        // sống tối đa thêm refreshTtl kể từ lần dùng cuối → idle quá refreshTtl thì family chết.
+        // (Khác jti dùng absolute expiry.) Đây là chủ ý — sliding session. (review #2)
         await _cache.SetStringAsync(FamilyKey(familyId), "1", options, ct);
 
-        return (token, jti, expiresIn);
+        return (token, jti);
     }
 
     private string BuildRefreshJwt(Guid userId, string jti, string familyId, int expiresIn)
     {
-        var (key, issuer, audience) = ReadJwtConfig();
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
+        var creds = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
             new Claim(JwtRegisteredClaimNames.Jti, jti),
             new Claim(FamilyClaim, familyId)
         };
-
         var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddSeconds(expiresIn),
-            signingCredentials: creds);
-
+            issuer: _issuer, audience: _audience, claims: claims,
+            expires: DateTime.UtcNow.AddSeconds(expiresIn), signingCredentials: creds);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private (string token, int expiresIn) GenerateAccessToken(User user)
     {
-        var (key, issuer, audience) = ReadJwtConfig();
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var expiresIn = AccessExpiresInSeconds();
-
+        var creds = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role.ToString())
         };
-
         var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddSeconds(expiresIn),
-            signingCredentials: creds);
-
-        return (new JwtSecurityTokenHandler().WriteToken(token), expiresIn);
+            issuer: _issuer, audience: _audience, claims: claims,
+            expires: DateTime.UtcNow.AddSeconds(_accessTtl), signingCredentials: creds);
+        return (new JwtSecurityTokenHandler().WriteToken(token), _accessTtl);
     }
 
     private ClaimsPrincipal ValidateToken(string token)
     {
-        var (key, issuer, audience) = ReadJwtConfig();
         var handler = new JwtSecurityTokenHandler();
         return handler.ValidateToken(token, new TokenValidationParameters
         {
@@ -212,32 +243,12 @@ public class RefreshTokenService : IRefreshTokenService
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
-            IssuerSigningKey = key,
+            ValidIssuer = _issuer,
+            ValidAudience = _audience,
+            IssuerSigningKey = _signingKey,
             ClockSkew = TimeSpan.Zero
         }, out _);
     }
-
-    private (SymmetricSecurityKey key, string issuer, string audience) ReadJwtConfig()
-    {
-        var jwt = _config.GetSection("Jwt");
-        var secret = jwt["Secret"]
-            ?? throw new InvalidOperationException("Jwt:Secret is not configured");
-        if (secret.Length < 32)
-            throw new InvalidOperationException("Jwt:Secret must be at least 32 characters");
-
-        return (
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
-            jwt["Issuer"] ?? "WorkspaceHub",
-            jwt["Audience"] ?? "WorkspaceHub");
-    }
-
-    private int AccessExpiresInSeconds()
-        => int.TryParse(_config["Jwt:ExpiresIn"], out var v) ? v : 3600;
-
-    private int RefreshExpiresInSeconds()
-        => int.TryParse(_config["Jwt:RefreshExpiresIn"], out var v) ? v : 60 * 60 * 24 * 7; // 7 ngày
 
     private static string JtiKey(string jti) => $"refresh:{jti}";
     private static string FamilyKey(string fam) => $"refreshfam:{fam}";
