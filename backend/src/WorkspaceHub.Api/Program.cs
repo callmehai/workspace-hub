@@ -145,7 +145,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(o => o.InjectJavascript("/swagger-auto-auth.js"));
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

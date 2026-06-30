@@ -17,7 +17,7 @@ export const OAuthCallback = () => {
     mutationFn: connectionsApi.oauthCallback,
     onSuccess: () => {
       toast.success('Connection successfully established');
-      navigate('/settings/integrations');
+      navigate('/integrations');
     },
     onError: (err) => {
       console.error(err);
@@ -47,7 +47,7 @@ export const OAuthCallback = () => {
         <div className="flex flex-col items-center space-y-4">
           <p className="text-red-500 font-medium">Failed to connect.</p>
           <button
-            onClick={() => navigate('/settings/integrations')}
+            onClick={() => navigate('/integrations')}
             className="px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors"
           >
             Return to Integrations

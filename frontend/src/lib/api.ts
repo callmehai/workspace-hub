@@ -11,6 +11,7 @@ export const tokenStore = {
 // Dev: dùng proxy '/api' (xem vite.config.ts). Prod: set VITE_API_URL.
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? '/api',
+  timeout: 3000,
 })
 
 // Gắn JWT vào mọi request.

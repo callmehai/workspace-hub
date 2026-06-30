@@ -1,5 +1,6 @@
-import { Search, Bell, Settings } from 'lucide-react';
+import { Search, Bell, Settings, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { Link } from 'react-router-dom';
 
 export const Header = () => {
   const { user } = useAuth();
@@ -18,6 +19,13 @@ export const Header = () => {
       </div>
       
       <div className="flex items-center space-x-4 ml-4">
+        <Link
+          to="/integrations"
+          className="inline-flex items-center gap-1.5 h-8 px-3.5 border border-transparent rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Kết nối dịch vụ</span>
+        </Link>
         <button className="text-gray-500 hover:text-white transition-colors relative">
           <Bell className="w-5 h-5" />
           <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-dark-900"></span>
