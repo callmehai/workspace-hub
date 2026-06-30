@@ -2,6 +2,38 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-06-30 — kế hoạch, ĐANG TRIỂN KHAI theo nhánh] Đại tu Auth: HttpOnly cookie + refresh token (Redis) + OTP đăng ký (Twilio)
+
+> ⚠️ **VƯỢT SCOPE SCRUM-42 và thay đổi NỀN TẢNG AUTH chung** (Lộc/Khánh/Vũ phụ thuộc). Yêu cầu phát sinh từ owner (ngoài board lúc ghi). Đã tách thành **3 ticket mới SCRUM-62/63/64** (xem SPRINTS.md) + làm theo **3 nhánh riêng** để dễ review, không dồn vào PR SCRUM-42. Ghi lại đây để cả nhóm nắm "tại sao" vì nó **đảo nhiều quyết định cũ** ở CLAUDE.md.
+
+### Bối cảnh — đảo các quyết định cũ
+- CLAUDE.md cũ: *"Token encryption (Data Protection) chỉ cho OAuth connection token, KHÔNG cho JWT login"*, *"stateless JWT MVP, không blacklist, không refresh"*, dùng `AddDistributedMemoryCache`, đăng ký = email+password đơn giản. Đợt này thay đổi cả 4 điểm trên.
+
+### Quyết định 1 — Access token → **HttpOnly cookie** (SCRUM-62)
+- **Vấn đề với yêu cầu gốc "mã hoá token rồi lưu cookie":** mã hoá ở **client là bảo mật giả** — FE là JS, key nằm trong bundle, ai mở DevTools cũng giải mã được. Cách đúng để "ẩn token khỏi JS" là **HttpOnly cookie** do server set (JS không đọc được) → chống XSS đánh cắp token. **Không tự mã hoá ở FE.**
+- **BE:** login / google-callback / register-verified set JWT vào cookie `wh_access` (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, `Max-Age=expiresIn`). JwtBearer đọc token từ cookie qua `OnMessageReceived` (fallback vẫn nhận `Authorization: Bearer` để Swagger/Postman dùng được). **KHÔNG còn trả `accessToken` trong body** (chỉ trả `user` + `expiresIn`).
+- **CSRF:** cookie tự gửi kèm → phải chống CSRF. Dùng **double-submit cookie**: thêm cookie `wh_csrf` (KHÔNG HttpOnly) + middleware bắt buộc header `X-CSRF-Token` khớp trên mọi request mutating (POST/PUT/PATCH/DELETE). FE đọc cookie `wh_csrf` gắn vào header.
+- **CORS:** dev dùng Vite proxy (same-origin → không cần CORS). Prod: `AddCors` với `WithOrigins(FE)` + `AllowCredentials()` (KHÔNG dùng `AllowAnyOrigin` cùng credentials — bị cấm). Cookie cross-site prod cần `SameSite=None; Secure`.
+- **FE:** bỏ `tokenStore`/localStorage, axios `withCredentials: true`, bỏ interceptor gắn Bearer; thêm interceptor đọc `wh_csrf` → `X-CSRF-Token`. `AuthContext.login` không nhận token nữa, chỉ set user cache + gọi `/auth/me`.
+
+### Quyết định 2 — **Refresh token + Redis** (SCRUM-63)
+- App chuyển từ **stateless → có refresh token server-side**. Access token TTL ngắn (vd 15 phút); refresh token TTL dài (vd 7 ngày) lưu **Redis** (key `refresh:{jti}` → userId + metadata), set vào cookie `wh_refresh` (HttpOnly, `Path=/api/auth/refresh`).
+- **Luồng = sơ đồ Client/Cookie/Redis (chốt 2026-06-30):** access + refresh token đều ở **HttpOnly cookie** phía client; refresh có **bản đối chiếu ở Redis**. Cách đối chiếu = **JWT refresh + `jti`** (Redis lưu `jti → metadata`, verify = check chữ ký JWT + tra jti còn sống) — KHÔNG dùng opaque-token-hash. Chọn jti để thống nhất hạ tầng JWT sẵn có; revoke vẫn bằng xoá key Redis như cách hash.
+- **Rotation:** mỗi lần `/auth/refresh` cấp access mới + **xoay refresh token mới**, revoke token cũ (xoá key Redis). Phát hiện reuse token đã revoke → revoke cả family (chống token theft).
+- **Hạ tầng:** thêm Redis qua **docker-compose** (`wh-redis`), đổi `AddDistributedMemoryCache` → `AddStackExchangeRedisCache` (dev fallback in-memory nếu thiếu Redis, log warning). OTP (QĐ 3) cũng dùng Redis store này.
+- **Logout giờ STATEFUL:** revoke refresh token trong Redis + clear cả 3 cookie. (Khác MVP cũ "client tự xoá token".)
+- **FE:** interceptor 401 → gọi `/auth/refresh` 1 lần → retry request gốc (single-flight queue tránh refresh dồn); refresh fail → logout + về /login.
+
+### Quyết định 3 — **OTP đăng ký qua SMS (Twilio)** (SCRUM-64)
+- **Flow (chốt): tạo account trước, verify sau.** Register tạo user ngay với `PhoneVerified=false` (+ cột `Phone`), gửi OTP qua SMS; user nhập OTP ở `/auth/verify-otp` để set `PhoneVerified=true`. **Login chặn user `PhoneVerified=false`** (trả 403 + tín hiệu cần verify) — trừ Google Sign-In (bỏ qua OTP, không có phone).
+- **OTP store:** Redis key `otp:{userId}` → mã 6 số hash + count, TTL 5 phút; rate-limit gửi lại (cooldown 60s) + tối đa N lần verify sai.
+- **Provider:** **Twilio** (trial — đủ cho đồ án). `ISmsSender` ở Application; `TwilioSmsSender` ở Infrastructure đọc `Sms:Twilio:AccountSid/AuthToken/FromNumber` từ config. Dev có thể dùng `LogSmsSender` (ghi OTP ra log) khi chưa cấu hình Twilio.
+- **DB:** migration thêm `Users.Phone` (string null), `Users.PhoneVerified` (bool, default true cho user cũ để không phá đăng nhập hiện có). Endpoint mới: `POST /api/auth/send-otp`, `POST /api/auth/verify-otp`.
+- **FE:** Register thêm field SĐT; sau register điều hướng màn nhập OTP (resend + đếm ngược).
+
+### Ngoài scope đợt này (cố ý)
+- KHÔNG đụng mã hoá **OAuth connection token** (Data Protection giữ nguyên). KHÔNG làm email-verification (chỉ phone OTP). KHÔNG đa thiết bị/quản lý session nâng cao (chỉ rotation cơ bản). Multi-region Redis, Twilio production (mua số) → để sau.
+
 ## [2026-06-28] Fix code-review phase Jira (PR #46)
 
 - **`ProviderAccountId` Jira = cloudId (KHÔNG phải account_id):** `JiraStrategy` trước lưu `account_id` từ `/me`, nhưng base URL gọi Jira REST là `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3` → sai giá trị làm mọi call 404. Đổi sang gọi `GET /oauth/token/accessible-resources`, lấy `id` (cloudId) của site đầu tiên làm `ProviderAccountId`. **Đây là bug chặn — Jira integration không thể hoạt động nếu không có fix này.**

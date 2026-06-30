@@ -113,6 +113,24 @@
 
 ---
 
+## Auth overhaul — cookie + refresh/Redis + OTP (SCRUM-62→64)
+
+> ⚠️ **Phát sinh ngoài board (yêu cầu owner 2026-06-30), VƯỢT SCOPE SCRUM-42, ĐẢO nhiều quyết định nền tảng auth** (xem CHANGELOG mục [2026-06-30]). Làm theo **3 nhánh riêng** (không dồn vào PR SCRUM-42) theo thứ tự phụ thuộc: 62 → 63 → 64. **Cần báo team trước khi merge** vì đụng auth chung (Lộc/Khánh/Vũ). Số ticket 62/63/64 là **tạm gán ở docs** — tạo ticket Jira thật trước khi merge.
+
+| Ticket | Việc | Assignee | Dependency | Status |
+|---|---|---|---|---|
+| SCRUM-62 | Access token → **HttpOnly cookie** + CSRF (BE Set-Cookie + đọc JWT từ cookie; FE bỏ localStorage, withCredentials, CSRF header) | — | — | ✅ Done (nhánh `feat/SCRUM-62-httponly-cookie-auth`) — BE: `AuthCookieService` set cookie `wh_access` (HttpOnly) + `wh_csrf` (double-submit); `AuthController` trả `AuthResultDto` (bỏ token khỏi body) + logout xoá cookie; JwtBearer `OnMessageReceived` đọc token từ cookie (fallback Bearer cho Swagger/Postman); `CsrfMiddleware` bắt header `X-CSRF-Token` trên request mutating có cookie; CORS opt-in `Cors:AllowedOrigins` + `AllowCredentials` (prod), `Auth:CrossSiteCookies` cho SameSite=None. FE: `api.ts` `withCredentials` + interceptor gắn CSRF header, bỏ `tokenStore`/Bearer; `AuthContext.login(user)` (không nhận token); `/auth/me` luôn gọi (cookie quyết định). Build BE + FE pass. |
+| SCRUM-63 | **Refresh token + Redis** (rotation, `/auth/refresh`, logout stateful, docker-compose `wh-redis`, `AddStackExchangeRedisCache`; FE auto-refresh single-flight) | — | 62 | ⏳ To Do — nhánh `feat/SCRUM-63-refresh-token-redis` |
+| SCRUM-64 | **OTP đăng ký qua Twilio** (cột `Users.Phone`/`PhoneVerified` + migration, `ISmsSender`+Twilio, `/auth/send-otp` + `/auth/verify-otp`, OTP store Redis, login chặn chưa verify; FE field SĐT + màn OTP) | — | 63 (dùng Redis store) | ⏳ To Do — nhánh `feat/SCRUM-64-register-otp-twilio` |
+
+**Phối hợp / lưu ý:**
+- 62 đổi **hợp đồng response auth** (bỏ `accessToken` khỏi body) → mọi nơi FE đọc token phải sửa; báo Dũng (FE) + Lộc (auth).
+- 63 đổi `AddDistributedMemoryCache` → Redis: ảnh hưởng cả `ConnectionsService` (đang dùng `IDistributedCache` cho OAuth state) — verify state OAuth vẫn chạy trên Redis.
+- 64 migration thêm cột Users: `PhoneVerified` default **true** cho user cũ (không phá login hiện có); chỉ user đăng ký mới sau migration mới phải verify.
+- Twilio = trial; dev fallback `LogSmsSender` (OTP ra log) khi chưa cấu hình `Sms:Twilio:*`.
+
+---
+
 ## Ngoài scope (KHÔNG có ticket Jira)
 
 Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — chỉ là định hướng tương lai, đừng code, đừng gán số SCRUM (số 39–46 nay đã dùng cho việc khác; Jira giờ là 54→60):
