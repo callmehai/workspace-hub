@@ -6,9 +6,11 @@ import { RegisterPage } from './pages/RegisterPage';
 import { Inbox } from './pages/Inbox';
 import { Projects } from './pages/Projects';
 import { KanbanBoard } from './pages/KanbanBoard';
-import { Integrations } from './pages/settings/Integrations';
+import { Integrations } from './pages/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
-
+import { ScheduledEmails } from './pages/ScheduledEmails';
+import { GoogleCallback } from './pages/auth/GoogleCallback';
+import { VerifyOtp } from './pages/auth/VerifyOtp';
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -19,8 +21,16 @@ export const router = createBrowserRouter([
     element: <OAuthCallback />,
   },
   {
+    path: '/auth/google/callback',
+    element: <GoogleCallback />,
+  },
+  {
     path: '/register',
     element: <RegisterPage />,
+  },
+  {
+    path: '/verify-otp',
+    element: <VerifyOtp />,
   },
   {
     path: '/',
@@ -42,8 +52,12 @@ export const router = createBrowserRouter([
             element: <KanbanBoard />,
           },
           {
-            path: 'settings/integrations',
+            path: 'integrations',
             element: <Integrations />,
+          },
+          {
+            path: 'scheduled-emails',
+            element: <ScheduledEmails />,
           },
           {
             path: '*',

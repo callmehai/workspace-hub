@@ -19,5 +19,10 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
         RuleFor(x => x.FullName)
             .NotEmpty().WithMessage("Full name is required")
             .MaximumLength(200).WithMessage("Full name must not exceed 200 characters");
+
+        // SCRUM-64: SĐT định dạng E.164 (vd +84901234567) để gửi OTP qua Twilio.
+        RuleFor(x => x.Phone)
+            .NotEmpty().WithMessage("Phone is required")
+            .Matches(@"^\+[1-9]\d{7,14}$").WithMessage("Phone must be E.164 format, e.g. +84901234567");
     }
 }

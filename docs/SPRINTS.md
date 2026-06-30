@@ -75,7 +75,7 @@
 | SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | ⏳ To Do |
 | SCRUM-38 | Conflict resolution chung (ETag → 409) | Lộc | 37 | ✅ Done — `WriteBackGuard : IWriteBackGuard.EnsureNoConflict(storedEtag, providerEtag)` (chỉ so sánh, không I/O; lệch → `ConflictException` → 409 qua middleware; null/empty một bên → skip-check). Thay `TempWriteBackGuard` placeholder của Vũ, DI cập nhật. Test: `WriteBackGuardTests` (9 case). Log `LogWarning` khi conflict. |
 | SCRUM-41 | FE: API layer (axios + JWT interceptor + TanStack Query) | Vũ | — | ⏳ To Do |
-| SCRUM-42 | FE: Wire Login/Register vào API | Lộc | 41 | ⏳ To Do |
+| SCRUM-42 | FE: Wire Login/Register vào API | Lộc | 41 | ✅ Done — `Login.tsx` + `RegisterPage.tsx` redesign theo prototype (card + logo W + banner lỗi + inline field error + Google button). Login gọi `POST /api/auth/login` → lưu token qua `tokenStore` + `login()`, redirect `/`; lỗi 401 (sai mật khẩu/khoá) hiện ở banner. Register gọi `POST /api/auth/register` (thêm confirm-password client-side), 409 email trùng → banner. Refresh giữ session qua `AuthContext` (`/auth/me`); logout xoá token. `ApiError` type khớp error envelope SCRUM-24. **Google Sign-In FE:** nút "Đăng nhập/Đăng ký bằng Google" gọi `POST /api/auth/google/start` → redirect Google → callback route riêng `/auth/google/callback` (`GoogleCallback.tsx`) đổi code+state qua `POST /api/auth/google/callback` → login + redirect. Dùng config `Google:SignInRedirectUri` (= `/auth/google/callback`) tách khỏi `/oauth/callback` của connect-để-sync. **Logout:** nút ở user block cuối Sidebar gọi `authApi.logout()` (`POST /api/auth/logout`) + xoá token + clear query cache, redirect `/login`. |
 | SCRUM-43 | FE: Connections page (list/connect/disconnect per-service) | Khánh | 41 | ⏳ To Do |
 
 **Phối hợp:** SCRUM-37 (Vũ) đang review; SCRUM-38 (Lộc) thống nhất interface `IWriteBackGuard` trước khi code. Scheduled email (30/31) viết theo mô hình B (`ScheduledEmails.ConnectionId` → Connection ServiceType=Gmail).
@@ -86,14 +86,15 @@
 |---|---|---|---|
 | SCRUM-44 | FE: Inbox/Items view (list + filter + search + pagination) | Huy | ✅ Done — `frontend/src/pages/Inbox.tsx` rebuild hoàn toàn theo `docs/prototype/` (design system slate-50/indigo-600, Inter font); TanStack Query `useQuery` key `['items', {status,type,isImportant,search,page,limit}]` gọi `itemsApi.getItems(params)`; filter chips Status (Inbox/Doing/Done) + Type (Email/Event/File/Note) + Important toggle; debounce search 350ms; numbered pagination + Prev/Next (reset page khi đổi filter); skeleton loading / empty-state / error-state; type icon tile màu (blue/amber/emerald/slate); status chip màu; `selectedId` local state cho active row; build TypeScript clean + eslint Inbox clean. |
 | SCRUM-45 | FE: Kanban 3 cột (drag-drop) + Folder sidebar | Huy | ⏳ To Do |
-| SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ⏳ To Do |
-| SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Vũ | ⏳ To Do |
+| SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ✅ Done — Hỗ trợ Email (star/read/label/trash), Event (CRUD), File (rename/trash), Ticket (assignee/priority/transition/comment) kèm ETag/version conflict resolution |
+| SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Khánh | ✅ Done — Giao diện 2 cột, validation client, OData filter/pagination, modal HTML. |
 | SCRUM-48 | FE: Loading/error/toast chuẩn | Khánh | ⏳ To Do |
 | SCRUM-49 | FE: Admin dashboard (users list + stats charts) | Huy | ⏳ To Do |
 | SCRUM-50 | FE: Responsive polish + dashboard chart + dark mode | Dũng | ⏳ To Do |
 | SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do |
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
+| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | ⏳ To Do |
 
 ## Phase Jira — Atlassian integration (SCRUM-54→60)
 
@@ -110,6 +111,24 @@
 | SCRUM-60 | Jira: ImportantContacts `JiraAccount` + Notification type (optional) | Lộc | 54 | ✅ Done — thêm `ImportantContactType.JiraAccount` (enum lưu string, KHÔNG cần migration); CRUD `ImportantContactsController` (`GET /api/importantcontacts?type=`, `POST`, `DELETE /{id}`) + `IImportantContactService`/`ImportantContactService` + repo (`GetByUserAsync`/`ExistsAsync`/`GetByIdAndUserAsync`) + validator (Email→email hợp lệ, JiraAccount→accountId tự do). UNIQUE(UserId,Type,Identifier) → 409 trùng; owner-only → 404. Unit test: `ImportantContactServiceTests` (6), `CreateImportantContactRequestValidatorTests` (5). **Notification type cho Jira: bỏ qua** (optional + chưa có nguồn sync-event Jira → tránh dead code). |
 
 **Phối hợp:** 54 mở đường (Integration + OAuth + cloudId) cho tất cả. 57 tái dùng `IWriteBackGuard` của SCRUM-38 (Jira không có HTTP ETag → dùng `fields.updated` làm version-token lưu trong `Items.ETag`). 56 cần 59 (metadata để chọn project/issue-type/priority khi tạo). Khác Gmail: nội dung Jira (summary/description) **sửa được**, không immutable.
+
+---
+
+## Auth overhaul — cookie + refresh/Redis + OTP (SCRUM-62→64)
+
+> ⚠️ **Phát sinh ngoài board (yêu cầu owner 2026-06-30), VƯỢT SCOPE SCRUM-42, ĐẢO nhiều quyết định nền tảng auth** (xem CHANGELOG mục [2026-06-30]). Làm theo **3 nhánh riêng** (không dồn vào PR SCRUM-42) theo thứ tự phụ thuộc: 62 → 63 → 64. **Cần báo team trước khi merge** vì đụng auth chung (Lộc/Khánh/Vũ). Số ticket 62/63/64 là **tạm gán ở docs** — tạo ticket Jira thật trước khi merge.
+
+| Ticket | Việc | Assignee | Dependency | Status |
+|---|---|---|---|---|
+| SCRUM-62 | Access token → **HttpOnly cookie** + CSRF (BE Set-Cookie + đọc JWT từ cookie; FE bỏ localStorage, withCredentials, CSRF header) | — | — | ✅ Done (nhánh `feat/SCRUM-62-httponly-cookie-auth`) — BE: `AuthCookieService` set cookie `wh_access` (HttpOnly) + `wh_csrf` (double-submit); `AuthController` trả `AuthResultDto` (bỏ token khỏi body) + logout xoá cookie; JwtBearer `OnMessageReceived` đọc token từ cookie (fallback Bearer cho Swagger/Postman); `CsrfMiddleware` bắt header `X-CSRF-Token` trên request mutating có cookie; CORS opt-in `Cors:AllowedOrigins` + `AllowCredentials` (prod), `Auth:CrossSiteCookies` cho SameSite=None. FE: `api.ts` `withCredentials` + interceptor gắn CSRF header, bỏ `tokenStore`/Bearer; `AuthContext.login(user)` (không nhận token); `/auth/me` luôn gọi (cookie quyết định). Build BE + FE pass. |
+| SCRUM-63 | **Refresh token + Redis** (rotation, `/auth/refresh`, logout stateful, docker-compose `wh-redis`, `AddStackExchangeRedisCache`; FE auto-refresh single-flight) | — | 62 | ✅ Done (nhánh `feat/SCRUM-63-refresh-token-redis`) — BE: `IRefreshTokenService`/`RefreshTokenService` (JWT+`jti`, Redis `refresh:{jti}` + `refreshfam:{fam}`, rotation, reuse→revoke family, inactive user→reject); `AuthCookieService.IssueRefreshCookie` cookie `wh_refresh` (HttpOnly, Path=/api/auth/refresh) + ClearAuthCookies xoá cả refresh; `AuthController` issue refresh khi login/register/google + `POST /api/auth/refresh` (rotate) + logout revoke; `AddStackExchangeRedisCache` (fallback in-memory + warning nếu thiếu `ConnectionStrings:Redis`); `docker-compose.yml` (`wh-redis` + `wh-sqlserver`); access TTL 15' (`Jwt:ExpiresIn=900`), refresh 7d (`Jwt:RefreshExpiresIn`). FE: `api.ts` interceptor 401 → `/auth/refresh` single-flight → retry, fail → /login. Test: `RefreshTokenServiceTests` (8). Build BE+FE pass, 223 test pass. |
+| SCRUM-64 | **OTP đăng ký qua Twilio** (cột `Users.Phone`/`PhoneVerified` + migration, `ISmsSender`+Twilio, `/auth/send-otp` + `/auth/verify-otp`, OTP store Redis, login chặn chưa verify; FE field SĐT + màn OTP) | — | 63 (dùng Redis store) | ✅ Done (nhánh `feat/SCRUM-64-register-otp-twilio`) — Migration `AddUserPhoneOtp` (Phone nvarchar(20) null + PhoneVerified bit default **true** cho user cũ) **đã apply DB**. BE: `ISmsSender` + `TwilioSmsSender` (REST, basic auth) + `LogSmsSender` (dev fallback, OTP ra log — chọn theo `Sms:Twilio:AccountSid`); `IOtpService`/`OtpService` (Redis `otp:{userId}` hash SHA-256 + attempts, TTL 5', cooldown 60s, max 5 sai); register tạo user `PhoneVerified=false` + gửi OTP (trả `RegisterResult`, KHÔNG phát token); `POST /auth/send-otp` + `/auth/verify-otp` (verify → set PhoneVerified=true → đăng nhập); login chặn chưa verify → 403 `PHONE_NOT_VERIFIED`. FE: Register thêm field SĐT (E.164) → `/verify-otp` (`VerifyOtp.tsx`, resend + đếm ngược); Login bắt 403 → gửi OTP + sang màn verify. Test: `OtpServiceTests` (5) — **228 test pass**. Build BE+FE pass. |
+
+**Phối hợp / lưu ý:**
+- 62 đổi **hợp đồng response auth** (bỏ `accessToken` khỏi body) → mọi nơi FE đọc token phải sửa; báo Dũng (FE) + Lộc (auth).
+- 63 đổi `AddDistributedMemoryCache` → Redis: ảnh hưởng cả `ConnectionsService` (đang dùng `IDistributedCache` cho OAuth state) — verify state OAuth vẫn chạy trên Redis.
+- 64 migration thêm cột Users: `PhoneVerified` default **true** cho user cũ (không phá login hiện có); chỉ user đăng ký mới sau migration mới phải verify.
+- Twilio = trial; dev fallback `LogSmsSender` (OTP ra log) khi chưa cấu hình `Sms:Twilio:*`.
 
 ---
 

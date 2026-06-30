@@ -54,3 +54,26 @@ export interface ItemFolderResponse {
   position: number;
   addedAt: string;
 }
+
+export interface PatchItemRequest {
+  isUnread?: boolean;
+  isStarred?: boolean;
+  addLabels?: string[];
+  removeLabels?: string[];
+  isTrashed?: boolean;
+  title?: string;
+  start?: string; // ISO DateTime
+  end?: string; // ISO DateTime
+  location?: string;
+  attendees?: string[];
+  name?: string;
+}
+
+export interface CreateEventRequest {
+  connectionId: string;
+  title: string;
+  start: string;
+  end: string;
+  location?: string;
+  attendees?: string[];
+}

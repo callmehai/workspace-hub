@@ -1,6 +1,7 @@
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
 
@@ -9,10 +10,13 @@ namespace WorkspaceHub.Infrastructure.Services;
 public class GoogleDriveGateway : IGoogleDriveGateway
 {
     private readonly ITokenService _tokenService;
+    private readonly ILogger<GoogleDriveGateway> _logger;
+    private const int InitialSyncPageSize = 100; // MVP: chỉ lấy N file mới nhất ở lần sync đầu tiên
 
-    public GoogleDriveGateway(ITokenService tokenService)
+    public GoogleDriveGateway(ITokenService tokenService, ILogger<GoogleDriveGateway> logger)
     {
         _tokenService = tokenService;
+        _logger = logger;
     }
 
     private async Task<DriveService> BuildDriveServiceAsync(Connection connection, CancellationToken ct)
@@ -37,25 +41,24 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             if (string.IsNullOrEmpty(pageToken))
             {
                 var listRequest = service.Files.List();
-                listRequest.PageSize = 50;
-                listRequest.Fields = "nextPageToken, files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
+                listRequest.PageSize = InitialSyncPageSize;
+                listRequest.Fields = "files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
                 listRequest.OrderBy = "modifiedTime desc";
 
-                string? filesPageToken = null;
-                do
+                var response = await listRequest.ExecuteAsync(ct);
+                if (response.Files != null)
                 {
-                    listRequest.PageToken = filesPageToken;
-                    var response = await listRequest.ExecuteAsync(ct);
-                    if (response.Files != null)
-                    {
-                        foreach (var file in response.Files)
-                            filesDto.Add(MapToDto(file));
-                    }
-                    filesPageToken = response.NextPageToken;
-                } while (!string.IsNullOrEmpty(filesPageToken));
+                    foreach (var file in response.Files)
+                        filesDto.Add(MapToDto(file));
+                    // [Info] Silent truncation warning: nếu Drive có > InitialSyncPageSize file,
+                    // user sẽ không thấy toàn bộ — chấp nhận được ở MVP.
+                    if ((response.Files?.Count ?? 0) >= InitialSyncPageSize)
+                        _logger.LogWarning("Drive initial sync capped at {PageSize} files — account may have more. Silent truncation in effect (MVP).", InitialSyncPageSize);
+                }
 
                 var tokenResponse = await service.Changes.GetStartPageToken().ExecuteAsync(ct);
-                nextToken = tokenResponse.StartPageTokenValue;
+                nextToken = tokenResponse.StartPageTokenValue
+                    ?? throw new InvalidOperationException("Drive API returned null start page token.");
 
                 return new DriveSyncResult(false, filesDto, nextToken); // nextToken = NewStartPageToken (sync cursor)
             }
@@ -64,6 +67,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             while (true)
             {
                 var changesRequest = service.Changes.List(pageToken);
+                changesRequest.PageSize = 1000;
                 changesRequest.Fields = "nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId), removed)";
 
                 var response = await changesRequest.ExecuteAsync(ct);
@@ -88,7 +92,8 @@ public class GoogleDriveGateway : IGoogleDriveGateway
                 }
                 else
                 {
-                    nextToken = response.NewStartPageToken;
+                    nextToken = response.NewStartPageToken
+                        ?? throw new InvalidOperationException("Drive Changes API returned null NewStartPageToken.");
                     break;
                 }
             }

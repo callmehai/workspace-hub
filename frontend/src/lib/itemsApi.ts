@@ -1,9 +1,9 @@
 import api from './api';
 import type { 
   PagedResult, ItemResponse, UpdateItemStatusRequest, CreateNoteRequest, 
-  FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType
+  FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType,
+  PatchItemRequest, CreateEventRequest
 } from '../types/items';
-
 
 export interface GetItemsParams {
   folderId?: string;
@@ -15,9 +15,16 @@ export interface GetItemsParams {
   limit?: number;
 }
 
+
+
 export const itemsApi = {
   getItems: async (params?: GetItemsParams): Promise<PagedResult<ItemResponse>> => {
     const response = await api.get('/items', { params });
+    return response.data;
+  },
+  
+  getItemById: async (id: string): Promise<ItemResponse> => {
+    const response = await api.get(`/items/${id}`);
     return response.data;
   },
   
@@ -25,14 +32,30 @@ export const itemsApi = {
     const response = await api.patch(`/items/${id}/status`, request);
     return response.data;
   },
-
-  updateItemImportant: async (id: string, isImportant: boolean): Promise<ItemResponse> => {
-    const response = await api.patch(`/items/${id}/important`, { isImportant });
+  
+  createNote: async (request: CreateNoteRequest): Promise<ItemResponse> => {
+    const response = await api.post('/items/note', request);
     return response.data;
   },
 
-  createNote: async (request: CreateNoteRequest): Promise<ItemResponse> => {
-    const response = await api.post('/items/note', request);
+  createEvent: async (request: CreateEventRequest): Promise<ItemResponse> => {
+    const response = await api.post('/items/event', request);
+    return response.data;
+  },
+
+
+
+  patchItem: async (id: string, request: PatchItemRequest): Promise<ItemResponse> => {
+    const response = await api.patch(`/items/${id}`, request);
+    return response.data;
+  },
+
+  deleteItem: async (id: string): Promise<void> => {
+    await api.delete(`/items/${id}`);
+  },
+
+  updateItemImportant: async (id: string, isImportant: boolean): Promise<ItemResponse> => {
+    const response = await api.patch(`/items/${id}/important`, { isImportant });
     return response.data;
   },
 };
@@ -52,3 +75,6 @@ export const foldersApi = {
     await api.delete(`/folders/${folderId}/items/${itemId}`);
   }
 };
+
+
+

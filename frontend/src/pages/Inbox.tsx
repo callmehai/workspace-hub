@@ -1,13 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemsApi } from '../lib/itemsApi';
-import type { ItemType, ItemStatus, ItemResponse } from '../types/items';
+import type { ItemType, ItemStatus } from '../types/items';
 import {
   Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight, Search, LayoutGrid, List,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 const LIMIT = 20;
 
@@ -17,13 +19,7 @@ function formatTime(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-  if (diffDays === 1) return 'Hôm qua';
-  if (diffDays < 7) return d.toLocaleDateString('vi-VN', { weekday: 'short' });
-  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  return formatDistanceToNow(d, { addSuffix: true, locale: vi });
 }
 
 function typeLabel(t: ItemType): string {
@@ -144,7 +140,7 @@ export const Inbox = () => {
   const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const [selectedItem, setSelectedItem] = useState<ItemResponse | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -185,8 +181,6 @@ export const Inbox = () => {
         if (!old) return old;
         return { ...old, items: old.items.map((it: any) => it.id === id ? { ...it, isImportant } : it) };
       });
-      // also update the open detail panel if it's the same item
-      setSelectedItem(prev => prev && prev.id === id ? { ...prev, isImportant } : prev);
       return { previous };
     },
     onError: (_err, _vars, ctx: any) => {
@@ -258,7 +252,6 @@ export const Inbox = () => {
 
         {/* ── Filter bar ── */}
         <div className="flex flex-wrap gap-2 items-center mb-4">
-          {/* Status chips */}
           {STATUS_FILTERS.map(f => (
             <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => { setStatusFilter(f.value); setPage(1); }}>
               {f.label}
@@ -267,7 +260,6 @@ export const Inbox = () => {
 
           <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
 
-          {/* Type chips */}
           {TYPE_FILTERS.map(f => (
             <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => { setTypeFilter(f.value); setPage(1); }}>
               {f.value ? (
@@ -280,7 +272,6 @@ export const Inbox = () => {
 
           <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
 
-          {/* Important toggle */}
           <Chip active={importantOnly} onClick={() => { setImportantOnly(v => !v); setPage(1); }}>
             <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
             Quan trọng
@@ -314,10 +305,8 @@ export const Inbox = () => {
         {/* ── Content ── */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
 
-          {/* Loading */}
           {isLoading && Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}
 
-          {/* Error */}
           {isError && (
             <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
               <AlertCircle className="w-8 h-8 text-rose-400" />
@@ -326,7 +315,6 @@ export const Inbox = () => {
             </div>
           )}
 
-          {/* Empty */}
           {isEmpty && (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <InboxIcon className="w-10 h-10 text-slate-300" />
@@ -337,19 +325,16 @@ export const Inbox = () => {
             </div>
           )}
 
-          {/* List */}
           {showList && items.map((item) => (
             <div
               key={item.id}
-              onClick={() => setSelectedItem(item)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedItem?.id === item.id ? 'bg-indigo-50/50' : ''}`}
+              onClick={() => setSelectedId(item.id)}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedId === item.id ? 'bg-indigo-50/50' : ''}`}
             >
-              {/* Type icon tile */}
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
                 {typeIcon(item.type)}
               </div>
 
-              {/* Title + snippet */}
               <div className="flex-1 min-w-0">
                 <div className="text-[13.5px] font-semibold text-slate-900 truncate leading-snug">
                   {item.title}
@@ -359,7 +344,6 @@ export const Inbox = () => {
                 </div>
               </div>
 
-              {/* Right meta */}
               <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                 <span className="text-[11.5px] text-slate-400">{formatTime(item.occurredAt)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
@@ -368,7 +352,6 @@ export const Inbox = () => {
                 </span>
               </div>
 
-              {/* Star button */}
               <button
                 onClick={e => {
                   e.stopPropagation();
@@ -391,7 +374,6 @@ export const Inbox = () => {
             </span>
 
             <div className="flex items-center gap-1">
-              {/* Prev */}
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
@@ -401,7 +383,6 @@ export const Inbox = () => {
                 <ChevronLeft className="w-4 h-4" />
               </button>
 
-              {/* Page numbers */}
               {pageNumbers.map((p, i) =>
                 p === '…' ? (
                   <span key={`ellipsis-${i}`} className="h-8 w-8 flex items-center justify-center text-[13px] text-slate-400">…</span>
@@ -420,7 +401,6 @@ export const Inbox = () => {
                 )
               )}
 
-              {/* Next */}
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
@@ -435,11 +415,13 @@ export const Inbox = () => {
       </div>
 
       {/* ── Item Detail Drawer ── */}
-      <ItemDetail
-        item={selectedItem}
-        onClose={() => setSelectedItem(null)}
-        onToggleImportant={(id, val) => toggleImportant({ id, isImportant: val })}
-      />
+      {selectedId && (
+        <ItemDetail
+          itemId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onDeleted={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 };
