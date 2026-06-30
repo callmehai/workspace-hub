@@ -5,7 +5,7 @@ export interface PagedResult<T> {
   limit: number;
 }
 
-export type ItemType = 'Email' | 'Event' | 'File' | 'Note';
+export type ItemType = 'Email' | 'Event' | 'File' | 'Note' | 'Ticket';
 export type ItemStatus = 'Inbox' | 'Doing' | 'Done';
 
 export interface ItemResponse {
@@ -53,4 +53,47 @@ export interface ItemFolderResponse {
   folderId: string;
   position: number;
   addedAt: string;
+}
+
+export interface PatchItemRequest {
+  isUnread?: boolean;
+  isStarred?: boolean;
+  addLabels?: string[];
+  removeLabels?: string[];
+  isTrashed?: boolean;
+  title?: string;
+  start?: string; // ISO DateTime
+  end?: string; // ISO DateTime
+  location?: string;
+  attendees?: string[];
+  name?: string;
+  
+  // Jira Ticket (SCRUM-57)
+  summary?: string;
+  description?: string;
+  assignee?: string;
+  priority?: string;
+  statusTransition?: string;
+  labels?: string[];
+  comment?: string;
+}
+
+export interface CreateEventRequest {
+  connectionId: string;
+  title: string;
+  start: string;
+  end: string;
+  location?: string;
+  attendees?: string[];
+}
+
+export interface CreateTicketRequest {
+  connectionId: string;
+  projectKey: string;
+  issueType: string;
+  summary: string;
+  description?: string;
+  assignee?: string;
+  priority?: string;
+  labels?: string[];
 }

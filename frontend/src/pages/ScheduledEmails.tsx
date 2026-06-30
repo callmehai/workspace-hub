@@ -274,6 +274,7 @@ export const ScheduledEmails = () => {
 
   React.useEffect(() => {
     if (!cConn && activeGmailConnections.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCConn(activeGmailConnections[0].id);
     }
   }, [cConn, activeGmailConnections]);

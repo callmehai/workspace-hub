@@ -1,0 +1,1646 @@
+SRS 
+ 
+Project Proposal Document 
+Workspace Hub 
+1. Thông tin nhóm 
+●​ Nguyễn Quang Huy 
+●​ Hoàng Đức Lộc 
+●​ Trần Việt Hải 
+●​ Phạm Minh Vũ 
+●​ Phạm Gia Khánh 
+●​ Hoàng Tuấn Dũng 
+2. Đề tài 
+●​ Tên đề tài: Workspace Hub 
+●​ Problem Statement: Người dùng phải mở nhiều ứng dụng (Gmail, Calendar, 
+Drive,…) để theo dõi cùng một dự án. Không có cách gom nhóm theo context, khó 
+chia sẻ view tổng thể cho đồng đội, thiếu dashboard quản trị. 
+●​ Mô tả: Ứng dụng web kết nối nhiều hệ sinh thái để gom nhóm email, sự kiện, file, 
+ticket, note vào một nơi duy nhất. Người dùng có thể quản lý theo Folder context 
+(Dự án, Khách hàng, Chủ đề) với giao diện Kanban drag-drop. 
+Đối tượng: 
+●​ Người dùng cá nhân: cần gom dữ liệu từ nhiều dịch vụ vào một nơi để quản lý 
+công việc. 
+●​ Nhóm làm việc: muốn chia sẻ Folder, phối hợp dự án nhanh gọn. 
+●​ Quản trị viên hệ thống: giám sát, quản lý user và đảm bảo bảo mật. 
+ 
+ 
+3. Context diagram:​
+ 
+4. Phân tích bài toán 
+User Roles: 
+●​ Admin: Quản trị hệ thống, quản lý user, khóa/mở account, xem thống kê sync, 
+force-disconnect integration. 
+●​ User: Người dùng mặc định, có thể kết nối dịch vụ, tạo Folder, kéo thả Item, chia 
+sẻ Folder với quyền Viewer. 
+External Dependencies 
+Hệ thống tích hợp với Google (Gmail, Calendar, Drive,...). 
+Functional Requirements: 
+●​ Kết nối OAuth với Google. 
+●​ Đồng bộ email, sự kiện, file, ticket, note thành Item 
+ 
+ 
+●​ Tạo Folder, drag-drop Item vào Folder (Kanban view) 
+●​ Compose & Schedule Send email 
+●​ Important Contact (đánh dấu email/ticket quan trọng) 
+●​ Folder Share (Viewer-only) 
+●​ Admin Dashboard quản trị user 
+●​ Search & Filter Items: Lọc nâng cao theo nguồn, trạng thái, folder, tag 
+●​ Respond to Share Invitation: Chấp nhận hoặc từ chối lời mời chia sẻ Folder 
+●​ Notification Management: Xem và đánh dấu đã đọc thông báo trong hệ thống 
+Non-functional Requirements: 
+●​ Bảo mật: JWT + RBAC + Resource-based Authorization 
+●​ Khả năng mở rộng: Thiết kế polymorphic Item, hỗ trợ nhiều nguồn dữ liệu 
+●​ Privacy: Viewer chỉ thấy metadata, không thấy body email/file 
+5. Feature List 
+Người dùng (User) 
+●​ Connect Provider: Kết nối tài khoản Google, Atlassian qua OAuth. 
+●​ Toggle Service & Status: Bật/tắt dịch vụ tích hợp và xem trạng thái đồng bộ gần 
+nhất. 
+●​ Sync Inbox & Notes: Đồng bộ dữ liệu (email, file, ticket, sự kiện) thành Item và 
+quản lý ghi chú nội bộ. 
+●​ Manage Folder & Kanban: Tạo, sửa, xóa Folder; kéo thả Item để phân loại và thay 
+đổi trạng thái Kanban (3 cột). 
+●​ Manage Custom Tags: Tạo Tag và gắn nhãn dán riêng của app vào các Item để lọc 
+chéo. 
+●​ Search & Filter Items: Lọc nâng cao Item theo nguồn, trạng thái, folder, tag. 
+●​ Compose & Schedule Send: Soạn và hẹn giờ gửi email. 
+●​ Important Contact: Đánh dấu liên hệ quan trọng để tự động nổi bật. 
+●​ Folder Sharing Management: Chia sẻ Folder với quyền Viewer, quản lý thành viên 
+(hủy/xóa quyền), và chấp nhận/từ chối lời mời. 
+●​ View Shared Folder: Xem Folder được chia sẻ (chỉ hiển thị metadata, bị ẩn nội dung 
+chi tiết). 
+Quản trị viên (Admin) 
+●​ Admin Dashboard: Quản lý toàn hệ thống. 
+ 
+ 
+●​ Manage System Users: Xem danh sách, tìm kiếm và xem chi tiết thông tin quản trị 
+của người dùng (số lượng folder, item sync). 
+●​ Lock/Unlock User: Khóa hoặc mở tài khoản. 
+●​ Force Disconnect Integration: Ngắt kết nối dịch vụ tích hợp. 
+6. Use case diagram: 
+ 
+Use case diagram - Guest 
+ 
+ 
+ 
+Use case diagram - Admin 
+ 
+ 
+ 
+Use case diagram - User 
+7. ERD: 
+​
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Mô tả Database 
+ 
+ 
+Workspace Hub — Mô tả Database 
+Quan hệ tổng quan  
+Users 1──n OAuthConnections 1──n ServiceConnections 1──n Items 
+Users 1──n Folders 1──n ItemFolders n──1 Items 
+Users 1──n Tags 1──n TagAssignments n──1 Items 
+Users 1──n ImportantContacts 
+Users 1──n ScheduledEmails ──n──1 ServiceConnections 
+Users 1──n Notifications 
+Integrations 1──n OAuthConnections 
+Folders 1──n FolderShares ──n──1 Users (SharedWithUserId / CreatedByUserId) 
+ 
+Cardinality chính: 
+●​
+Users là gốc của hầu hết bảng (1-n). 
+●​
+Items ↔ Folders: nhiều-nhiều qua ItemFolders. 
+●​
+Items ↔ Tags: nhiều-nhiều qua TagAssignments. 
+●​
+OAuthConnection → ServiceConnection: 1 grant Google bật nhiều service (Gmail/GCal/Drive). 
+●​
+Item → ServiceConnection: n-1, nullable (Note không thuộc service nào). 
+ 
+Nhóm 1 — Auth & RBAC 
+1.1. Users 
+Mục đích: Lưu tài khoản local. Mỗi đăng ký tạo 1 row. Không lưu mật khẩu thật — chỉ BCrypt hash. Là gốc 
+của hầu hết bảng khác. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+FK ở mọi bảng dữ liệu user 
+ 
+ 
+Email 
+string, 
+UNIQUE 
+dùng đăng nhập 
+PasswordHash 
+string 
+BCrypt cost factor 12 
+FullName 
+string 
+hiển thị UI 
+AvatarUrl 
+string, null 
+hiển thị UI 
+IsActive 
+bool 
+false = bị Admin khoá, không login được 
+LockedReason 
+string, null 
+lý do khoá (Admin xem lại) 
+LastLoginAt 
+datetime, null 
+phục vụ Admin dashboard 
+Role 
+string 
+Phân quyền vai trò người dùng 
+CreatedAt 
+datetime 
+thời điểm đăng ký 
+ 
+ 
+Quan hệ: 1-n OAuthConnections, Folders, Items, Tags, ImportantContacts, ScheduledEmails, Notifications; 
+m-n Roles qua UserRoles; là người được mời trong FolderShares (SharedWithUserId) và người tạo share 
+(CreatedByUserId). 
+1.2. Roles 
+Mục đích: Vai trò hệ thống (system role). Seed sẵn 2 role: Admin, User. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+int (PK, identity) 
+số ít, không lộ thông tin 
+ 
+ 
+Name 
+string, UNIQUE 
+tên role 
+Lưu ý: Role là system-level (vào trang nào), không phải resource-level. Phân quyền cấp folder dùng 
+FolderShares. 
+1.3. UserRoles (junction) 
+Mục đích: Nối m-n Users ↔ Roles. MVP gán 1 role/user. 
+Cột 
+Kiểu 
+Ghi chú 
+UserId + RoleId 
+uuid + int 
+composite PK 
+AssignedAt 
+datetime 
+audit 
+ 
+Nhóm 2 — Integration & OAuth 
+3 bảng, 2 layer: Integration = catalog provider (Admin quản); Connection = grant của user. App tự quản 
+OAuth (không Nango). 
+2.1. Integrations 
+Mục đích: Catalog provider OAuth app hỗ trợ — blueprint khai báo kết nối tới đâu, credential nào, scope nào. 
+Seed sẵn 1 row Google; Admin có thể CRUD thêm provider mà không cần redeploy. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+Key 
+string, 
+UNIQUE 
+slug route callback (vd google) 
+DisplayName 
+string 
+"Google Workspace" 
+ 
+ 
+IconUrl 
+string 
+trang /integrations 
+Description 
+string 
+"Gmail · Calendar · Drive" 
+Provider 
+string 
+nhóm provider — BE switch logic 
+ClientIdEncrypted 
+string 
+Data Protection 
+ClientSecretEncrypted 
+string 
+Data Protection 
+AuthorizationEndpoint 
+string 
+URL OAuth provider 
+TokenEndpoint 
+string 
+URL token provider 
+DefaultScopes 
+string 
+scope mặc định 
+SupportedServices 
+jsonb 
+["Gmail","GCal","Drive"] 
+IsEnabled 
+bool 
+tắt → user mới không connect, user cũ vẫn dùng 
+Quan hệ: 1-n OAuthConnections. 
+Seed migration: { Key:"google", DisplayName:"Google Workspace", Provider:"Google", 
+DefaultScopes:"gmail.readonly calendar.readonly drive.readonly", 
+SupportedServices:["Gmail","GCal","Drive"] }. 
+2.2. OAuthConnections 
+Mục đích: 1 grant OAuth thật của 1 user vào Google. Mỗi lần user authorize thành công → tạo 1 row với 
+token đã encrypt. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+ 
+ 
+UserId 
+uuid (FK→Users) 
+chủ grant, CASCADE 
+IntegrationId 
+uuid 
+(FK→Integrations) 
+trỏ về Google 
+ProviderAccountId 
+string 
+email / sub id_token — phân biệt nhiều 
+account Google 
+AccessTokenEncrypted 
+string 
+Data Protection 
+RefreshTokenEncrypted 
+string 
+Data Protection 
+ExpiresAt 
+datetime 
+hết hạn access_token; refresh trước nếu còn < 
+5 phút 
+Scopes 
+string 
+scope thực được cấp 
+Status 
+enum string 
+Active / Disconnected / Error 
+LastRefreshedAt 
+datetime, null 
+log refresh gần nhất 
+Quan hệ: thuộc 1 User (CASCADE), 1 Integration; có nhiều ServiceConnections. 
+Constraint: UNIQUE(UserId, IntegrationId, ProviderAccountId) — 1 user không connect 2 lần cùng 1 
+Google account. 
+2.3. ServiceConnections 
+Mục đích: 1 grant Google bật nhiều sub-service (Gmail + GCal + Drive, cùng token khác scope). Lưu trạng 
+thái bật/tắt + metadata sync + cursor incremental sync của từng service. (Đã gộp SyncStates cũ vào đây.) 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+ 
+ 
+OAuthConnectionId 
+uuid (FK) 
+grant cha (token lấy từ đó), CASCADE 
+ServiceType 
+enum string 
+Gmail / GCal / Drive 
+IsEnabled 
+bool 
+user toggle on/off 
+DisplayName 
+string, null 
+tên thân thiện (vd "Gmail công ty") 
+CursorType 
+enum string, 
+null 
+HistoryId (Gmail) / PageToken (Drive) / SyncToken 
+(GCal) 
+CursorValue 
+string, null 
+giá trị cursor; null = sync lần đầu (dùng list thay vì 
+history.list) 
+LastSyncedAt 
+datetime, null 
+lần cron sync thành công cuối 
+LastError 
+string, null 
+error gần nhất (vd quota_exceeded, 401) 
+Quan hệ: thuộc 1 OAuthConnection (CASCADE); có nhiều Items; có nhiều ScheduledEmails. 
+Nhóm 3 — Core Workspace 
+3.1. Folders 
+Mục đích: Container theo context (dự án / khách / chủ đề). Mỗi folder có Kanban 3 cột (Cần xem / Đang xử lý 
+/ Done). 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+OwnerId 
+uuid 
+(FK→Users) 
+chủ folder, toàn quyền 
+ 
+ 
+Name 
+string 
+ 
+Color 
+string 
+hiển thị sidebar 
+Icon 
+string 
+hiển thị sidebar 
+SortOrder 
+int 
+drag-drop sắp xếp 
+IsArchive
+d 
+bool 
+ẩn khỏi sidebar nhưng giữ data 
+Quan hệ: thuộc 1 User (owner); m-n Items qua ItemFolders; có nhiều FolderShares. 
+3.2. FolderShares 
+Mục đích: Owner mời teammate xem 1 folder. MVP chỉ Viewer (read-only metadata, không thấy body). 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+FolderId 
+uuid 
+(FK→Folders) 
+CASCADE 
+SharedWithUserId 
+uuid (FK→Users) 
+người được mời 
+CreatedByUserId 
+uuid (FK→Users) 
+ai mời (audit) 
+Permission 
+enum string 
+Viewer (MVP); roadmap Editor 
+AcceptedAt 
+datetime, null 
+null = pending invite 
+ExpiresAt 
+datetime, null 
+optional, share tạm thời 
+ 
+ 
+Privacy: Viewer chỉ thấy metadata Item (đã lưu DB); không thấy body (body lấy live qua token của Owner 
+— share token = leak). IAuthorizationHandler<FolderPermissionRequirement, Folder> kiểm tra ở mọi API có 
+folderId. 
+3.3. Items 
+Mục đích: Lõi app — 1 đơn vị thông tin (email / event / file / note). Đồng nhất 4 type về 1 model; field riêng 
+từng type lưu trong MetadataJson. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+UserId 
+uuid 
+(FK→Users) 
+CASCADE 
+Type 
+enum string 
+Email / Event / File / Note 
+Title 
+string 
+subject / tên event / tên file / tiêu đề note 
+Snippet 
+string 
+preview ~200 ký tự 
+ExternalId 
+string, null 
+ID gốc Google (messageId/fileId…); NULL cho Note 
+ServiceConnectionId 
+uuid (FK), null 
+sync từ service nào; NULL cho Note; SET NULL khi 
+xoá connection 
+Status 
+enum string 
+Inbox / Doing / Done (= Cần xem / Đang xử lý / Done) 
+OccurredAt 
+datetime 
+sort (email arrived / event start / file modified) 
+DueAt 
+datetime, null 
+event start; null cho email/file/note 
+IsImportant 
+bool 
+true → chấm đỏ, lên top Inbox 
+ 
+ 
+IsArchived 
+bool 
+ẩn khỏi inbox, giữ data 
+MetadataJson 
+jsonb 
+field riêng từng type 
+MetadataJson shape: 
+●​
+Email: {from, to[], threadId, labels[], hasAttachment, webUrl} 
+●​
+Event: {start, end, location, attendees[], meetUrl} 
+●​
+File: {mimeType, size, webViewLink, iconLink} 
+●​
+Note: {contentMarkdown} 
+Quan hệ: thuộc 1 User; 0-1 ServiceConnection (NULL cho Note); m-n Folders qua ItemFolders; m-n Tags 
+qua TagAssignments. 
+Constraint/Index: UNIQUE(ServiceConnectionId, ExternalId) chống duplicate khi re-sync; index (UserId, 
+Status, OccurredAt DESC). 
+3.4. ItemFolders (junction) 
+Mục đích: m-n Item ↔ Folder. 1 Item có thể vào nhiều Folder. Thêm Position cho drag-drop Kanban. 
+Cột 
+Kiểu 
+Ghi chú 
+ItemId + FolderId 
+uuid + uuid 
+composite PK 
+Position 
+int 
+thứ tự trong cùng folder + cùng status 
+AddedAt 
+datetime 
+ 
+CASCADE cả 2 phía. 
+ 
+Nhóm 4 — Features 
+4.1. Tags 
+Mục đích: Label nhẹ user tự tạo, filter chéo qua folder. Tag private (không share). 
+ 
+ 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+UserI
+d 
+uuid 
+(FK→Users) 
+tag thuộc user nào 
+Name 
+string 
+không unique toàn hệ thống (2 user trùng tên được) 
+Color 
+string 
+hiển thị UI 
+Quan hệ: thuộc 1 User; m-n Items qua TagAssignments. 
+4.2. TagAssignments (junction) 
+Mục đích: m-n Tag ↔ Item. 
+Cột 
+Kiểu 
+Ghi chú 
+TagId + ItemId 
+uuid + uuid 
+composite PK 
+AssignedAt 
+datetime 
+ 
+CASCADE. 
+4.3. ImportantContacts 
+Mục đích: Danh sách "người quan trọng" do user định nghĩa. Item sync về có from match list → tự set 
+IsImportant=true. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+ 
+ 
+UserId 
+uuid 
+(FK→Users) 
+list thuộc user nào 
+Type 
+enum string 
+Email (MVP chỉ Email — JiraAccount đã bỏ cùng Jira) 
+Identifier 
+string 
+giá trị match (vd boss@company.com) 
+Label 
+string 
+tên hiển thị (vd "Sếp Tổng") 
+Constraint: UNIQUE(UserId, Type, Identifier) — chống thêm trùng (API trả 409). 
+Quan hệ: thuộc 1 User. 
+4.4. ScheduledEmails 
+Mục đích: Email hẹn giờ gửi. BE lưu Pending; cron ngoài (cron-job.org, mỗi 5 phút) gọi 
+/api/internal/process-scheduled → gửi qua Gmail → update status. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+UserId 
+uuid 
+(FK→Users) 
+ai lên lịch 
+ServiceConnectionId 
+uuid (FK) 
+gửi qua Gmail nào (chỉ Gmail hỗ trợ gửi) 
+ToJson / CcJson / BccJson 
+jsonb 
+list recipient 
+Subject 
+string 
+ 
+BodyHtml 
+string 
+ 
+SendAt 
+datetime 
+thời điểm gửi 
+ 
+ 
+Status 
+enum string 
+Pending / Sent / Failed / Cancelled 
+RetryCount 
+int 
+max 3 rồi mark Failed 
+LastError 
+string, null 
+error nếu gửi fail 
+SentAt 
+datetime, null 
+thời điểm gửi thật 
+Index: (Status, SendAt) WHERE Status='Pending' để cron query nhanh. 
+4.5. Notifications 
+Mục đích: Thông báo in-app. Badge đỏ trên icon chuông sidebar. 
+Cột 
+Kiểu 
+Ghi chú 
+Id 
+uuid (PK) 
+ 
+UserId 
+uuid 
+(FK→User
+s) 
+ai nhận 
+Type 
+enum 
+string 
+share_invite / important_email / sync_error / schedule_sent 
+Title 
+string 
+ 
+Body 
+string 
+ 
+LinkUrl 
+string 
+click redirect (vd /folders/123) 
+IsRead 
+bool 
+false = chấm đỏ 
+ 
+ 
+CreatedAt 
+datetime 
+ 
+Index: (UserId, IsRead, CreatedAt DESC). 
+ 
+Quy ước chung 
+Topic 
+Quy ước 
+ID type 
+uuid (Guid). Tránh int auto-increment (trừ Roles) để không lộ row count. 
+Timestamp 
+UTC. Postgres timestamptz, EF DateTimeKind.Utc. Convert timezone ở FE. 
+Soft delete 
+Không dùng. Dùng IsArchived. Xoá thật khi Delete. 
+Encryption 
+Token OAuth: IDataProtectionProvider. Không tự viết AES, không lưu key trong 
+DB. 
+Enum 
+Lưu string (HasConversion<string>()). 
+JSON 
+Postgres jsonb, SQLite TEXT. Parse ở FE. 
+Cascade 
+ON DELETE CASCADE cho child của User/Folder/OAuthConnection. SET NULL 
+cho Items.ServiceConnectionId. 
+Index 
+unique 
+Junction → composite PK. Cột Key/slug → UNIQUE. Mọi FK có IX. 
+ 
+ 
+ 
+ 
+API Design 
+ 
+ 
+Workspace Hub — API Design  
+Quy ước chung 
+●​
+Base URL: https://api.workspacehub.app (prod) · https://localhost:5001 (dev) 
+●​
+Authentication: JWT Bearer, header Authorization: Bearer <token>. Claim chính: sub (UserId), 
+email, role. 
+●​
+Content-Type: application/json cho mọi request/response (trừ upload file). 
+●​
+DateTime: ISO 8601 UTC (2026-05-25T14:30:00Z). 
+●​
+Pagination: ?page=1&limit=20. Default limit=20, max 100. 
+●​
+Response collection (quy ước chuẩn hoá): 
+○​
+List có thể tăng lớn (items, users, notifications, scheduled-emails) → envelope { "items": [...], 
+"total": N, "page": 1, "limit": 20 }. 
+○​
+List giới hạn nhỏ, không phân trang (integrations, connections, folders, tags, shares) → trả 
+thẳng array [...]. 
+●​
+Error wrapper: xem Phụ lục error format. 
+Status code 
+Code 
+Khi nào 
+200 OK 
+GET/PUT/PATCH thành công 
+201 Created 
+POST tạo mới thành công 
+202 Accepted 
+Nhận yêu cầu xử lý bất đồng bộ (vd trigger sync) 
+204 No Content 
+DELETE thành công, không body 
+400 Bad Request 
+Body không hợp lệ, validation fail 
+401 Unauthorized 
+Thiếu token / token hết hạn 
+403 Forbidden 
+Có token nhưng không đủ quyền 
+404 Not Found 
+Resource không tồn tại 
+409 Conflict 
+Vi phạm unique constraint 
+ 
+ 
+422 Unprocessable Entity 
+Business rule fail 
+429 Too Many Requests 
+Rate limit 
+500 Internal Server Error 
+Lỗi BE không lường trước 
+502 Bad Gateway 
+Provider bên thứ ba lỗi khi gọi live (vd lấy body item) 
+ 
+Nhóm 1 — Authentication 
+1.1. Đăng ký 
+POST /api/auth/register · Auth: không cần 
+Request: 
+{ "email": "vy@gmail.com", "password": "MySecure123!", "fullName": "Vy Cường" } 
+ 
+Response 201: 
+{ "id": "uuid", "email": "vy@gmail.com", "fullName": "Vy Cường", "role": "User", "createdAt": 
+"2026-05-25T14:30:00Z" } 
+ 
+Status: 201, 400 (email sai / password < 8), 409 (email trùng). 
+1.2. Đăng nhập 
+POST /api/auth/login · Auth: không cần 
+Request: { "email": "vy@gmail.com", "password": "MySecure123!" } 
+Response 200: 
+{ "accessToken": "eyJhbGc...", "expiresIn": 3600, "user": { "id": "uuid", "email": "vy@gmail.com", 
+"fullName": "Vy Cường", "role": "User" } } 
+ 
+Status: 200, 400 (sai format), 401 (sai thông tin / account bị khoá). 
+1.3. Info user hiện tại 
+ 
+ 
+GET /api/auth/me · Auth: Bearer 
+Response 200: 
+{ "id": "uuid", "email": "vy@gmail.com", "fullName": "Vy Cường", "avatarUrl": null, "role": "User", 
+"isActive": true } 
+ 
+Status: 200, 401. 
+1.4. Đăng xuất 
+POST /api/auth/logout · Auth: Bearer 
+MVP stateless JWT: BE trả 204, FE xoá token. (Lưu ý: token vẫn hợp lệ tới khi hết hạn — production nên 
+dùng expiresIn ngắn hoặc blacklist.) 
+Status: 204, 401. 
+Nhóm 2 — User Management (Admin) 
+2.1. List users 
+GET /api/admin/users?search=&page=&limit= · Auth: Admin 
+Response 200: 
+{ 
+  "items": [ 
+    { "id": "uuid", "email": "vy@gmail.com", "fullName": "Vy Cường", "role": "Admin", "isActive": true, 
+"lastLoginAt": "2026-05-25T10:00:00Z", "integrationCount": 3, "itemCount": 247 } 
+  ], 
+  "total": 42, "page": 1, "limit": 20 
+} 
+ 
+Status: 200, 401, 403. 
+2.2. Chi tiết user 
+GET /api/admin/users/{id} · Auth: Admin 
+Response 200: 
+{ 
+ 
+ 
+  "id": "uuid", "email": "vy@gmail.com", "fullName": "Vy Cường", "role": "User", 
+  "isActive": true, "lockedReason": null, "lastLoginAt": "2026-05-25T10:00:00Z", "createdAt": 
+"2026-01-02T08:00:00Z", 
+  "folderCount": 8, "itemCount": 247, 
+  "connections": [ 
+    { "id": "uuid", "integrationKey": "google", "providerAccountId": "vy@gmail.com", "status": "Active", 
+"lastSyncedAt": "2026-05-25T14:25:00Z" } 
+  ] 
+} 
+ 
+Status: 200, 401, 403, 404. 
+2.3. Khoá / mở khoá user 
+PATCH /api/admin/users/{id}/lock · Auth: Admin 
+Request: { "isActive": false, "reason": "Spam khiếu nại" } 
+Response 200: user đã update. Status: 200, 400, 401, 403, 404. 
+2.4. Thống kê hệ thống — Admin dashboard 
+GET /api/admin/stats · Auth: Admin 
+Response 200: 
+{ 
+  "totalUsers": 42, "activeUsers": 39, "lockedUsers": 3, 
+  "totalConnections": 88, "connectionsByStatus": { "Active": 80, "Error": 5, "Disconnected": 3 }, 
+  "totalItems": 12043, 
+  "syncErrorsLast24h": 4 
+} 
+ 
+Status: 200, 401, 403. 
+Nhóm 3 — Integrations (Catalog) 
+3.1. List integrations (User) 
+GET /api/integrations · Auth: Bearer 
+Response 200 (array): 
+ 
+ 
+[ 
+  { "id": "uuid", "key": "google", "displayName": "Google Workspace", "provider": "Google", "iconUrl": 
+"https://...", "description": "Gmail · Calendar · Drive", "supportedServices": ["Gmail","GCal","Drive"], 
+"isEnabled": true, "myConnectionId": "uuid_or_null" } 
+] 
+ 
+Status: 200, 401. 
+3.2. Add integration (Admin) 
+POST /api/admin/integrations · Auth: Admin 
+Request: 
+{ 
+  "key": "google", "displayName": "Google Workspace", "provider": "Google", "iconUrl": "https://...", 
+  "clientId": "xxx.apps.googleusercontent.com", "clientSecret": "GOCSPX-...", 
+  "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth", 
+  "tokenEndpoint": "https://oauth2.googleapis.com/token", 
+  "defaultScopes": "gmail.readonly calendar.readonly drive.readonly", 
+  "supportedServices": ["Gmail","GCal","Drive"] 
+} 
+ 
+Response 201: integration đã tạo (clientSecret bị mask). Status: 201, 400, 401, 403, 409 (key trùng). 
+3.3. Update integration (Admin) 
+PUT /api/admin/integrations/{id} · Auth: Admin · body partial. Status: 200, 400, 401, 403, 404. 
+3.4. Disable integration (Admin) 
+PATCH /api/admin/integrations/{id}/disable · Auth: Admin 
+Request: { "isEnabled": false }. User mới không connect được; user cũ vẫn dùng. Status: 200, 401, 403, 404. 
+ 
+ 
+ 
+ 
+ 
+Nhóm 4 — OAuth Connections 
+ 
+ 
+4.1. Bắt đầu OAuth flow 
+POST /api/connections/oauth/start · Auth: Bearer 
+Request: { "integrationKey": "google", "redirectUri": "https://app.workspacehub.app/oauth/callback" } 
+Response 200: 
+{ "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...&state=...", "state": 
+"csrf_token_uuid" } 
+ 
+Status: 200, 404 (integration không tồn tại), 401, 422 (integration đang Disabled). 
+4.2. OAuth callback 
+POST /api/connections/oauth/callback · Auth: Bearer 
+Request: { "code": "4/0AX4...", "state": "csrf_token_uuid" } 
+Response 201: 
+{ 
+  "id": "uuid", "integrationKey": "google", "providerAccountId": "vy@gmail.com", 
+  "scopes": "gmail.readonly calendar.readonly drive.readonly", "status": "Active", 
+  "services": [ 
+    { "id": "uuid", "serviceType": "Gmail", "isEnabled": true }, 
+    { "id": "uuid", "serviceType": "GCal", "isEnabled": true }, 
+    { "id": "uuid", "serviceType": "Drive", "isEnabled": true } 
+  ] 
+} 
+ 
+Status: 201, 400 (state không match — CSRF), 401, 422 (provider từ chối code), 409 (đã connect account này 
+rồi — vi phạm UNIQUE). 
+4.3. List connections của tôi 
+GET /api/connections · Auth: Bearer 
+Response 200 (array): mỗi item có id, integrationKey, integrationName, providerAccountId, scopes, status, 
+expiresAt, lastRefreshedAt, services[]. Status: 200, 401. 
+4.4. Force refresh token 
+POST /api/connections/{id}/refresh · Auth: Bearer 
+ 
+ 
+Response 200: connection với expiresAt mới (token mask). Status: 200, 401, 404, 422 (refresh token không 
+hợp lệ → set Status=Error), 429 (refresh quá nhanh). 
+4.5. Disconnect 
+DELETE /api/connections/{id} · Auth: Bearer 
+Xoá OAuthConnection → CASCADE ServiceConnections + SyncStates. Item liên quan giữ lại 
+(ServiceConnectionId=NULL). Status: 204, 401, 404. 
+4.6. Admin force-disconnect connection của user 
+DELETE /api/admin/connections/{id} · Auth: Admin 
+Phủ SRS Admin "Force Disconnect Integration". Tác động giống 4.5 nhưng Admin thực hiện trên connection 
+của bất kỳ user nào; ghi Notification(type=sync_error) cho user đó. 
+Status: 204, 401, 403, 404. 
+Nhóm 5 — Service Connections 
+5.1. Toggle service on/off 
+PATCH /api/services/{id}/toggle · Auth: Bearer 
+Request: { "isEnabled": false }. Status: 200, 401, 403 (không thuộc user), 404. 
+5.2. Trigger sync thủ công 
+POST /api/services/{id}/sync · Auth: Bearer 
+Response 202: 
+{ "jobId": "uuid", "message": "Sync đã được xếp hàng, kết quả sẽ về trong 30s" } 
+ 
+Status: 202, 401, 403, 404, 429 (sync quá gần đây, chờ 1 phút). 
+ 
+ 
+ 
+Nhóm 6 — Folders 
+6.1. List folders 
+GET /api/folders?includeShared=true · Auth: Bearer 
+Response 200 (array): folder của mình + (nếu includeShared) folder được share. Mỗi item: id, name, color, 
+icon, sortOrder, isArchived, itemCount, isOwner, permission, ownerName. Status: 200, 401. 
+6.2. Create folder 
+POST /api/folders · Auth: Bearer 
+ { "name": "Dự án A", "color": "#3B82F6", "icon": "briefcase" }. Status: 201, 400, 401. 
+6.3. Update folder 
+PUT /api/folders/{id} · Auth: Bearer (Owner).  
+Status: 200, 400, 401, 403, 404. 
+6.4. Delete folder 
+DELETE /api/folders/{id} · Auth: Bearer (Owner)  
+CASCADE ItemFolders + FolderShares; Item gốc giữ lại. Status: 204, 401, 403, 404. 
+Nhóm 7 — Folder Shares 
+7.1. Invite teammate 
+POST /api/folders/{folderId}/shares · Auth: Bearer (Owner) 
+Request: { "email": "hung.lead@company.com", "permission": "Viewer" } 
+Response 201: 
+{ "id": "uuid", "folderId": "uuid", "sharedWithUserId": "uuid", "sharedWithEmail": 
+"hung.lead@company.com", "permission": "Viewer", "acceptedAt": null, "createdAt": 
+"2026-05-25T14:30:00Z" } 
+ 
+ 
+ 
+Status: 201, 400, 401, 403, 404 (email không tồn tại), 409 (đã share). 
+7.2. List thành viên của folder  
+GET /api/folders/{folderId}/shares · Auth: Bearer (Owner) 
+Response 200 (array): mỗi item { id, sharedWithEmail, sharedWithUserId, permission, acceptedAt, createdAt 
+}. Status: 200, 401, 403, 404. 
+7.3. List pending invites của tôi 
+GET /api/shares/pending · Auth: Bearer. Status: 200, 401. 
+7.4. Accept / decline invite 
+PATCH /api/shares/{id}/accept | /api/shares/{id}/decline · Auth: Bearer 
+Accept: AcceptedAt=now. Decline: xoá row. Response 200 (accept) / 204 (decline). Status: 200/204, 401, 403 
+(không phải người được mời), 404. 
+7.5. Revoke share (Owner) 
+DELETE /api/shares/{id} · Auth: Bearer (Owner).  
+Status: 204, 401, 403, 404. 
+Nhóm 8 — Items 
+8.1. List items (Inbox / Filter) 
+GET /api/items?folderId=&status=&type=&isImportant=&search=&page=&limit= · Auth: Bearer 
+Query: folderId (bỏ trống = mọi item), status (Inbox/Doing/Done), type (Email/Event/File/Ticket/Note), 
+isImportant, search (full-text Title + Snippet). 
+Response 200: 
+{ 
+  "items": [ 
+    { 
+ 
+ 
+      "id": "uuid", "type": "Email", "title": "Yêu cầu thay đổi spec", "snippet": "Anh ơi spec module thanh 
+toán...", 
+      "externalId": "msg-abc", "serviceConnectionId": "uuid", "status": "Inbox", "occurredAt": 
+"2026-05-25T13:00:00Z", 
+      "isImportant": true, "metadata": { "from": "kh@x.com", "labels": ["INBOX"] }, 
+      "folders": [{"id": "uuid", "name": "Dự án A"}], "tags": [{"id": "uuid", "name": "urgent", "color": "red"}] 
+    } 
+  ], 
+  "total": 247, "page": 1, "limit": 20 
+} 
+ 
+Status: 200, 401. 
+8.2. Get item detail (body live) 
+GET /api/items/{id}/detail · Auth: Bearer 
+Trả metadata DB + gọi live tới provider lấy body. Response 200: { "item": {...}, "bodyHtml": "<p>...</p>", 
+"attachments": [{"name": "spec.pdf", "downloadUrl": "..."}] }. Status: 200, 401, 403 (Viewer không xem 
+body), 404, 502 (provider lỗi). 
+8.3. Update item status (Kanban drag) 
+PATCH /api/items/{id}/status · Auth: Bearer  
+{ "status": "Doing" }. Status: 200, 400, 401, 403, 404. 
+8.4. Tạo Note item 
+POST /api/items/note · Auth: Bearer 
+{ "title": "Review PR #142", "contentMarkdown": "## Todo\n- check db migration\n- run tests", "folderId": 
+"uuid_or_null", "tagIds": ["uuid"] } 
+ 
+Status: 201, 400, 401. 
+8.5. Archive item 
+PATCH /api/items/{id}/archive · Auth: Bearer 
+{ "isArchived": true }. Status: 200, 401, 404. 
+ 
+ 
+ 
+Nhóm 9 — Item-Folder relations 
+9.1. Add item vào folder 
+POST /api/folders/{folderId}/items · Auth: Bearer (Owner)  
+{ "itemId": "uuid", "position": 0 }. Status: 201, 400, 401, 403, 409 (đã thuộc folder). 
+9.2. Remove item khỏi folder 
+DELETE /api/folders/{folderId}/items/{itemId} · Auth: Bearer (Owner).  
+Status: 204, 401, 403, 404. 
+9.3. Reorder items trong folder 
+PATCH /api/folders/{folderId}/items/reorder · Auth: Bearer (Owner) 
+ { "orderedItemIds": ["uuid1", "uuid2", "uuid3"] }. Status: 200, 400, 401, 403. 
+Nhóm 10 — Tags 
+Endpoint 
+Method 
+Auth 
+Response 
+Status 
+/api/tags 
+GET 
+Bearer 
+array {id,name,color,itemCount} 
+200, 401 
+/api/tags 
+POST 
+Bearer 
+Tag mới ({name,color}) 
+201, 400, 
+401 
+/api/tags/{id} 
+PUT 
+Bearer 
+Tag updated 
+200, 401, 
+404 
+/api/tags/{id} 
+DELET
+E 
+Bearer 
+(CASCADE TagAssignments) 
+204, 401, 
+404 
+Assign / unassign: POST / DELETE /api/items/{itemId}/tags/{tagId} · Bearer · 201/204, 401, 404, 409 
+(assign trùng). 
+ 
+ 
+ 
+Nhóm 11 — Important Contacts 
+Endpoint 
+Method 
+Body 
+Status 
+/api/important-contacts 
+GET 
+— 
+200, 401 
+/api/important-contacts 
+POST 
+{type, identifier, label} 
+201, 400, 401, 
+409 
+/api/important-contacts/{id} 
+PUT 
+partial 
+200, 401, 404 
+/api/important-contacts/{id} 
+DELET
+E 
+— 
+204, 401, 404 
+type: Email / JiraAccount. (409 ↔ DB UNIQUE(UserId, Type, Identifier).) 
+Nhóm 12 — Scheduled Emails 
+12.1. Tạo email lên lịch 
+POST /api/scheduled-emails · Auth: Bearer 
+{ "serviceConnectionId": "uuid", "to": ["customer@x.com"], "cc": [], "bcc": [], "subject": "Phản hồi spec v2", 
+"bodyHtml": "<p>Chào anh,...</p>", "sendAt": "2026-05-26T01:00:00Z" } 
+ 
+Status: 201, 400 (sendAt quá khứ), 401, 404 (ServiceConnection không tồn tại), 422 (ServiceType không hỗ 
+trợ gửi — chỉ Gmail/Outlook). 
+12.2. List scheduled emails 
+GET /api/scheduled-emails?status=Pending&page=&limit= · Auth: Bearer  
+Response envelope phân trang. Status: 200, 401. 
+12.3. Cancel 
+PATCH /api/scheduled-emails/{id}/cancel · Auth: Bearer 
+ set Status=Cancelled (chỉ khi Pending). Status: 200, 401, 404, 422 (đã gửi). 
+ 
+ 
+Nhóm 13 — Notifications 
+type values: share_invite, important_email, sync_error, schedule_sent. 
+Endpoint 
+Method 
+Response 
+Status 
+/api/notifications?unreadOnly=true&page=&
+limit= 
+GET 
+{items, total, page, limit, 
+unreadCount} 
+200, 401 
+/api/notifications/unread-count 
+GET 
+{count: 5} 
+200, 401 
+/api/notifications/{id}/read 
+PATCH 
+Notification updated 
+200, 
+401, 404 
+/api/notifications/read-all 
+PATCH 
+{markedCount: 12} 
+200, 401 
+/api/notifications/{id} 
+DELET
+E 
+— 
+204, 
+401, 404 
+ 
+Error response format 
+{ 
+  "error": "ValidationError", 
+  "message": "Một số field không hợp lệ", 
+  "details": [ 
+    { "field": "email", "issue": "Email format không đúng" }, 
+    { "field": "password", "issue": "Tối thiểu 8 ký tự" } 
+  ], 
+  "traceId": "req_abc123" 
+} 
+ 
+Loại error: ValidationError(400) · AuthenticationError(401) · AuthorizationError(403) · NotFoundError(404) · 
+ConflictError(409) · BusinessRuleError(422) · RateLimitError(429) · InternalError(500) · 
+UpstreamError(502). 
+Authorization matrix 
+ 
+ 
+Endpoint nhóm 
+User 
+Admi
+n 
+Folder 
+Owner 
+Folder 
+Viewer 
+/api/auth/* 
+X 
+ 
+X 
+ 
+— 
+— 
+/api/admin/* 
+ 403 
+ 
+X 
+ 
+— 
+— 
+/api/admin/connections/{id} (force-disconnect) 
+ 403 
+ 
+X 
+ 
+— 
+— 
+/api/integrations (GET) 
+X 
+ 
+X 
+ 
+— 
+— 
+/api/connections/* 
+X (của 
+mình) 
+ 
+X 
+(của 
+mình) 
+ 
+— 
+— 
+/api/services/* 
+X (của 
+mình) 
+ 
+X 
+(của 
+mình) 
+ 
+— 
+— 
+/api/folders/{id} GET 
+X 
+(own/shared
+) 
+ 
+X 
+(own) 
+ 
+X 
+ 
+X 
+ 
+/api/folders/{id} PUT/DELETE 
+X (own) 
+ 
+X 
+(own) 
+ 
+X 
+ 
+ 403 
+ 
+/api/folders/{id}/shares (GET/POST) 
+X (own) 
+ 
+X 
+(own) 
+ 
+X 
+ 
+ 403 
+ 
+ 
+ 
+/api/folders/{id}/items (add/remove/reorder) 
+X (own) 
+ 
+X 
+(own) 
+ 
+X 
+ 
+ 403 
+ 
+/api/items (GET list) 
+X (own) 
+ 
+X 
+(own) 
+ 
+X 
+(metadata
+) 
+ 
+X 
+(metadata
+) 
+ 
+/api/items/{id}/detail (body) 
+X (own) 
+ 
+X 
+(own) 
+ 
+X 
+ 
+ 403 
+(privacy) 
+ 
+/api/items/{id}/status, /note, /archive 
+X (own) 
+ 
+X 
+(own) 
+ 
+X 
+ 
+ 403 
+ 
+/api/tags/*, /api/important-contacts/* 
+X (của 
+mình) 
+ 
+X 
+(của 
+mình) 
+ 
+— 
+— 
+/api/scheduled-emails/* 
+X (của 
+mình) 
+ 
+X 
+(của 
+mình) 
+ 
+— 
+— 
+/api/notifications/* 
+X (của 
+mình) 
+ 
+X 
+(của 
+mình) 
+ 
+— 
+— 
+/api/internal/process-scheduled 
+O 
+(X-Cron-Se
+cret) 
+ 
+O 
+ 
+— 
+— 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Mapping với DATABASE 
+Nhóm API 
+Bảng chính 
+1. Authentication 
+Users · UserRoles · Roles 
+2. User Management 
+Users · OAuthConnections (stats) 
+3. Integrations 
+Integrations 
+4. OAuth Connections 
+OAuthConnections · ServiceConnections · SyncStates 
+5. Service Connections 
+ServiceConnections · SyncStates 
+6. Folders 
+ 
+Folders 
+7. Folder Shares 
+ 
+FolderShares · Notifications 
+8. Items 
+ 
+Items · ItemFolders · TagAssignments 
+9. Item-Folder 
+ 
+ItemFolders 
+10. Tags 
+ 
+Tags · TagAssignments 
+11. Important Contacts 
+ 
+ImportantContacts 
+12. Scheduled Emails 
+ 
+ScheduledEmails · ServiceConnections 
+13. Notifications 
+ 
+Notifications 
+ 
+ 
+ 
+ 
+ 
+ 
+File của thầy 
+ 
+ 
+Lộ trình Project Fullstack ASP.NET trong 10 tuần 
+(Cấu trúc 60% Backend – 40% Frontend) 
+Công nghệ đề xuất 
+Backend (60%) 
+●​ ASP.NET Core Web API  
+●​ Entity Framework Core  
+●​ SQL Server  
+●​ JWT Authentication  
+Frontend (40%) 
+Có thể chọn: 
+●​ React  
+●​ Next.js  
+●​ ASP.NET Core MVC, Razpr 
+●​ Movbile App 
+Deployment 
+●​ Vercel  
+●​ Render  
+●​ Microsoft Azure  
+●​ … 
+ 
+Mục tiêu môn học 
+●​ Hiểu quy trình phát triển phần mềm thực tế  
+●​ Áp dụng mô hình phát triển Fullstack  
+●​ Tập trung trọng tâm vào Backend API  
+●​ Có checkpoint hằng tuần  
+●​ Đánh giá được cá nhân và nhóm  
+●​ Rèn kỹ năng Git/GitHub và teamwork  
+ 
+Yêu cầu chức năng tối thiểu 
+Backend 
+●​ Authentication / Authorization  
+●​ RESTful API  
+●​ CRUD dữ liệu chính  
+●​ Validation  
+ 
+ 
+●​ Search / Filter / Pagination  
+●​ Upload file/image  
+●​ Exception handling  
+Frontend 
+●​ Responsive UI  
+●​ Login/Register UI  
+●​ CRUD pages  
+●​ Dashboard cơ bản  
+●​ API integration  
+●​ Form validation  
+ 
+Ví dụ đề tài 
+●​ Library Management  
+●​ Booking System  
+●​ Coffee Shop Management  
+●​ Task Management  
+●​ LMS mini  
+●​ Event Management  
+ 
+Kế hoạch triển khai 10 tuần 
+Giai đoạn 1 — System Analysis & Design (Tuần 1–2) 
+Tỷ trọng 
+●​ Backend: 15%  
+●​ Frontend: 5%  
+ 
+Tuần 1 — Chọn đề tài & Phân tích yêu cầu 
+Sinh viên cần làm 
+●​ Lập nhóm  
+●​ Chọn đề tài  
+●​ Phân tích:  
+o​ Problem Statement  
+o​ User Roles  
+o​ Functional Requirements  
+o​ Non-functional Requirements  
+ 
+ 
+Thiết kế sơ bộ 
+●​ Use Case Diagram  
+●​ ERD draft  
+●​ Sitemap UI  
+Deliverables 
+●​ Proposal PDF  
+●​ Feature list  
+●​ Use Case Diagram  
+●​ ERD sơ bộ  
+Giảng viên đánh giá 
+●​ Phạm vi phù hợp  
+●​ Có business logic rõ ràng  
+●​ Có khả năng phân chia module  
+ 
+Tuần 2 — Database Design & API Specification 
+Backend focus 
+●​ Thiết kế database  
+●​ Quan hệ bảng  
+●​ Primary/Foreign keys  
+●​ Seed data  
+API Design 
+●​ Endpoint  
+●​ Method  
+●​ Request/Response  
+●​ Status code  
+Frontend focus 
+●​ Wireframe giao diện  
+●​ Routing structure  
+Deliverables 
+●​ Database Diagram  
+●​ API Document  
+ 
+ 
+●​ UI wireframe  
+Công cụ gợi ý 
+●​ Swagger  
+●​ Postman  
+ 
+Giai đoạn 2 — Backend Core Development (Tuần 3–6) 
+Tỷ trọng 
+= 45% tổng project 
+ 
+Tuần 3 — Backend Architecture & Core APIs 
+Sinh viên cần làm 
+Implement: 
+●​ ASP.NET Web API structure  
+●​ EF Core  
+●​ Repository/Service pattern  
+●​ CRUD APIs  
+Bắt buộc 
+●​ DTO  
+●​ Validation  
+●​ Async/Await  
+●​ Migration  
+Deliverables 
+●​ Backend source code  
+●​ CRUD APIs  
+●​ Swagger document  
+ 
+Tuần 4 — Authentication & Authorization 
+Sinh viên cần làm 
+Implement: 
+●​ JWT Authentication  
+●​ Login/Register  
+●​ Role-based Authorization  
+Bắt buộc 
+ 
+ 
+●​ Password hashing  
+●​ Protected APIs  
+Khuyến khích 
+●​ Refresh token  
+Deliverables 
+●​ Authentication APIs  
+●​ Demo Postman  
+ 
+Tuần 5 — Business Logic & Advanced Backend 
+Sinh viên cần làm 
+Implement: 
+●​ Business rules  
+●​ Search/filter  
+●​ Pagination  
+●​ Upload image/file  
+●​ Validation nâng cao  
+Ví dụ 
+●​ Kiểm tra tồn kho  
+●​ Duplicate validation  
+●​ Order processing  
+Deliverables 
+●​ Full business workflow backend  
+ 
+Tuần 6 — Backend Optimization & Testing 
+Sinh viên cần làm 
+●​ Exception handling  
+●​ Refactor services  
+●​ Logging  
+●​ Optimize queries  
+●​ API testing  
+Bắt buộc 
+ 
+ 
+●​ README backend  
+●​ Clean architecture  
+Khuyến khích 
+●​ Unit test  
+●​ Caching  
+Deliverables 
+●​ Stable backend version  
+●​ API testing evidence  
+ 
+Giai đoạn 3 — Frontend Development (Tuần 7–8) 
+Tỷ trọng 
+= 30% tổng project 
+ 
+Tuần 7 — Frontend Foundation 
+Sinh viên cần làm 
+Setup frontend: 
+●​ Routing  
+●​ Layout  
+●​ Authentication UI  
+●​ Navigation  
+API Integration 
+●​ Call APIs  
+●​ Token handling  
+Bắt buộc 
+●​ Login page  
+●​ CRUD pages  
+●​ Responsive cơ bản  
+Deliverables 
+●​ UI skeleton  
+●​ API connected  
+ 
+ 
+ 
+Tuần 8 — Frontend Features & Integration 
+Sinh viên cần làm 
+Implement: 
+●​ CRUD frontend  
+●​ Search/filter UI  
+●​ Pagination UI  
+●​ Form validation  
+Bắt buộc 
+●​ Loading state  
+●​ Error handling  
+●​ Toast notification  
+Khuyến khích 
+●​ Dashboard chart  
+●​ Dark mode  
+●​ Realtime notification  
+Deliverables 
+●​ End-to-end workflow hoàn chỉnh  
+ 
+Giai đoạn 4 — Deployment & Defense (Tuần 9–10) 
+Tỷ trọng 
+= 10% tổng project 
+ 
+Tuần 9 — Deployment & Finalization 
+Sinh viên cần làm 
+Deploy: 
+●​ Backend  
+●​ Frontend  
+●​ Database  
+Hoàn thiện 
+●​ README  
+●​ API docs  
+●​ Setup guide  
+ 
+ 
+Deliverables 
+●​ Public URL  
+●​ Deploy guide  
+ 
+Tuần 10 — Final Presentation & Defense 
+Sinh viên trình bày 
+●​ Problem  
+●​ Architecture  
+●​ Database  
+●​ API  
+●​ Frontend workflow  
+●​ Challenges  
+●​ Team contribution  
+Bắt buộc 
+Mỗi thành viên: 
+●​ Demo phần phụ trách  
+●​ Trả lời technical questions  
+ 
+Cấu trúc chấm điểm (60% Backend – 40% Frontend) 
+Hạng mục 
+Tỷ lệ 
+Backend Architecture & API 
+25% 
+Database & EF Core 
+10% 
+Authentication & Security 
+10% 
+Business Logic & Validation 
+10% 
+Backend Testing & Optimization 5% 
+Frontend UI & API Integration 
+20% 
+Frontend UX & Responsive 
+10% 
+Deployment 
+5% 
+Presentation & Teamwork 
+5% 
+ 
+Yêu cầu kỹ thuật bắt buộc 
+Backend 
+●​ Layer architecture  
+●​ DTO  
+●​ RESTful API  
+ 
+ 
+●​ JWT  
+●​ EF Core Migration  
+●​ Exception middleware  
+●​ Pagination/filter/search  
+Frontend 
+●​ Responsive  
+●​ Protected routes  
+●​ API abstraction  
+●​ Form validation  
+Git 
+●​ GitHub repository  
+●​ Branching strategy  
+●​ Meaningful commits  
+ 
+Mô hình phù hợp cho sinh viên 
+Mức cơ bản 
+●​ Monolithic architecture  
+●​ ASP.NET API + React/MVC  
+●​ SQL Server  
+Mức nâng cao 
+●​ Clean Architecture  
+●​ CQRS  
+●​ Redis cache  
+●​ Docker  
+●​ CI/CD  
+ 
+Gợi ý quản lý tiến độ 
+Mỗi tuần 
+●​ Submit source code  
+●​ Demo 5–10 phút  
+●​ Review trực tiếp với giảng viên  
+Nên kiểm tra 
+ 
+ 
+●​ Git commit history  
+●​ Pull requests  
+●​ Contribution từng thành viên  
+●​ Tiến độ theo milestone tuần 
+ 
+ 
+ 
