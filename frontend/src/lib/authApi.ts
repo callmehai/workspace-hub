@@ -1,5 +1,5 @@
 import api from './api';
-import type { AuthResponse, GoogleAuthStartResponse } from '../types/auth';
+import type { AuthResultDto, GoogleAuthStartResponse } from '../types/auth';
 
 /**
  * Auth API — Google Sign-In (đăng nhập bằng Google, KHÁC connect-để-sync) + logout.
@@ -13,13 +13,13 @@ export const authApi = {
     return res.data;
   },
 
-  /** Đổi code + state lấy JWT + thông tin user. */
-  googleCallback: async (code: string, state: string): Promise<AuthResponse> => {
-    const res = await api.post<AuthResponse>('/auth/google/callback', { code, state });
+  /** Đổi code + state → set cookie auth (SCRUM-62); body trả user + expiresIn. */
+  googleCallback: async (code: string, state: string): Promise<AuthResultDto> => {
+    const res = await api.post<AuthResultDto>('/auth/google/callback', { code, state });
     return res.data;
   },
 
-  /** Logout stateless (MVP) — backend trả 204, client tự xoá token. */
+  /** Logout — backend xoá cookie auth (SCRUM-62), trả 204. */
   logout: async (): Promise<void> => {
     await api.post('/auth/logout');
   },

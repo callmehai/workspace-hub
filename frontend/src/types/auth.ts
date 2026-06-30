@@ -5,9 +5,11 @@ export interface UserDto {
   role: string;
 }
 
-/** Khớp AuthResponse của backend: { accessToken, expiresIn, user }. */
-export interface AuthResponse {
-  accessToken: string;
+/**
+ * Body trả về sau login/register/google (SCRUM-62).
+ * Access token KHÔNG còn trong body — nằm trong HttpOnly cookie wh_access.
+ */
+export interface AuthResultDto {
   expiresIn: number;
   user: UserDto;
 }

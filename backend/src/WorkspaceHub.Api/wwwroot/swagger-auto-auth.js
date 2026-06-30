@@ -1,50 +1,29 @@
 (function () {
-    // Auto-inject Bearer token sau khi login thành công.
-    const originalFetch = window.fetch;
-    window.fetch = async function (...args) {
-        const response = await originalFetch(...args);
-
-        const url = args[0];
-        if (typeof url === 'string' && url.includes('/api/auth/login') && response.status === 200) {
-            try {
-                const clone = response.clone();
-                const data = await clone.json();
-
-                const token = data.accessToken || data.token;
-                if (token) {
-                    const ui = window.ui;
-                    if (ui && ui.authActions) {
-                        ui.authActions.authorize({
-                            Bearer: {
-                                name: "Bearer",
-                                schema: { type: "apiKey", in: "header", name: "Authorization" },
-                                value: token
-                            }
-                        });
-                        console.log("Swagger: Bearer token auto-injected.");
-                    }
-                }
-            } catch (err) {
-                console.error("Swagger auto-auth failed:", err);
-            }
-        }
-
-        return response;
-    };
-
-    // Auto-login khi Swagger UI sẵn sàng.
+    // SCRUM-62: access token nằm trong HttpOnly cookie wh_access (không còn trong body).
+    // Swagger UI chạy cùng origin với API → cookie tự gửi kèm mọi request, KHÔNG cần
+    // inject Bearer thủ công nữa. Script này giờ chỉ (tuỳ chọn) auto-login để set cookie.
+    //
+    // Điền DEV_EMAIL/DEV_PASSWORD nếu muốn Swagger tự đăng nhập khi mở (chỉ dùng dev).
+    // Để trống → bỏ qua, tự gọi /api/auth/login trong Swagger rồi cookie sẽ áp dụng.
     const DEV_EMAIL = "";
     const DEV_PASSWORD = "";
 
     function autoLogin() {
+        if (!DEV_EMAIL || !DEV_PASSWORD) return; // chưa cấu hình → không làm gì
+
         fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include", // nhận cookie wh_access / wh_csrf
             body: JSON.stringify({ email: DEV_EMAIL, password: DEV_PASSWORD })
-        }).catch(() => console.warn("Swagger auto-login failed — server chưa sẵn sàng?"));
+        })
+            .then((res) => {
+                if (res.ok) console.log("Swagger: đã auto-login, cookie auth được set.");
+                else console.warn("Swagger auto-login thất bại:", res.status);
+            })
+            .catch(() => console.warn("Swagger auto-login failed — server chưa sẵn sàng?"));
     }
 
-    // Đợi window.ui khởi tạo xong rồi mới login.
     const interval = setInterval(() => {
         if (window.ui && window.ui.authActions) {
             clearInterval(interval);
