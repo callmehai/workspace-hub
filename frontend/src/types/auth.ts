@@ -12,6 +12,12 @@ export interface AuthResponse {
   user: UserDto;
 }
 
+/** Khớp GoogleAuthStartResponse: { authorizationUrl, state }. */
+export interface GoogleAuthStartResponse {
+  authorizationUrl: string;
+  state: string;
+}
+
 /** Error envelope chuẩn của backend (ExceptionMiddleware, SCRUM-24). */
 export interface ApiError {
   error: string;

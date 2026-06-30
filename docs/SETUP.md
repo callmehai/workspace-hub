@@ -56,7 +56,8 @@ dotnet run --project src/WorkspaceHub.Api
 | `Jwt:ExpiresIn` | mặc định 3600s |
 | `OAuth:google:ClientId` / `OAuth:google:ClientSecret` | OAuth Google (prod: env var `OAuth__google__ClientId`) |
 | `OAuth:jira:ClientId` / `OAuth:jira:ClientSecret` | OAuth Jira (tương tự) |
-| `Google:RedirectUri` | callback URL |
+| `Google:RedirectUri` | callback URL connect-để-sync (`/oauth/callback`) |
+| `Google:SignInRedirectUri` | callback URL Google Sign-In (`/auth/google/callback`) — tách khỏi connect flow |
 | `Cron:Secret` | bảo vệ /api/internal/process-scheduled (X-Cron-Secret) |
 
 ## Tạo migration mới
@@ -73,7 +74,7 @@ dotnet ef migrations add <TenMigration> \
 2. APIs & Services → bật Gmail API, Calendar API, Drive API.
 3. OAuth consent screen → cấu hình (External, scope read-write: gmail.modify + gmail.send, calendar, drive — xem danh sách bên dưới).
 4. Credentials → tạo OAuth Client ID (Web application).
-5. Authorized redirect URIs → thêm `https://localhost:5001/oauth/callback` (dev) và URL prod.
+5. Authorized redirect URIs → thêm cả 2: `http://localhost:5173/oauth/callback` (connect-để-sync) **và** `http://localhost:5173/auth/google/callback` (Google Sign-In) cho dev; thêm URL prod tương ứng.
 6. Copy Client ID + Secret vào user-secrets.
 
 Scope dùng (2 chiều, mô hình B — mỗi service xin riêng full scope):
