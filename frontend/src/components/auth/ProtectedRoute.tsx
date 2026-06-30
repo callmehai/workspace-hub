@@ -1,10 +1,13 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { tokenStore } from '../../lib/api';
 
 export const ProtectedRoute = () => {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) {
+  const hasToken = tokenStore.get() !== null;
+
+  if (isLoading && !hasToken) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
         <div className="text-gray-500">Đang tải...</div>
@@ -12,7 +15,7 @@ export const ProtectedRoute = () => {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !hasToken) {
     // Chuyển hướng người dùng về trang đăng nhập nếu chưa đăng nhập
     return <Navigate to="/login" replace />;
   }
