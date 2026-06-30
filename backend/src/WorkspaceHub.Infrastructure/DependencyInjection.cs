@@ -90,6 +90,16 @@ public static class DependencyInjection
 
         services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IOtpService, OtpService>();
+
+        // SMS sender (SCRUM-64): có Sms:Twilio:AccountSid → Twilio thật; thiếu → LogSmsSender
+        // (ghi OTP ra log cho dev/demo). Đăng ký HttpClient "Twilio" cho TwilioSmsSender.
+        services.AddHttpClient("Twilio");
+        if (!string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]))
+            services.AddScoped<ISmsSender, TwilioSmsSender>();
+        else
+            services.AddScoped<ISmsSender, LogSmsSender>();
+
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();
         services.AddScoped<IJiraGateway, JiraGateway>();

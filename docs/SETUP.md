@@ -41,7 +41,8 @@ dotnet user-secrets set "OAuth:google:ClientId" "<client-id>" --project src/Work
 dotnet user-secrets set "OAuth:google:ClientSecret" "<client-secret>" --project src/WorkspaceHub.Api
 dotnet user-secrets set "Cron:Secret" "<cron-secret>" --project src/WorkspaceHub.Api
 
-# 3. Apply migrations (tạo DB) — hiện có 4 migration: InitialCreate, UsersMultiAuth, ModelBConnections, RemoveClientCredentialsFromIntegration
+# 3. Apply migrations (tạo DB). Gồm: InitialCreate, UsersMultiAuth, ModelBConnections,
+#    RemoveClientCredentialsFromIntegration, ... , AddUserPhoneOtp (SCRUM-64: Users.Phone/PhoneVerified)
 dotnet ef database update --project src/WorkspaceHub.Infrastructure --startup-project src/WorkspaceHub.Api
 
 # 4. Run
@@ -99,6 +100,21 @@ Scope dùng (2 chiều, mô hình B — mỗi service xin riêng full scope):
 - Google Sign-In (đăng nhập): `openid email profile` (riêng, không tạo Connection)
 
 > Connection cũ connect bằng scope readonly (mô hình A) sau migration SCRUM-34 vẫn giữ token cũ → phải **reconnect** mới dùng được write-back.
+
+## Setup Twilio SMS OTP (SCRUM-64)
+
+OTP đăng ký gửi qua Twilio. Dev có thể bỏ qua (không cấu hình → `LogSmsSender` ghi OTP ra log để demo).
+
+Dùng SMS thật (Twilio trial — đủ cho đồ án):
+1. Đăng ký https://www.twilio.com/try-twilio → lấy **Account SID** + **Auth Token** (Console Dashboard).
+2. Trial cấp 1 số gửi (**From**) + phải **verify số nhận** trong "Verified Caller IDs" (giới hạn của trial).
+3. Set config (user-secrets / env):
+```bash
+dotnet user-secrets set "Sms:Twilio:AccountSid" "ACxxxx" --project src/WorkspaceHub.Api
+dotnet user-secrets set "Sms:Twilio:AuthToken" "xxxx" --project src/WorkspaceHub.Api
+dotnet user-secrets set "Sms:Twilio:FromNumber" "+1xxxxxxxxxx" --project src/WorkspaceHub.Api
+```
+SĐT nhập khi đăng ký phải dạng E.164 (vd `+84901234567`).
 
 ## Cron cho scheduled email (SCRUM-31)
 

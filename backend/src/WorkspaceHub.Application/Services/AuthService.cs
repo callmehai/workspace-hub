@@ -30,6 +30,7 @@ public class AuthService : IAuthService
     private readonly IOAuthTokenClient _tokenClient;
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
     private readonly IJwtTokenFactory _jwt;
+    private readonly IOtpService _otp;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -42,7 +43,8 @@ public class AuthService : IAuthService
         IDistributedCache cache,
         IOAuthTokenClient tokenClient,
         IGoogleTokenVerifier googleTokenVerifier,
-        IJwtTokenFactory jwt)
+        IJwtTokenFactory jwt,
+        IOtpService otp)
     {
         _users = users;
         _config = config;
@@ -52,9 +54,10 @@ public class AuthService : IAuthService
         _tokenClient = tokenClient;
         _googleTokenVerifier = googleTokenVerifier;
         _jwt = jwt;
+        _otp = otp;
     }
 
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
+    public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
     {
         await _registerValidator.ValidateAndThrowAsync(request, ct);
 
@@ -65,12 +68,15 @@ public class AuthService : IAuthService
 
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
 
+        // SCRUM-64: tạo user trước, verify sau. PhoneVerified=false → login bị chặn tới khi verify OTP.
         var user = new User
         {
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = passwordHash,
             FullName = request.FullName.Trim(),
+            Phone = request.Phone.Trim(),
+            PhoneVerified = false,
             Role = UserRole.User,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
@@ -79,8 +85,8 @@ public class AuthService : IAuthService
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
 
-        var (token, expiresIn) = _jwt.CreateAccessToken(user);
-        return new AuthResponse(token, expiresIn, MapToDto(user));
+        var cooldown = await _otp.SendAsync(user.Id, user.Phone, ct);
+        return new RegisterResult(user.Email, RequiresPhoneVerification: true, cooldown);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -100,7 +106,47 @@ public class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedException("Invalid credentials");
 
+        // SCRUM-64: chặn login nếu chưa verify SĐT. FE bắt mã này → mở màn nhập OTP.
+        if (!user.PhoneVerified)
+            throw new ForbiddenException("PHONE_NOT_VERIFIED");
+
         return await SignInAsync(user, ct);
+    }
+
+    public async Task<int> SendOtpAsync(string email, CancellationToken ct = default)
+    {
+        var user = await GetUserForOtpAsync(email, ct);
+        return await _otp.SendAsync(user.Id, user.Phone!, ct);
+    }
+
+    public async Task<AuthResponse> VerifyOtpAsync(string email, string code, CancellationToken ct = default)
+    {
+        var user = await GetUserForOtpAsync(email, ct);
+
+        var ok = await _otp.VerifyAsync(user.Id, code, ct);
+        if (!ok)
+            throw new BusinessRuleException("Mã OTP không đúng.");
+
+        user.PhoneVerified = true;
+        await _users.SaveChangesAsync(ct);
+
+        // Verify xong → đăng nhập luôn (phát JWT) cho mượt.
+        return await SignInAsync(user, ct);
+    }
+
+    /// <summary>Lấy user cho luồng OTP: phải tồn tại, có Phone, và chưa verify (tránh gửi OTP thừa).</summary>
+    private async Task<User> GetUserForOtpAsync(string email, CancellationToken ct)
+    {
+        var normalized = email.Trim().ToLowerInvariant();
+        var user = await _users.GetByEmailAsync(normalized, ct)
+            ?? throw new NotFoundException("User not found");
+
+        if (string.IsNullOrEmpty(user.Phone))
+            throw new BusinessRuleException("Tài khoản không có số điện thoại để xác minh.");
+        if (user.PhoneVerified)
+            throw new BusinessRuleException("Số điện thoại đã được xác minh.");
+
+        return user;
     }
 
     public async Task<UserDto> GetMeAsync(Guid userId, CancellationToken ct = default)

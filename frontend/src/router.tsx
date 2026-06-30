@@ -10,6 +10,7 @@ import { Integrations } from './pages/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
 import { ScheduledEmails } from './pages/ScheduledEmails';
 import { GoogleCallback } from './pages/auth/GoogleCallback';
+import { VerifyOtp } from './pages/auth/VerifyOtp';
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -26,6 +27,10 @@ export const router = createBrowserRouter([
   {
     path: '/register',
     element: <RegisterPage />,
+  },
+  {
+    path: '/verify-otp',
+    element: <VerifyOtp />,
   },
   {
     path: '/',

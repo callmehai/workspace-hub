@@ -4,31 +4,37 @@ import { isAxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AlertCircle } from 'lucide-react';
-import api from '../lib/api';
 import { authApi } from '../lib/authApi';
 import { EMAIL_RE } from '../lib/validation';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 import type { ApiError } from '../types/auth';
 
+// SĐT định dạng E.164 (vd +84901234567) — khớp validator backend SCRUM-64.
+const PHONE_RE = /^\+[1-9]\d{7,14}$/;
+
 export const RegisterPage = () => {
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [errFullName, setErrFullName] = useState('');
   const [errEmail, setErrEmail] = useState('');
+  const [errPhone, setErrPhone] = useState('');
   const [errPwd, setErrPwd] = useState('');
   const [errConfirm, setErrConfirm] = useState('');
   const [banner, setBanner] = useState('');
 
   const register = useMutation({
-    mutationFn: async () => {
-      await api.post('/auth/register', { fullName, email, password });
-    },
-    onSuccess: () => {
-      toast.success('Đăng ký thành công, mời đăng nhập');
-      navigate('/login', { replace: true });
+    mutationFn: () => authApi.register({ fullName, email, password, phone }),
+    onSuccess: (result) => {
+      toast.success('Đã gửi mã OTP. Vui lòng kiểm tra điện thoại.');
+      // SCRUM-64: chưa đăng nhập — sang màn nhập OTP, mang email + cooldown.
+      navigate('/verify-otp', {
+        replace: true,
+        state: { email: result.email, cooldown: result.resendCooldownSeconds },
+      });
     },
     onError: (error) => {
       const data = isAxiosError<ApiError>(error) ? error.response?.data : undefined;
@@ -53,13 +59,15 @@ export const RegisterPage = () => {
 
     const eFullName = fullName.trim().length === 0 ? 'Vui lòng nhập họ tên' : '';
     const eEmail = !EMAIL_RE.test(email) ? 'Email không hợp lệ' : '';
+    const ePhone = !PHONE_RE.test(phone) ? 'SĐT phải dạng E.164, vd +84901234567' : '';
     const ePwd = password.length < 8 ? 'Mật khẩu phải từ 8 ký tự trở lên' : '';
     const eConfirm = confirm !== password ? 'Mật khẩu nhập lại không khớp' : '';
     setErrFullName(eFullName);
     setErrEmail(eEmail);
+    setErrPhone(ePhone);
     setErrPwd(ePwd);
     setErrConfirm(eConfirm);
-    if (eFullName || eEmail || ePwd || eConfirm) return;
+    if (eFullName || eEmail || ePhone || ePwd || eConfirm) return;
 
     register.mutate();
   };
@@ -112,6 +120,19 @@ export const RegisterPage = () => {
               }`}
             />
             {errEmail && <div className="mt-1 text-xs text-red-600">{errEmail}</div>}
+
+            <label htmlFor="phone" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Số điện thoại</label>
+            <input
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+84901234567"
+              className={`h-[38px] w-full rounded-lg border px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
+                errPhone ? 'border-red-400' : 'border-gray-300'
+              }`}
+            />
+            {errPhone && <div className="mt-1 text-xs text-red-600">{errPhone}</div>}
 
             <label htmlFor="password" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Mật khẩu</label>
             <input
