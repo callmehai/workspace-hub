@@ -11,3 +11,11 @@ export interface AuthResponse {
   expiresIn: number;
   user: UserDto;
 }
+
+/** Error envelope chuẩn của backend (ExceptionMiddleware, SCRUM-24). */
+export interface ApiError {
+  error: string;
+  message: string;
+  details: string[];
+  traceId: string;
+}
