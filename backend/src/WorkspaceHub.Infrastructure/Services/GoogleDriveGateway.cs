@@ -37,22 +37,16 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             if (string.IsNullOrEmpty(pageToken))
             {
                 var listRequest = service.Files.List();
-                listRequest.PageSize = 50;
+                listRequest.PageSize = 100; // Chỉ lấy 100 file mới nhất ở lần đầu tiên (MVP)
                 listRequest.Fields = "nextPageToken, files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
                 listRequest.OrderBy = "modifiedTime desc";
 
-                string? filesPageToken = null;
-                do
+                var response = await listRequest.ExecuteAsync(ct);
+                if (response.Files != null)
                 {
-                    listRequest.PageToken = filesPageToken;
-                    var response = await listRequest.ExecuteAsync(ct);
-                    if (response.Files != null)
-                    {
-                        foreach (var file in response.Files)
-                            filesDto.Add(MapToDto(file));
-                    }
-                    filesPageToken = response.NextPageToken;
-                } while (!string.IsNullOrEmpty(filesPageToken));
+                    foreach (var file in response.Files)
+                        filesDto.Add(MapToDto(file));
+                }
 
                 var tokenResponse = await service.Changes.GetStartPageToken().ExecuteAsync(ct);
                 nextToken = tokenResponse.StartPageTokenValue;
@@ -64,6 +58,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             while (true)
             {
                 var changesRequest = service.Changes.List(pageToken);
+                changesRequest.PageSize = 1000;
                 changesRequest.Fields = "nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId), removed)";
 
                 var response = await changesRequest.ExecuteAsync(ct);
