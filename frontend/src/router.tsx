@@ -8,8 +8,8 @@ import { Projects } from './pages/Projects';
 import { KanbanBoard } from './pages/KanbanBoard';
 import { Integrations } from './pages/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
+import { ScheduledEmails } from './pages/ScheduledEmails';
 import { GoogleCallback } from './pages/auth/GoogleCallback';
-
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -49,6 +49,10 @@ export const router = createBrowserRouter([
           {
             path: 'integrations',
             element: <Integrations />,
+          },
+          {
+            path: 'scheduled-emails',
+            element: <ScheduledEmails />,
           },
           {
             path: '*',

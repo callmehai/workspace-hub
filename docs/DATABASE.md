@@ -148,6 +148,7 @@ Không đổi cấu trúc.
 | ToJson/CcJson/BccJson | nvarchar(max) (JSON) | |
 | Subject, BodyHtml | string | |
 | SendAt | datetime | |
+| CreatedAt | datetime | Thêm để sort danh sách theo thứ tự tạo |
 | Status | enum string | Pending/Sent/Failed/Cancelled |
 | RetryCount | int | max 3 |
 | LastError | string null | |

@@ -18,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // OData EDM model — expose FolderResponse cho $filter/$orderby/$select/$top/$skip/$count.
 var edmBuilder = new ODataConventionModelBuilder();
+edmBuilder.EnableLowerCamelCase(); // Force camelCase cho tất cả OData response
 edmBuilder.EntitySet<FolderResponse>("Folders");
 edmBuilder.EntitySet<ScheduledEmailDto>("ScheduledEmails");
 

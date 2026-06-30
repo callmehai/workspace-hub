@@ -16,4 +16,5 @@ public class ScheduledEmailDto
     public int RetryCount { get; set; }
     public string? LastError { get; set; }
     public DateTime? SentAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
