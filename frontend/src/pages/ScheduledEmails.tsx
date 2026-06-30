@@ -364,7 +364,7 @@ export const ScheduledEmails = () => {
                 <label className={`${labelClass} shrink-0`}>Thời gian gửi</label>
                 <DatePicker
                   selected={cWhen}
-                  onChange={(date) => setCWhen(date)}
+                  onChange={(date: Date | null) => setCWhen(date)}
                   showTimeSelect
                   timeFormat="HH:mm"
                   timeIntervals={15}

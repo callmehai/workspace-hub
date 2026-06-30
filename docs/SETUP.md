@@ -7,8 +7,15 @@
 - Node.js ≥ 20 (frontend Vite + React)
 - Google Cloud project (OAuth credentials) — xem phần OAuth bên dưới
 
-## SQL Server dev (Docker)
+## Hạ tầng dev (Docker Compose)
 
+Cách gọn nhất — chạy cả SQL Server + Redis một lệnh (xem `docker-compose.yml` ở repo root):
+```bash
+docker compose up -d            # SQL Server (wh-sqlserver) + Redis (wh-redis)
+docker compose up -d wh-redis   # chỉ Redis (SCRUM-63)
+```
+
+Hoặc chạy SQL Server thủ công:
 ```bash
 docker run -d --name wh-sqlserver \
   -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='Workspace#2026Dev' \
@@ -16,6 +23,7 @@ docker run -d --name wh-sqlserver \
 ```
 Connection string dev tương ứng (đã có trong `appsettings.Development.json` mẫu):
 `Server=localhost,1433;Database=WorkspaceHub;User Id=sa;Password=Workspace#2026Dev;TrustServerCertificate=True`
+Redis dev: `ConnectionStrings:Redis=localhost:6379`.
 
 ## Chạy backend local
 
@@ -45,7 +53,9 @@ dotnet run --project src/WorkspaceHub.Api
 
 > **OAuth credentials:** đọc từ section `OAuth:{provider}:ClientId` / `ClientSecret` trong config (appsettings / user-secrets / env var). Prod set qua env var `OAuth__google__ClientId` / `OAuth__google__ClientSecret` (ASP.NET dùng `__` thay `:` trong env). Không còn section `Dev:` riêng — đây là đường chính thức cho cả dev lẫn prod.
 
-> **OAuth state cache:** state CSRF lưu bằng `AddDistributedMemoryCache` (in-memory) — **restart app giữa chừng flow OAuth sẽ mất state** → user nhận "State không hợp lệ", phải bấm connect lại. Chấp nhận được cho MVP single-instance; deploy nhiều instance thì phải đổi sang Redis.
+> **Distributed cache (SCRUM-63):** có `ConnectionStrings:Redis` → dùng **Redis** (`AddStackExchangeRedisCache`) cho refresh token (`refresh:{jti}`), OTP (SCRUM-64) và OAuth state CSRF. Thiếu Redis → fallback **in-memory** (dev) + log cảnh báo: refresh token + OAuth state sẽ mất khi restart, không chia sẻ giữa nhiều instance. Prod/multi-instance **bắt buộc** Redis.
+>
+> Chạy Redis dev: `docker compose up -d wh-redis` (xem `docker-compose.yml`), rồi set `ConnectionStrings:Redis=localhost:6379`.
 
 ## Biến môi trường / config cần thiết
 

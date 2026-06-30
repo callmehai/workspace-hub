@@ -1,5 +1,9 @@
 import axios from 'axios'
+import type { InternalAxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
+
+/** Cờ đánh dấu request đã thử refresh 1 lần (tránh vòng lặp refresh vô hạn). */
+type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean }
 
 const CSRF_COOKIE = 'wh_csrf'
 const CSRF_HEADER = 'X-CSRF-Token'
@@ -30,18 +34,59 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// SCRUM-63: tự refresh access token khi gặp 401. Single-flight — nhiều request 401
+// đồng thời chỉ kích hoạt MỘT lần /auth/refresh, rồi cùng retry sau khi xong.
+let refreshPromise: Promise<void> | null = null
+
+const redirectToLogin = () => {
+  if (window.location.pathname !== '/login') {
+    window.location.assign('/login')
+  }
+}
+
+const runRefresh = (): Promise<void> => {
+  if (!refreshPromise) {
+    // Dùng axios "trần" để gọi /auth/refresh, tránh đệ quy interceptor.
+    refreshPromise = axios
+      .post('/auth/refresh', null, {
+        baseURL: api.defaults.baseURL,
+        withCredentials: true,
+      })
+      .then(() => undefined)
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
+  async (error) => {
     const status = error.response?.status
-    // 401 → đẩy về /login (cookie đã hết hạn / chưa đăng nhập). Backend tự xoá cookie.
-    if (status === 401) {
-      if (window.location.pathname !== '/login') {
-        window.location.assign('/login')
+    const original = error.config as RetriableConfig | undefined
+    const url: string = original?.url ?? ''
+
+    // 401 → thử refresh 1 lần rồi retry. Không refresh cho chính endpoint auth
+    // (login/refresh/logout) và không retry lần 2 (_retried).
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh') ||
+      url.includes('/auth/logout') || url.includes('/auth/google')
+    if (status === 401 && original && !original._retried && !isAuthEndpoint) {
+      original._retried = true
+      try {
+        await runRefresh()
+        return api(original) // retry request gốc với cookie access mới
+      } catch {
+        redirectToLogin() // refresh fail → hết phiên
+        return Promise.reject(error)
       }
     }
+
+    // 401 còn lại (kể cả refresh fail) → về /login.
+    if (status === 401) {
+      redirectToLogin()
+    }
     // 403 CsrfError → cookie CSRF thiếu/lệch (bị xoá tay hoặc trình duyệt chặn cookie).
-    // Báo rõ thay vì để 403 im lặng khó debug.
     else if (status === 403 && error.response?.data?.error === 'CsrfError') {
       toast.error('Phiên bảo mật không hợp lệ. Vui lòng tải lại trang và thử lại.')
     }
