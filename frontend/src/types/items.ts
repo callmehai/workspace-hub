@@ -5,7 +5,7 @@ export interface PagedResult<T> {
   limit: number;
 }
 
-export type ItemType = 'Email' | 'Event' | 'File' | 'Note';
+export type ItemType = 'Email' | 'Event' | 'File' | 'Note' | 'Ticket';
 export type ItemStatus = 'Inbox' | 'Doing' | 'Done';
 
 export interface ItemResponse {

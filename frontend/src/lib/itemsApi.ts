@@ -25,7 +25,12 @@ export const itemsApi = {
     const response = await api.patch(`/items/${id}/status`, request);
     return response.data;
   },
-  
+
+  updateItemImportant: async (id: string, isImportant: boolean): Promise<ItemResponse> => {
+    const response = await api.patch(`/items/${id}/important`, { isImportant });
+    return response.data;
+  },
+
   createNote: async (request: CreateNoteRequest): Promise<ItemResponse> => {
     const response = await api.post('/items/note', request);
     return response.data;

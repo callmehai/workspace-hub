@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemsApi } from '../lib/itemsApi';
-import type { ItemType, ItemStatus } from '../types/items';
+import type { ItemType, ItemStatus, ItemResponse } from '../types/items';
 import {
-  Mail, Calendar, FileText, StickyNote,
+  Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight, Search, LayoutGrid, List,
 } from 'lucide-react';
+import { ItemDetail } from '../components/ItemDetail';
 
 const LIMIT = 20;
 
@@ -27,7 +28,7 @@ function formatTime(iso: string | null | undefined): string {
 
 function typeLabel(t: ItemType): string {
   const map: Record<ItemType, string> = {
-    Email: 'Email', Event: 'Sự kiện', File: 'Tệp', Note: 'Ghi chú',
+    Email: 'Email', Event: 'Sự kiện', File: 'Tệp', Note: 'Ghi chú', Ticket: 'Ticket',
   };
   return map[t] ?? t;
 }
@@ -35,19 +36,21 @@ function typeLabel(t: ItemType): string {
 function typeIcon(t: ItemType) {
   const cls = 'w-4 h-4';
   switch (t) {
-    case 'Email': return <Mail className={cls} />;
-    case 'Event': return <Calendar className={cls} />;
-    case 'File': return <FileText className={cls} />;
-    case 'Note': return <StickyNote className={cls} />;
+    case 'Email':  return <Mail className={cls} />;
+    case 'Event':  return <Calendar className={cls} />;
+    case 'File':   return <FileText className={cls} />;
+    case 'Note':   return <StickyNote className={cls} />;
+    case 'Ticket': return <Briefcase className={cls} />;
   }
 }
 
 function typeTileClass(t: ItemType): string {
   const map: Record<ItemType, string> = {
-    Email: 'bg-blue-50 text-blue-600',
-    Event: 'bg-amber-50 text-amber-600',
-    File: 'bg-emerald-50 text-emerald-600',
-    Note: 'bg-slate-100 text-slate-500',
+    Email:  'bg-blue-50 text-blue-600',
+    Event:  'bg-amber-50 text-amber-600',
+    File:   'bg-emerald-50 text-emerald-600',
+    Note:   'bg-slate-100 text-slate-500',
+    Ticket: 'bg-purple-50 text-purple-600',
   };
   return map[t] ?? 'bg-slate-100 text-slate-500';
 }
@@ -56,7 +59,7 @@ function statusChipClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-100 text-slate-600',
     Doing: 'bg-blue-50 text-blue-700',
-    Done: 'bg-emerald-50 text-emerald-700',
+    Done:  'bg-emerald-50 text-emerald-700',
   };
   return map[s] ?? 'bg-slate-100 text-slate-500';
 }
@@ -65,7 +68,7 @@ function statusDotClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-400',
     Doing: 'bg-blue-500',
-    Done: 'bg-emerald-500',
+    Done:  'bg-emerald-500',
   };
   return map[s] ?? 'bg-slate-400';
 }
@@ -141,7 +144,7 @@ export const Inbox = () => {
   const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ItemResponse | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -169,6 +172,27 @@ export const Inbox = () => {
     queryKey,
     queryFn: () => itemsApi.getItems(params),
     placeholderData: (prev) => prev,
+  });
+
+  const queryClient = useQueryClient();
+  const { mutate: toggleImportant } = useMutation({
+    mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
+      itemsApi.updateItemImportant(id, isImportant),
+    onMutate: async ({ id, isImportant }) => {
+      await queryClient.cancelQueries({ queryKey: ['items'] });
+      const previous = queryClient.getQueryData(queryKey);
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        return { ...old, items: old.items.map((it: any) => it.id === id ? { ...it, isImportant } : it) };
+      });
+      // also update the open detail panel if it's the same item
+      setSelectedItem(prev => prev && prev.id === id ? { ...prev, isImportant } : prev);
+      return { previous };
+    },
+    onError: (_err, _vars, ctx: any) => {
+      if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
   });
 
   const items = data?.items ?? [];
@@ -201,6 +225,7 @@ export const Inbox = () => {
     { label: 'Sự kiện', value: 'Event' },
     { label: 'Tệp', value: 'File' },
     { label: 'Ghi chú', value: 'Note' },
+    { label: 'Ticket', value: 'Ticket' },
   ];
 
   const pageNumbers = buildPageNumbers(page, totalPages);
@@ -253,140 +278,115 @@ export const Inbox = () => {
             </Chip>
           ))}
 
-          {/* Important */}
-          <Chip active={importantOnly} onClick={() => { setImportantOnly(v => !v); setPage(1); }}>
-            <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-indigo-600 text-indigo-600' : 'text-slate-400'}`} />
-            <span>Quan trọng</span>
-          </Chip>
+          <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
 
-          {/* Search */}
-          <div className="relative ml-auto min-w-[200px] max-w-xs">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 flex pointer-events-none">
-              <Search className="w-4 h-4" />
-            </span>
-            <input
-              id="inbox-search"
-              type="text"
-              value={searchInput}
-              onChange={e => handleSearchChange(e.target.value)}
-              placeholder="Tìm kiếm…"
-              className="w-full h-9 pl-8 pr-3 text-[13px] border border-slate-200 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
-            />
-          </div>
+          {/* Important toggle */}
+          <Chip active={importantOnly} onClick={() => { setImportantOnly(v => !v); setPage(1); }}>
+            <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
+            Quan trọng
+          </Chip>
         </div>
 
-        {/* ── List card ── */}
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,.05)]">
+        {/* ── Search ── */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => handleSearchChange(e.target.value)}
+            placeholder="Tìm kiếm tiêu đề, nội dung…"
+            className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13.5px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
+          />
+        </div>
 
-          {/* Loading skeleton */}
-          {isLoading && (
-            <>
-              {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
-            </>
-          )}
+        {/* ── Active filter summary ── */}
+        {(statusFilter || typeFilter || importantOnly || search) && (
+          <div className="flex items-center gap-2 mb-3 text-[12.5px] text-slate-500">
+            <span>Đang lọc:</span>
+            {statusFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{statusLabel(statusFilter)}</span>}
+            {typeFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{typeLabel(typeFilter)}</span>}
+            {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">⭐ Quan trọng</span>}
+            {search && <span className="px-2 py-0.5 rounded-full bg-slate-100">"{search}"</span>}
+            <button onClick={clearFilters} className="text-indigo-600 hover:underline ml-1">Xoá bộ lọc</button>
+          </div>
+        )}
+
+        {/* ── Content ── */}
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+
+          {/* Loading */}
+          {isLoading && Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}
 
           {/* Error */}
           {isError && (
-            <div className="py-[52px] px-6 text-center">
-              <div className="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-3.5">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div className="text-[15px] font-semibold text-slate-900 mb-1">Không tải được dữ liệu</div>
-              <div className="text-[13px] text-slate-500 mb-[18px]">Mất kết nối tới máy chủ. Vui lòng thử lại.</div>
-              <button
-                onClick={() => refetch()}
-                className="h-[38px] px-[18px] border-none rounded-lg bg-indigo-600 text-white text-[13px] font-semibold cursor-pointer hover:bg-indigo-700 transition-colors"
-              >
-                Thử lại
-              </button>
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+              <AlertCircle className="w-8 h-8 text-rose-400" />
+              <p className="text-[13.5px] text-slate-500">Không thể tải dữ liệu.</p>
+              <button onClick={() => refetch()} className="text-[13px] text-indigo-600 hover:underline">Thử lại</button>
             </div>
           )}
 
           {/* Empty */}
           {isEmpty && (
-            <div className="py-[52px] px-6 text-center">
-              <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3.5">
-                <InboxIcon className="w-6 h-6" />
-              </div>
-              <div className="text-[15px] font-semibold text-slate-900 mb-1">Không có mục nào</div>
-              <div className="text-[13px] text-slate-500 mb-[18px]">Thử bỏ bớt bộ lọc, hoặc kết nối thêm dịch vụ để kéo dữ liệu về.</div>
-              <button
-                onClick={clearFilters}
-                className="h-[38px] px-[18px] border border-slate-300 rounded-lg bg-white text-slate-800 text-[13px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors"
-              >
-                Xoá bộ lọc
-              </button>
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <InboxIcon className="w-10 h-10 text-slate-300" />
+              <p className="text-[13.5px] text-slate-400">Không có mục nào.</p>
+              {(statusFilter || typeFilter || importantOnly || search) && (
+                <button onClick={clearFilters} className="text-[13px] text-indigo-600 hover:underline">Xoá bộ lọc</button>
+              )}
             </div>
           )}
 
-          {/* Item rows */}
-          {showList && items.map((item, idx) => {
-            const isActive = item.id === selectedId;
-            return (
-              <div
-                key={item.id}
-                onClick={() => setSelectedId(prev => prev === item.id ? null : item.id)}
-                className={`flex items-center gap-[13px] px-4 py-[13px] border-b border-slate-100 cursor-pointer transition-colors duration-100 last:border-b-0
-                  ${isActive ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}
-                  ${idx === items.length - 1 ? '' : ''}`}
-              >
-                {/* Type icon tile */}
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
-                  {typeIcon(item.type)}
-                </div>
-
-                {/* Main content */}
-                <div className="min-w-0 flex-1">
-                  {/* Title row */}
-                  <div className="flex items-center gap-1.5">
-                    {item.isImportant && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
-                    )}
-                    <span className={`text-[14px] truncate ${item.isImportant ? 'font-semibold text-slate-900' : 'font-medium text-slate-800'}`}>
-                      {item.title}
-                    </span>
-                  </div>
-                  {/* from · snippet */}
-                  <div className="flex items-center gap-1.5 mt-[3px] min-w-0">
-                    <span className="text-[13px] text-slate-500 whitespace-nowrap flex-shrink-0 max-w-[42%] overflow-hidden text-ellipsis">
-                      {typeLabel(item.type)}
-                    </span>
-                    <span className="text-slate-300 flex-shrink-0">·</span>
-                    <span className="text-[13px] text-slate-400 whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
-                      {item.snippet}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Right meta */}
-                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                  <span className="text-[12px] text-slate-400 whitespace-nowrap">
-                    {formatTime(item.occurredAt)}
-                  </span>
-                  {/* Status chip */}
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(item.status)}`} />
-                    {statusLabel(item.status)}
-                  </span>
-                </div>
-
-                {/* Star button */}
-                <button
-                  onClick={e => { e.stopPropagation(); }}
-                  aria-label="Đánh dấu quan trọng"
-                  className="flex-shrink-0 p-1.5 rounded-md text-slate-300 hover:text-amber-400 hover:bg-amber-50 transition-colors"
-                >
-                  <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
-                </button>
+          {/* List */}
+          {showList && items.map((item) => (
+            <div
+              key={item.id}
+              onClick={() => setSelectedItem(item)}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedItem?.id === item.id ? 'bg-indigo-50/50' : ''}`}
+            >
+              {/* Type icon tile */}
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
+                {typeIcon(item.type)}
               </div>
-            );
-          })}
+
+              {/* Title + snippet */}
+              <div className="flex-1 min-w-0">
+                <div className="text-[13.5px] font-semibold text-slate-900 truncate leading-snug">
+                  {item.title}
+                </div>
+                <div className="text-[12.5px] text-slate-500 truncate mt-0.5 leading-snug">
+                  {item.snippet}
+                </div>
+              </div>
+
+              {/* Right meta */}
+              <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                <span className="text-[11.5px] text-slate-400">{formatTime(item.occurredAt)}</span>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item.status)}`} />
+                  {statusLabel(item.status)}
+                </span>
+              </div>
+
+              {/* Star button */}
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  toggleImportant({ id: item.id, isImportant: !item.isImportant });
+                }}
+                aria-label="Đánh dấu quan trọng"
+                className="flex-shrink-0 p-1.5 rounded-md text-slate-300 hover:text-amber-400 hover:bg-amber-50 transition-colors"
+              >
+                <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
+              </button>
+            </div>
+          ))}
         </div>
 
         {/* ── Pagination ── */}
-        {showList && (
-          <div className="flex items-center justify-between mt-3.5 flex-wrap gap-2.5">
-            <span className="text-[13px] text-slate-500">
+        {showList && totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-[12.5px] text-slate-400">
               Hiển thị {rangeStart}–{rangeEnd} trong {total} mục
             </span>
 
@@ -433,6 +433,13 @@ export const Inbox = () => {
           </div>
         )}
       </div>
+
+      {/* ── Item Detail Drawer ── */}
+      <ItemDetail
+        item={selectedItem}
+        onClose={() => setSelectedItem(null)}
+        onToggleImportant={(id, val) => toggleImportant({ id, isImportant: val })}
+      />
     </div>
   );
 };
