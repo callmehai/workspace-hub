@@ -8,6 +8,7 @@ import { AxiosError } from 'axios';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { vi } from 'date-fns/locale/vi';
+import DOMPurify from 'dompurify';
 
 registerLocale('vi', vi);
 
@@ -121,7 +122,7 @@ const DetailModal = ({ email, connectionName, onClose, onCancel, isCancelling }:
             return (
               <div
                 className={`bg-gray-50 rounded-xl p-4 border border-gray-100 html-content overflow-hidden ${!isHtml ? 'whitespace-pre-wrap' : ''}`}
-                dangerouslySetInnerHTML={{ __html: email.bodyHtml }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.bodyHtml) }}
               />
             );
           })() : (
@@ -146,7 +147,7 @@ const DetailModal = ({ email, connectionName, onClose, onCancel, isCancelling }:
           </button>
           {canCancel && (
             <button
-              onClick={() => { onCancel(email.id); onClose(); }}
+              onClick={() => { onCancel(email.id); }}
               disabled={isCancelling}
               className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50"
             >
@@ -184,9 +185,9 @@ export const ScheduledEmails = () => {
     queryFn: connectionsApi.getConnections,
   });
 
-  const activeGmailConnections = connections.filter(
+  const activeGmailConnections = React.useMemo(() => connections.filter(
     c => c.serviceType.toLowerCase() === 'gmail' && c.status.toLowerCase() === 'active'
-  );
+  ), [connections]);
 
   // Fetch scheduled emails
   const skip = (page - 1) * limit;
@@ -235,6 +236,7 @@ export const ScheduledEmails = () => {
     if (!cSubject.trim()) return toast.error('Vui lòng nhập tiêu đề email');
     if (!cWhen) return toast.error('Vui lòng chọn thời gian gửi');
     if (!cConn) return toast.error('Vui lòng chọn kết nối Gmail');
+    if (cWhen <= new Date()) return toast.error('Thời gian gửi phải sau thời điểm hiện tại');
 
     const splitAndTrim = (str: string) => str.split(',').map(s => s.trim()).filter(Boolean);
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -278,7 +280,14 @@ export const ScheduledEmails = () => {
 
   const renderPagination = () => {
     if (totalItems === 0) return null;
-    const pageButtons = Array.from({ length: totalPages }, (_, i) => i + 1);
+    const maxButtons = 5;
+    let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+    let endPage = startPage + maxButtons - 1;
+    if (endPage > totalPages) {
+      endPage = totalPages;
+      startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+    const pageButtons = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
     const startItem = skip + 1;
     const endItem = Math.min(skip + limit, totalItems);
     return (
@@ -309,7 +318,7 @@ export const ScheduledEmails = () => {
           email={selectedEmail}
           connectionName={connections.find(c => c.id === selectedEmail.connectionId)?.providerAccountId || 'Unknown'}
           onClose={() => setSelectedEmail(null)}
-          onCancel={(id) => cancelMutation.mutate(id)}
+          onCancel={(id) => cancelMutation.mutate(id, { onSuccess: () => setSelectedEmail(null) })}
           isCancelling={cancelMutation.isPending}
         />
       )}

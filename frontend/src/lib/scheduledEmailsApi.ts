@@ -23,6 +23,7 @@ export interface ScheduledEmailDto {
   retryCount: number;
   lastError?: string;
   sentAt?: string;
+  createdAt: string;
 }
 
 export interface PaginatedResponse<T> {

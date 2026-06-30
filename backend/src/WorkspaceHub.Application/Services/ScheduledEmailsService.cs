@@ -23,11 +23,6 @@ public class ScheduledEmailsService : IScheduledEmailsService
 
     public async Task<ScheduledEmailDto> CreateAsync(Guid userId, CreateScheduledEmailRequest request, CancellationToken ct = default)
     {
-        if (request.SendAt <= DateTime.UtcNow)
-        {
-            throw new BusinessRuleException("SendAt must be in the future.");
-        }
-
         var connection = await _connections.GetByIdTrackedAsync(request.ConnectionId, ct)
             ?? throw new NotFoundException("Connection", request.ConnectionId);
 
