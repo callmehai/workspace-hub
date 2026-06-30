@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import api, { tokenStore } from '../lib/api';
+import api from '../lib/api';
 import { authApi } from '../lib/authApi';
 import type { UserDto } from '../types/auth';
 import { AuthContext } from './auth-context';
@@ -11,24 +11,23 @@ const ME_QUERY_KEY = ['auth', 'me'] as const;
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
 
-  // 401 đã được interceptor trong lib/api xử lý (clear token + về /login).
+  // SCRUM-62: token nằm trong HttpOnly cookie → JS không kiểm tra được sự tồn tại.
+  // Luôn gọi /auth/me; cookie hợp lệ → có user, không thì 401 (interceptor xử lý).
   const { data: user, isLoading } = useQuery({
     queryKey: ME_QUERY_KEY,
     queryFn: async () => (await api.get<UserDto>('/auth/me')).data,
-    enabled: tokenStore.get() !== null,
     staleTime: Infinity,
     retry: false,
   });
 
-  const login = (token: string, userData: UserDto) => {
-    tokenStore.set(token);
+  // Đăng nhập thành công: token đã được backend set vào cookie; chỉ cache user.
+  const login = (userData: UserDto) => {
     queryClient.setQueryData(ME_QUERY_KEY, userData);
   };
 
   const logout = () => {
-    // Best-effort báo backend (stateless MVP — không chặn việc xoá token local nếu lỗi).
+    // Báo backend xoá cookie auth (SCRUM-62); best-effort, không chặn cleanup local nếu lỗi.
     void authApi.logout().catch(() => undefined);
-    tokenStore.clear();
     queryClient.setQueryData(ME_QUERY_KEY, null);
     queryClient.clear();
   };

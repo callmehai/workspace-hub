@@ -23,7 +23,7 @@ export const GoogleCallback = () => {
   const { mutate, isError } = useMutation({
     mutationFn: () => authApi.googleCallback(code!, state!),
     onSuccess: (data) => {
-      login(data.accessToken, data.user);
+      login(data.user);
       toast.success("Đăng nhập thành công!");
       navigate("/", { replace: true });
     },

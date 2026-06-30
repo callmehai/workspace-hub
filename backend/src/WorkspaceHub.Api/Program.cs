@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.ModelBuilder;
 using Microsoft.OpenApi.Models;
+using WorkspaceHub.Api.Auth;
 using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application;
 using WorkspaceHub.Application.DTOs;
@@ -123,7 +124,35 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
         ClockSkew = TimeSpan.Zero
     };
+
+    // SCRUM-62: ưu tiên đọc JWT từ HttpOnly cookie wh_access. Vẫn fallback header
+    // Authorization: Bearer (đã có sẵn) để Swagger/Postman/server-to-server dùng được.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = ctx =>
+        {
+            if (string.IsNullOrEmpty(ctx.Token) &&
+                ctx.Request.Cookies.TryGetValue(AuthCookieService.AccessCookieName, out var cookieToken))
+            {
+                ctx.Token = cookieToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
+
+// CORS cho cookie auth cross-site (prod). Dev dùng Vite proxy → same-origin, không cần.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (allowedOrigins is { Length: > 0 })
+{
+    builder.Services.AddCors(o => o.AddPolicy("frontend", p => p
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials())); // cookie cross-site cần credentials; KHÔNG kèm AllowAnyOrigin
+}
+
+builder.Services.AddSingleton<AuthCookieService>();
 
 // Register application and infrastructure services
 builder.Services.AddApplication();
@@ -146,7 +175,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+if (allowedOrigins is { Length: > 0 })
+    app.UseCors("frontend");
+
 app.UseAuthentication();
+// CSRF double-submit check (SCRUM-62) — sau Authentication (cần biết request dùng cookie),
+// trước Authorization/endpoint để chặn sớm request mutating thiếu token.
+app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 

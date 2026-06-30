@@ -9,7 +9,7 @@ import api from '../lib/api';
 import { authApi } from '../lib/authApi';
 import { EMAIL_RE } from '../lib/validation';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
-import type { ApiError, AuthResponse } from '../types/auth';
+import type { ApiError, AuthResultDto } from '../types/auth';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -22,9 +22,9 @@ export const Login = () => {
 
   const loginMutation = useMutation({
     mutationFn: async () =>
-      (await api.post<AuthResponse>('/auth/login', { email, password })).data,
+      (await api.post<AuthResultDto>('/auth/login', { email, password })).data,
     onSuccess: (data) => {
-      login(data.accessToken, data.user);
+      login(data.user);
       toast.success('Đăng nhập thành công!');
       navigate('/', { replace: true });
     },

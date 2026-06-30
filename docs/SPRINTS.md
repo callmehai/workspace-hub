@@ -119,7 +119,7 @@
 
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
-| SCRUM-62 | Access token → **HttpOnly cookie** + CSRF (BE Set-Cookie + đọc JWT từ cookie; FE bỏ localStorage, withCredentials, CSRF header) | — | — | ⏳ To Do — nhánh `feat/SCRUM-62-httponly-cookie-auth` |
+| SCRUM-62 | Access token → **HttpOnly cookie** + CSRF (BE Set-Cookie + đọc JWT từ cookie; FE bỏ localStorage, withCredentials, CSRF header) | — | — | ✅ Done (nhánh `feat/SCRUM-62-httponly-cookie-auth`) — BE: `AuthCookieService` set cookie `wh_access` (HttpOnly) + `wh_csrf` (double-submit); `AuthController` trả `AuthResultDto` (bỏ token khỏi body) + logout xoá cookie; JwtBearer `OnMessageReceived` đọc token từ cookie (fallback Bearer cho Swagger/Postman); `CsrfMiddleware` bắt header `X-CSRF-Token` trên request mutating có cookie; CORS opt-in `Cors:AllowedOrigins` + `AllowCredentials` (prod), `Auth:CrossSiteCookies` cho SameSite=None. FE: `api.ts` `withCredentials` + interceptor gắn CSRF header, bỏ `tokenStore`/Bearer; `AuthContext.login(user)` (không nhận token); `/auth/me` luôn gọi (cookie quyết định). Build BE + FE pass. |
 | SCRUM-63 | **Refresh token + Redis** (rotation, `/auth/refresh`, logout stateful, docker-compose `wh-redis`, `AddStackExchangeRedisCache`; FE auto-refresh single-flight) | — | 62 | ⏳ To Do — nhánh `feat/SCRUM-63-refresh-token-redis` |
 | SCRUM-64 | **OTP đăng ký qua Twilio** (cột `Users.Phone`/`PhoneVerified` + migration, `ISmsSender`+Twilio, `/auth/send-otp` + `/auth/verify-otp`, OTP store Redis, login chặn chưa verify; FE field SĐT + màn OTP) | — | 63 (dùng Redis store) | ⏳ To Do — nhánh `feat/SCRUM-64-register-otp-twilio` |
 
