@@ -31,6 +31,15 @@
 - **DB:** migration thêm `Users.Phone` (string null), `Users.PhoneVerified` (bool, default true cho user cũ để không phá đăng nhập hiện có). Endpoint mới: `POST /api/auth/send-otp`, `POST /api/auth/verify-otp`.
 - **FE:** Register thêm field SĐT; sau register điều hướng màn nhập OTP (resend + đếm ngược).
 
+### Fix sau code-review (PR SCRUM-63/64)
+- **TOCTOU refresh rotate (63):** tiêu thụ jti bằng GETDEL atomic (Lua) qua `IConnectionMultiplexer` khi có Redis; dev in-memory fallback get+remove.
+- **OTP TTL không reset khi nhập sai (64):** lưu absolute expiry trong value Redis (`hash:attempts:expiryTicks`), update đếm dùng TTL còn lại → cửa sổ tấn công cố định 5' (không gia hạn theo mỗi lần sai).
+- **OTP hash:** SHA-256 → **HMAC-SHA256 keyed theo userId** (chống rainbow table dùng chung) + so sánh `FixedTimeEquals`.
+- **Chống user enumeration (64):** `/auth/send-otp` luôn 200 (im lặng nếu email không đủ điều kiện); `/auth/verify-otp` trả 422 đồng nhất cho mọi case không hợp lệ.
+- **Twilio config:** đọc 1 lần ở ctor `TwilioSmsSender` thay vì mỗi lần gửi.
+- **docker-compose:** SA password đọc từ `.env` (gitignored) `${MSSQL_SA_PASSWORD:-...}` thay vì hardcode; thêm `.env.example`.
+- **Để backlog (đồng ý với review):** rate-limit `/auth/refresh`; race TOCTOU trong `OtpService.SendAsync` (risk thấp, single-instance dev); tách `IJwtTokenFactory` chung cho AuthService + RefreshTokenService (duplicate access-token gen — refactor lớn, làm sau).
+
 ### Ngoài scope đợt này (cố ý)
 - KHÔNG đụng mã hoá **OAuth connection token** (Data Protection giữ nguyên). KHÔNG làm email-verification (chỉ phone OTP). KHÔNG đa thiết bị/quản lý session nâng cao (chỉ rotation cơ bản). Multi-region Redis, Twilio production (mua số) → để sau.
 

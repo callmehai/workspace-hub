@@ -14,40 +14,42 @@ namespace WorkspaceHub.Infrastructure.Services;
 public class TwilioSmsSender : ISmsSender
 {
     private readonly IHttpClientFactory _httpFactory;
-    private readonly IConfiguration _config;
     private readonly ILogger<TwilioSmsSender> _logger;
+
+    // Config đọc 1 lần ở ctor (review #5) — chỉ resolve khi đã chọn Twilio (có AccountSid).
+    private readonly string _accountSid;
+    private readonly string _authToken;
+    private readonly string _fromNumber;
 
     public TwilioSmsSender(IHttpClientFactory httpFactory, IConfiguration config, ILogger<TwilioSmsSender> logger)
     {
         _httpFactory = httpFactory;
-        _config = config;
         _logger = logger;
+
+        _accountSid = config["Sms:Twilio:AccountSid"]
+            ?? throw new InvalidOperationException("Sms:Twilio:AccountSid chưa cấu hình.");
+        _authToken = config["Sms:Twilio:AuthToken"]
+            ?? throw new InvalidOperationException("Sms:Twilio:AuthToken chưa cấu hình.");
+        _fromNumber = config["Sms:Twilio:FromNumber"]
+            ?? throw new InvalidOperationException("Sms:Twilio:FromNumber chưa cấu hình.");
     }
 
     public async Task SendAsync(string toPhoneE164, string message, CancellationToken ct = default)
     {
-        var accountSid = _config["Sms:Twilio:AccountSid"];
-        var authToken = _config["Sms:Twilio:AuthToken"];
-        var fromNumber = _config["Sms:Twilio:FromNumber"];
-
-        if (string.IsNullOrWhiteSpace(accountSid) || string.IsNullOrWhiteSpace(authToken) ||
-            string.IsNullOrWhiteSpace(fromNumber))
-            throw new InvalidOperationException("Sms:Twilio:AccountSid/AuthToken/FromNumber chưa cấu hình.");
-
         var client = _httpFactory.CreateClient("Twilio");
-        var url = $"https://api.twilio.com/2010-04-01/Accounts/{accountSid}/Messages.json";
+        var url = $"https://api.twilio.com/2010-04-01/Accounts/{_accountSid}/Messages.json";
 
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["To"] = toPhoneE164,
-                ["From"] = fromNumber,
+                ["From"] = _fromNumber,
                 ["Body"] = message
             })
         };
         // Basic auth: AccountSid:AuthToken
-        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{accountSid}:{authToken}"));
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_accountSid}:{_authToken}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
 
         HttpResponseMessage response;

@@ -34,12 +34,13 @@ public class AuthController : ApiControllerBase
     public async Task<ActionResult<RegisterResult>> Register(RegisterRequest request, CancellationToken ct)
         => StatusCode(201, await _auth.RegisterAsync(request, ct));
 
-    /// <summary>POST /api/auth/send-otp — gửi lại OTP cho tài khoản chưa verify (SCRUM-64).</summary>
+    /// <summary>
+    /// POST /api/auth/send-otp — gửi lại OTP cho tài khoản chưa verify (SCRUM-64).
+    /// Luôn 200 (không tiết lộ email tồn tại/đã verify — chống enumeration).
+    /// </summary>
     [HttpPost("send-otp")]
     [AllowAnonymous]
     [ProducesResponseType(200)]
-    [ProducesResponseType(404)]
-    [ProducesResponseType(422)]
     public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request, CancellationToken ct)
     {
         var cooldown = await _auth.SendOtpAsync(request.Email, ct);
@@ -50,7 +51,6 @@ public class AuthController : ApiControllerBase
     [HttpPost("verify-otp")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResultDto), 200)]
-    [ProducesResponseType(404)]
     [ProducesResponseType(422)]
     public async Task<ActionResult<AuthResultDto>> VerifyOtp([FromBody] VerifyOtpRequest request, CancellationToken ct)
         => Ok(await IssueCookiesAsync(await _auth.VerifyOtpAsync(request.Email, request.Code, ct), ct));

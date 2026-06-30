@@ -35,6 +35,10 @@ public class AuthService : IAuthService
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
 
+    // Cooldown giả trả về khi email không đủ điều kiện gửi OTP (chống enumeration, review #6).
+    // Khớp cooldown thật trong OtpService để client không phân biệt được.
+    private const int DefaultCooldownSeconds = 60;
+
     public AuthService(
         IUserRepository users,
         IConfiguration config,
@@ -115,38 +119,35 @@ public class AuthService : IAuthService
 
     public async Task<int> SendOtpAsync(string email, CancellationToken ct = default)
     {
-        var user = await GetUserForOtpAsync(email, ct);
-        return await _otp.SendAsync(user.Id, user.Phone!, ct);
+        // Chống user enumeration (review #6): KHÔNG tiết lộ email tồn tại / đã verify / không
+        // có phone. Email không đủ điều kiện → im lặng trả cooldown giả, không gửi gì.
+        var normalized = email.Trim().ToLowerInvariant();
+        var user = await _users.GetByEmailAsync(normalized, ct);
+        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
+            return DefaultCooldownSeconds;
+
+        return await _otp.SendAsync(user.Id, user.Phone, ct);
     }
 
     public async Task<AuthResponse> VerifyOtpAsync(string email, string code, CancellationToken ct = default)
     {
-        var user = await GetUserForOtpAsync(email, ct);
+        var normalized = email.Trim().ToLowerInvariant();
+        var user = await _users.GetByEmailAsync(normalized, ct);
+
+        // Uniform 422 cho mọi case không hợp lệ (user không tồn tại / đã verify / không phone /
+        // mã sai) — không phân biệt để tránh enumeration. OtpService.VerifyAsync cũng throw 422.
+        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
+            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
 
         var ok = await _otp.VerifyAsync(user.Id, code, ct);
         if (!ok)
-            throw new BusinessRuleException("Mã OTP không đúng.");
+            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
 
         user.PhoneVerified = true;
         await _users.SaveChangesAsync(ct);
 
         // Verify xong → đăng nhập luôn (phát JWT) cho mượt.
         return await SignInAsync(user, ct);
-    }
-
-    /// <summary>Lấy user cho luồng OTP: phải tồn tại, có Phone, và chưa verify (tránh gửi OTP thừa).</summary>
-    private async Task<User> GetUserForOtpAsync(string email, CancellationToken ct)
-    {
-        var normalized = email.Trim().ToLowerInvariant();
-        var user = await _users.GetByEmailAsync(normalized, ct)
-            ?? throw new NotFoundException("User not found");
-
-        if (string.IsNullOrEmpty(user.Phone))
-            throw new BusinessRuleException("Tài khoản không có số điện thoại để xác minh.");
-        if (user.PhoneVerified)
-            throw new BusinessRuleException("Số điện thoại đã được xác minh.");
-
-        return user;
     }
 
     public async Task<UserDto> GetMeAsync(Guid userId, CancellationToken ct = default)

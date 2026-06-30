@@ -11,6 +11,7 @@
 
 Cách gọn nhất — chạy cả SQL Server + Redis một lệnh (xem `docker-compose.yml` ở repo root):
 ```bash
+cp .env.example .env            # SA password cho SQL Server (gitignored; đổi nếu cần)
 docker compose up -d            # SQL Server (wh-sqlserver) + Redis (wh-redis)
 docker compose up -d wh-redis   # chỉ Redis (SCRUM-63)
 ```
