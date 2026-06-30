@@ -1,4 +1,5 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 import { connectionsApi } from '../../lib/connectionsApi';
 import toast from 'react-hot-toast';
 import { Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
@@ -47,7 +48,9 @@ const SERVICES = [
 ];
 
 export const Integrations = () => {
-  const { data: connections = [], isLoading: loading, refetch } = useQuery({
+  const queryClient = useQueryClient();
+
+  const { data: connections = [], isLoading: loading } = useQuery({
     queryKey: ['connections'],
     queryFn: connectionsApi.getConnections,
   });
@@ -56,21 +59,31 @@ export const Integrations = () => {
     mutationFn: connectionsApi.disconnect,
     onSuccess: () => {
       toast.success('Disconnected successfully');
-      refetch();
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
-    onError: () => toast.error('Failed to disconnect'),
+    onError: (err) => {
+      console.error(err);
+      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to disconnect';
+      toast.error(message);
+    },
   });
 
-  const handleConnect = async (integrationKey: string, serviceType: string) => {
-    try {
-      const redirectUri = `${window.location.origin}/oauth/callback`;
-      const res = await connectionsApi.startOAuth({ integrationKey, serviceType, redirectUri });
+  const connectMutation = useMutation({
+    mutationFn: (params: { integrationKey: string; serviceType: string; redirectUri: string }) =>
+      connectionsApi.startOAuth(params),
+    onSuccess: (res) => {
+      window.location.assign(res.authorizationUrl);
+    },
+    onError: (err) => {
+      console.error(err);
+      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to start connection';
+      toast.error(message);
+    },
+  });
 
-      window.location.href = res.authorizationUrl;
-    } catch (err) {
-      const e = err as { response?: { data?: { message?: string } } };
-      toast.error(e.response?.data?.message || 'Failed to start connection');
-    }
+  const handleConnect = (integrationKey: string, serviceType: string) => {
+    const redirectUri = `${window.location.origin}/oauth/callback`;
+    connectMutation.mutate({ integrationKey, serviceType, redirectUri });
   };
 
   if (loading) {
@@ -147,16 +160,32 @@ export const Integrations = () => {
                 {isConnected ? (
                   <button
                     onClick={() => disconnectMutation.mutate(connection.id)}
-                    className="w-full py-2 px-4 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                    disabled={disconnectMutation.isPending && disconnectMutation.variables === connection.id}
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    Disconnect
+                    {disconnectMutation.isPending && disconnectMutation.variables === connection.id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Disconnecting...</span>
+                      </>
+                    ) : (
+                      <span>Disconnect</span>
+                    )}
                   </button>
                 ) : (
                   <button
                     onClick={() => handleConnect(service.integrationKey, service.serviceType)}
-                    className="w-full py-2 px-4 rounded-md text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+                    disabled={connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType}
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    Connect
+                    {connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Connecting...</span>
+                      </>
+                    ) : (
+                      <span>Connect</span>
+                    )}
                   </button>
                 )}
               </div>
