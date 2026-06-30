@@ -33,6 +33,39 @@ builder.Services.AddControllers()
         .SkipToken()
         .AddRouteComponents("api", edmBuilder.GetEdmModel()));
 
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+{
+    // Factory này chạy khi ASP.NET Core model binder thất bại TRƯỚC FluentValidation:
+    // ví dụ sai kiểu JSON, thiếu [Required] property. Lỗi FluentValidation đi qua ExceptionMiddleware.
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var traceId = context.HttpContext.TraceIdentifier;
+        var details = context.ModelState
+            .Where(ms => ms.Value!.Errors.Any())
+            .SelectMany(ms => ms.Value!.Errors.Select(e => $"{ms.Key}: {e.ErrorMessage}"))
+            .ToArray();
+
+        // Log để truy vết request thất bại do model binding — tương tự cách ExceptionMiddleware
+        // log ValidationException. Không có dòng này thì lỗi biến mất khỏi server log.
+        var logger = context.HttpContext.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("ModelBinding");
+        logger.LogWarning(
+            "Model binding failed ({Count} error(s)). Path={Path}, TraceId={TraceId}",
+            details.Length, context.HttpContext.Request.Path, traceId);
+
+        var body = new
+        {
+            error = "ValidationError",
+            message = "One or more validation errors occurred.",
+            details,
+            traceId
+        };
+
+        return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(body);
+    };
+});
+
 builder.Services.AddMemoryCache();
 
 // Swagger.
