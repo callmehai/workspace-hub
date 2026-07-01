@@ -180,5 +180,6 @@ public class ItemService : IItemService
         DueAt: item.DueAt,
         IsImportant: item.IsImportant,
         ExternalId: item.ExternalId,
-        MetadataJson: item.MetadataJson);
+        MetadataJson: item.MetadataJson,
+        FolderIds: item.ItemFolders.Select(f => f.FolderId).ToList());
 }

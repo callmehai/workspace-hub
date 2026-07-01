@@ -27,6 +27,20 @@ public class JiraItemMapper : IJiraItemMapper
             issueUrl = issue.IssueUrl
         };
 
+        var mappedStatus = ItemStatus.Inbox;
+        if (!string.IsNullOrEmpty(issue.StatusName))
+        {
+            var lowerStatus = issue.StatusName.ToLower();
+            if (lowerStatus.Contains("done") || lowerStatus.Contains("xong") || lowerStatus.Contains("hoàn thành") || lowerStatus.Contains("closed"))
+            {
+                mappedStatus = ItemStatus.Done;
+            }
+            else if (lowerStatus.Contains("progress") || lowerStatus.Contains("doing") || lowerStatus.Contains("đang") || lowerStatus.Contains("review") || lowerStatus.Contains("test"))
+            {
+                mappedStatus = ItemStatus.Doing;
+            }
+        }
+
         return new Item
         {
             Id = Guid.NewGuid(),
@@ -38,7 +52,7 @@ public class JiraItemMapper : IJiraItemMapper
             ConnectionId = connectionId,
             // Jira không trả HTTP ETag — dùng fields.updated làm version-token cho conflict (SCRUM-57).
             ETag = issue.Updated?.UtcDateTime.ToString("O"),
-            Status = ItemStatus.Inbox,
+            Status = mappedStatus,
             OccurredAt = issue.Updated?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
             IsArchived = false,

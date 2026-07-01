@@ -37,7 +37,7 @@ public class JiraItemMapperTests
         var item = _mapper.ToItem(SampleIssue(), userId, connId);
 
         item.Type.Should().Be(ItemType.Ticket);
-        item.Status.Should().Be(ItemStatus.Inbox);
+        item.Status.Should().Be(ItemStatus.Doing);
         item.Title.Should().Be("Fix the bug");
         item.ExternalId.Should().Be("10001");
         item.ConnectionId.Should().Be(connId);

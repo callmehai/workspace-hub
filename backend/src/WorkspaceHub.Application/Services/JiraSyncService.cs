@@ -116,6 +116,7 @@ public class JiraSyncService : IJiraSyncService
         existing.ETag = mapped.ETag;
         existing.OccurredAt = mapped.OccurredAt;
         existing.IsImportant = mapped.IsImportant;
+        existing.Status = mapped.Status;
     }
 
     /// <summary>Lưu items; nếu vi phạm UNIQUE(ConnectionId, ExternalId) thì lưu lại từng cái, không hỏng cả batch.</summary>

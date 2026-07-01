@@ -95,6 +95,7 @@ public record ItemResponse(
     DateTime? DueAt,
     bool IsImportant,
     string? ExternalId,
-    string? MetadataJson);
+    string? MetadataJson,
+    List<Guid> FolderIds);
 
 
