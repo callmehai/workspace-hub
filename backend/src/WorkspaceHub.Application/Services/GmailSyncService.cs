@@ -189,26 +189,38 @@ public class GmailSyncService : IGmailSyncService
         List<Item> newItems,
         CancellationToken ct)
     {
-        int created = 0;
-        int skipped = 0;
+        var idsToFetch = ids.Where(id => !existing.Contains(id)).ToList();
+        var skipped = ids.Count() - idsToFetch.Count;
+        
+        if (idsToFetch.Count == 0) return (0, skipped);
 
-        foreach (var id in ids)
+        var semaphore = new SemaphoreSlim(10); // Concurrent limit 10
+        var fetchTasks = idsToFetch.Select(async id =>
         {
-            if (existing.Contains(id))
+            await semaphore.WaitAsync(ct);
+            try
             {
-                skipped++;
-                continue;
+                var msg = await _gmailGateway.GetMessageAsync(connection, id, ct);
+                return _mapper.ToItem(msg, connection.UserId, connection.Id, importantSet);
             }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
 
-            var msg = await _gmailGateway.GetMessageAsync(connection, id, ct);
-            var item = _mapper.ToItem(msg, connection.UserId, connection.Id, importantSet);
-
+        var items = await Task.WhenAll(fetchTasks);
+        
+        foreach (var item in items)
+        {
             newItems.Add(item);
+        }
+        foreach (var id in idsToFetch)
+        {
             existing.Add(id);
-            created++;
         }
 
-        return (created, skipped);
+        return (items.Length, skipped);
     }
 
     private async Task<(List<string> CollectedIds, string? NewCursor)> FullSyncAsync(Connection connection, int maxMessages, CancellationToken ct)

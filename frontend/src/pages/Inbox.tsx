@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { itemsApi } from '../lib/itemsApi';
+import { handleApiError } from '../lib/errorUtils';
 import type { ItemType, ItemStatus } from '../types/items';
 import {
   Mail, Calendar, FileText, StickyNote, Briefcase,
@@ -142,6 +144,8 @@ export const Inbox = () => {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = useCallback((val: string) => {
@@ -183,8 +187,9 @@ export const Inbox = () => {
       });
       return { previous };
     },
-    onError: (_err, _vars, ctx: any) => {
+    onError: (err, _vars, ctx: any) => {
       if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
+      handleApiError(err, 'Lỗi đánh dấu quan trọng', { navigate });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
   });
@@ -243,7 +248,10 @@ export const Inbox = () => {
               <List className="w-4 h-4" />
               <span>Danh sách</span>
             </button>
-            <button className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50">
+            <button 
+              onClick={() => navigate('/kanban')}
+              className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
+            >
               <LayoutGrid className="w-4 h-4" />
               <span>Bảng</span>
             </button>

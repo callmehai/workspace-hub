@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Star, Mail, MailOpen, Trash2, Edit3, Save, X, Calendar, MapPin, 
-  Users, FileText, ExternalLink, Plus, Tag, Loader2, 
-  AlertCircle, CheckCircle
+import {
+  X, Mail, Calendar, FileText, StickyNote, Briefcase,
+  Trash2, Edit3, Save, ExternalLink, Plus, Tag, Loader2,
+  AlertCircle, Eye, EyeOff, Star, Reply, Check, Send
 } from 'lucide-react';
 import { itemsApi } from '../lib/itemsApi';
 import { type PatchItemRequest } from '../types/items';
@@ -17,14 +17,29 @@ interface ItemDetailProps {
   onDeleted?: () => void;
 }
 
+const STATUS_LABEL: Record<string, string> = { Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Done' };
+const STATUS_COLOR: Record<string, string> = {
+  Inbox: 'bg-slate-100 text-slate-600 border border-slate-200',
+  Doing: 'bg-blue-50 text-blue-700 border border-blue-100',
+  Done: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+};
+const STATUS_DOT: Record<string, string> = { Inbox: 'bg-slate-400', Doing: 'bg-blue-500', Done: 'bg-emerald-500' };
+
+const TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; bg: string }> = {
+  Email:  { label: 'Email',    icon: <Mail className="w-5 h-5" />,      bg: 'bg-blue-50 text-blue-600' },
+  Event:  { label: 'Sự kiện', icon: <Calendar className="w-5 h-5" />,   bg: 'bg-amber-50 text-amber-600' },
+  File:   { label: 'Tệp',     icon: <FileText className="w-5 h-5" />,   bg: 'bg-emerald-50 text-emerald-600' },
+  Note:   { label: 'Ghi chú', icon: <StickyNote className="w-5 h-5" />, bg: 'bg-slate-100 text-slate-500' },
+  Ticket: { label: 'Ticket',  icon: <Briefcase className="w-5 h-5" />,  bg: 'bg-purple-50 text-purple-600' },
+};
+
 export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDeleted }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const [newLabelName, setNewLabelName] = useState('');
   const [isAddingLabel, setIsAddingLabel] = useState(false);
-
 
   // Event form edit state
   const [eventForm, setEventForm] = useState({
@@ -38,8 +53,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   // File edit state
   const [fileName, setFileName] = useState('');
   const [isRenamingFile, setIsRenamingFile] = useState(false);
-
-
 
   // Fetch item by ID
   const { data: item, isLoading, isError, refetch } = useQuery({
@@ -76,7 +89,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const deleteMutation = useMutation({
     mutationFn: () => itemsApi.deleteItem(itemId),
     onSuccess: () => {
-      toast.success('Đã xóa item thành công');
+      toast.success('Đã xóa mục thành công');
       queryClient.invalidateQueries({ queryKey: ['items'] });
       if (onDeleted) onDeleted();
       if (onClose) onClose();
@@ -92,14 +105,15 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     }
   });
 
-
-
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#13141f] text-gray-400">
-        <div className="flex flex-col items-center space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
-          <span className="text-sm font-medium">Đang tải chi tiết...</span>
+      <div className="fixed inset-0 z-50 flex justify-end">
+        <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
+        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex items-center justify-center">
+          <div className="flex flex-col items-center space-y-3">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+            <span className="text-sm font-medium text-slate-500">Đang tải chi tiết...</span>
+          </div>
         </div>
       </div>
     );
@@ -107,41 +121,120 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   if (isError || !item) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6 bg-[#13141f] text-gray-400">
-        <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
-        <h3 className="text-base font-semibold text-white mb-1">Không thể tải thông tin chi tiết</h3>
-        <p className="text-xs text-gray-500 text-center max-w-xs mb-4">Vui lòng thử lại sau hoặc tải lại trang.</p>
-        <button 
-          onClick={() => refetch()}
-          className="px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
-        >
-          Tải lại
-        </button>
+      <div className="fixed inset-0 z-50 flex justify-end">
+        <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
+        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500">
+          <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
+          <h3 className="text-base font-semibold text-slate-850 mb-1">Không thể tải thông tin chi tiết</h3>
+          <p className="text-xs text-slate-450 text-center max-w-xs mb-4">Vui lòng thử lại sau hoặc tải lại trang.</p>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            Tải lại
+          </button>
+        </div>
       </div>
     );
   }
 
   const metadata = (() => {
-    try {
-      return item?.metadataJson ? JSON.parse(item.metadataJson) : {};
-    } catch {
-      return {};
-    }
+    try { return item.metadataJson ? JSON.parse(item.metadataJson) : {}; }
+    catch { return {}; }
   })();
 
-  // Setup Event initial form values
+  const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
+  const statusLabel = STATUS_LABEL[item.status] ?? item.status;
+  const statusColor = STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500';
+  const statusDot = STATUS_DOT[item.status] ?? 'bg-slate-400';
+
+  const typeChip = `inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${tInfo.bg}`;
+
+  // ── metadata rows per type
+  const rows: { label: string; value: React.ReactNode }[] = [];
+  if (item.type === 'Email') {
+    if (metadata.from) rows.push({ label: 'Từ', value: metadata.from });
+    const to = Array.isArray(metadata.to) ? metadata.to.join(', ') : metadata.to;
+    if (to)            rows.push({ label: 'Đến', value: to });
+    if (metadata.labels && metadata.labels.length > 0) {
+      rows.push({
+        label: 'Nhãn',
+        value: (
+          <div className="flex flex-wrap gap-x-1.5 gap-y-1 items-center">
+            {metadata.labels.map((label: string, idx: number) => (
+              <span key={label} className="inline-flex items-center gap-0.5">
+                {label}
+                <button onClick={() => handleRemoveLabel(label)} className="text-slate-400 hover:text-rose-500 ml-0.5">&times;</button>
+                {idx < metadata.labels.length - 1 && <span className="text-slate-900">,</span>}
+              </span>
+            ))}
+          </div>
+        )
+      });
+    }
+    rows.push({ label: 'Thời gian', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
+  } else if (item.type === 'Event') {
+    rows.push({ label: 'Bắt đầu', value: metadata.start ? new Date(metadata.start).toLocaleString('vi-VN') : new Date(item.occurredAt).toLocaleString('vi-VN') });
+    if (metadata.end) rows.push({ label: 'Kết thúc', value: new Date(metadata.end).toLocaleString('vi-VN') });
+    if (metadata.location) rows.push({ label: 'Địa điểm', value: metadata.location });
+    if (Array.isArray(metadata.attendees) && metadata.attendees.length) {
+      rows.push({
+        label: 'Người tham gia',
+        value: (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {metadata.attendees.map((email: string) => (
+              <span key={email} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px]">
+                {email}
+              </span>
+            ))}
+          </div>
+        )
+      });
+    }
+  } else if (item.type === 'File') {
+    rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
+    if (metadata.mimeType) rows.push({ label: 'Loại tệp', value: metadata.mimeType });
+    if (metadata.size) {
+      const kb = Math.round(metadata.size / 1024);
+      rows.push({ label: 'Kích thước', value: kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB` });
+    }
+  } else if (item.type === 'Note') {
+    rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
+  } else if (item.type === 'Ticket') {
+    if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
+    if (metadata.projectKey) rows.push({ label: 'Project',    value: metadata.projectKey });
+    if (metadata.issueType)  rows.push({ label: 'Loại',       value: metadata.issueType });
+    if (metadata.priority)   rows.push({ label: 'Ưu tiên',    value: metadata.priority });
+    if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });
+    if (metadata.reporter)   rows.push({ label: 'Reporter',   value: metadata.reporter });
+    if (metadata.status)     rows.push({ label: 'Trạng thái', value: metadata.status });
+    if (Array.isArray(metadata.labels) && metadata.labels.length) {
+      rows.push({
+        label: 'Labels',
+        value: (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {metadata.labels.map((l: string) => (
+              <span key={l} className="px-2 py-0.5 bg-purple-50 text-purple-750 border border-purple-100 rounded text-[11px]">
+                {l}
+              </span>
+            ))}
+          </div>
+        )
+      });
+    }
+    if (item.dueAt) rows.push({ label: 'Due date', value: new Date(item.dueAt).toLocaleString('vi-VN') });
+  }
+
+  // Event form edits
   const startEditingEvent = () => {
     let startVal = '';
     let endVal = '';
-    if (metadata.start) {
-      startVal = new Date(metadata.start).toISOString().slice(0, 16);
-    }
-    if (metadata.end) {
-      endVal = new Date(metadata.end).toISOString().slice(0, 16);
-    }
+    if (metadata.start) startVal = new Date(metadata.start).toISOString().slice(0, 16);
+    if (metadata.end)   endVal = new Date(metadata.end).toISOString().slice(0, 16);
+
     setEventForm({
       title: item.title,
-      start: startVal,
+      start: startVal || new Date(item.occurredAt).toISOString().slice(0, 16),
       end: endVal,
       location: metadata.location || '',
       attendees: metadata.attendees ? metadata.attendees.join(', ') : ''
@@ -156,7 +249,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     }
     const startIso = new Date(eventForm.start).toISOString();
     const endIso = new Date(eventForm.end).toISOString();
-    
+
     if (new Date(startIso) >= new Date(endIso)) {
       toast.error('Thời gian bắt đầu phải trước thời gian kết thúc');
       return;
@@ -182,7 +275,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
-  // Setup File edit values
+  // File rename edits
   const startRenamingFile = () => {
     setFileName(item.title);
     setIsRenamingFile(true);
@@ -202,9 +295,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
-
-
-  // Labels Add/Remove for Email
+  // Gmail labels
   const handleAddLabel = () => {
     if (!newLabelName.trim()) return;
     patchMutation.mutate({
@@ -218,403 +309,366 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
-  // Formatter for file size
-  const formatBytes = (bytes?: number) => {
-    if (!bytes) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+  const bodyText: string =
+    metadata.body ?? metadata.description ?? metadata.contentMarkdown ?? item.snippet ?? '';
 
   return (
-    <div className="h-full flex flex-col bg-[#13141f] text-gray-200">
-      {/* Toolbar */}
-      <div className="h-14 border-b border-gray-800 flex items-center justify-between px-6 shrink-0 bg-[#0f1019]">
-        <div className="flex items-center space-x-4">
+    <div className="fixed inset-0 z-50 flex justify-end">
+      {/* Backdrop */}
+      <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
+
+      {/* Drawer */}
+      <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col" style={{ animation: 'wh-slide-in .25s ease' }}>
+
+        {/* Header */}
+        <div className="px-5 py-[18px] border-b border-slate-200 shrink-0">
+          <div className="flex items-start justify-between mb-3.5">
+            <div className="flex items-center gap-3">
+              <div className={`w-[42px] h-[42px] rounded-xl flex items-center justify-center shrink-0 ${tInfo.bg}`}>
+                {tInfo.icon}
+              </div>
+              <div className="flex flex-wrap gap-[6px]">
+                <span className={typeChip}>{tInfo.label}</span>
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${statusColor}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
+                  {statusLabel}
+                </span>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg shrink-0 transition-colors -mr-1.5 -mt-1.5">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          {isRenamingFile ? (
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="text"
+                value={fileName}
+                onChange={e => setFileName(e.target.value)}
+                className="flex-1 min-w-0 bg-white border border-indigo-400 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleRenameFile();
+                  else if (e.key === 'Escape') setIsRenamingFile(false);
+                }}
+                autoFocus
+              />
+              <button
+                onClick={handleRenameFile}
+                disabled={patchMutation.isPending}
+                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                {patchMutation.isPending ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Check className="w-4.5 h-4.5" />}
+              </button>
+            </div>
+          ) : (
+            <h2 className="text-[20px] font-bold text-slate-800 leading-[1.35] m-0">{item.title}</h2>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-5 py-[18px]">
+          {/* Mock Folder Dot (for UI parity with prototype) */}
+          <div className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 px-[11px] py-[5px] rounded-full mb-4">
+            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+            VinClub — Chiến dịch Tết
+          </div>
+
+          {/* Form edit for Event */}
+          {isEditing && item.type === 'Event' ? (
+            <div className="border border-slate-200 rounded-[10px] p-4 bg-slate-50/50 space-y-4 mb-[18px]">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chỉnh sửa sự kiện</h3>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Tiêu đề sự kiện</label>
+                <input
+                  type="text"
+                  value={eventForm.title}
+                  onChange={e => setEventForm({...eventForm, title: e.target.value})}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Bắt đầu (Local)</label>
+                  <input
+                    type="datetime-local"
+                    value={eventForm.start}
+                    onChange={e => setEventForm({...eventForm, start: e.target.value})}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Kết thúc (Local)</label>
+                  <input
+                    type="datetime-local"
+                    value={eventForm.end}
+                    onChange={e => setEventForm({...eventForm, end: e.target.value})}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Địa điểm</label>
+                <input
+                  type="text"
+                  value={eventForm.location}
+                  onChange={e => setEventForm({...eventForm, location: e.target.value})}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Người tham gia (Ngăn cách bởi dấu phẩy)</label>
+                <input
+                  type="text"
+                  value={eventForm.attendees}
+                  onChange={e => setEventForm({...eventForm, attendees: e.target.value})}
+                  placeholder="vd1@gmail.com, vd2@gmail.com"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="px-3.5 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-650 hover:bg-slate-100 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleSaveEvent}
+                  disabled={patchMutation.isPending}
+                  className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-750 transition-colors flex items-center gap-1.5"
+                >
+                  {patchMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Lưu</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Metadata Rows */
+            rows.length > 0 && (
+              <div className="border border-slate-200 rounded-[10px] overflow-hidden mb-[18px]">
+                {rows.map((row, i) => (
+                  <div key={i} className="flex gap-3 px-[13px] py-[9px] border-b border-slate-200 last:border-b-0">
+                    <span className="text-[12.5px] text-slate-400 w-[118px] shrink-0">{row.label}</span>
+                    <span className="text-[12.5px] text-slate-900 flex-1 break-words">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {item.type === 'Email' && isAddingLabel && (
+            <div className="mb-4 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <span className="text-[12px] font-semibold text-slate-500 shrink-0">Thêm nhãn:</span>
+              <input
+                type="text"
+                value={newLabelName}
+                onChange={e => setNewLabelName(e.target.value)}
+                placeholder="NHÃN MỚI"
+                className="bg-white border border-slate-200 rounded px-2 py-1 text-[13px] focus:outline-none focus:border-indigo-500 flex-1 min-w-0"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { handleAddLabel(); setIsAddingLabel(false); }
+                  else if (e.key === 'Escape') setIsAddingLabel(false);
+                }}
+                autoFocus
+              />
+              <button onClick={() => { handleAddLabel(); setIsAddingLabel(false); }} className="text-[12px] text-indigo-650 hover:text-indigo-800 font-semibold px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded transition-colors shrink-0">Thêm</button>
+              <button onClick={() => setIsAddingLabel(false)} className="text-[12px] text-slate-500 hover:text-slate-800 font-semibold px-2.5 py-1.5 hover:bg-slate-100 rounded transition-colors shrink-0">Hủy</button>
+            </div>
+          )}
+
+          {/* Body Content */}
+          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 mb-2">Nội dung</div>
+          <div className="text-[13.5px] text-slate-900 leading-[1.65] whitespace-pre-wrap bg-slate-50 rounded-[10px] p-[14px]">
+            {bodyText || <span className="text-slate-400 italic">Không có nội dung</span>}
+          </div>
+        </div>
+
+        {/* Footer actions — per type */}
+        <div className="shrink-0 border-t border-slate-200 px-5 py-[14px] flex flex-wrap gap-2">
           {item.type === 'Email' && (
             <>
-              {/* Star/Unstar */}
-              <button 
-                onClick={() => patchMutation.mutate({ isStarred: !metadata.isStarred })}
-                disabled={patchMutation.isPending}
-                className={`p-1.5 rounded-lg transition-colors hover:bg-gray-800 ${metadata.isStarred ? 'text-amber-400' : 'text-gray-500 hover:text-white'}`}
-                title={metadata.isStarred ? "Bỏ gắn sao" : "Gắn sao"}
-              >
-                <Star className="w-5 h-5 fill-current" />
-              </button>
-
-              {/* Read/Unread */}
-              <button 
+              <button
                 onClick={() => patchMutation.mutate({ isUnread: !metadata.isUnread })}
                 disabled={patchMutation.isPending}
-                className="p-1.5 rounded-lg text-gray-500 hover:text-white transition-colors hover:bg-gray-800"
-                title={metadata.isUnread ? "Đánh dấu đã đọc" : "Đánh dấu chưa đọc"}
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
               >
-                {metadata.isUnread ? <MailOpen className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
+                {metadata.isUnread ? <Eye className="w-4 h-4 text-slate-500" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
+                <span>{metadata.isUnread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc'}</span>
               </button>
-
-              {/* Trash/Restore Email */}
-              <button 
-                onClick={() => patchMutation.mutate({ isTrashed: !metadata.isTrashed })}
+              <button
+                onClick={() => patchMutation.mutate({ isStarred: !metadata.isStarred })}
                 disabled={patchMutation.isPending}
-                className={`p-1.5 rounded-lg transition-colors hover:bg-gray-800 ${metadata.isTrashed ? 'text-red-400' : 'text-gray-500 hover:text-white'}`}
-                title={metadata.isTrashed ? "Khôi phục từ Thùng rác" : "Cho vào Thùng rác"}
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
               >
-                <Trash2 className="w-5 h-5" />
+                <Star className={`w-4 h-4 ${metadata.isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450'}`} />
+                <span>{metadata.isStarred ? 'Bỏ quan trọng' : 'Quan trọng'}</span>
+              </button>
+              <button
+                onClick={() => setIsAddingLabel(true)}
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <Tag className="w-4 h-4 text-slate-400" /><span>Nhãn</span>
+              </button>
+              <button
+                onClick={() => navigate('/scheduled')}
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <Send className="w-4 h-4 text-slate-400" /><span>Soạn mới</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('Bạn có muốn xóa vĩnh viễn email này trên Gmail?')) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </button>
+            </>
+          )}
+
+          {item.type === 'Event' && (
+            <>
+              {!isEditing && (
+                <button
+                  onClick={startEditingEvent}
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-650 text-white hover:bg-indigo-755 shadow-sm transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" /><span>Sửa sự kiện</span>
+                </button>
+              )}
+              {metadata.meetUrl && (
+                <a
+                  href={metadata.meetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500" /><span>Google Meet</span>
+                </a>
+              )}
+              <button
+                onClick={() => {
+                  if (window.confirm('Bạn có chắc muốn xóa sự kiện này?')) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </button>
             </>
           )}
 
           {item.type === 'File' && (
             <>
-              {/* Rename File */}
-              <button 
+              <button
                 onClick={startRenamingFile}
-                disabled={patchMutation.isPending}
-                className="p-1.5 rounded-lg text-gray-500 hover:text-white transition-colors hover:bg-gray-800"
-                title="Đổi tên tệp"
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
               >
-                <Edit3 className="w-5 h-5" />
+                <Edit3 className="w-4 h-4" /><span>Đổi tên</span>
               </button>
-
-              {/* Trash/Restore File */}
-              <button 
-                onClick={() => patchMutation.mutate({ isTrashed: !metadata.isTrashed })}
-                disabled={patchMutation.isPending}
-                className={`p-1.5 rounded-lg transition-colors hover:bg-gray-800 ${metadata.isTrashed ? 'text-red-400' : 'text-gray-500 hover:text-white'}`}
-                title={metadata.isTrashed ? "Khôi phục từ Thùng rác" : "Đưa vào Thùng rác"}
+              {metadata.webViewLink && (
+                <a
+                  href={metadata.webViewLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500" /><span>Mở trên Drive</span>
+                </a>
+              )}
+              <button
+                onClick={() => {
+                  if (window.confirm('Bạn có muốn xóa tệp này trên Google Drive?')) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
               >
-                <Trash2 className="w-5 h-5" />
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </button>
             </>
           )}
 
-          {item.type === 'Event' && !isEditing && (
+          {item.type === 'Note' && (
             <>
-              {/* Edit Event */}
-              <button 
-                onClick={startEditingEvent}
-                className="p-1.5 rounded-lg text-gray-500 hover:text-white transition-colors hover:bg-gray-800"
-                title="Sửa sự kiện"
+              <button
+                onClick={() => {
+                  toast.success('Ghi chú tự động được đồng bộ');
+                }}
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
               >
-                <Edit3 className="w-5 h-5" />
+                <Save className="w-4 h-4" /><span>Đồng bộ ghi chú</span>
               </button>
             </>
           )}
 
-
-
-          {/* Delete Permanently (all types except Note) */}
-          {item.type !== 'Note' && (
-            <button 
-              onClick={() => {
-                if (window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn mục này khỏi máy chủ nhà cung cấp? Thao tác này không thể hoàn tác.')) {
-                  deleteMutation.mutate();
-                }
-              }}
-              disabled={deleteMutation.isPending}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 transition-colors hover:bg-red-950/20"
-              title="Xóa vĩnh viễn"
-            >
-              {deleteMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5 text-red-500" />}
-            </button>
+          {item.type === 'Ticket' && (
+            <>
+              <button
+                onClick={() => {
+                  toast.success('Ticket được tự động lưu');
+                }}
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
+              >
+                <Save className="w-4 h-4" /><span>Cập nhật Jira</span>
+              </button>
+              <button
+                onClick={() => {
+                  toast.success('Bình luận mới đã được lưu');
+                }}
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <Reply className="w-4 h-4 text-slate-400" /><span>Bình luận</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('Bạn có muốn xóa ticket này trên Jira?')) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </button>
+            </>
           )}
         </div>
 
-        <div className="flex items-center space-x-2">
-          {onClose && (
-            <button 
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-white transition-colors hover:bg-gray-800"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+        {/* Mock write-back footer */}
+        <div className="shrink-0 px-5 pb-4 flex items-center gap-2 flex-wrap">
+          <span className="text-[12px] text-slate-450">Mô phỏng write-back:</span>
+          <button
+            onClick={() => {
+              toast.error('409 — Bản ghi trên provider đã đổi. Đang tải lại...');
+              refetch();
+            }}
+            className="px-2.5 py-1 text-[11.5px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[6px] hover:border-slate-400 transition-colors"
+          >
+            409 xung đột
+          </button>
+          <button
+            onClick={() => {
+              toast.error('403 — Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại.');
+              navigate('/integrations');
+            }}
+            className="px-2.5 py-1 text-[11.5px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[6px] hover:border-slate-400 transition-colors"
+          >
+            403 thiếu scope
+          </button>
         </div>
       </div>
 
-      {/* Main Details Area */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
-        
-        {/* Render Title/Header */}
-        {isEditing ? (
-          <div className="space-y-4 bg-[#1c1d2c] border border-gray-800 p-5 rounded-2xl">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Chỉnh sửa thông tin</h3>
-            
-            {item.type === 'Event' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Tiêu đề sự kiện</label>
-                  <input 
-                    type="text" 
-                    value={eventForm.title}
-                    onChange={e => setEventForm({...eventForm, title: e.target.value})}
-                    className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Thời gian bắt đầu (Local)</label>
-                    <input 
-                      type="datetime-local" 
-                      value={eventForm.start}
-                      onChange={e => setEventForm({...eventForm, start: e.target.value})}
-                      className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Thời gian kết thúc (Local)</label>
-                    <input 
-                      type="datetime-local" 
-                      value={eventForm.end}
-                      onChange={e => setEventForm({...eventForm, end: e.target.value})}
-                      className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Địa điểm</label>
-                  <input 
-                    type="text" 
-                    value={eventForm.location}
-                    onChange={e => setEventForm({...eventForm, location: e.target.value})}
-                    className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                    placeholder="VD: Phòng họp số 3"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Người tham gia (Phân cách bởi dấu phẩy)</label>
-                  <input 
-                    type="text" 
-                    value={eventForm.attendees}
-                    onChange={e => setEventForm({...eventForm, attendees: e.target.value})}
-                    className="w-full bg-[#0f1019] border border-gray-800 rounded-lg px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors text-sm"
-                    placeholder="vd1@gmail.com, vd2@gmail.com"
-                  />
-                </div>
-                
-                <div className="flex justify-end space-x-3 pt-2">
-                  <button 
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 border border-gray-800 text-gray-400 hover:text-white rounded-lg text-sm transition-colors"
-                  >
-                    Hủy
-                  </button>
-                  <button 
-                    onClick={handleSaveEvent}
-                    disabled={patchMutation.isPending}
-                    className="px-5 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors flex items-center space-x-1.5"
-                  >
-                    {patchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    <span>Lưu</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-[10px] uppercase font-extrabold tracking-wider bg-brand-500/10 text-brand-400 border border-brand-500/20 px-2 py-0.5 rounded">
-                {item.type}
-              </span>
-              {item.isImportant && (
-                <span className="text-[10px] uppercase font-extrabold tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded">
-                  Quan trọng
-                </span>
-              )}
-            </div>
-            
-            {/* File title editing inline */}
-            {isRenamingFile ? (
-              <div className="flex items-center space-x-2">
-                <input 
-                  type="text" 
-                  value={fileName}
-                  onChange={e => setFileName(e.target.value)}
-                  className="bg-[#0f1019] border border-brand-500 rounded-lg py-2 px-3 text-lg font-bold text-white focus:outline-none flex-1"
-                  autoFocus
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleRenameFile();
-                    else if (e.key === 'Escape') setIsRenamingFile(false);
-                  }}
-                  onBlur={handleRenameFile}
-                />
-                <button 
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={handleRenameFile} 
-                  className="p-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600"
-                >
-                  <CheckCircle className="w-5 h-5" />
-                </button>
-              </div>
-            ) : (
-              <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">
-                {item.title}
-              </h1>
-            )}
-
-            {/* Email meta information */}
-            {item.type === 'Email' && (
-              <div className="bg-[#1c1d2c] border border-gray-800 rounded-xl p-4 text-xs space-y-2 text-gray-400">
-                <div className="flex"><span className="w-16 font-semibold text-gray-500">Từ:</span> <span className="text-gray-200">{metadata.from}</span></div>
-                {metadata.to && <div className="flex"><span className="w-16 font-semibold text-gray-500">Tới:</span> <span className="text-gray-200">{metadata.to}</span></div>}
-                <div className="flex"><span className="w-16 font-semibold text-gray-500">Ngày gửi:</span> <span className="text-gray-200">{new Date(item.occurredAt).toLocaleString()}</span></div>
-              </div>
-            )}
-
-            {/* Event information */}
-            {item.type === 'Event' && (
-              <div className="bg-[#1c1d2c] border border-gray-800 rounded-xl p-5 space-y-3.5 text-sm">
-                <div className="flex items-center space-x-3 text-gray-400">
-                  <Calendar className="w-4 h-4 text-brand-500" />
-                  <div className="flex-1">
-                    <div className="font-semibold text-gray-300">Thời gian</div>
-                    <div className="text-xs">Bắt đầu: {metadata.start ? new Date(metadata.start).toLocaleString() : 'N/A'}</div>
-                    <div className="text-xs">Kết thúc: {metadata.end ? new Date(metadata.end).toLocaleString() : 'N/A'}</div>
-                  </div>
-                </div>
-                {metadata.location && (
-                  <div className="flex items-center space-x-3 text-gray-400">
-                    <MapPin className="w-4 h-4 text-brand-500" />
-                    <div>
-                      <div className="font-semibold text-gray-300">Địa điểm</div>
-                      <div className="text-xs">{metadata.location}</div>
-                    </div>
-                  </div>
-                )}
-                {metadata.attendees && metadata.attendees.length > 0 && (
-                  <div className="flex items-start space-x-3 text-gray-400">
-                    <Users className="w-4 h-4 text-brand-500 mt-1" />
-                    <div>
-                      <div className="font-semibold text-gray-300">Người tham gia ({metadata.attendees.length})</div>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {metadata.attendees.map((email: string) => (
-                          <span key={email} className="text-xs bg-[#0f1019] px-2.5 py-1 rounded-full border border-gray-800 text-gray-300">
-                            {email}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {metadata.meetUrl && (
-                  <div className="pt-2">
-                    <a 
-                      href={metadata.meetUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium text-xs transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Tham gia Google Meet</span>
-                    </a>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* File information */}
-            {item.type === 'File' && (
-              <div className="bg-[#1c1d2c] border border-gray-800 rounded-xl p-5 space-y-3 text-sm">
-                <div className="flex items-center space-x-3 text-gray-400">
-                  <FileText className="w-5 h-5 text-brand-500" />
-                  <div>
-                    <div className="font-semibold text-gray-300">Chi tiết tệp tin</div>
-                    {metadata.size && <div className="text-xs mt-0.5">Dung lượng: {formatBytes(metadata.size)}</div>}
-                    {metadata.mimeType && <div className="text-xs text-gray-500 font-mono mt-0.5">{metadata.mimeType}</div>}
-                  </div>
-                </div>
-                {metadata.webViewLink && (
-                  <div className="pt-2">
-                    <a 
-                      href={metadata.webViewLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-xs transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Mở trong Google Drive</span>
-                    </a>
-                  </div>
-                )}
-              </div>
-            )}
-
-
-          </div>
-        )}
-
-        {/* Labels tag area for Email */}
-        {item.type === 'Email' && (
-          <div className="border-t border-gray-800 pt-4">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center space-x-1">
-              <Tag className="w-3.5 h-3.5" />
-              <span>Nhãn Gmail (Labels)</span>
-            </h4>
-            
-            <div className="flex flex-wrap gap-1.5 items-center">
-              {metadata.labels && metadata.labels.map((label: string) => (
-                <span key={label} className="inline-flex items-center space-x-1 text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 px-2.5 py-1 rounded-full">
-                  <span>{label}</span>
-                  <button 
-                    onClick={() => handleRemoveLabel(label)}
-                    disabled={patchMutation.isPending}
-                    className="hover:text-red-500 rounded-full font-bold ml-1 w-3.5 h-3.5 flex items-center justify-center bg-brand-500/20 hover:bg-red-500/10 transition-colors"
-                  >
-                    &times;
-                  </button>
-                </span>
-              ))}
-
-              {isAddingLabel ? (
-                <div className="flex items-center space-x-1.5">
-                  <input 
-                    type="text" 
-                    value={newLabelName}
-                    onChange={e => setNewLabelName(e.target.value)}
-                    placeholder="NHÃN_MỚI"
-                    className="bg-[#0f1019] border border-gray-800 rounded px-2 py-0.5 text-xs focus:outline-none focus:border-brand-500 uppercase"
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleAddLabel();
-                    }}
-                    autoFocus
-                  />
-                  <button onClick={handleAddLabel} className="text-xs text-brand-500 hover:text-brand-400 font-semibold">Thêm</button>
-                  <button onClick={() => setIsAddingLabel(false)} className="text-xs text-gray-500 hover:text-white font-semibold">Hủy</button>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => setIsAddingLabel(true)}
-                  className="inline-flex items-center space-x-1 text-xs text-gray-500 hover:text-white border border-dashed border-gray-800 px-2.5 py-1 rounded-full transition-colors hover:border-gray-500"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Thêm nhãn</span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Content Snippet / Description Box */}
-        {!isEditing && (
-          <div className="border-t border-gray-800 pt-5 space-y-2 flex-1">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Nội dung</h4>
-            <div className="bg-[#1c1d2c] border border-gray-800 rounded-xl p-5 text-sm font-sans leading-relaxed text-gray-300 max-h-[300px] overflow-y-auto whitespace-pre-wrap">
-              {item.type === 'Note' ? (
-                // Note has markdown stored in metadata
-                metadata.contentMarkdown || item.snippet
-              ) : (
-                item.snippet || <span className="text-gray-500 italic">Không có nội dung mô tả.</span>
-              )}
-            </div>
-          </div>
-        )}
-
-      </div>
+      {/* slide-in animation */}
+      <style>{`
+        @keyframes wh-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+      `}</style>
     </div>
   );
 };
