@@ -173,7 +173,6 @@ export const KanbanBoard = () => {
       handleApiError(err, 'Lỗi cập nhật trạng thái', { navigate });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     }
   });
