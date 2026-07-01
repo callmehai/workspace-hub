@@ -271,19 +271,47 @@ public class GmailGateway : IGmailGateway
         sb.Append("Content-Type: text/html; charset=\"UTF-8\"\r\n");
         sb.Append("Content-Transfer-Encoding: base64\r\n");
         sb.Append("\r\n");
-        sb.Append(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(bodyHtml)));
+        // Wrap base64 mỗi 76 ký tự (RFC 2045) — tránh 1 dòng dài vượt giới hạn 998 octet của SMTP (RFC 5321) với body HTML nhiều KB.
+        sb.Append(Convert.ToBase64String(
+            System.Text.Encoding.UTF8.GetBytes(bodyHtml),
+            Base64FormattingOptions.InsertLineBreaks));
 
         var rawBytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
         return Base64UrlEncode(rawBytes);
     }
 
-    /// <summary>Encoded-word (RFC 2047) cho header chứa Unicode — vd Subject tiếng Việt.</summary>
+    /// <summary>
+    /// Encoded-word (RFC 2047) cho header chứa Unicode — vd Subject tiếng Việt.
+    /// Fold thành nhiều encoded-word ≤ 75 ký tự (RFC 2047 §2), tách bằng CRLF + space,
+    /// để Subject dài không tạo 1 dòng header vượt 998 octet (RFC 5321). Cắt theo ranh
+    /// giới code point (Rune) nên không bao giờ tách đôi ký tự multi-byte.
+    /// </summary>
     private static string EncodeHeaderValue(string value)
     {
         if (string.IsNullOrEmpty(value)) return value;
-        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
-        return $"=?UTF-8?B?{Convert.ToBase64String(bytes)}?=";
+
+        const int maxBytesPerWord = 45; // base64(45B)=60 ký tự + "=?UTF-8?B??=" (12) = 72 ≤ 75.
+        var words = new List<string>();
+        var chunk = new List<byte>(maxBytesPerWord + 4);
+        Span<byte> buf = stackalloc byte[4];
+
+        foreach (var rune in value.EnumerateRunes())
+        {
+            var n = rune.EncodeToUtf8(buf);
+            if (chunk.Count > 0 && chunk.Count + n > maxBytesPerWord)
+            {
+                words.Add(ToEncodedWord(chunk));
+                chunk.Clear();
+            }
+            for (var i = 0; i < n; i++) chunk.Add(buf[i]);
+        }
+        if (chunk.Count > 0) words.Add(ToEncodedWord(chunk));
+
+        return string.Join("\r\n ", words);
     }
+
+    private static string ToEncodedWord(List<byte> bytes)
+        => $"=?UTF-8?B?{Convert.ToBase64String(bytes.ToArray())}?=";
 
     /// <summary>Base64url (RFC 4648) — '+'→'-', '/'→'_', bỏ '=' padding theo yêu cầu Gmail API.</summary>
     private static string Base64UrlEncode(byte[] bytes)
