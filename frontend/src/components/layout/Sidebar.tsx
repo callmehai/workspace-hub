@@ -1,25 +1,30 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Inbox,
-  CheckCircle2,
-  FileText,
-  Calendar as CalendarIcon,
-  Code,
-  MessageSquare,
-  Briefcase,
-  Settings,
-  HelpCircle,
-  Plus,
-  LayoutGrid,
+  Kanban,
+  Plug,
   Clock,
-  LogOut
+  LayoutDashboard,
+  LogOut,
+  Plus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
+import { foldersApi } from '../../lib/itemsApi';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user, logout } = useAuth();
+  
+  const currentFolder = searchParams.get('folder');
+
+  const { data: folders = [] } = useQuery({
+    queryKey: ['folders'],
+    queryFn: () => foldersApi.getFolders(false),
+  });
 
   const handleLogout = () => {
     logout();
@@ -27,150 +32,128 @@ export const Sidebar = () => {
     navigate('/login', { replace: true });
   };
 
+  const handleFolderClick = (folderId: string | null) => {
+    if (location.pathname !== '/' && location.pathname !== '/kanban') {
+      navigate(folderId ? `/?folder=${folderId}` : '/');
+    } else {
+      const newParams = new URLSearchParams(searchParams);
+      if (!folderId) {
+        newParams.delete('folder');
+      } else {
+        newParams.set('folder', folderId);
+      }
+      navigate(`${location.pathname}?${newParams.toString()}`);
+    }
+  };
+
+  const navItemClass = (isActive: boolean) => 
+    `flex items-center gap-2.5 w-full px-[10px] py-[9px] rounded-lg border-none cursor-pointer text-[14px] font-inherit transition-colors ${
+      isActive 
+        ? 'font-semibold bg-indigo-50 text-indigo-600' 
+        : 'font-medium bg-transparent text-slate-500 hover:bg-slate-100'
+    }`;
+
   return (
-    <aside className="w-64 bg-gray-50 border-r border-gray-200 text-gray-700 flex flex-col h-full shrink-0">
-      <div className="p-4 flex items-center space-x-3">
-        <div className="w-10 h-10 bg-brand-500 rounded-lg flex items-center justify-center text-gray-900 shadow-sm">
-          <LayoutGrid className="w-5 h-5" />
+    <aside className="w-[232px] bg-white border-r border-slate-200 flex flex-col h-full shrink-0 px-3 py-4">
+      {/* ── Top Branding ── */}
+      <div className="flex items-center gap-2.5 px-2 pt-1 pb-[18px]">
+        <div className="w-[30px] h-[30px] rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-[15px] shrink-0">
+          W
         </div>
-        <div>
-          <h2 className="text-gray-900 font-semibold leading-tight">Main Workspace</h2>
-          <p className="text-xs text-gray-500">Productivity Hub</p>
-        </div>
+        <span className="text-[15px] font-semibold text-slate-900">
+          Workspace Hub
+        </span>
       </div>
 
-      <div className="px-4 py-2">
-        <button className="w-full flex items-center justify-center space-x-2 bg-brand-500 hover:bg-brand-600 text-gray-900 py-2 rounded-md font-medium transition-colors">
-          <Plus className="w-4 h-4" />
-          <span>New Project</span>
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto py-2">
-        <nav className="px-3 mb-6 space-y-0.5">
-          <NavLink
-            to="/"
-            className={({ isActive }) =>
-              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
-              }`
-            }
-          >
-            <Inbox className="w-4 h-4" />
-            <span>Inbox</span>
-          </NavLink>
-          <NavLink
-            to="/tasks"
-            className={({ isActive }) =>
-              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
-              }`
-            }
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Tasks</span>
-          </NavLink>
-          <NavLink
-            to="/kanban"
-            className={({ isActive }) =>
-              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
-              }`
-            }
-          >
-            <LayoutGrid className="w-4 h-4" />
-            <span>Kanban Board</span>
-          </NavLink>
-          <NavLink
-            to="/files"
-            className={({ isActive }) =>
-              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
-              }`
-            }
-          >
-            <FileText className="w-4 h-4" />
-            <span>Files</span>
-          </NavLink>
-          <NavLink
-            to="/calendar"
-            className={({ isActive }) =>
-              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
-              }`
-            }
-          >
-            <CalendarIcon className="w-4 h-4" />
-            <span>Calendar</span>
-          </NavLink>
-          <NavLink
-            to="/scheduled-emails"
-            className={({ isActive }) =>
-              `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
-              }`
-            }
-          >
-            <Clock className="w-4 h-4" />
-            <span>Hẹn giờ gửi</span>
-          </NavLink>
-        </nav>
-
-        <div className="px-3 mb-2">
-          <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Integrations</h3>
-          <div className="space-y-0.5">
-            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
-              <div className="flex items-center space-x-3">
-                <Code className="w-4 h-4" />
-                <span>GitHub</span>
-              </div>
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-            </button>
-            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
-              <div className="flex items-center space-x-3">
-                <MessageSquare className="w-4 h-4" />
-                <span>Slack</span>
-              </div>
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-            </button>
-            <button className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
-              <div className="flex items-center space-x-3">
-                <Briefcase className="w-4 h-4" />
-                <span>Jira</span>
-              </div>
-              <div className="w-2 h-2 rounded-full bg-red-500"></div>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-3 border-t border-gray-200 space-y-0.5">
-        <NavLink 
-          to="/integrations"
-          className={({ isActive }) =>
-            `w-full flex items-center space-x-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:text-brand-600 hover:bg-brand-50'
-            }`
-          }
-        >
-          <Settings className="w-4 h-4" />
-          <span>Kết nối dịch vụ</span>
+      {/* ── Main Nav ── */}
+      <nav className="flex flex-col gap-0.5">
+        <NavLink to="/" className={({ isActive }) => navItemClass(isActive && location.pathname === '/')}>
+          <Inbox className="w-[18px] h-[18px] shrink-0" />
+          <span className="flex-1 text-left">Inbox</span>
         </NavLink>
-        <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-colors">
-          <HelpCircle className="w-4 h-4" />
-          <span>Help</span>
-        </button>
 
-        <div className="flex items-center gap-2.5 pt-3 mt-2 border-t border-gray-200">
-          <div className="h-8 w-8 flex-none rounded-full bg-brand-50 text-brand-600 flex items-center justify-center text-sm font-semibold">
+        <NavLink to="/kanban" className={({ isActive }) => navItemClass(isActive)}>
+          <Kanban className="w-[18px] h-[18px] shrink-0" />
+          <span className="flex-1 text-left">Bảng Kanban</span>
+        </NavLink>
+
+        <NavLink to="/integrations" className={({ isActive }) => navItemClass(isActive)}>
+          <Plug className="w-[18px] h-[18px] shrink-0" />
+          <span className="flex-1 text-left">Kết nối dịch vụ</span>
+        </NavLink>
+
+        <NavLink to="/scheduled-emails" className={({ isActive }) => navItemClass(isActive)}>
+          <Clock className="w-[18px] h-[18px] shrink-0" />
+          <span className="flex-1 text-left">Email hẹn giờ</span>
+        </NavLink>
+
+        {user?.role === 'Admin' && (
+          <NavLink to="/admin" className={({ isActive }) => navItemClass(isActive)}>
+            <LayoutDashboard className="w-[18px] h-[18px] shrink-0" />
+            <span className="flex-1 text-left">Quản trị</span>
+          </NavLink>
+        )}
+      </nav>
+
+      {/* ── Folders Section ── */}
+      <div className="flex items-center justify-between mx-[10px] mt-6 mb-2">
+        <span className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400">
+          Thư mục
+        </span>
+        <button 
+          aria-label="Thư mục mới" 
+          className="p-0.5 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-colors flex"
+          onClick={() => toast('Tính năng Thư mục mới đang được phát triển')}
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-0.5 overflow-y-auto flex-1 min-h-0 hide-scrollbar">
+        <button
+          onClick={() => handleFolderClick(null)}
+          className={navItemClass(!currentFolder)}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0 bg-slate-400" />
+          <span className="flex-1 text-left truncate">Tất cả</span>
+        </button>
+        
+        {folders.map(folder => (
+          <button
+            key={folder.id}
+            onClick={() => handleFolderClick(folder.id)}
+            className={navItemClass(currentFolder === folder.id)}
+          >
+            <span 
+              className="w-2 h-2 rounded-full shrink-0" 
+              style={{ backgroundColor: folder.color || '#94a3b8' }} 
+            />
+            <span className="flex-1 text-left truncate">{folder.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Bottom User Profile ── */}
+      <div className="mt-4 pt-3 border-t border-slate-200">
+        <div className="flex items-center gap-2.5 px-1">
+          <div className="w-[34px] h-[34px] rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[13px] font-semibold shrink-0">
             {user?.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-gray-900">
+          <div className="flex-1 min-w-0">
+            <div className="truncate text-[13.5px] font-semibold text-slate-900">
               {user?.fullName ?? 'Người dùng'}
             </div>
-            <div className="truncate text-xs text-gray-500">{user?.email}</div>
+            <div className="truncate text-[12px] text-slate-500">
+              {user?.email}
+            </div>
           </div>
           <button
             onClick={handleLogout}
             aria-label="Đăng xuất"
             title="Đăng xuất"
-            className="flex-none rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-colors flex"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>

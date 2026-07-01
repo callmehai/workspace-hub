@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
@@ -7,7 +7,7 @@ import { ItemDetail } from '../components/ItemDetail';
 import type { ItemStatus, ItemType } from '../types/items';
 import {
   Plus, Loader2, Mail, Calendar, FileText, StickyNote, Briefcase,
-  Star, GripVertical, AlertCircle, LayoutGrid, List as ListIcon, Folder
+  Star, GripVertical, AlertCircle, LayoutGrid, List as ListIcon, Search
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
@@ -56,6 +56,35 @@ const COLUMNS: { title: string, status: ItemStatus, dotColor: string }[] = [
   { title: 'Done', status: 'Done', dotColor: 'bg-emerald-500' },
 ];
 
+interface ChipProps {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+function Chip({ active, onClick, children }: ChipProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors whitespace-nowrap
+        ${active
+          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+        }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
+  { label: 'Tất cả', value: null },
+  { label: 'Email', value: 'Email' },
+  { label: 'Sự kiện', value: 'Event' },
+  { label: 'Tệp', value: 'File' },
+  { label: 'Ghi chú', value: 'Note' },
+  { label: 'Ticket', value: 'Ticket' },
+];
+
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -63,6 +92,20 @@ export const KanbanBoard = () => {
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
+  const [importantOnly, setImportantOnly] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchChange = useCallback((val: string) => {
+    setSearchInput(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(val.trim());
+    }, 350);
+  }, []);
 
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteForm, setNoteForm] = useState({ title: '', contentMarkdown: '' });
@@ -82,22 +125,21 @@ export const KanbanBoard = () => {
     else setSelectedFolderId(null);
   }, [location.search]);
 
-  const updateFolderUrl = (folderId: string | null) => {
-    const params = new URLSearchParams(location.search);
-    if (folderId) params.set('folder', folderId);
-    else params.delete('folder');
-    navigate({ search: params.toString() }, { replace: true });
-  };
-
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
   });
 
-  const queryKey = ['items', selectedFolderId];
+  const queryKey = ['items', { folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, search }];
   const { data: pagedItems, isLoading, isError, refetch } = useQuery({
     queryKey,
-    queryFn: () => itemsApi.getItems({ folderId: selectedFolderId || undefined, limit: 100 })
+    queryFn: () => itemsApi.getItems({ 
+      folderId: selectedFolderId || undefined, 
+      type: typeFilter || undefined,
+      isImportant: importantOnly || undefined,
+      search: search || undefined,
+      limit: 100 
+    })
   });
 
   const items = pagedItems?.items || [];
@@ -218,41 +260,10 @@ export const KanbanBoard = () => {
     : 'Tất cả thư mục';
 
   return (
-    <div className="h-full flex flex-col md:flex-row overflow-hidden bg-slate-50 text-slate-900">
-      {/* Sidebar */}
-      <div className="w-64 border-r border-slate-200 bg-white flex flex-col shrink-0 h-full">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800">Thư mục</h2>
-        </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1 hide-scrollbar">
-          <button
-            onClick={() => updateFolderUrl(null)}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedFolderId === null ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <Folder className="w-4 h-4" />
-            Tất cả
-          </button>
-          {folders.map((f: any) => (
-            <button
-              key={f.id}
-              onClick={() => updateFolderUrl(f.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedFolderId === f.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#94a3b8' }}></span>
-              <span className="truncate">{f.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Board */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-end shrink-0 flex-wrap gap-4">
+    <div className="h-full flex flex-col min-w-0 bg-slate-50 text-slate-900">
+      {/* Header & Filters */}
+      <div className="px-6 py-4 border-b border-slate-200 bg-white flex flex-col shrink-0 gap-4">
+        <div className="flex justify-between items-end flex-wrap gap-4">
           <div>
             <h1 className="text-[22px] font-semibold text-slate-900 leading-tight mb-0.5">Bảng Kanban</h1>
             <p className="text-[13px] text-slate-500">{currentFolderName} · kéo-thả thẻ để đổi trạng thái</p>
@@ -269,27 +280,54 @@ export const KanbanBoard = () => {
                 <LayoutGrid className="w-4 h-4" /> Bảng
               </div>
             </div>
+            <div className="flex gap-2 ml-2 border-l border-slate-200 pl-4">
+              <button
+                onClick={() => setIsNoteModalOpen(true)}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-all"
+              >
+                <Plus className="w-4 h-4" /> Ghi chú
+              </button>
+              <button
+                onClick={() => setIsEventModalOpen(true)}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-all"
+              >
+                <Plus className="w-4 h-4" /> Sự kiện
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Tools bar */}
-        <div className="px-6 py-3 border-b border-slate-200 bg-white flex gap-2">
-          <button
-            onClick={() => setIsNoteModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[13px] font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-          >
-            <Plus className="w-4 h-4" /> Ghi chú mới
-          </button>
-          <button
-            onClick={() => setIsEventModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[13px] font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-          >
-            <Plus className="w-4 h-4" /> Sự kiện mới
-          </button>
+        {/* Filter bar */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {TYPE_FILTERS.map(f => (
+            <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => setTypeFilter(f.value)}>
+              {f.value ? (
+                <span className={`inline-flex items-center gap-1 ${typeTileClass(f.value)} px-0 bg-transparent`}>
+                  {typeIcon(f.value)}{f.label}
+                </span>
+              ) : f.label}
+            </Chip>
+          ))}
+          <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
+          <Chip active={importantOnly} onClick={() => setImportantOnly(v => !v)}>
+            <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
+            Quan trọng
+          </Chip>
+          <div className="relative ml-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => handleSearchChange(e.target.value)}
+              placeholder="Tìm kiếm..."
+              className="w-64 h-8 pl-9 pr-4 rounded-lg border border-slate-200 bg-slate-50 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
+            />
+          </div>
         </div>
+      </div>
 
-        {/* Board content */}
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-slate-50">
+      {/* Board content */}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-slate-50">
           {isError ? (
             <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl bg-white p-8 text-center max-w-md mx-auto">
               <div className="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mb-4">
@@ -378,7 +416,6 @@ export const KanbanBoard = () => {
             </div>
           )}
         </div>
-      </div>
 
       {/* Note Modal */}
       {isNoteModalOpen && (
