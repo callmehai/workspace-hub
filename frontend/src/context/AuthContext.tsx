@@ -18,6 +18,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     queryFn: async () => (await api.get<UserDto>('/auth/me')).data,
     staleTime: Infinity,
     retry: false,
+    // Khi chưa login, query này ở trạng thái error (401). Mặc định TanStack refetch on
+    // window-focus → đổi tab quay lại sẽ bắn /auth/me lần nữa. Tắt để tránh refetch thừa
+    // (login/logout đã chủ động set cache key này).
+    refetchOnWindowFocus: false,
   });
 
   // Đăng nhập thành công: token đã được backend set vào cookie; chỉ cache user.

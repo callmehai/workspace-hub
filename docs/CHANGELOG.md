@@ -31,6 +31,20 @@
 - **DB:** migration thêm `Users.Phone` (string null), `Users.PhoneVerified` (bool, default true cho user cũ để không phá đăng nhập hiện có). Endpoint mới: `POST /api/auth/send-otp`, `POST /api/auth/verify-otp`.
 - **FE:** Register thêm field SĐT; sau register điều hướng màn nhập OTP (resend + đếm ngược).
 
+### Fix sau code-review (PR SCRUM-63/64)
+- **TOCTOU refresh rotate (63):** tiêu thụ jti bằng GETDEL atomic (Lua) qua `IConnectionMultiplexer` khi có Redis; dev in-memory fallback get+remove.
+- **OTP TTL không reset khi nhập sai (64):** lưu absolute expiry trong value Redis (`hash:attempts:expiryTicks`), update đếm dùng TTL còn lại → cửa sổ tấn công cố định 5' (không gia hạn theo mỗi lần sai).
+- **OTP hash:** SHA-256 → **HMAC-SHA256 keyed theo userId** (chống rainbow table dùng chung) + so sánh `FixedTimeEquals`.
+- **Chống user enumeration (64):** `/auth/send-otp` luôn 200 (im lặng nếu email không đủ điều kiện); `/auth/verify-otp` trả 422 đồng nhất cho mọi case không hợp lệ.
+- **Twilio config:** đọc 1 lần ở ctor `TwilioSmsSender` thay vì mỗi lần gửi.
+- **docker-compose:** SA password đọc từ `.env` (gitignored) `${MSSQL_SA_PASSWORD:-...}` thay vì hardcode; thêm `.env.example`.
+- **Đã làm (review vòng sau):** tách `IJwtTokenFactory` chung cho AuthService + RefreshTokenService (bỏ duplicate access-token gen); GETDEL atomic chống TOCTOU khi rotate refresh token (Redis thật).
+- **Để backlog (đồng ý với review):** rate-limit `/auth/refresh`; race TOCTOU trong `OtpService.SendAsync` (risk thấp, single-instance dev).
+
+### Dev ergonomics (2026-06-30, sau review)
+- **FE proxy → HTTPS:** `vite.config.ts` đổi target `/api` từ `http://localhost:5118` sang `https://localhost:7010` (`secure:false` cho dev cert tự ký). Chạy BE bằng `--launch-profile https`. Lý do: dev/test sát prod (cookie `Secure`, HTTPS) hơn.
+- **SMS fallback chặt hơn:** chỉ chọn `TwilioSmsSender` khi **đủ cả** `AccountSid` + `AuthToken` + `FromNumber`. Twilio trial chưa mua số (`FromNumber` trống) → tự fallback `LogSmsSender` ghi OTP ra console — team test OTP không cần gọi Twilio thật. Trước đây chỉ check `AccountSid` nên sẽ chọn Twilio rồi fail vì thiếu From.
+
 ### Ngoài scope đợt này (cố ý)
 - KHÔNG đụng mã hoá **OAuth connection token** (Data Protection giữ nguyên). KHÔNG làm email-verification (chỉ phone OTP). KHÔNG đa thiết bị/quản lý session nâng cao (chỉ rotation cơ bản). Multi-region Redis, Twilio production (mua số) → để sau.
 
