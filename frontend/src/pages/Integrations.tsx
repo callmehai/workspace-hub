@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { AxiosError } from 'axios';
 import { connectionsApi } from '../lib/connectionsApi';
+import { handleApiError } from '../lib/errorUtils';
 import toast from 'react-hot-toast';
 import { Loader2, Lock, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -60,11 +60,7 @@ export const Integrations = () => {
       toast.success('Đã ngắt kết nối thành công');
       queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
-    onError: (err) => {
-      console.error(err);
-      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Không thể ngắt kết nối';
-      toast.error(message);
-    },
+    onError: (err) => handleApiError(err, 'Không thể ngắt kết nối'),
   });
 
   const connectMutation = useMutation({
@@ -73,11 +69,7 @@ export const Integrations = () => {
     onSuccess: (res) => {
       window.location.assign(res.authorizationUrl);
     },
-    onError: (err) => {
-      console.error(err);
-      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Không thể bắt đầu kết nối';
-      toast.error(message);
-    },
+    onError: (err) => handleApiError(err, 'Không thể bắt đầu kết nối'),
   });
 
   const syncMutation = useMutation({
@@ -86,11 +78,7 @@ export const Integrations = () => {
       toast.success('Đã gửi yêu cầu đồng bộ');
       queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
-    onError: (err) => {
-      console.error(err);
-      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Đồng bộ thất bại';
-      toast.error(message);
-    },
+    onError: (err) => handleApiError(err, 'Đồng bộ thất bại'),
   });
 
   const handleConnect = (integrationKey: string, serviceType: string) => {

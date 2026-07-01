@@ -1,4 +1,4 @@
-import axios, { isAxiosError } from 'axios'
+import axios from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 
@@ -99,47 +99,5 @@ api.interceptors.response.use(
   },
 )
 
-export const handleApiError = (
-  error: unknown,
-  fallbackMessage: string = 'Có lỗi xảy ra',
-  options?: {
-    onConflict?: () => void;
-    navigate?: (path: string) => void;
-  }
-) => {
-  if (isAxiosError(error)) {
-    const status = error.response?.status;
-    const errorData = error.response?.data as { error?: string; message?: string } | undefined;
-
-    if (status === 409) {
-      toast.error('Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại...');
-      if (options?.onConflict) {
-        options.onConflict();
-      }
-      return;
-    }
-
-    if (status === 403) {
-      if (errorData?.error === 'CsrfError') {
-        return;
-      }
-      toast.error('Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại tài khoản.');
-      if (options?.navigate) {
-        options.navigate('/integrations');
-      }
-      return;
-    }
-
-    if (status === 502) {
-      toast.error('Lỗi từ nhà cung cấp dịch vụ (Google/Jira). Vui lòng thử lại sau.');
-      return;
-    }
-
-    const serverMessage = errorData?.message;
-    toast.error(serverMessage || fallbackMessage);
-  } else {
-    toast.error(fallbackMessage);
-  }
-};
 
 export default api
