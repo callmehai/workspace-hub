@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { itemsApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
 import type { ItemType, ItemStatus } from '../types/items';
@@ -136,15 +136,36 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
 
 // ─── main component ──────────────────────────────────────────────────────────
 export const Inbox = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getInitialType = (): ItemType | null => {
+    if (location.pathname === '/files') return 'File';
+    if (location.pathname === '/calendar') return 'Event';
+    if (location.pathname === '/tasks') return 'Note';
+    return null;
+  };
+
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
+  const [typeFilter, setTypeFilter] = useState<ItemType | null>(getInitialType);
   const [importantOnly, setImportantOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const navigate = useNavigate();
+  useEffect(() => {
+    if (location.pathname === '/files') {
+      setTypeFilter('File');
+    } else if (location.pathname === '/calendar') {
+      setTypeFilter('Event');
+    } else if (location.pathname === '/tasks') {
+      setTypeFilter('Note');
+    } else {
+      setTypeFilter(null);
+    }
+    setPage(1);
+  }, [location.pathname]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
