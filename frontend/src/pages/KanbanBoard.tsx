@@ -260,7 +260,7 @@ export const KanbanBoard = () => {
     : 'Tất cả thư mục';
 
   return (
-    <div className="h-full flex flex-col min-w-0 bg-slate-50 text-slate-900">
+    <div className="h-full flex flex-col min-w-0 overflow-hidden bg-slate-50 text-slate-900">
       {/* Header & Filters */}
       <div className="px-6 py-4 border-b border-slate-200 bg-white flex flex-col shrink-0 gap-4">
         <div className="flex justify-between items-end flex-wrap gap-4">
@@ -358,7 +358,7 @@ export const KanbanBoard = () => {
                       onDragOver={(e) => handleDragOver(e, col.status)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, col.status)}
-                      className={`flex-1 flex flex-col gap-2.5 p-2.5 rounded-xl min-h-[160px] transition-colors border-2 ${
+                      className={`flex-1 flex flex-col gap-2.5 p-2.5 rounded-xl min-h-[160px] overflow-y-auto transition-colors border-2 ${
                         isOver ? 'bg-indigo-50 border-indigo-400 border-dashed' : 'bg-slate-100/80 border-transparent'
                       }`}
                     >
