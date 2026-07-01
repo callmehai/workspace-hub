@@ -67,7 +67,7 @@ export const Sidebar = () => {
 
       {/* ── Main Nav ── */}
       <nav className="flex flex-col gap-0.5">
-        <NavLink to="/" className={({ isActive }) => navItemClass(isActive && location.pathname === '/')}>
+        <NavLink to="/" end className={({ isActive }) => navItemClass(isActive)}>
           <Inbox className="w-[18px] h-[18px] shrink-0" />
           <span className="flex-1 text-left">Inbox</span>
         </NavLink>

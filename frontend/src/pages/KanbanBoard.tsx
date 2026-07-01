@@ -4,7 +4,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
-import type { ItemStatus, ItemType } from '../types/items';
+import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
 import {
   Plus, Loader2, Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, GripVertical, AlertCircle, LayoutGrid, List as ListIcon, Search
@@ -158,17 +158,17 @@ export const KanbanBoard = () => {
       itemsApi.updateItemStatus(id, { status }),
     onMutate: async ({ id, status }) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<any>(queryKey);
-      queryClient.setQueryData(queryKey, (old: any) => {
+      const previous = queryClient.getQueryData<PagedResult<ItemResponse>>(queryKey);
+      queryClient.setQueryData(queryKey, (old: PagedResult<ItemResponse> | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          items: old.items.map((it: any) => it.id === id ? { ...it, status } : it)
+          items: old.items.map((it: ItemResponse) => it.id === id ? { ...it, status } : it)
         };
       });
       return { previous };
     },
-    onError: (err, _vars, ctx: any) => {
+    onError: (err, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
       handleApiError(err, 'Lỗi cập nhật trạng thái', { navigate });
     },
@@ -222,12 +222,22 @@ export const KanbanBoard = () => {
       toast.error('Bắt đầu phải trước kết thúc');
       return;
     }
+
+    if (eventForm.attendees) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const attendeesArray = eventForm.attendees.split(',').map(e => e.trim()).filter(e => e.length > 0);
+      const invalidEmails = attendeesArray.filter(email => !emailRegex.test(email));
+      if (invalidEmails.length > 0) {
+        toast.error(`Email không hợp lệ: ${invalidEmails.join(', ')}`);
+        return;
+      }
+    }
+
     createEvent.mutate();
   };
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     e.dataTransfer.setData('itemId', id);
-    setDraggingId(id);
     setTimeout(() => setDraggingId(id), 0); // let UI update before changing appearance
   };
 
@@ -256,7 +266,7 @@ export const KanbanBoard = () => {
   };
 
   const currentFolderName = selectedFolderId 
-    ? (folders.find((f: any) => f.id === selectedFolderId)?.name || 'Thư mục ẩn')
+    ? (folders.find((f: FolderResponse) => f.id === selectedFolderId)?.name || 'Thư mục ẩn')
     : 'Tất cả thư mục';
 
   return (
@@ -324,6 +334,13 @@ export const KanbanBoard = () => {
             />
           </div>
         </div>
+
+        {pagedItems && pagedItems.total > 100 && (
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-800 text-[13px] font-medium shrink-0 animate-in fade-in duration-200">
+            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>Chỉ hiển thị tối đa 100 mục đầu tiên trên bảng Kanban. Thư mục hiện tại có {pagedItems.total} mục.</span>
+          </div>
+        )}
       </div>
 
       {/* Board content */}
@@ -374,7 +391,7 @@ export const KanbanBoard = () => {
                         colItems.map(item => (
                           <div
                             key={item.id}
-                            draggable
+                            draggable={!(updateStatus.isPending && updateStatus.variables?.id === item.id)}
                             onDragStart={(e) => handleDragStart(e, item.id)}
                             onDragEnd={handleDragEnd}
                             onClick={() => setSelectedItemId(item.id)}
