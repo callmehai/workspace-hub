@@ -68,7 +68,7 @@
 |---|---|---|---|---|
 | SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done — map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack ở prod; traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
 | SCRUM-26 | Refactor services + clean architecture | Khánh | — | ✅ Done |
-| SCRUM-27 | API testing + Postman collection | Huy | 24 | 🔍 In Review — Postman collection + environment ở `backend/postman/` (48 request, 10 nhóm: auth/folders/items/connections/scheduled-emails/important-contacts/admin/health). Có test script tự assert + tự capture token/id (chạy Collection Runner / Newman). Phủ 200/201/204/400/401/403/404/409/422; happy-path provider tách riêng. Chờ Huy chạy test. |
+| SCRUM-27 | API testing + Postman collection | Huy | 24 | ✅ Done — Postman collection + environment ở `backend/postman/` (48 request, 10 nhóm: auth/folders/items/connections/scheduled-emails/important-contacts/admin/health). Có test script tự assert + tự capture token/id (chạy Collection Runner / Newman). Phủ 200/201/204/400/401/403/404/409/422; happy-path provider tách riêng. |
 | SCRUM-28 | README backend + setup guide | Dũng | — | ⏳ To Do |
 | SCRUM-29 | Unit test cho service chính | Hải | — | ⏳ To Do |
 | SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ✅ Done — `POST /api/scheduled-emails` (422 nếu Connection ≠ Gmail, 400 nếu sendAt quá khứ); list phân trang; cancel |
@@ -95,6 +95,7 @@
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
 | SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | ⏳ To Do |
+| SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ⏳ To Do |
 
 ## Phase Jira — Atlassian integration (SCRUM-54→60)
 
