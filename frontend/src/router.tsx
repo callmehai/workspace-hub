@@ -44,6 +44,18 @@ export const router = createBrowserRouter([
             element: <Inbox />,
           },
           {
+            path: 'tasks',
+            element: <Inbox />,
+          },
+          {
+            path: 'files',
+            element: <Inbox />,
+          },
+          {
+            path: 'calendar',
+            element: <Inbox />,
+          },
+          {
             path: 'projects',
             element: <Projects />,
           },
