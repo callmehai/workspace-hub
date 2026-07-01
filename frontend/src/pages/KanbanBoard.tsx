@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
-import { handleApiError } from '../lib/api';
 import type { ItemStatus } from '../types/items';
 import { Plus, MoreVertical, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -13,12 +12,12 @@ import { handleApiError } from '../lib/errorUtils';
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  
+
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  
+
   // Selected Item for detail modal
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  
+
   // Note Modal state
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteForm, setNoteForm] = useState({ title: '', contentMarkdown: '' });
@@ -103,7 +102,7 @@ export const KanbanBoard = () => {
       if (!eventForm.connectionId) throw new Error('Vui lòng chọn tài khoản Google Calendar');
       const startIso = new Date(eventForm.start).toISOString();
       const endIso = new Date(eventForm.end).toISOString();
-      const attendeesArray = eventForm.attendees 
+      const attendeesArray = eventForm.attendees
         ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
         : undefined;
 
@@ -135,7 +134,7 @@ export const KanbanBoard = () => {
 
     const startIso = new Date(eventForm.start).toISOString();
     const endIso = new Date(eventForm.end).toISOString();
-    
+
     if (new Date(startIso) >= new Date(endIso)) {
       toast.error('Thời gian bắt đầu phải trước thời gian kết thúc');
       return;
@@ -211,14 +210,14 @@ export const KanbanBoard = () => {
         <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center shrink-0">
           <h1 className="text-xl font-bold text-white">Kanban Board</h1>
           <div className="flex items-center space-x-3">
-            <button 
+            <button
               className="flex items-center space-x-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-all border border-gray-700"
               onClick={() => setIsEventModalOpen(true)}
             >
               <Plus className="w-4 h-4 text-emerald-400" />
               <span>New Event</span>
             </button>
-            <button 
+            <button
               className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-sm shadow-brand-500/20 hover:shadow-brand-500/40"
               onClick={() => setIsNoteModalOpen(true)}
             >
@@ -260,10 +259,11 @@ export const KanbanBoard = () => {
                     {items.filter(i => i.status === col.status).map(item => (
                       <div
                         key={item.id}
-                        draggable={!updateStatus.isPending}
+                        draggable={!(updateStatus.isPending && updateStatus.variables?.id === item.id)}
                         onDragStart={(e) => handleDragStart(e, item.id)}
                         onClick={() => setSelectedItemId(item.id)}
-                        className="bg-[#1c1d2c] border border-gray-700/50 p-4 rounded-xl cursor-pointer hover:bg-[#202133] hover:border-brand-500/50 transition-all group relative shadow-sm"
+                        className={`bg-[#1c1d2c] border border-gray-700/50 p-4 rounded-xl cursor-pointer hover:bg-[#202133] hover:border-brand-500/50 transition-all group relative shadow-sm ${updateStatus.isPending && updateStatus.variables?.id === item.id ? 'opacity-50 pointer-events-none' : ''
+                          }`}
                       >
                         <div className="flex justify-between items-start mb-2.5">
                           <div className="flex space-x-2">
@@ -301,7 +301,7 @@ export const KanbanBoard = () => {
           <div className="bg-[#1c1d2c] rounded-2xl border border-gray-700/50 w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-5 border-b border-gray-800 flex justify-between items-center">
               <h2 className="text-lg font-semibold text-white">Tạo ghi chú mới</h2>
-              <button 
+              <button
                 onClick={() => setIsNoteModalOpen(false)}
                 className="text-gray-500 hover:text-white transition-colors text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800"
               >
@@ -311,8 +311,8 @@ export const KanbanBoard = () => {
             <div className="p-6 space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Tiêu đề</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={noteForm.title}
                   onChange={e => setNoteForm({ ...noteForm, title: e.target.value })}
                   className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
@@ -321,7 +321,7 @@ export const KanbanBoard = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Nội dung (Markdown)</label>
-                <textarea 
+                <textarea
                   value={noteForm.contentMarkdown}
                   onChange={e => setNoteForm({ ...noteForm, contentMarkdown: e.target.value })}
                   className="w-full h-32 bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors resize-none placeholder-gray-600 font-mono text-sm leading-relaxed"
@@ -354,7 +354,7 @@ export const KanbanBoard = () => {
           <div className="bg-[#1c1d2c] rounded-2xl border border-gray-700/50 w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-5 border-b border-gray-800 flex justify-between items-center">
               <h2 className="text-lg font-semibold text-white">Tạo sự kiện Calendar mới</h2>
-              <button 
+              <button
                 onClick={() => setIsEventModalOpen(false)}
                 className="text-gray-500 hover:text-white transition-colors text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800"
               >
@@ -366,7 +366,7 @@ export const KanbanBoard = () => {
                 <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Tài khoản Google Calendar</label>
                 <select
                   value={eventForm.connectionId}
-                  onChange={e => setEventForm({...eventForm, connectionId: e.target.value})}
+                  onChange={e => setEventForm({ ...eventForm, connectionId: e.target.value })}
                   className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
                 >
                   <option value="">-- Chọn tài khoản Google Calendar --</option>
@@ -380,13 +380,13 @@ export const KanbanBoard = () => {
                   <p className="text-xs text-amber-500 mt-1">Bạn chưa kết nối Google Calendar hoặc kết nối đã hết hạn. Hãy kết nối ở phần Cài đặt.</p>
                 )}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Tiêu đề sự kiện</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={eventForm.title}
-                  onChange={e => setEventForm({...eventForm, title: e.target.value})}
+                  onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
                   className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
                   placeholder="Ví dụ: Họp Daily Scrum..."
                 />
@@ -395,19 +395,19 @@ export const KanbanBoard = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Bắt đầu (Local)</label>
-                  <input 
-                    type="datetime-local" 
+                  <input
+                    type="datetime-local"
                     value={eventForm.start}
-                    onChange={e => setEventForm({...eventForm, start: e.target.value})}
+                    onChange={e => setEventForm({ ...eventForm, start: e.target.value })}
                     className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Kết thúc (Local)</label>
-                  <input 
-                    type="datetime-local" 
+                  <input
+                    type="datetime-local"
                     value={eventForm.end}
-                    onChange={e => setEventForm({...eventForm, end: e.target.value})}
+                    onChange={e => setEventForm({ ...eventForm, end: e.target.value })}
                     className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
                   />
                 </div>
@@ -415,10 +415,10 @@ export const KanbanBoard = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Địa điểm</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={eventForm.location}
-                  onChange={e => setEventForm({...eventForm, location: e.target.value})}
+                  onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
                   className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
                   placeholder="Ví dụ: Google Meet, phòng họp A..."
                 />
@@ -426,23 +426,23 @@ export const KanbanBoard = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Người tham gia (Phân tách bằng dấu phẩy)</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={eventForm.attendees}
-                  onChange={e => setEventForm({...eventForm, attendees: e.target.value})}
+                  onChange={e => setEventForm({ ...eventForm, attendees: e.target.value })}
                   className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
                   placeholder="guest1@gmail.com, guest2@gmail.com"
                 />
               </div>
             </div>
             <div className="p-5 border-t border-gray-800 flex justify-end space-x-3 bg-[#13141f]">
-              <button 
+              <button
                 onClick={() => setIsEventModalOpen(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
               >
                 Hủy
               </button>
-              <button 
+              <button
                 onClick={handleCreateEvent}
                 disabled={!eventForm.connectionId || !eventForm.title || !eventForm.start || !eventForm.end || createEvent.isPending}
                 className="bg-emerald-600 hover:bg-emerald-750 disabled:bg-gray-700 disabled:text-gray-500 text-white px-5 py-2 rounded-lg font-medium transition-all flex items-center space-x-1.5"
@@ -459,7 +459,7 @@ export const KanbanBoard = () => {
       {selectedItemId && (
         <div className="fixed inset-0 bg-[#0f1019]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-[#13141f] rounded-2xl border border-gray-800 w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col relative">
-            <ItemDetail 
+            <ItemDetail
               itemId={selectedItemId}
               onClose={() => setSelectedItemId(null)}
               onDeleted={() => setSelectedItemId(null)}

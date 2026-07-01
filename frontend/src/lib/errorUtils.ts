@@ -8,17 +8,51 @@ export interface ApiErrorResponse {
   traceId?: string;
 }
 
+export interface HandleApiErrorOptions {
+  onConflict?: () => void;
+  navigate?: (path: string) => void;
+}
+
 /**
  * Parse lỗi Axios theo format backend chuẩn và hiển thị toast.
- * Ưu tiên: details[] > message > fallbackMessage
+ * Ưu tiên: Xử lý status code (409, 403, 502) > details[] > message > fallbackMessage
  */
-export const handleApiError = (err: unknown, fallbackMessage: string): void => {
+export const handleApiError = (
+  err: unknown, 
+  fallbackMessage: string = 'Có lỗi xảy ra',
+  options?: HandleApiErrorOptions
+): void => {
   if (import.meta.env.DEV) {
     console.error('[API Error]:', err);
   }
 
   if (axios.isAxiosError(err)) {
+    const status = err.response?.status;
     const data = err.response?.data as ApiErrorResponse | undefined;
+
+    if (status === 409) {
+      toast.error('Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại...');
+      if (options?.onConflict) {
+        options.onConflict();
+      }
+      return;
+    }
+
+    if (status === 403) {
+      if (data?.error === 'CsrfError') {
+        return; // Interceptor đã xử lý CsrfError
+      }
+      toast.error('Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại tài khoản.');
+      if (options?.navigate) {
+        options.navigate('/integrations');
+      }
+      return;
+    }
+
+    if (status === 502) {
+      toast.error('Lỗi từ nhà cung cấp dịch vụ (Google/Jira). Vui lòng thử lại sau.');
+      return;
+    }
     
     if (data?.details && data.details.length > 0) {
       toast.error(data.details[0]); // Chỉ hiển thị lỗi đầu tiên tránh spam toast
