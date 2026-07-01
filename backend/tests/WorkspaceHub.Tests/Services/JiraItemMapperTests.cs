@@ -21,12 +21,15 @@ public class JiraItemMapperTests
         string key = "SCRUM-1",
         string? summary = "Fix the bug",
         JsonElement? description = null,
-        DateTimeOffset? updated = null) =>
+        DateTimeOffset? updated = null,
+        string? statusCategoryKey = "indeterminate",
+        string? statusName = "In Progress") =>
         new(
             id, key, "SCRUM", summary, description,
-            "In Progress", "Loc Hoang", "High", "Task",
+            statusName, "Loc Hoang", "High", "Task",
             "https://api.atlassian.com/ex/jira/cloud-1/browse/SCRUM-1",
-            updated);
+            updated,
+            statusCategoryKey);
 
     [Fact]
     public void ToItem_SetsTypeTicketAndBasicFields()
@@ -42,6 +45,27 @@ public class JiraItemMapperTests
         item.ExternalId.Should().Be("10001");
         item.ConnectionId.Should().Be(connId);
         item.UserId.Should().Be(userId);
+    }
+
+    [Theory]
+    [InlineData("new", ItemStatus.Inbox)]
+    [InlineData("indeterminate", ItemStatus.Doing)]
+    [InlineData("done", ItemStatus.Done)]
+    [InlineData("unknown_key", ItemStatus.Inbox)]
+    public void ToItem_MapsStatusUsingCategoryKey(string categoryKey, ItemStatus expectedStatus)
+    {
+        var item = _mapper.ToItem(SampleIssue(statusCategoryKey: categoryKey), Guid.NewGuid(), Guid.NewGuid());
+        item.Status.Should().Be(expectedStatus);
+    }
+
+    [Theory]
+    [InlineData("To Do", ItemStatus.Inbox)]
+    [InlineData("In Progress", ItemStatus.Doing)]
+    [InlineData("Done", ItemStatus.Done)]
+    public void ToItem_FallbackToStatusName_WhenCategoryKeyIsNull(string statusName, ItemStatus expectedStatus)
+    {
+        var item = _mapper.ToItem(SampleIssue(statusCategoryKey: null, statusName: statusName), Guid.NewGuid(), Guid.NewGuid());
+        item.Status.Should().Be(expectedStatus);
     }
 
     [Fact]

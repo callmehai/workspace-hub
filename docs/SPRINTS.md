@@ -95,7 +95,7 @@
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
 | SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | ⏳ To Do |
-| SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ⏳ To Do |
+| SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
 
 ## Phase Jira — Atlassian integration (SCRUM-54→60)
 

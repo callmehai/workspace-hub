@@ -28,7 +28,17 @@ public class JiraItemMapper : IJiraItemMapper
         };
 
         var mappedStatus = ItemStatus.Inbox;
-        if (!string.IsNullOrEmpty(issue.StatusName))
+        if (!string.IsNullOrEmpty(issue.StatusCategoryKey))
+        {
+            mappedStatus = issue.StatusCategoryKey.ToLower() switch
+            {
+                "new" => ItemStatus.Inbox,
+                "indeterminate" => ItemStatus.Doing,
+                "done" => ItemStatus.Done,
+                _ => ItemStatus.Inbox
+            };
+        }
+        else if (!string.IsNullOrEmpty(issue.StatusName))
         {
             var lowerStatus = issue.StatusName.ToLower();
             if (lowerStatus.Contains("done") || lowerStatus.Contains("xong") || lowerStatus.Contains("hoàn thành") || lowerStatus.Contains("closed"))

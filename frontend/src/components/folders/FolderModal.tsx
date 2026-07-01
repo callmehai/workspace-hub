@@ -65,7 +65,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
       toast.error('Vui lòng nhập tên thư mục');
       return;
     }
-    mutation.mutate({ name: name.trim(), color, icon: 'folder' });
+    mutation.mutate({ name: name.trim(), color, icon: folder?.icon || 'folder' });
   };
 
   if (!isOpen) return null;

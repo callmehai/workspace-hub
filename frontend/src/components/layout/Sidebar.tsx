@@ -53,7 +53,9 @@ export const Sidebar = () => {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Element;
+      if (target.closest('[data-folder-toggle]')) return;
+      if (menuRef.current && !menuRef.current.contains(target)) {
         setActiveMenuId(null);
       }
     };
@@ -207,6 +209,7 @@ export const Sidebar = () => {
               </button>
               
               <button
+                data-folder-toggle
                 className={`absolute right-2 p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors ${
                   activeMenuId === folder.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                 }`}
