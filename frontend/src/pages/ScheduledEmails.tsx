@@ -245,7 +245,7 @@ export const ScheduledEmails = () => {
     if (invalidBcc) return toast.error(`"${invalidBcc}" không phải email hợp lệ (Bcc)`);
 
     const payload: CreateScheduledEmailRequest = {
-      connectionId: cConn,
+      connectionId: cConn || activeGmailConnections[0]?.id || '',
       to: toList,
       cc: ccList,
       bcc: bccList,
@@ -262,11 +262,7 @@ export const ScheduledEmails = () => {
   const totalPages = Math.max(1, Math.ceil(totalItems / limit));
   const hasItems = scheduledList.length > 0;
 
-  React.useEffect(() => {
-    if (!cConn && activeGmailConnections.length > 0) {
-      setCConn(activeGmailConnections[0].id);
-    }
-  }, [cConn, activeGmailConnections]);
+
 
   const renderPagination = () => {
     if (totalItems === 0) return null;
@@ -354,7 +350,7 @@ export const ScheduledEmails = () => {
                 <label className={`${labelClass} shrink-0`}>Thời gian gửi</label>
                 <DatePicker
                   selected={cWhen}
-                  onChange={(date) => setCWhen(date)}
+                  onChange={(date: Date | null) => setCWhen(date)}
                   showTimeSelect
                   timeFormat="HH:mm"
                   timeIntervals={15}
@@ -367,7 +363,7 @@ export const ScheduledEmails = () => {
               </div>
               <div className="flex-1">
                 <label className={labelClass}>Kết nối</label>
-                <select value={cConn} onChange={(e) => setCConn(e.target.value)} className={inputClass}>
+                <select value={cConn || activeGmailConnections[0]?.id || ''} onChange={(e) => setCConn(e.target.value)} className={inputClass}>
                   <option value="">Chọn kết nối...</option>
                   {activeGmailConnections.map(c => (
                     <option key={c.id} value={c.id}>Gmail · {c.providerAccountId}</option>

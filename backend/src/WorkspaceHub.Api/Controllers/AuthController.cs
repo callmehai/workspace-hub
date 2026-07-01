@@ -14,30 +14,53 @@ public class AuthController : ApiControllerBase
 {
     private readonly IAuthService _auth;
     private readonly AuthCookieService _cookies;
+    private readonly IRefreshTokenService _refreshTokens;
 
-    public AuthController(IAuthService auth, AuthCookieService cookies)
+    public AuthController(IAuthService auth, AuthCookieService cookies, IRefreshTokenService refreshTokens)
     {
         _auth = auth;
         _cookies = cookies;
+        _refreshTokens = refreshTokens;
     }
 
-    /// <summary>POST /api/auth/register — tạo tài khoản mới; set cookie JWT.</summary>
+    /// <summary>
+    /// POST /api/auth/register — tạo tài khoản (PhoneVerified=false) + gửi OTP (SCRUM-64).
+    /// KHÔNG set cookie/đăng nhập ngay — client phải verify OTP ở /auth/verify-otp.
+    /// </summary>
     [HttpPost("register")]
-    [ProducesResponseType(typeof(AuthResultDto), 201)]
+    [ProducesResponseType(typeof(RegisterResult), 201)]
     [ProducesResponseType(400)]
     [ProducesResponseType(409)]
-    public async Task<ActionResult<AuthResultDto>> Register(RegisterRequest request, CancellationToken ct)
+    public async Task<ActionResult<RegisterResult>> Register(RegisterRequest request, CancellationToken ct)
+        => StatusCode(201, await _auth.RegisterAsync(request, ct));
+
+    /// <summary>
+    /// POST /api/auth/send-otp — gửi lại OTP cho tài khoản chưa verify (SCRUM-64).
+    /// Luôn 200 (không tiết lộ email tồn tại/đã verify — chống enumeration).
+    /// </summary>
+    [HttpPost("send-otp")]
+    [AllowAnonymous]
+    [ProducesResponseType(200)]
+    public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request, CancellationToken ct)
     {
-        var result = await _auth.RegisterAsync(request, ct);
-        return StatusCode(201, IssueCookieAndStripToken(result));
+        var cooldown = await _auth.SendOtpAsync(request.Email, ct);
+        return Ok(new { resendCooldownSeconds = cooldown });
     }
+
+    /// <summary>POST /api/auth/verify-otp — verify OTP → set cookie JWT (đăng nhập) (SCRUM-64).</summary>
+    [HttpPost("verify-otp")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(AuthResultDto), 200)]
+    [ProducesResponseType(422)]
+    public async Task<ActionResult<AuthResultDto>> VerifyOtp([FromBody] VerifyOtpRequest request, CancellationToken ct)
+        => Ok(await IssueCookiesAsync(await _auth.VerifyOtpAsync(request.Email, request.Code, ct), ct));
 
     /// <summary>POST /api/auth/login — đăng nhập; set cookie JWT.</summary>
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResultDto), 200)]
     [ProducesResponseType(401)]
     public async Task<ActionResult<AuthResultDto>> Login(LoginRequest request, CancellationToken ct)
-        => Ok(IssueCookieAndStripToken(await _auth.LoginAsync(request, ct)));
+        => Ok(await IssueCookiesAsync(await _auth.LoginAsync(request, ct), ct));
 
     /// <summary>GET /api/auth/me — returns the current authenticated user's profile.</summary>
     [HttpGet("me")]
@@ -48,17 +71,42 @@ public class AuthController : ApiControllerBase
         => Ok(await _auth.GetMeAsync(CurrentUserId, ct));
 
     /// <summary>
-    /// POST /api/auth/logout — xoá cookie auth (SCRUM-62).
+    /// POST /api/auth/logout — revoke refresh token (Redis) + xoá cookie auth (SCRUM-62/63).
     /// AllowAnonymous: access token có thể đã hết hạn nhưng cookie vẫn còn → vẫn phải
-    /// clear được cookie (và sau SCRUM-63: revoke refresh token) thay vì trả 401.
+    /// revoke + clear được thay vì trả 401.
     /// </summary>
     [HttpPost("logout")]
     [AllowAnonymous]
     [ProducesResponseType(204)]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout(CancellationToken ct)
     {
+        var refreshToken = Request.Cookies[AuthCookieService.RefreshCookieName];
+        await _refreshTokens.RevokeAsync(refreshToken, ct);
         _cookies.ClearAuthCookies(Response);
         return NoContent();
+    }
+
+    /// <summary>
+    /// POST /api/auth/refresh — đổi refresh token (cookie wh_refresh) lấy access token mới
+    /// + xoay refresh token (SCRUM-63). Token thiếu/không hợp lệ/đã revoke → 401.
+    /// </summary>
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(AuthResultDto), 200)]
+    [ProducesResponseType(401)]
+    public async Task<ActionResult<AuthResultDto>> Refresh(CancellationToken ct)
+    {
+        var refreshToken = Request.Cookies[AuthCookieService.RefreshCookieName];
+        if (string.IsNullOrEmpty(refreshToken))
+            return Unauthorized();
+
+        var rotated = await _refreshTokens.ValidateAndRotateAsync(refreshToken, ct);
+
+        _cookies.IssueAccessCookie(Response, rotated.AccessToken, rotated.AccessExpiresInSeconds);
+        _cookies.IssueRefreshCookie(Response, rotated.RefreshToken, rotated.RefreshExpiresInSeconds);
+
+        var user = new UserDto(rotated.User.Id, rotated.User.Email, rotated.User.FullName, rotated.User.Role);
+        return Ok(new AuthResultDto(rotated.AccessExpiresInSeconds, user));
     }
     /// <summary>POST /api/auth/google/start — returns Google Sign-In authorization URL.</summary>
     [HttpPost("google/start")]
@@ -74,14 +122,28 @@ public class AuthController : ApiControllerBase
     [ProducesResponseType(400)]
     [ProducesResponseType(401)]
     public async Task<ActionResult<AuthResultDto>> GoogleCallback(
-        [FromBody] GoogleCallbackRequest request,
-        CancellationToken ct)
-        => Ok(IssueCookieAndStripToken(await _auth.GoogleCallbackAsync(request.Code, request.State, ct)));
+        [FromBody] GoogleCallbackRequest request)
+    {
+        // Google authorization code là DÙNG-MỘT-LẦN. Nếu trình duyệt huỷ request giữa chừng
+        // (unmount/redirect/proxy reset), HttpContext.RequestAborted sẽ cancel cả chuỗi
+        // exchange→verify→DB upsert → code đã "tiêu" mà không phát được token, retry cũng fail.
+        // → CHẠY TRỌN không phụ thuộc client còn kết nối hay không (dùng CancellationToken.None).
+        // Có timeout HttpClient (30s) + SQL command timeout làm chặn an toàn.
+        var result = await _auth.GoogleCallbackAsync(request.Code, request.State, CancellationToken.None);
+        return Ok(await IssueCookiesAsync(result, CancellationToken.None));
+    }
 
-    /// <summary>Set access token vào HttpOnly cookie, trả body không chứa token (SCRUM-62).</summary>
-    private AuthResultDto IssueCookieAndStripToken(AuthResponse result)
+    /// <summary>
+    /// Set access token (cookie wh_access, SCRUM-62) + phát refresh token mới (cookie
+    /// wh_refresh, SCRUM-63). Trả body không chứa token.
+    /// </summary>
+    private async Task<AuthResultDto> IssueCookiesAsync(AuthResponse result, CancellationToken ct)
     {
         _cookies.IssueAccessCookie(Response, result.AccessToken, result.ExpiresIn);
+
+        var refresh = await _refreshTokens.IssueAsync(result.User.Id, ct);
+        _cookies.IssueRefreshCookie(Response, refresh.RefreshToken, refresh.ExpiresInSeconds);
+
         return new AuthResultDto(result.ExpiresIn, result.User);
     }
 }
