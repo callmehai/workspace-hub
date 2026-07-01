@@ -16,12 +16,12 @@ export const OAuthCallback = () => {
   const { mutate: triggerCallback, isError: isMutationError } = useMutation({
     mutationFn: connectionsApi.oauthCallback,
     onSuccess: () => {
-      toast.success('Connection successfully established');
+      toast.success('Kết nối thành công');
       navigate('/integrations');
     },
     onError: (err) => {
       console.error(err);
-      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Failed to establish connection';
+      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || 'Kết nối thất bại';
       toast.error(message);
     },
   });
@@ -33,7 +33,7 @@ export const OAuthCallback = () => {
     called.current = true;
 
     if (!code || !state) {
-      toast.error('Invalid callback parameters');
+      toast.error('Kết nối thất bại');
       return;
     }
     triggerCallback({ code, state });
@@ -45,18 +45,18 @@ export const OAuthCallback = () => {
     <div className="flex h-screen w-full items-center justify-center bg-gray-50">
       {isError ? (
         <div className="flex flex-col items-center space-y-4">
-          <p className="text-red-500 font-medium">Failed to connect.</p>
+          <p className="text-red-500 font-medium">Kết nối thất bại.</p>
           <button
             onClick={() => navigate('/integrations')}
             className="px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors"
           >
-            Return to Integrations
+            Quay lại trang Tích hợp
           </button>
         </div>
       ) : (
         <div className="flex flex-col items-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
-          <p className="text-gray-600 font-medium">Connecting to service...</p>
+          <p className="text-gray-600 font-medium">Đang thiết lập kết nối...</p>
         </div>
       )}
     </div>

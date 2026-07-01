@@ -222,10 +222,11 @@ export const ScheduledEmails = () => {
   });
 
   const handleScheduleSend = () => {
+    const selectedConn = cConn || activeGmailConnections[0]?.id || '';
     if (!cTo.trim()) return toast.error('Vui lòng nhập người nhận');
     if (!cSubject.trim()) return toast.error('Vui lòng nhập tiêu đề email');
     if (!cWhen) return toast.error('Vui lòng chọn thời gian gửi');
-    if (!cConn) return toast.error('Vui lòng chọn kết nối Gmail');
+    if (!selectedConn) return toast.error('Vui lòng chọn kết nối Gmail');
     if (cWhen <= new Date()) return toast.error('Thời gian gửi phải sau thời điểm hiện tại');
 
     const splitAndTrim = (str: string) => str.split(',').map(s => s.trim()).filter(Boolean);
@@ -245,7 +246,7 @@ export const ScheduledEmails = () => {
     if (invalidBcc) return toast.error(`"${invalidBcc}" không phải email hợp lệ (Bcc)`);
 
     const payload: CreateScheduledEmailRequest = {
-      connectionId: cConn || activeGmailConnections[0]?.id || '',
+      connectionId: selectedConn,
       to: toList,
       cc: ccList,
       bcc: bccList,
