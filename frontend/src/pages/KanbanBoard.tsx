@@ -1,65 +1,112 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
-import type { ItemStatus } from '../types/items';
-import { Plus, MoreVertical, Loader2 } from 'lucide-react';
+import type { ItemStatus, ItemType } from '../types/items';
+import {
+  Plus, Loader2, Mail, Calendar, FileText, StickyNote, Briefcase,
+  Star, GripVertical, AlertCircle, LayoutGrid, List as ListIcon, Folder
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
+
+function formatTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return formatDistanceToNow(d, { addSuffix: true, locale: vi });
+}
+
+function typeLabel(t: ItemType): string {
+  const map: Record<ItemType, string> = {
+    Email: 'Email', Event: 'Sự kiện', File: 'Tệp', Note: 'Ghi chú', Ticket: 'Ticket',
+  };
+  return map[t] ?? t;
+}
+
+function typeIcon(t: ItemType) {
+  const cls = 'w-3.5 h-3.5';
+  switch (t) {
+    case 'Email': return <Mail className={cls} />;
+    case 'Event': return <Calendar className={cls} />;
+    case 'File': return <FileText className={cls} />;
+    case 'Note': return <StickyNote className={cls} />;
+    case 'Ticket': return <Briefcase className={cls} />;
+  }
+}
+
+function typeTileClass(t: ItemType): string {
+  const map: Record<ItemType, string> = {
+    Email: 'bg-blue-50 text-blue-700',
+    Event: 'bg-amber-50 text-amber-700',
+    File: 'bg-emerald-50 text-emerald-700',
+    Note: 'bg-slate-100 text-slate-600',
+    Ticket: 'bg-violet-50 text-violet-700',
+  };
+  return map[t] ?? 'bg-gray-100 text-gray-700';
+}
+
+const COLUMNS: { title: string, status: ItemStatus, dotColor: string }[] = [
+  { title: 'Cần xem', status: 'Inbox', dotColor: 'bg-slate-400' },
+  { title: 'Đang xử lý', status: 'Doing', dotColor: 'bg-blue-500' },
+  { title: 'Done', status: 'Done', dotColor: 'bg-emerald-500' },
+];
 
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-
-  // Selected Item for detail modal
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
-  // Note Modal state
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteForm, setNoteForm] = useState({ title: '', contentMarkdown: '' });
 
-  // Event Modal state
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [eventForm, setEventForm] = useState({
-    connectionId: '',
-    title: '',
-    start: '',
-    end: '',
-    location: '',
-    attendees: ''
+    connectionId: '', title: '', start: '', end: '', location: '', attendees: ''
   });
 
-  // Fetch Folders
+  const [dragOverCol, setDragOverCol] = useState<ItemStatus | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const folder = params.get('folder');
+    if (folder) setSelectedFolderId(folder);
+    else setSelectedFolderId(null);
+  }, [location.search]);
+
+  const updateFolderUrl = (folderId: string | null) => {
+    const params = new URLSearchParams(location.search);
+    if (folderId) params.set('folder', folderId);
+    else params.delete('folder');
+    navigate({ search: params.toString() }, { replace: true });
+  };
+
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
   });
 
-  // Fetch Items
-  const { data: pagedItems, isLoading, isError } = useQuery({
-    queryKey: ['items', selectedFolderId],
-    queryFn: () => itemsApi.getItems({
-      folderId: selectedFolderId || undefined,
-      limit: 100
-    })
+  const queryKey = ['items', selectedFolderId];
+  const { data: pagedItems, isLoading, isError, refetch } = useQuery({
+    queryKey,
+    queryFn: () => itemsApi.getItems({ folderId: selectedFolderId || undefined, limit: 100 })
   });
 
   const items = pagedItems?.items || [];
-  if (pagedItems && pagedItems.total > 100) {
-    console.warn(`Total items is ${pagedItems.total}, which exceeds the limit of 100. Some items are truncated.`);
-  }
 
-  // Fetch Connections for GCal
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
     queryFn: () => connectionsApi.getConnections(),
     enabled: isEventModalOpen
   });
-
   const gcalConnections = connections.filter(
     (c: ConnectionDto) => c.serviceType.toLowerCase() === 'gcal' && c.status.toLowerCase() === 'active'
   );
@@ -67,280 +114,313 @@ export const KanbanBoard = () => {
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string, status: ItemStatus }) =>
       itemsApi.updateItemStatus(id, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      toast.success('Đã cập nhật trạng thái');
-    },
-    onError: (err) => {
-      handleApiError(err, 'Không thể cập nhật trạng thái', {
-        onConflict: () => {
-          queryClient.invalidateQueries({ queryKey: ['items'] });
-        },
-        navigate
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<any>(queryKey);
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.map((it: any) => it.id === id ? { ...it, status } : it)
+        };
       });
+      return { previous };
+    },
+    onError: (err, _vars, ctx: any) => {
+      if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
+      handleApiError(err, 'Lỗi cập nhật trạng thái', { navigate });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     }
   });
 
   const createNote = useMutation({
-    mutationFn: () => itemsApi.createNote({
-      ...noteForm,
-      folderId: selectedFolderId || undefined
-    }),
+    mutationFn: () => itemsApi.createNote({ ...noteForm, folderId: selectedFolderId || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       setIsNoteModalOpen(false);
       setNoteForm({ title: '', contentMarkdown: '' });
-      toast.success('Ghi chú đã được tạo thành công');
+      toast.success('Đã tạo ghi chú');
     },
-    onError: (err) => {
-      handleApiError(err, 'Không thể tạo ghi chú', { navigate });
-    }
+    onError: (err) => handleApiError(err, 'Lỗi tạo ghi chú', { navigate })
   });
 
   const createEvent = useMutation({
     mutationFn: () => {
-      if (!eventForm.connectionId) throw new Error('Vui lòng chọn tài khoản Google Calendar');
+      if (!eventForm.connectionId) throw new Error('Vui lòng chọn tài khoản');
       const startIso = new Date(eventForm.start).toISOString();
       const endIso = new Date(eventForm.end).toISOString();
       const attendeesArray = eventForm.attendees
-        ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
+        ? eventForm.attendees.split(',').map(e => e.trim()).filter(e => e.length > 0)
         : undefined;
-
       return itemsApi.createEvent({
-        connectionId: eventForm.connectionId,
-        title: eventForm.title,
-        start: startIso,
-        end: endIso,
-        location: eventForm.location || undefined,
-        attendees: attendeesArray
+        connectionId: eventForm.connectionId, title: eventForm.title,
+        start: startIso, end: endIso, location: eventForm.location || undefined, attendees: attendeesArray
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       setIsEventModalOpen(false);
       setEventForm({ connectionId: '', title: '', start: '', end: '', location: '', attendees: '' });
-      toast.success('Sự kiện đã được tạo thành công');
+      toast.success('Đã tạo sự kiện');
     },
-    onError: (err) => {
-      handleApiError(err, 'Không thể tạo sự kiện', { navigate });
-    }
+    onError: (err) => handleApiError(err, 'Lỗi tạo sự kiện', { navigate })
   });
 
   const handleCreateEvent = () => {
     if (!eventForm.connectionId || !eventForm.title || !eventForm.start || !eventForm.end) {
-      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+      toast.error('Vui lòng điền đủ thông tin');
       return;
     }
-
     const startIso = new Date(eventForm.start).toISOString();
     const endIso = new Date(eventForm.end).toISOString();
-
     if (new Date(startIso) >= new Date(endIso)) {
-      toast.error('Thời gian bắt đầu phải trước thời gian kết thúc');
+      toast.error('Bắt đầu phải trước kết thúc');
       return;
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const attendeesArray = eventForm.attendees
-      ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
-      : [];
-
-    const invalidEmails = attendeesArray.filter(email => !emailRegex.test(email));
-    if (invalidEmails.length > 0) {
-      toast.error(`Email không hợp lệ: ${invalidEmails.join(', ')}`);
-      return;
-    }
-
     createEvent.mutate();
   };
 
-  // Drag and Drop handlers
   const handleDragStart = (e: React.DragEvent, id: string) => {
     e.dataTransfer.setData('itemId', id);
+    setDraggingId(id);
+    setTimeout(() => setDraggingId(id), 0); // let UI update before changing appearance
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverCol(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, status: ItemStatus) => {
     e.preventDefault();
+    if (dragOverCol !== status) setDragOverCol(status);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverCol(null);
   };
 
   const handleDrop = (e: React.DragEvent, status: ItemStatus) => {
     e.preventDefault();
+    setDragOverCol(null);
+    setDraggingId(null);
     const itemId = e.dataTransfer.getData('itemId');
     if (itemId) {
       updateStatus.mutate({ id: itemId, status });
     }
   };
 
-  const columns: { title: string, status: ItemStatus, color: string }[] = [
-    { title: 'Inbox / To Do', status: 'Inbox', color: 'bg-gray-800' },
-    { title: 'In Progress', status: 'Doing', color: 'bg-blue-900/30' },
-    { title: 'Done', status: 'Done', color: 'bg-emerald-900/30' },
-  ];
+  const currentFolderName = selectedFolderId 
+    ? (folders.find((f: any) => f.id === selectedFolderId)?.name || 'Thư mục ẩn')
+    : 'Tất cả thư mục';
 
   return (
-    <div className="h-full flex flex-col md:flex-row overflow-hidden bg-[#13141f] text-gray-200">
-      {/* Sidebar for Folders */}
-      <div className="w-64 border-r border-gray-800 bg-[#0f1019] p-4 flex flex-col shrink-0">
-        <h2 className="text-xs uppercase tracking-wider font-semibold mb-4 text-gray-500">Kanban Folders</h2>
-        <ul className="space-y-1 overflow-y-auto flex-1 hide-scrollbar">
-          <li>
+    <div className="h-full flex flex-col md:flex-row overflow-hidden bg-slate-50 text-slate-900">
+      {/* Sidebar */}
+      <div className="w-64 border-r border-slate-200 bg-white flex flex-col shrink-0 h-full">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-800">Thư mục</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-1 hide-scrollbar">
+          <button
+            onClick={() => updateFolderUrl(null)}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              selectedFolderId === null ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <Folder className="w-4 h-4" />
+            Tất cả
+          </button>
+          {folders.map((f: any) => (
             <button
-              className={`w-full text-left px-3 py-2 rounded-lg transition-colors text-sm font-medium ${selectedFolderId === null ? 'bg-brand-500 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
-              onClick={() => setSelectedFolderId(null)}
+              key={f.id}
+              onClick={() => updateFolderUrl(f.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedFolderId === f.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
             >
-              All Items
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#94a3b8' }}></span>
+              <span className="truncate">{f.name}</span>
             </button>
-          </li>
-          {folders.map(f => (
-            <li key={f.id}>
-              <button
-                className={`w-full text-left px-3 py-2 rounded-lg transition-colors text-sm font-medium ${selectedFolderId === f.id ? 'bg-brand-500 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
-                onClick={() => setSelectedFolderId(f.id)}
-              >
-                <span className="mr-2">{f.icon || '📁'}</span>
-                {f.name}
-              </button>
-            </li>
           ))}
-        </ul>
+        </div>
       </div>
 
       {/* Main Board */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center shrink-0">
-          <h1 className="text-xl font-bold text-white">Kanban Board</h1>
-          <div className="flex items-center space-x-3">
-            <button
-              className="flex items-center space-x-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-all border border-gray-700"
-              onClick={() => setIsEventModalOpen(true)}
-            >
-              <Plus className="w-4 h-4 text-emerald-400" />
-              <span>New Event</span>
-            </button>
-            <button
-              className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-sm shadow-brand-500/20 hover:shadow-brand-500/40"
-              onClick={() => setIsNoteModalOpen(true)}
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Note</span>
-            </button>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-end shrink-0 flex-wrap gap-4">
+          <div>
+            <h1 className="text-[22px] font-semibold text-slate-900 leading-tight mb-0.5">Bảng Kanban</h1>
+            <p className="text-[13px] text-slate-500">{currentFolderName} · kéo-thả thẻ để đổi trạng thái</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 p-1 bg-slate-100 border border-slate-200 rounded-lg">
+              <Link
+                to={selectedFolderId ? `/?folder=${selectedFolderId}` : '/'}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-slate-600 rounded-md hover:text-slate-900 hover:bg-white transition-colors"
+              >
+                <ListIcon className="w-4 h-4" /> Danh sách
+              </Link>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold text-indigo-700 bg-white shadow-sm rounded-md border border-slate-200/50">
+                <LayoutGrid className="w-4 h-4" /> Bảng
+              </div>
+            </div>
           </div>
         </div>
 
-        {pagedItems && pagedItems.total > 100 && (
-          <div className="bg-yellow-950/20 border-b border-yellow-800/40 px-6 py-2 text-xs text-yellow-400 font-medium flex items-center justify-between shrink-0">
-            <span>⚠️ Note: Only the first 100 items are displayed. Some items may be truncated.</span>
-          </div>
-        )}
+        {/* Tools bar */}
+        <div className="px-6 py-3 border-b border-slate-200 bg-white flex gap-2">
+          <button
+            onClick={() => setIsNoteModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[13px] font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
+          >
+            <Plus className="w-4 h-4" /> Ghi chú mới
+          </button>
+          <button
+            onClick={() => setIsEventModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[13px] font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
+          >
+            <Plus className="w-4 h-4" /> Sự kiện mới
+          </button>
+        </div>
 
-        <div className="flex-1 overflow-x-auto p-6">
+        {/* Board content */}
+        <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-slate-50">
           {isError ? (
-            <div className="h-full flex flex-col items-center justify-center border border-dashed border-red-800/30 rounded-2xl bg-red-950/10 p-8 text-center max-w-md mx-auto my-12">
-              <span className="text-red-400 text-sm font-semibold mb-2">Failed to load items</span>
-              <p className="text-xs text-gray-500">There was an error retrieving the items. Please try refreshing or try again later.</p>
+            <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl bg-white p-8 text-center max-w-md mx-auto">
+              <div className="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mb-4">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <span className="text-slate-900 text-sm font-semibold mb-1">Không tải được bảng</span>
+              <p className="text-[13px] text-slate-500 mb-4">Mất kết nối tới máy chủ. Vui lòng thử lại.</p>
+              <button onClick={() => refetch()} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg">
+                Thử lại
+              </button>
             </div>
           ) : (
-            <div className="flex h-full gap-6 min-w-[900px]">
-              {columns.map(col => (
-                <div
-                  key={col.status}
-                  className={`flex-1 rounded-2xl p-4 flex flex-col border border-gray-800/50 ${col.color} backdrop-blur-sm`}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, col.status)}
-                >
-                  <div className="flex justify-between items-center mb-4 px-2">
-                    <h3 className="font-semibold text-gray-100">{col.title}</h3>
-                    <span className="bg-[#0f1019] text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium shadow-inner">
-                      {items.filter(i => i.status === col.status).length}
-                    </span>
-                  </div>
+            <div className="flex h-full gap-5 min-w-[900px]">
+              {COLUMNS.map(col => {
+                const colItems = items.filter(i => i.status === col.status);
+                const isOver = dragOverCol === col.status;
+                return (
+                  <div key={col.status} className="flex-1 w-80 flex flex-col min-h-0">
+                    <div className="flex items-center gap-2 px-1 mb-2">
+                      <span className={`w-2 h-2 rounded-full ${col.dotColor}`}></span>
+                      <span className="text-[14px] font-semibold text-slate-900">{col.title}</span>
+                      <span className="text-[12px] font-semibold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">
+                        {colItems.length}
+                      </span>
+                    </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-3 hide-scrollbar pb-4">
-                    {items.filter(i => i.status === col.status).map(item => (
-                      <div
-                        key={item.id}
-                        draggable={!(updateStatus.isPending && updateStatus.variables?.id === item.id)}
-                        onDragStart={(e) => handleDragStart(e, item.id)}
-                        onClick={() => setSelectedItemId(item.id)}
-                        className={`bg-[#1c1d2c] border border-gray-700/50 p-4 rounded-xl cursor-pointer hover:bg-[#202133] hover:border-brand-500/50 transition-all group relative shadow-sm ${updateStatus.isPending && updateStatus.variables?.id === item.id ? 'opacity-50 pointer-events-none' : ''
-                          }`}
-                      >
-                        <div className="flex justify-between items-start mb-2.5">
-                          <div className="flex space-x-2">
-                            <span className="text-[10px] uppercase font-bold tracking-widest text-brand-400 bg-brand-400/10 px-2 py-0.5 rounded border border-brand-400/20">
-                              {item.type}
-                            </span>
-                            {item.isImportant && (
-                              <span className="text-[10px] uppercase font-bold tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">
-                                High
-                              </span>
-                            )}
+                    <div
+                      onDragOver={(e) => handleDragOver(e, col.status)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, col.status)}
+                      className={`flex-1 flex flex-col gap-2.5 p-2.5 rounded-xl min-h-[160px] transition-colors border-2 ${
+                        isOver ? 'bg-indigo-50 border-indigo-400 border-dashed' : 'bg-slate-100/80 border-transparent'
+                      }`}
+                    >
+                      {isLoading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 animate-pulse">
+                            <div className="h-4 bg-slate-200 rounded w-1/4 mb-3"></div>
+                            <div className="h-3 bg-slate-200 rounded w-3/4 mb-2"></div>
+                            <div className="h-3 bg-slate-200 rounded w-1/2"></div>
                           </div>
-                          <button className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
+                        ))
+                      ) : (
+                        colItems.map(item => (
+                          <div
+                            key={item.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, item.id)}
+                            onDragEnd={handleDragEnd}
+                            onClick={() => setSelectedItemId(item.id)}
+                            className={`bg-white border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 transition-all ${
+                              draggingId === item.id ? 'opacity-40 shadow-none border-slate-200' : 'opacity-100 shadow-sm border-slate-200'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center mb-2">
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
+                                {typeIcon(item.type)}
+                                {typeLabel(item.type)}
+                              </span>
+                              <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
+                                <GripVertical className="w-4 h-4" />
+                              </span>
+                            </div>
+                            <h4 className="text-[13.5px] font-medium text-slate-900 leading-snug mb-2 line-clamp-2">
+                              {item.title}
+                            </h4>
+                            <div className="flex items-center justify-end gap-2 mt-auto pt-1">
+                              <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 shrink-0">
+                                {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
+                                {formatTime(item.occurredAt)}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+
+                      {!isLoading && colItems.length === 0 && (
+                        <div className="flex items-center justify-center p-4 border-[1.5px] border-dashed border-slate-300 rounded-xl text-[12.5px] text-slate-400 text-center h-20">
+                          Kéo thẻ vào đây
                         </div>
-                        <h4 className="text-sm font-semibold text-gray-100 mb-1.5 leading-snug">{item.title}</h4>
-                        <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                          {item.snippet}
-                        </p>
-                      </div>
-                    ))}
-                    {isLoading && <div className="text-center text-gray-500 py-6 text-sm font-medium animate-pulse">Loading items...</div>}
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* Create Note Modal */}
+      {/* Note Modal */}
       {isNoteModalOpen && (
-        <div className="fixed inset-0 bg-[#0f1019]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1c1d2c] rounded-2xl border border-gray-700/50 w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-gray-800 flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-white">Tạo ghi chú mới</h2>
-              <button
-                onClick={() => setIsNoteModalOpen(false)}
-                className="text-gray-500 hover:text-white transition-colors text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800"
-              >
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center">
+              <h2 className="text-[16px] font-semibold text-slate-900">Tạo ghi chú mới</h2>
+              <button onClick={() => setIsNoteModalOpen(false)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-lg transition-colors">
                 &times;
               </button>
             </div>
-            <div className="p-6 space-y-5">
+            <div className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Tiêu đề</label>
+                <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Tiêu đề</label>
                 <input
                   type="text"
                   value={noteForm.title}
                   onChange={e => setNoteForm({ ...noteForm, title: e.target.value })}
-                  className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
+                  className="w-full bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
                   placeholder="Tiêu đề ghi chú..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Nội dung (Markdown)</label>
+                <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Nội dung (Markdown)</label>
                 <textarea
                   value={noteForm.contentMarkdown}
                   onChange={e => setNoteForm({ ...noteForm, contentMarkdown: e.target.value })}
-                  className="w-full h-32 bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors resize-none placeholder-gray-600 font-mono text-sm leading-relaxed"
+                  className="w-full h-32 bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow resize-none"
                   placeholder="Nội dung ghi chú..."
                 ></textarea>
               </div>
             </div>
-            <div className="p-5 border-t border-gray-800 flex justify-end space-x-3 bg-[#13141f]">
-              <button
-                onClick={() => setIsNoteModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
-              >
+            <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+              <button onClick={() => setIsNoteModalOpen(false)} className="px-4 py-2 text-[13px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors">
                 Hủy
               </button>
               <button
                 onClick={() => createNote.mutate()}
                 disabled={!noteForm.title || !noteForm.contentMarkdown || createNote.isPending}
-                className="bg-brand-500 hover:bg-brand-600 disabled:bg-gray-700 disabled:text-gray-500 text-white px-5 py-2 rounded-lg font-medium transition-all"
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-[13px] font-medium transition-colors inline-flex items-center gap-2"
               >
+                {createNote.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {createNote.isPending ? 'Đang tạo...' : 'Tạo ghi chú'}
               </button>
             </div>
@@ -348,117 +428,102 @@ export const KanbanBoard = () => {
         </div>
       )}
 
-      {/* Create Event Modal */}
+      {/* Event Modal */}
       {isEventModalOpen && (
-        <div className="fixed inset-0 bg-[#0f1019]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1c1d2c] rounded-2xl border border-gray-700/50 w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-gray-800 flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-white">Tạo sự kiện Calendar mới</h2>
-              <button
-                onClick={() => setIsEventModalOpen(false)}
-                className="text-gray-500 hover:text-white transition-colors text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800"
-              >
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center">
+              <h2 className="text-[16px] font-semibold text-slate-900">Tạo sự kiện Calendar mới</h2>
+              <button onClick={() => setIsEventModalOpen(false)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-lg transition-colors">
                 &times;
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Tài khoản Google Calendar</label>
+                <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Tài khoản Google Calendar</label>
                 <select
                   value={eventForm.connectionId}
                   onChange={e => setEventForm({ ...eventForm, connectionId: e.target.value })}
-                  className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                  className="w-full bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
                 >
-                  <option value="">-- Chọn tài khoản Google Calendar --</option>
+                  <option value="">-- Chọn tài khoản --</option>
                   {gcalConnections.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.providerAccountId} ({c.provider})
-                    </option>
+                    <option key={c.id} value={c.id}>{c.providerAccountId} ({c.provider})</option>
                   ))}
                 </select>
                 {gcalConnections.length === 0 && (
-                  <p className="text-xs text-amber-500 mt-1">Bạn chưa kết nối Google Calendar hoặc kết nối đã hết hạn. Hãy kết nối ở phần Cài đặt.</p>
+                  <p className="text-[12px] text-amber-600 mt-1.5">Chưa có kết nối Google Calendar hợp lệ.</p>
                 )}
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Tiêu đề sự kiện</label>
+                <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Tiêu đề sự kiện</label>
                 <input
                   type="text"
                   value={eventForm.title}
                   onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
-                  className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
-                  placeholder="Ví dụ: Họp Daily Scrum..."
+                  className="w-full bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Bắt đầu (Local)</label>
+                  <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Bắt đầu</label>
                   <input
                     type="datetime-local"
                     value={eventForm.start}
                     onChange={e => setEventForm({ ...eventForm, start: e.target.value })}
-                    className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                    className="w-full bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Kết thúc (Local)</label>
+                  <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Kết thúc</label>
                   <input
                     type="datetime-local"
                     value={eventForm.end}
                     onChange={e => setEventForm({ ...eventForm, end: e.target.value })}
-                    className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                    className="w-full bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
                   />
                 </div>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Địa điểm</label>
+                <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Địa điểm</label>
                 <input
                   type="text"
                   value={eventForm.location}
                   onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
-                  className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
-                  placeholder="Ví dụ: Google Meet, phòng họp A..."
+                  className="w-full bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 font-semibold">Người tham gia (Phân tách bằng dấu phẩy)</label>
+                <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Người tham gia (Email cách nhau bởi dấu phẩy)</label>
                 <input
                   type="text"
                   value={eventForm.attendees}
                   onChange={e => setEventForm({ ...eventForm, attendees: e.target.value })}
-                  className="w-full bg-[#0f1019] border border-gray-700 rounded-lg py-2.5 px-3 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-gray-600"
-                  placeholder="guest1@gmail.com, guest2@gmail.com"
+                  className="w-full bg-white border border-slate-300 rounded-lg py-2 px-3 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
                 />
               </div>
             </div>
-            <div className="p-5 border-t border-gray-800 flex justify-end space-x-3 bg-[#13141f]">
-              <button
-                onClick={() => setIsEventModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
-              >
+            <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+              <button onClick={() => setIsEventModalOpen(false)} className="px-4 py-2 text-[13px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors">
                 Hủy
               </button>
               <button
                 onClick={handleCreateEvent}
                 disabled={!eventForm.connectionId || !eventForm.title || !eventForm.start || !eventForm.end || createEvent.isPending}
-                className="bg-emerald-600 hover:bg-emerald-750 disabled:bg-gray-700 disabled:text-gray-500 text-white px-5 py-2 rounded-lg font-medium transition-all flex items-center space-x-1.5"
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-[13px] font-medium transition-colors inline-flex items-center gap-2"
               >
-                {createEvent.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                <span>{createEvent.isPending ? 'Đang tạo...' : 'Tạo sự kiện'}</span>
+                {createEvent.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {createEvent.isPending ? 'Đang tạo...' : 'Tạo sự kiện'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Item Detail Drawer/Modal */}
+      {/* Item Detail */}
       {selectedItemId && (
-        <div className="fixed inset-0 bg-[#0f1019]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#13141f] rounded-2xl border border-gray-800 w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col relative">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-end z-50">
+          <div className="bg-white w-full max-w-[600px] h-full shadow-2xl flex flex-col relative animate-in slide-in-from-right duration-200">
             <ItemDetail
               itemId={selectedItemId}
               onClose={() => setSelectedItemId(null)}
