@@ -35,7 +35,7 @@ const SERVICES = [
     bgColor: 'bg-gray-50',
   },
   {
-    integrationKey: 'jira',
+    integrationKey: 'atlassian',
     provider: 'atlassian',
     serviceType: 'Jira',
     name: 'Atlassian Jira',
