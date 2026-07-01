@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { itemsApi } from '../lib/itemsApi';
 import { type PatchItemRequest } from '../types/items';
-import { handleApiError } from '../lib/api';
+import { handleApiError } from '../lib/errorUtils';
 import toast from 'react-hot-toast';
 
 interface ItemDetailProps {
