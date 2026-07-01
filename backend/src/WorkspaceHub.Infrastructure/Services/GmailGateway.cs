@@ -195,7 +195,102 @@ public class GmailGateway : IGmailGateway
         }
     }
 
+    public async Task<string> SendMessageAsync(
+        Connection connection,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+
+            var raw = BuildMimeMessage(connection.ProviderAccountId, to, cc, bcc, subject, bodyHtml);
+            var message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw };
+
+            var sent = await gmail.Users.Messages.Send(message, "me").ExecuteAsync(ct);
+            return sent.Id;
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", "send");
+        }
+    }
+
+    public async Task<string?> GetSignatureAsync(Connection connection, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var list = await gmail.Users.Settings.SendAs.List("me").ExecuteAsync(ct);
+
+            // Ưu tiên địa chỉ primary; fallback theo email của connection.
+            var sendAs = list.SendAs?.FirstOrDefault(s => s.IsPrimary == true)
+                ?? list.SendAs?.FirstOrDefault(s =>
+                    string.Equals(s.SendAsEmail, connection.ProviderAccountId, StringComparison.OrdinalIgnoreCase));
+
+            return string.IsNullOrWhiteSpace(sendAs?.Signature) ? null : sendAs.Signature;
+        }
+        catch (Google.GoogleApiException)
+        {
+            // Thiếu scope gmail.settings.basic (connection cũ) hoặc lỗi khác → coi như không có chữ ký.
+            return null;
+        }
+    }
+
     // ───────────────────────── Private helpers ─────────────────────────
+
+    /// <summary>
+    /// Build MIME RFC 2822 rồi base64url-encode cho field Message.Raw.
+    /// Subject mã hoá theo encoded-word UTF-8 để giữ Unicode; body là text/html UTF-8.
+    /// </summary>
+    private static string BuildMimeMessage(
+        string from,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("From: ").Append(from).Append("\r\n");
+        sb.Append("To: ").Append(string.Join(", ", to)).Append("\r\n");
+        if (cc.Count > 0)
+        {
+            sb.Append("Cc: ").Append(string.Join(", ", cc)).Append("\r\n");
+        }
+        if (bcc.Count > 0)
+        {
+            sb.Append("Bcc: ").Append(string.Join(", ", bcc)).Append("\r\n");
+        }
+        sb.Append("Subject: ").Append(EncodeHeaderValue(subject)).Append("\r\n");
+        sb.Append("MIME-Version: 1.0\r\n");
+        sb.Append("Content-Type: text/html; charset=\"UTF-8\"\r\n");
+        sb.Append("Content-Transfer-Encoding: base64\r\n");
+        sb.Append("\r\n");
+        sb.Append(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(bodyHtml)));
+
+        var rawBytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+        return Base64UrlEncode(rawBytes);
+    }
+
+    /// <summary>Encoded-word (RFC 2047) cho header chứa Unicode — vd Subject tiếng Việt.</summary>
+    private static string EncodeHeaderValue(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        return $"=?UTF-8?B?{Convert.ToBase64String(bytes)}?=";
+    }
+
+    /// <summary>Base64url (RFC 4648) — '+'→'-', '/'→'_', bỏ '=' padding theo yêu cầu Gmail API.</summary>
+    private static string Base64UrlEncode(byte[] bytes)
+        => Convert.ToBase64String(bytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
 
     /// <summary>Đệ quy tìm xem có Part nào chứa attachment (có filename).</summary>
     private static bool CheckHasAttachment(Google.Apis.Gmail.v1.Data.MessagePart part)

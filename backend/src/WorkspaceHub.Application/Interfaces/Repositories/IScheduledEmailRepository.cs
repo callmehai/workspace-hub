@@ -18,4 +18,11 @@ public interface IScheduledEmailRepository : IGenericRepository<ScheduledEmail>
     /// Lấy danh sách email đã lên lịch của user.
     /// </summary>
     Task<IReadOnlyList<ScheduledEmail>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy các email Pending đã tới hạn (SendAt &lt;= nowUtc) cho cron processor (SCRUM-31).
+    /// Tracked (KHÔNG AsNoTracking) để service cập nhật Status/SentAt/RetryCount rồi SaveChanges.
+    /// Sắp xếp theo SendAt tăng dần và giới hạn maxBatch để tránh xử lý quá tải 1 lượt.
+    /// </summary>
+    Task<IReadOnlyList<ScheduledEmail>> GetPendingDueEmailsAsync(DateTime nowUtc, int maxBatch, CancellationToken ct = default);
 }

@@ -5,6 +5,7 @@ import {
   Kanban,
   Plug,
   Clock,
+  Send,
   LayoutDashboard,
   LogOut,
   Plus,
@@ -148,6 +149,11 @@ export const Sidebar = () => {
           <NavLink to="/integrations" className={({ isActive }) => navItemClass(isActive)}>
             <Plug className="w-[18px] h-[18px] shrink-0" />
             <span className="flex-1 text-left">Kết nối dịch vụ</span>
+          </NavLink>
+
+          <NavLink to="/send-email" className={({ isActive }) => navItemClass(isActive)}>
+            <Send className="w-[18px] h-[18px] shrink-0" />
+            <span className="flex-1 text-left">Gửi email</span>
           </NavLink>
 
           <NavLink to="/scheduled-emails" className={({ isActive }) => navItemClass(isActive)}>

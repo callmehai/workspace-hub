@@ -163,6 +163,13 @@ builder.Services.AddSingleton<AuthCookieService>();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 
+// Auto-cron gửi scheduled email — CHỈ khi Cron:AutoRun=true (mặc định prod=false, dev=true).
+// Thiết kế gốc dùng cron ngoài gọi /api/internal/process-scheduled; đây là tuỳ chọn tiện lợi.
+if (builder.Configuration.GetValue<bool>("Cron:AutoRun"))
+{
+    builder.Services.AddHostedService<WorkspaceHub.Api.BackgroundJobs.ScheduledEmailProcessorService>();
+}
+
 var app = builder.Build();
 
 // Request logging (SCRUM-25) — đặt NGOÀI CÙNG để đo trọn thời gian xử lý và đọc đúng
