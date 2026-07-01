@@ -69,7 +69,7 @@ dotnet run --project src/WorkspaceHub.Api --launch-profile https
 | `Jwt:Secret` | ký JWT (≥32 ký tự) |
 | `Jwt:ExpiresIn` | mặc định 3600s |
 | `OAuth:google:ClientId` / `OAuth:google:ClientSecret` | OAuth Google (prod: env var `OAuth__google__ClientId`) |
-| `OAuth:jira:ClientId` / `OAuth:jira:ClientSecret` | OAuth Jira (tương tự) |
+| `OAuth:atlassian:ClientId` / `OAuth:atlassian:ClientSecret` | OAuth Jira (tương tự) |
 | `Google:RedirectUri` | callback URL connect-để-sync (`/oauth/callback`) |
 | `Google:SignInRedirectUri` | callback URL Google Sign-In (`/auth/google/callback`) — tách khỏi connect flow |
 | `Cron:Secret` | bảo vệ /api/internal/process-scheduled (X-Cron-Secret) |
