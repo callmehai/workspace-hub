@@ -173,7 +173,6 @@ export const KanbanBoard = () => {
       handleApiError(err, 'Lỗi cập nhật trạng thái', { navigate });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     }
   });
@@ -400,10 +399,21 @@ export const KanbanBoard = () => {
                             }`}
                           >
                             <div className="flex justify-between items-center mb-2">
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
-                                {typeIcon(item.type)}
-                                {typeLabel(item.type)}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
+                                  {typeIcon(item.type)}
+                                  {typeLabel(item.type)}
+                                </span>
+                                {item.folderIds?.map(fId => {
+                                  const f = folders.find(fol => fol.id === fId);
+                                  if (!f) return null;
+                                  return (
+                                    <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
+                                      {f.name}
+                                    </span>
+                                  );
+                                })}
+                              </div>
                               <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
                                 <GripVertical className="w-4 h-4" />
                               </span>
