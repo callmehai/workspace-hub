@@ -161,6 +161,7 @@ public class ItemService : IItemService
             ?? throw new NotFoundException(nameof(Item), itemId);
 
         item.IsImportant = isImportant;
+        _itemRepo.Update(item);
         await _itemRepo.SaveChangesAsync(ct);
 
         return MapToResponse(item);

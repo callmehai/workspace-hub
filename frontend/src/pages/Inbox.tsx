@@ -142,7 +142,7 @@ export const Inbox = () => {
   const getInitialType = (): ItemType | null => {
     if (location.pathname === '/files') return 'File';
     if (location.pathname === '/calendar') return 'Event';
-    if (location.pathname === '/tasks') return 'Note';
+    if (location.pathname === '/tasks') return 'Ticket';
     return null;
   };
 
@@ -160,7 +160,7 @@ export const Inbox = () => {
     } else if (location.pathname === '/calendar') {
       setTypeFilter('Event');
     } else if (location.pathname === '/tasks') {
-      setTypeFilter('Note');
+      setTypeFilter('Ticket');
     } else {
       setTypeFilter(null);
     }

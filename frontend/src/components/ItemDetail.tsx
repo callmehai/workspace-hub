@@ -594,75 +594,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               </button>
             </>
           )}
-
-          {item.type === 'Note' && (
-            <>
-              <button
-                onClick={() => {
-                  toast.success('Ghi chú tự động được đồng bộ');
-                }}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
-              >
-                <Save className="w-4 h-4" /><span>Đồng bộ ghi chú</span>
-              </button>
-            </>
-          )}
-
-          {item.type === 'Ticket' && (
-            <>
-              <button
-                onClick={() => {
-                  toast.success('Ticket được tự động lưu');
-                }}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
-              >
-                <Save className="w-4 h-4" /><span>Cập nhật Jira</span>
-              </button>
-              <button
-                onClick={() => {
-                  toast.success('Bình luận mới đã được lưu');
-                }}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-              >
-                <Reply className="w-4 h-4 text-slate-400" /><span>Bình luận</span>
-              </button>
-              <button
-                onClick={() => {
-                  if (window.confirm('Bạn có muốn xóa ticket này trên Jira?')) {
-                    deleteMutation.mutate();
-                  }
-                }}
-                disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
-              >
-                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              </button>
-            </>
-          )}
         </div>
 
-        {/* Mock write-back footer */}
-        <div className="shrink-0 px-5 pb-4 flex items-center gap-2 flex-wrap">
-          <span className="text-[12px] text-slate-450">Mô phỏng write-back:</span>
-          <button
-            onClick={() => {
-              toast.error('409 — Bản ghi trên provider đã đổi. Đang tải lại...');
-              refetch();
-            }}
-            className="px-2.5 py-1 text-[11.5px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[6px] hover:border-slate-400 transition-colors"
-          >
-            409 xung đột
-          </button>
-          <button
-            onClick={() => {
-              toast.error('403 — Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại.');
-              navigate('/integrations');
-            }}
-            className="px-2.5 py-1 text-[11.5px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[6px] hover:border-slate-400 transition-colors"
-          >
-            403 thiếu scope
-          </button>
-        </div>
       </div>
 
       {/* slide-in animation */}
