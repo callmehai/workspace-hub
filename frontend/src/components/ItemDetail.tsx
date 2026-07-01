@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
-  Trash2, Edit3, Save, ExternalLink, Plus, Tag, Loader2,
-  AlertCircle, Eye, EyeOff, Star, Reply, Check, Send
+  Trash2, Edit3, ExternalLink, Tag, Loader2,
+  AlertCircle, Eye, EyeOff, Star, Check, Send
 } from 'lucide-react';
 import { itemsApi } from '../lib/itemsApi';
 import { type PatchItemRequest } from '../types/items';
