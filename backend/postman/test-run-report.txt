@@ -1,0 +1,346 @@
+Workspace Hub API (SCRUM-27)
+
+□ 00 — Health
+└ GET /api/health (200)
+  GET https://localhost:7010/api/health [200 OK, 253B, 30ms]
+  √  200 OK
+  √  reports status + database
+
+□ 01 — Auth
+└ Register (201)
+  POST https://localhost:7010/api/auth/register [201 Created, 260B, 193ms]
+  √  201 Created
+  √  returns RegisterResult (không có token — phải verify OTP)
+
+└ Login unverified → PHONE_NOT_VERIFIED (403)
+  POST https://localhost:7010/api/auth/login [403 Forbidden, 245B, 182ms]
+  √  error body has standard shape {error,message,traceId}
+  √  403 Forbidden — chưa verify SĐT
+  √  message = PHONE_NOT_VERIFIED
+
+└ Send OTP (200 — luôn 200 chống enumeration)
+  POST https://localhost:7010/api/auth/send-otp [200 OK, 176B, 7ms]
+  √  200 OK
+  √  trả resendCooldownSeconds
+
+└ Verify OTP — mã sai (422)
+  POST https://localhost:7010/api/auth/verify-otp [422 Unprocessable Entity, 320B, 10ms]
+  √  error body has standard shape {error,message,traceId}
+  √  422 — mã OTP sai/hết hạn
+
+└ Register duplicate email (409)
+  POST https://localhost:7010/api/auth/register [409 Conflict, 249B, 8ms]
+  √  error body has standard shape {error,message,traceId}
+  √  409 Conflict
+  √  error = ConflictError
+
+└ Register invalid — short password + no phone (400)
+  POST https://localhost:7010/api/auth/register [400 Bad Request, 479B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  √  400 Bad Request
+  √  details[] lists field errors
+
+└ Login (200) — tài khoản đã verify
+  POST https://localhost:7010/api/auth/login [200 OK, 1.32kB, 195ms]
+  √  200 OK
+  √  body trả ExpiresIn + user (KHÔNG token — token ở cookie)
+  √  cookie wh_access được set
+
+└ Login wrong password (401)
+  POST https://localhost:7010/api/auth/login [401 Unauthorized, 252B, 9ms]
+  √  error body has standard shape {error,message,traceId}
+  √  401 Unauthorized
+
+└ Get me (200)
+  GET https://localhost:7010/api/auth/me [200 OK, 274B, 7ms]
+  √  200 OK
+  √  id matches logged-in user
+
+└ Get me — invalid token (401)
+  GET https://localhost:7010/api/auth/me [401 Unauthorized, 332B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  √  401 Unauthorized
+
+└ Google start (200)
+  POST https://localhost:7010/api/auth/google/start [200 OK, 537B, 4ms]
+  √  200 OK
+  √  returns authorizationUrl + state
+
+└ Google callback invalid (400/401)
+  POST https://localhost:7010/api/auth/google/callback [400 Bad Request, 298B, 5ms]
+  √  error body has standard shape {error,message,traceId}
+  √  rejected (400 CSRF or 401 invalid token)
+
+□ 02 — Folders
+└ Create folder (201)
+  POST https://localhost:7010/api/folders [201 Created, 412B, 18ms]
+  √  201 Created
+  √  owner flag true
+
+└ List folders (200)
+  GET https://localhost:7010/api/folders [200 OK, 363B, 14ms]
+  √  200 OK
+  √  array contains created folder
+
+└ List folders — OData $filter (200)
+  GET https://localhost:7010/api/folders?$filter=isArchived eq false&$orderby=name [200 OK, 363B, 19ms]
+  √  200 OK
+
+└ Create folder invalid — bad color (400)
+  POST https://localhost:7010/api/folders [400 Bad Request, 362B, 2ms]
+  √  error body has standard shape {error,message,traceId}
+  √  400 Bad Request
+
+└ Update folder (200)
+  PUT https://localhost:7010/api/folders/047f7705-55a5-4461-ae2c-d17ebe7d5910 [200 OK, 371B, 14ms]
+  √  200 OK
+  √  name updated
+
+└ Update folder — not found (404)
+  PUT https://localhost:7010/api/folders/00000000-0000-0000-0000-0000000000ff [404 Not Found, 304B, 8ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 (or 403 — not owner of a non-existent row)
+
+□ 03 — Items
+└ Create note (201)
+  POST https://localhost:7010/api/items/note [201 Created, 561B, 18ms]
+  √  201 Created
+  √  type = Note
+
+└ List items (200, envelope)
+  GET https://localhost:7010/api/items?page=1&limit=20 [200 OK, 517B, 18ms]
+  √  200 OK
+  √  paged envelope {items,total,page,limit}
+
+└ List items — filter type=Note (200)
+  GET https://localhost:7010/api/items?type=Note&isImportant=false [200 OK, 517B, 15ms]
+  √  200 OK
+  √  all returned items are Note
+
+└ Get item by id (200)
+  GET https://localhost:7010/api/items/706594b3-d5a1-42ac-9bd5-571791c70f21 [200 OK, 475B, 6ms]
+  √  200 OK
+  √  id matches
+
+└ Get item — not found (404)
+  GET https://localhost:7010/api/items/00000000-0000-0000-0000-0000000000ff [404 Not Found, 302B, 7ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+└ Patch status -> Doing (200)
+  PATCH https://localhost:7010/api/items/706594b3-d5a1-42ac-9bd5-571791c70f21/status [200 OK, 475B, 22ms]
+  √  200 OK
+  √  status = Doing
+
+└ Patch status — invalid value (400)
+  PATCH https://localhost:7010/api/items/706594b3-d5a1-42ac-9bd5-571791c70f21/status [400 Bad Request, 490B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  400 Bad Request
+
+└ Add item to folder (201)
+  POST https://localhost:7010/api/folders/047f7705-55a5-4461-ae2c-d17ebe7d5910/items [409 Conflict, 256B, 13ms]
+  √  error body has standard shape {error,message,traceId}
+  √  201 Created (or 409 if already linked)
+
+└ Remove item from folder (204)
+  DELETE https://localhost:7010/api/folders/047f7705-55a5-4461-ae2c-d17ebe7d5910/items/706594b3-d5a1-42ac-9bd5-571791c70f21 [204 No Content, 81B, 16ms]
+  √  204 No Content
+
+└ Create event — connection not found (404)
+  POST https://localhost:7010/api/items/event [404 Not Found, 308B, 7ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 connection (or 422 wrong service type)
+
+└ Create event — invalid (end before start) (400)
+  POST https://localhost:7010/api/items/event [400 Bad Request, 342B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  √  400 Bad Request (validation)
+
+└ Delete item (204)
+  DELETE https://localhost:7010/api/items/706594b3-d5a1-42ac-9bd5-571791c70f21 [204 No Content, 81B, 7ms]
+  √  204 No Content
+
+□ 04 — Connections
+└ List connections (200)
+  GET https://localhost:7010/api/connections [200 OK, 150B, 5ms]
+  √  200 OK
+  √  returns array (token masked)
+
+└ OAuth start — invalid serviceType (422)
+  POST https://localhost:7010/api/connections/oauth/start [422 Unprocessable Entity, 299B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  √  422 / 400 / 404 rejected
+
+└ Refresh connection — not found (404)
+  POST https://localhost:7010/api/connections/00000000-0000-0000-0000-0000000000ff/refresh [404 Not Found, 308B, 6ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+└ Disconnect — not found (404)
+  DELETE https://localhost:7010/api/connections/00000000-0000-0000-0000-0000000000ff [404 Not Found, 308B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+□ 05 — Scheduled Emails
+└ List scheduled emails (200)
+  GET https://localhost:7010/api/scheduled-emails [200 OK, 150B, 7ms]
+  √  200 OK
+
+└ Create scheduled — connection not found (404)
+  POST https://localhost:7010/api/scheduled-emails [404 Not Found, 308B, 5ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 connection (or 422 non-Gmail)
+
+└ Create scheduled — validation (400)
+  POST https://localhost:7010/api/scheduled-emails [400 Bad Request, 422B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  400 Bad Request (no recipient/subject)
+
+└ Cancel scheduled — not found (404)
+  PATCH https://localhost:7010/api/scheduled-emails/00000000-0000-0000-0000-0000000000ff/cancel [404 Not Found, 312B, 6ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+□ 06 — Important Contacts
+└ Create contact (201)
+  POST https://localhost:7010/api/importantcontacts [201 Created, 368B, 15ms]
+  √  201 Created
+
+└ List contacts (200)
+  GET https://localhost:7010/api/importantcontacts?type=Email [200 OK, 298B, 5ms]
+  √  200 OK
+
+└ Create contact duplicate (409)
+  POST https://localhost:7010/api/importantcontacts [409 Conflict, 325B, 5ms]
+  √  error body has standard shape {error,message,traceId}
+  √  409 Conflict
+
+└ Delete contact (204)
+  DELETE https://localhost:7010/api/importantcontacts/c56c6155-f1e8-47e1-ae4b-4282fd10eb5d [204 No Content, 81B, 13ms]
+  √  204 No Content
+
+□ 07 — Admin (RBAC)
+└ Admin users as normal user (403)
+  GET https://localhost:7010/api/admin/users [403 Forbidden, 278B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  √  403 Forbidden (normal user token)
+
+└ Admin stats as normal user (403)
+  GET https://localhost:7010/api/admin/stats [403 Forbidden, 278B, 2ms]
+  √  error body has standard shape {error,message,traceId}
+  √  403 Forbidden (normal user token)
+
+└ Admin users (200) [needs adminToken]
+  GET https://localhost:7010/api/admin/users?page=1&limit=20 [401 Unauthorized, 332B, 2ms]
+  √  error body has standard shape {error,message,traceId}
+  -  [skipped] skipped — set adminToken to run admin success case
+
+└ Admin stats (200) [needs adminToken]
+  GET https://localhost:7010/api/admin/stats [401 Unauthorized, 332B, 2ms]
+  √  error body has standard shape {error,message,traceId}
+  -  [skipped] skipped — set adminToken to run admin success case
+
+└ Admin toggle integration — user token (403)
+  PATCH https://localhost:7010/api/admin/integrations/gmail/enable [403 Forbidden, 278B, 2ms]
+  √  error body has standard shape {error,message,traceId}
+  √  403 Forbidden — user token cannot toggle integration
+  √  error = ForbiddenError
+
+└ Admin toggle integration — non-existent key (404) [needs adminToken]
+  PATCH https://localhost:7010/api/admin/integrations/nonexistent-service-key/enable [401 Unauthorized, 332B, 2ms]
+  √  error body has standard shape {error,message,traceId}
+  -  [skipped] skipped — set adminToken to run admin 404 case
+
+□ 08 — Provider-dependent (manual)
+└ Create scheduled email — real Gmail (201)
+  POST https://localhost:7010/api/scheduled-emails [400 Bad Request, 460B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  -  [skipped] skipped — set gmailConnectionId
+
+└ Create event — real Calendar (201)
+  POST https://localhost:7010/api/items/event [400 Bad Request, 497B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  -  [skipped] skipped — set gcalConnectionId
+
+□ 09 — Jira (error-cases)
+└ GET /api/jira/projects — connectionId omitted → Guid.Empty bound (404)
+  GET https://localhost:7010/api/jira/projects [404 Not Found, 308B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found — Guid.Empty connection not in DB
+
+└ GET /api/jira/projects — non-existent connectionId (404)
+  GET https://localhost:7010/api/jira/projects?connectionId=00000000-0000-0000-0000-000000000000 [404 Not Found, 308B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+└ GET /api/jira/issue-types — non-existent connectionId (404)
+  GET https://localhost:7010/api/jira/issue-types?connectionId=00000000-0000-0000-0000-000000000000&projectKey=TEST [404 Not Found, 308B, 5ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+└ GET /api/jira/priorities — non-existent connectionId (404)
+  GET https://localhost:7010/api/jira/priorities?connectionId=00000000-0000-0000-0000-000000000000 [404 Not Found, 308B, 5ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+└ GET /api/jira/assignable-users — non-existent connectionId (404)
+  GET https://localhost:7010/api/jira/assignable-users?connectionId=00000000-0000-0000-0000-000000000000&projectKey=TEST [404 Not Found, 308B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+└ POST /api/items/ticket — missing body (400)
+  POST https://localhost:7010/api/items/ticket [400 Bad Request, 419B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  400 Bad Request — validation
+  √  details[] lists field errors
+
+└ POST /api/items/ticket — Guid.Empty connectionId (400 validation)
+  POST https://localhost:7010/api/items/ticket [400 Bad Request, 314B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  √  400 Bad Request — Guid.Empty rejected by validator
+  √  error = ValidationError
+  √  details[] is non-empty array
+
+└ POST /api/items/ticket — non-existent connectionId (404)
+  POST https://localhost:7010/api/items/ticket [404 Not Found, 308B, 4ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found — connection does not exist
+
+└ POST /api/items/ticket — wrong service type (422)
+  POST https://localhost:7010/api/items/ticket [400 Bad Request, 498B, 3ms]
+  √  error body has standard shape {error,message,traceId}
+  -  [skipped] skipped — set gmailConnectionId to run wrong-service-type case
+
+└ GET /api/jira/transitions — non-existent connectionId (404)
+  GET https://localhost:7010/api/jira/transitions?connectionId=00000000-0000-0000-0000-000000000000&issueKey=TEST-1 [404 Not Found, 308B, 5ms]
+  √  error body has standard shape {error,message,traceId}
+  √  404 Not Found
+
+□ 99 — Session
+└ Cleanup — delete test folder (204)
+  DELETE https://localhost:7010/api/folders/047f7705-55a5-4461-ae2c-d17ebe7d5910 [204 No Content, 81B, 17ms]
+  √  204 No Content
+
+└ Logout (204)
+  POST https://localhost:7010/api/auth/logout [204 No Content, 371B, 2ms]
+  √  204 No Content
+
+┌─────────────────────────┬───────────────────┬──────────────────┐
+│                         │          executed │           failed │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│              iterations │                 1 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│                requests │                63 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│            test-scripts │               126 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│      prerequest-scripts │                65 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│              assertions │               125 │                0 │
+├─────────────────────────┴───────────────────┴──────────────────┤
+│ total run duration: 6.1s                                       │
+├────────────────────────────────────────────────────────────────┤
+│ total data received: 11.01kB (approx)                          │
+├────────────────────────────────────────────────────────────────┤
+│ average response time: 16ms [min: 2ms, max: 195ms, s.d.: 39ms] │
+└────────────────────────────────────────────────────────────────┘
