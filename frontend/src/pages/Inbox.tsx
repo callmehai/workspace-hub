@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { itemsApi } from '../lib/itemsApi';
+import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
 import type { ItemType, ItemStatus } from '../types/items';
 import {
@@ -154,7 +154,13 @@ export const Inbox = () => {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const folder = params.get('folder');
+    setSelectedFolderId(folder || null);
+
     if (location.pathname === '/files') {
       setTypeFilter('File');
     } else if (location.pathname === '/calendar') {
@@ -165,7 +171,7 @@ export const Inbox = () => {
       setTypeFilter(null);
     }
     setPage(1);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -178,16 +184,22 @@ export const Inbox = () => {
     }, 350);
   }, []);
 
+  const { data: folders = [] } = useQuery({
+    queryKey: ['folders'],
+    queryFn: () => foldersApi.getFolders()
+  });
+
   const params = {
     status: statusFilter ?? undefined,
     type: typeFilter ?? undefined,
     isImportant: importantOnly || undefined,
     search: search || undefined,
+    folderId: selectedFolderId || undefined,
     page,
     limit: LIMIT,
   };
 
-  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, page, limit: LIMIT }];
+  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit: LIMIT }];
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey,
@@ -228,6 +240,12 @@ export const Inbox = () => {
     setSearchInput('');
     setSearch('');
     setPage(1);
+  };
+
+  const handleRemoveFolderFilter = () => {
+    const params = new URLSearchParams(location.search);
+    params.delete('folder');
+    navigate(`${location.pathname}?${params.toString()}`);
   };
 
   const isEmpty = !isLoading && !isError && items.length === 0;
@@ -320,9 +338,15 @@ export const Inbox = () => {
         </div>
 
         {/* ── Active filter summary ── */}
-        {(statusFilter || typeFilter || importantOnly || search) && (
-          <div className="flex items-center gap-2 mb-3 text-[12.5px] text-slate-500">
+        {(statusFilter || typeFilter || importantOnly || search || selectedFolderId) && (
+          <div className="flex items-center gap-2 mb-3 text-[12.5px] text-slate-500 flex-wrap">
             <span>Đang lọc:</span>
+            {selectedFolderId && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                Thư mục: {folders.find(f => f.id === selectedFolderId)?.name || 'Ẩn'}
+                <button onClick={handleRemoveFolderFilter} className="hover:text-indigo-900 font-bold ml-1">×</button>
+              </span>
+            )}
             {statusFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{statusLabel(statusFilter)}</span>}
             {typeFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{typeLabel(typeFilter)}</span>}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">⭐ Quan trọng</span>}
