@@ -20,7 +20,7 @@ public class JiraStrategy(
     private const string AccessibleResourcesEndpoint = "https://api.atlassian.com/oauth/token/accessible-resources";
 
 
-    public string ProviderKey => "jira";
+    public string ProviderKey => "atlassian";
 
     public Task<InitiateConnectionResult> BuildAuthUrlAsync(
         BuildAuthUrlRequest request,

@@ -52,7 +52,12 @@ export const itemsApi = {
 
   deleteItem: async (id: string): Promise<void> => {
     await api.delete(`/items/${id}`);
-  }
+  },
+
+  updateItemImportant: async (id: string, isImportant: boolean): Promise<ItemResponse> => {
+    const response = await api.patch(`/items/${id}/important`, { isImportant });
+    return response.data;
+  },
 };
 
 export const foldersApi = {

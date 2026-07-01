@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -15,19 +16,25 @@ public class GmailSyncService : IGmailSyncService
     private readonly IItemRepository _items;
     private readonly IImportantContactRepository _importantContacts;
     private readonly IConnectionRepository _connections;
+    private readonly ITokenService _tokenService;
+    private readonly ILogger<GmailSyncService> _logger;
 
     public GmailSyncService(
         IGmailGateway gmailGateway,
         IGmailItemMapper mapper,
         IItemRepository items,
         IImportantContactRepository importantContacts,
-        IConnectionRepository connections)
+        IConnectionRepository connections,
+        ITokenService tokenService,
+        ILogger<GmailSyncService> logger)
     {
         _gmailGateway = gmailGateway;
         _mapper = mapper;
         _items = items;
         _importantContacts = importantContacts;
         _connections = connections;
+        _tokenService = tokenService;
+        _logger = logger;
     }
 
     private async Task<Connection> GetValidConnectionAsync(Guid connectionId, Guid userId, CancellationToken ct)
@@ -189,26 +196,56 @@ public class GmailSyncService : IGmailSyncService
         List<Item> newItems,
         CancellationToken ct)
     {
-        int created = 0;
-        int skipped = 0;
+        var idsToFetch = ids.Where(id => !existing.Contains(id)).ToList();
+        var skipped = ids.Count() - idsToFetch.Count;
+        
+        if (idsToFetch.Count == 0) return (0, skipped);
 
-        foreach (var id in ids)
+        var semaphore = new SemaphoreSlim(10); // Concurrent limit 10
+        try
         {
-            if (existing.Contains(id))
+            // Pre-refresh token once before fanning out to avoid DB concurrency issues
+            await _tokenService.GetFreshAccessTokenAsync(connection, ct);
+
+            var fetchTasks = idsToFetch.Select(async id =>
             {
-                skipped++;
-                continue;
+                await semaphore.WaitAsync(ct);
+                try
+                {
+                    var msg = await _gmailGateway.GetMessageAsync(connection, id, ct);
+                    return _mapper.ToItem(msg, connection.UserId, connection.Id, importantSet);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to fetch Gmail message {MessageId} for connection {ConnectionId}. Skipping.", id, connection.Id);
+                    return null;
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(fetchTasks);
+            
+            var successfullyCreatedCount = 0;
+            for (int i = 0; i < results.Length; i++)
+            {
+                var item = results[i];
+                if (item != null)
+                {
+                    newItems.Add(item);
+                    existing.Add(idsToFetch[i]);
+                    successfullyCreatedCount++;
+                }
             }
 
-            var msg = await _gmailGateway.GetMessageAsync(connection, id, ct);
-            var item = _mapper.ToItem(msg, connection.UserId, connection.Id, importantSet);
-
-            newItems.Add(item);
-            existing.Add(id);
-            created++;
+            return (successfullyCreatedCount, skipped);
         }
-
-        return (created, skipped);
+        finally
+        {
+            semaphore.Dispose();
+        }
     }
 
     private async Task<(List<string> CollectedIds, string? NewCursor)> FullSyncAsync(Connection connection, int maxMessages, CancellationToken ct)

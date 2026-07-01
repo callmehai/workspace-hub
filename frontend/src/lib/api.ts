@@ -18,7 +18,7 @@ const readCookie = (name: string): string | null => {
 // withCredentials: gửi kèm cookie auth (wh_access HttpOnly) trên mọi request (SCRUM-62).
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? '/api',
-  timeout: 10000,
+  timeout: 30000,
   withCredentials: true,
 })
 

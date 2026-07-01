@@ -84,7 +84,7 @@
 
 | Ticket | Việc | Assignee | Status |
 |---|---|---|---|
-| SCRUM-44 | FE: Inbox/Items view (list + filter + search + pagination) | Huy | ⏳ To Do |
+| SCRUM-44 | FE: Inbox/Items view (list + filter + search + pagination) | Huy | ✅ Done — `frontend/src/pages/Inbox.tsx` rebuild hoàn toàn theo `docs/prototype/` (design system slate-50/indigo-600, Inter font); TanStack Query `useQuery` key `['items', {status,type,isImportant,search,page,limit}]` gọi `itemsApi.getItems(params)`; filter chips Status (Inbox/Doing/Done) + Type (Email/Event/File/Note) + Important toggle; debounce search 350ms; numbered pagination + Prev/Next (reset page khi đổi filter); skeleton loading / empty-state / error-state; type icon tile màu (blue/amber/emerald/slate); status chip màu; `selectedId` local state cho active row; build TypeScript clean + eslint Inbox clean. |
 | SCRUM-45 | FE: Kanban 3 cột (drag-drop) + Folder sidebar | Huy | ⏳ To Do |
 | SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ✅ Done — Hỗ trợ Email (star/read/label/trash), Event (CRUD), File (rename/trash), Ticket (assignee/priority/transition/comment) kèm ETag/version conflict resolution |
 | SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Khánh | ✅ Done — Giao diện 2 cột, validation client, OData filter/pagination, modal HTML. |

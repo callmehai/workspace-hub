@@ -154,6 +154,19 @@ public class ItemService : IItemService
         return MapToResponse(item);
     }
 
+    /// <inheritdoc/>
+    public async Task<ItemResponse> ToggleImportantAsync(Guid userId, Guid itemId, bool isImportant, CancellationToken ct = default)
+    {
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
+            ?? throw new NotFoundException(nameof(Item), itemId);
+
+        item.IsImportant = isImportant;
+        _itemRepo.Update(item);
+        await _itemRepo.SaveChangesAsync(ct);
+
+        return MapToResponse(item);
+    }
+
     // ───────────────────────── Private helpers ─────────────────────────
 
     /// <summary>Map Item entity → ItemResponse DTO.</summary>
