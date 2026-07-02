@@ -34,20 +34,20 @@ function typeLabel(t: ItemType): string {
 function typeIcon(t: ItemType) {
   const cls = 'w-4 h-4';
   switch (t) {
-    case 'Email':  return <Mail className={cls} />;
-    case 'Event':  return <Calendar className={cls} />;
-    case 'File':   return <FileText className={cls} />;
-    case 'Note':   return <StickyNote className={cls} />;
+    case 'Email': return <Mail className={cls} />;
+    case 'Event': return <Calendar className={cls} />;
+    case 'File': return <FileText className={cls} />;
+    case 'Note': return <StickyNote className={cls} />;
     case 'Ticket': return <Briefcase className={cls} />;
   }
 }
 
 function typeTileClass(t: ItemType): string {
   const map: Record<ItemType, string> = {
-    Email:  'bg-blue-50 text-blue-600',
-    Event:  'bg-amber-50 text-amber-600',
-    File:   'bg-emerald-50 text-emerald-600',
-    Note:   'bg-slate-100 text-slate-500',
+    Email: 'bg-blue-50 text-blue-600',
+    Event: 'bg-amber-50 text-amber-600',
+    File: 'bg-emerald-50 text-emerald-600',
+    Note: 'bg-slate-100 text-slate-500',
     Ticket: 'bg-purple-50 text-purple-600',
   };
   return map[t] ?? 'bg-slate-100 text-slate-500';
@@ -57,7 +57,7 @@ function statusChipClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-100 text-slate-600',
     Doing: 'bg-blue-50 text-blue-700',
-    Done:  'bg-emerald-50 text-emerald-700',
+    Done: 'bg-emerald-50 text-emerald-700',
   };
   return map[s] ?? 'bg-slate-100 text-slate-500';
 }
@@ -66,7 +66,7 @@ function statusDotClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-400',
     Doing: 'bg-blue-500',
-    Done:  'bg-emerald-500',
+    Done: 'bg-emerald-500',
   };
   return map[s] ?? 'bg-slate-400';
 }
@@ -287,7 +287,7 @@ export const Inbox = () => {
               <List className="w-4 h-4" />
               <span>Danh sách</span>
             </button>
-            <button 
+            <button
               onClick={() => navigate('/kanban')}
               className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
             >
@@ -378,21 +378,37 @@ export const Inbox = () => {
             </div>
           )}
 
-          {showList && items.map((item) => (
+          {showList && items.map((item) => {
+            let isUnread = false;
+            if (item.type === 'Email' && item.metadataJson) {
+              try {
+                const meta = JSON.parse(item.metadataJson);
+                isUnread = meta.isUnread !== undefined 
+                  ? meta.isUnread === true 
+                  : (Array.isArray(meta.labels) && meta.labels.includes('UNREAD'));
+              } catch (e) {
+                // Ignore parse error
+              }
+            }
+
+            return (
             <div
               key={item.id}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedId === item.id ? 'bg-indigo-50/50' : ''}`}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 relative ${selectedId === item.id ? 'bg-indigo-50/50' : (isUnread ? 'bg-white' : 'bg-slate-50/50')}`}
             >
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
+              {isUnread && (
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-md" />
+              )}
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 z-10 ${typeTileClass(item.type)}`}>
                 {typeIcon(item.type)}
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-semibold text-slate-900 truncate leading-snug">
+              <div className="flex-1 min-w-0 z-10">
+                <div className={`text-[13.5px] truncate leading-snug ${isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
                   {item.title}
                 </div>
-                <div className="text-[12.5px] text-slate-500 truncate mt-0.5 leading-snug">
+                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${isUnread ? 'font-medium text-slate-700' : 'text-slate-500'}`}>
                   {item.snippet}
                 </div>
                 {item.folderIds && item.folderIds.length > 0 && (
@@ -429,7 +445,8 @@ export const Inbox = () => {
                 <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── Pagination ── */}

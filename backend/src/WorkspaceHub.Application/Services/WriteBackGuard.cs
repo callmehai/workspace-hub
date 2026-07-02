@@ -47,7 +47,7 @@ public class WriteBackGuard : IWriteBackGuard
                 "Write-back ETag conflict: stored={StoredEtag}, provider={ProviderEtag}",
                 storedEtag, providerEtag);
             throw new ConflictException(
-                "The item was modified on the provider since it was last synced. " +
+                $"The item was modified on the provider since it was last synced. Stored: {storedEtag}, Provider: {providerEtag}. " +
                 "Refetch the latest version and retry.");
         }
     }
