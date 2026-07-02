@@ -54,7 +54,7 @@ public class JiraItemMapperTests
     [InlineData("unknown_key", ItemStatus.Inbox)]
     public void ToItem_MapsStatusUsingCategoryKey(string categoryKey, ItemStatus expectedStatus)
     {
-        var item = _mapper.ToItem(SampleIssue(statusCategoryKey: categoryKey), Guid.NewGuid(), Guid.NewGuid());
+        var item = _mapper.ToItem(SampleIssue(statusCategoryKey: categoryKey, statusName: ""), Guid.NewGuid(), Guid.NewGuid());
         item.Status.Should().Be(expectedStatus);
     }
 

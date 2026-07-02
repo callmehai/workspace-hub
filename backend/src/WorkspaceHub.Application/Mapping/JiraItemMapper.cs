@@ -64,7 +64,7 @@ public class JiraItemMapper : IJiraItemMapper
             OccurredAt = issue.Updated?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata)
+            MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
         };
     }
 }

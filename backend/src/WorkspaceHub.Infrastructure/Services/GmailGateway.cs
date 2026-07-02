@@ -112,17 +112,22 @@ public class GmailGateway : IGmailGateway
         try
         {
             var response = await request.ExecuteAsync(ct);
-            var addedIds = response.History?
-                .Where(h => h.MessagesAdded != null)
-                .SelectMany(h => h.MessagesAdded)
-                .Where(m => m.Message?.Id != null)
-                .Select(m => m.Message.Id)
+            var affectedIds = response.History?
+                .SelectMany(h => 
+                {
+                    var ids = new List<string>();
+                    if (h.MessagesAdded != null) ids.AddRange(h.MessagesAdded.Select(m => m.Message.Id));
+                    if (h.LabelsAdded != null) ids.AddRange(h.LabelsAdded.Select(m => m.Message.Id));
+                    if (h.LabelsRemoved != null) ids.AddRange(h.LabelsRemoved.Select(m => m.Message.Id));
+                    return ids;
+                })
+                .Where(id => id != null)
                 .Distinct()
                 .ToList() ?? new List<string>();
 
             return new GmailHistory(
                 false,
-                addedIds,
+                affectedIds,
                 response.NextPageToken,
                 response.HistoryId?.ToString());
         }
@@ -142,8 +147,8 @@ public class GmailGateway : IGmailGateway
                 AddLabelIds = addLabelIds,
                 RemoveLabelIds = removeLabelIds
             };
-            var response = await gmail.Users.Messages.Modify(req, "me", messageId).ExecuteAsync(ct);
-            return response.HistoryId?.ToString();
+            await gmail.Users.Messages.Modify(req, "me", messageId).ExecuteAsync(ct);
+            return await GetMessageETagAsync(connection, messageId, ct);
         }
         catch (Google.GoogleApiException ex)
         {
@@ -156,8 +161,8 @@ public class GmailGateway : IGmailGateway
         try
         {
             using var gmail = await BuildGmailServiceAsync(connection, ct);
-            var response = await gmail.Users.Messages.Trash("me", messageId).ExecuteAsync(ct);
-            return response.HistoryId?.ToString();
+            await gmail.Users.Messages.Trash("me", messageId).ExecuteAsync(ct);
+            return await GetMessageETagAsync(connection, messageId, ct);
         }
         catch (Google.GoogleApiException ex)
         {
@@ -170,8 +175,8 @@ public class GmailGateway : IGmailGateway
         try
         {
             using var gmail = await BuildGmailServiceAsync(connection, ct);
-            var response = await gmail.Users.Messages.Untrash("me", messageId).ExecuteAsync(ct);
-            return response.HistoryId?.ToString();
+            await gmail.Users.Messages.Untrash("me", messageId).ExecuteAsync(ct);
+            return await GetMessageETagAsync(connection, messageId, ct);
         }
         catch (Google.GoogleApiException ex)
         {

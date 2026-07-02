@@ -20,6 +20,7 @@ export interface ItemResponse {
   externalId: string | null;
   metadataJson: string | null;
   folderIds: string[];
+  connectionId?: string | null;
 }
 
 export interface UpdateItemStatusRequest {

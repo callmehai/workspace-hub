@@ -449,7 +449,10 @@ export const Inbox = () => {
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-semibold text-slate-900 truncate leading-snug">
+                <div className={`text-[13.5px] ${item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') ? 'font-bold text-slate-900' : 'font-semibold text-slate-900'} truncate leading-snug flex items-center`}>
+                  {item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') && (
+                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5 flex-shrink-0" />
+                  )}
                   {item.title}
                 </div>
                 <div className="text-[12.5px] text-slate-500 truncate mt-0.5 leading-snug">
@@ -457,7 +460,7 @@ export const Inbox = () => {
                 </div>
                 {item.folderIds && item.folderIds.length > 0 && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    {item.folderIds.map(fId => {
+                    {item.folderIds.map((fId: string) => {
                       const f = folders.find(fol => fol.id === fId);
                       if (!f) return null;
                       return (

@@ -7,6 +7,7 @@ import {
   AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
+import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import toast from 'react-hot-toast';
@@ -82,7 +83,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     },
     onError: (err) => {
       handleApiError(err, 'Lỗi cập nhật dữ liệu', {
-        onConflict: () => {
+        onConflict: async () => {
+          if (item?.connectionId) {
+            try {
+              await connectionsApi.syncConnection(item.connectionId);
+            } catch (e) {
+              console.error('Lỗi khi đồng bộ tự động', e);
+            }
+          }
           refetch();
           queryClient.invalidateQueries({ queryKey: ['items'] });
         },
@@ -102,7 +110,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     },
     onError: (err) => {
       handleApiError(err, 'Không thể xóa dữ liệu', {
-        onConflict: () => {
+        onConflict: async () => {
+          if (item?.connectionId) {
+            try {
+              await connectionsApi.syncConnection(item.connectionId);
+            } catch (e) {
+              console.error('Lỗi khi đồng bộ tự động', e);
+            }
+          }
           refetch();
           queryClient.invalidateQueries({ queryKey: ['items'] });
         },

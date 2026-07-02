@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FolderPlus, FolderMinus, X, Loader2 } from 'lucide-react';
+import { FolderPlus, FolderMinus, X } from 'lucide-react';
 import { foldersApi } from '../lib/itemsApi';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';

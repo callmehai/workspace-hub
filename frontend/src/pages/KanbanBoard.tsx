@@ -508,7 +508,10 @@ export const KanbanBoard = () => {
                                 <GripVertical className="w-4 h-4" />
                               </span>
                             </div>
-                            <h4 className="text-[13.5px] font-medium text-slate-900 leading-snug mb-2 line-clamp-2">
+                            <h4 className={`text-[13.5px] ${item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') ? 'font-bold text-slate-900' : 'font-medium text-slate-900'} leading-snug mb-2 line-clamp-2`}>
+                              {item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') && (
+                                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5" />
+                              )}
                               {item.title}
                             </h4>
                             <div className="flex items-center justify-end gap-2 mt-auto pt-1">
