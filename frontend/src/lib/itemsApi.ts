@@ -87,6 +87,15 @@ export const foldersApi = {
   
   removeItemFromFolder: async (folderId: string, itemId: string): Promise<void> => {
     await api.delete(`/folders/${folderId}/items/${itemId}`);
+  },
+
+  addItemsToFolderBulk: async (folderId: string, itemIds: string[]): Promise<void> => {
+    await api.post(`/folders/${folderId}/items/bulk`, { itemIds });
+  },
+
+  removeItemsFromFolderBulk: async (folderId: string, itemIds: string[]): Promise<void> => {
+    // using HTTP DELETE with a body requires config.data in axios
+    await api.delete(`/folders/${folderId}/items/bulk`, { data: { itemIds } });
   }
 };
 

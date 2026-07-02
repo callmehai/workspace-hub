@@ -82,6 +82,7 @@ export interface PatchItemRequest {
   location?: string;
   attendees?: string[];
   name?: string;
+  statusTransition?: string;
 }
 
 export interface CreateEventRequest {

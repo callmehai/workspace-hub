@@ -4,6 +4,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
+import { BulkActionBar } from '../components/BulkActionBar';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
 import {
   Plus, Loader2, Mail, Calendar, FileText, StickyNote, Briefcase,
@@ -99,6 +100,8 @@ export const KanbanBoard = () => {
   const [importantOnly, setImportantOnly] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
   const handleSearchChange = useCallback((val: string) => {
     setSearchInput(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -109,8 +112,11 @@ export const KanbanBoard = () => {
 
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteForm, setNoteForm] = useState({ title: '', contentMarkdown: '' });
+  
+  const [addingFolderItemId, setAddingFolderItemId] = useState<string | null>(null);
 
-  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const isEventModalOpenState = useState(false);
+  const [isEventModalOpen, setIsEventModalOpen] = isEventModalOpenState;
   const [eventForm, setEventForm] = useState({
     connectionId: '', title: '', start: '', end: '', location: '', attendees: ''
   });
@@ -219,6 +225,15 @@ export const KanbanBoard = () => {
     onError: (err) => handleApiError(err, 'Lỗi tạo sự kiện', { navigate })
   });
 
+  const addToFolderMutation = useMutation({
+    mutationFn: ({ folderId, itemId }: { folderId: string, itemId: string }) => foldersApi.addItemToFolder(folderId, { itemId }),
+    onSuccess: () => {
+      toast.success('Đã thêm vào thư mục');
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
+  });
+
   const handleCreateEvent = () => {
     if (!eventForm.connectionId || !eventForm.title || !eventForm.start || !eventForm.end) {
       toast.error('Vui lòng điền đủ thông tin');
@@ -245,8 +260,12 @@ export const KanbanBoard = () => {
   };
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
-    e.dataTransfer.setData('itemId', id);
-    setTimeout(() => setDraggingId(id), 0); // let UI update before changing appearance
+    setDraggingId(id);
+    if (selectedItemIds.has(id) && selectedItemIds.size > 1) {
+      e.dataTransfer.setData('itemIds', JSON.stringify(Array.from(selectedItemIds)));
+    } else {
+      e.dataTransfer.setData('itemId', id);
+    }
   };
 
   const handleDragEnd = () => {
@@ -268,7 +287,15 @@ export const KanbanBoard = () => {
     setDragOverCol(null);
     setDraggingId(null);
     const itemId = e.dataTransfer.getData('itemId');
-    if (itemId) {
+    const itemIds = e.dataTransfer.getData('itemIds');
+    
+    if (itemIds) {
+      const ids = JSON.parse(itemIds);
+      ids.forEach((id: string) => {
+        const item = items.find((i: ItemResponse) => i.id === id);
+        if (item) updateStatus.mutate({ id, status, type: item.type });
+      });
+    } else if (itemId) {
       const draggedItem = items.find((i: ItemResponse) => i.id === itemId);
       if (draggedItem) {
         updateStatus.mutate({ id: itemId, status, type: draggedItem.type });
@@ -412,6 +439,19 @@ export const KanbanBoard = () => {
                           >
                             <div className="flex justify-between items-center mb-2">
                               <div className="flex items-center gap-1.5 flex-wrap">
+                                <input 
+                                  type="checkbox" 
+                                  checked={selectedItemIds.has(item.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newSet = new Set(selectedItemIds);
+                                    if (newSet.has(item.id)) newSet.delete(item.id);
+                                    else newSet.add(item.id);
+                                    setSelectedItemIds(newSet);
+                                  }}
+                                  onChange={() => {}}
+                                  className={`w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 ${selectedItemIds.has(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                                />
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
                                   {typeIcon(item.type)}
                                   {typeLabel(item.type)}
@@ -425,6 +465,44 @@ export const KanbanBoard = () => {
                                     </span>
                                   );
                                 })}
+                                
+                                <div className="relative" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAddingFolderItemId(addingFolderItemId === item.id ? null : item.id);
+                                    }}
+                                    className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Thêm thư mục"
+                                  >
+                                    <Plus className="w-2.5 h-2.5" />
+                                    <span>Thêm</span>
+                                  </button>
+                                  
+                                  {addingFolderItemId === item.id && (
+                                    <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                                      {folders.filter((f: any) => !item.folderIds?.includes(f.id)).length === 0 ? (
+                                        <div className="px-3 py-1.5 text-[11px] text-slate-500 text-center">Không còn thư mục</div>
+                                      ) : (
+                                        folders.filter((f: any) => !item.folderIds?.includes(f.id)).map((f: any) => (
+                                          <button
+                                            key={f.id}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              addToFolderMutation.mutate({ folderId: f.id, itemId: item.id });
+                                              setAddingFolderItemId(null);
+                                            }}
+                                            disabled={addToFolderMutation.isPending}
+                                            className="w-full text-left px-3 py-1.5 text-[11.5px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                                            <span className="truncate">{f.name}</span>
+                                          </button>
+                                        ))
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                               <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
                                 <GripVertical className="w-4 h-4" />
@@ -608,6 +686,12 @@ export const KanbanBoard = () => {
           </div>
         </div>
       )}
+
+      {/* ── Bulk Action Bar ── */}
+      <BulkActionBar 
+        selectedItemIds={selectedItemIds}
+        onClearSelection={() => setSelectedItemIds(new Set())}
+      />
     </div>
   );
 };

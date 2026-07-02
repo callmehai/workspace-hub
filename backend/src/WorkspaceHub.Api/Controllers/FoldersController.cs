@@ -123,4 +123,36 @@ public class FoldersController : ApiControllerBase
         await _folderService.RemoveItemFromFolderAsync(CurrentUserId, id, itemId, ct);
         return NoContent();
     }
+
+    /// <summary>
+    /// POST /api/folders/{id}/items/bulk — gắn nhiều item vào folder.
+    /// </summary>
+    [HttpPost("{id:guid}/items/bulk")]
+    public async Task<IActionResult> AddItemsToFolderBulk(
+        Guid id,
+        [FromBody] AddItemsToFolderBulkRequest request,
+        CancellationToken ct = default)
+    {
+        if (request.ItemIds == null || !request.ItemIds.Any())
+            return BadRequest(new { Message = "ItemIds is required and cannot be empty." });
+
+        await _folderService.AddItemsToFolderAsync(CurrentUserId, id, request, ct);
+        return Ok();
+    }
+
+    /// <summary>
+    /// DELETE /api/folders/{id}/items/bulk — gỡ nhiều item khỏi folder.
+    /// </summary>
+    [HttpDelete("{id:guid}/items/bulk")]
+    public async Task<IActionResult> RemoveItemsFromFolderBulk(
+        Guid id,
+        [FromBody] RemoveItemsFromFolderBulkRequest request,
+        CancellationToken ct = default)
+    {
+        if (request.ItemIds == null || !request.ItemIds.Any())
+            return BadRequest(new { Message = "ItemIds is required and cannot be empty." });
+
+        await _folderService.RemoveItemsFromFolderAsync(CurrentUserId, id, request, ct);
+        return NoContent();
+    }
 }

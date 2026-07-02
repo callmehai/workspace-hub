@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, Search, LayoutGrid, List,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
+import { BulkActionBar } from '../components/BulkActionBar';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -155,6 +156,9 @@ export const Inbox = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  
+  // Multi-selection state
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -232,6 +236,39 @@ export const Inbox = () => {
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
   const rangeStart = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const rangeEnd = Math.min(page * LIMIT, total);
+
+  // Clear selection when page or filters change
+  useEffect(() => {
+    setSelectedItemIds(new Set());
+  }, [page, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
+
+  const toggleSelection = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSet = new Set(selectedItemIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedItemIds(newSet);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedItemIds.size === items.length) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(items.map((i: any) => i.id)));
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    // Pass either the single dragged item, or a JSON array if dragging a selection
+    if (selectedItemIds.has(id) && selectedItemIds.size > 1) {
+      e.dataTransfer.setData('itemIds', JSON.stringify(Array.from(selectedItemIds)));
+    } else {
+      e.dataTransfer.setData('itemId', id);
+    }
+  };
 
   const clearFilters = () => {
     setStatusFilter(null);
@@ -378,12 +415,35 @@ export const Inbox = () => {
             </div>
           )}
 
-          {showList && items.map((item) => (
+          {showList && (
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-slate-50">
+              <input 
+                type="checkbox" 
+                checked={items.length > 0 && selectedItemIds.size === items.length}
+                onChange={toggleAllSelection}
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+              />
+              <span className="text-[12.5px] font-medium text-slate-500">
+                Chọn tất cả trang này
+              </span>
+            </div>
+          )}
+
+          {showList && items.map((item: any) => (
             <div
               key={item.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, item.id)}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedId === item.id ? 'bg-indigo-50/50' : ''}`}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedId === item.id ? 'bg-indigo-50/50' : ''} ${selectedItemIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}
             >
+              <input 
+                type="checkbox" 
+                checked={selectedItemIds.has(item.id)}
+                onClick={(e) => toggleSelection(item.id, e)}
+                onChange={() => {}} // handled by onClick
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1"
+              />
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
                 {typeIcon(item.type)}
               </div>
@@ -488,6 +548,12 @@ export const Inbox = () => {
           onDeleted={() => setSelectedId(null)}
         />
       )}
+
+      {/* ── Bulk Action Bar ── */}
+      <BulkActionBar 
+        selectedItemIds={selectedItemIds}
+        onClearSelection={() => setSelectedItemIds(new Set())}
+      />
     </div>
   );
 };

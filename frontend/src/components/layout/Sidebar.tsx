@@ -96,6 +96,18 @@ export const Sidebar = () => {
     }
   });
 
+  const assignItemsBulkMutation = useMutation({
+    mutationFn: ({ folderId, itemIds }: { folderId: string; itemIds: string[] }) => 
+      foldersApi.addItemsToFolderBulk(folderId, itemIds),
+    onSuccess: (_, variables) => {
+      toast.success(`Đã gán ${variables.itemIds.length} mục vào thư mục`);
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => {
+      handleApiError(err, 'Lỗi gán thư mục');
+    }
+  });
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.currentTarget.classList.add('bg-indigo-50');
@@ -108,8 +120,20 @@ export const Sidebar = () => {
   const handleDrop = (e: React.DragEvent, folderId: string) => {
     e.preventDefault();
     e.currentTarget.classList.remove('bg-indigo-50');
+    
+    const itemIdsStr = e.dataTransfer.getData('itemIds');
     const itemId = e.dataTransfer.getData('itemId');
-    if (itemId) {
+
+    if (itemIdsStr) {
+      try {
+        const itemIds = JSON.parse(itemIdsStr);
+        if (Array.isArray(itemIds) && itemIds.length > 0) {
+          assignItemsBulkMutation.mutate({ folderId, itemIds });
+        }
+      } catch (e) {
+        console.error("Failed to parse dragged items");
+      }
+    } else if (itemId) {
       assignItemMutation.mutate({ folderId, itemId });
     }
   };
