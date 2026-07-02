@@ -7,12 +7,14 @@ import type { ItemType, ItemStatus } from '../types/items';
 import {
   Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, AlertCircle, Inbox as InboxIcon,
-  ChevronLeft, ChevronRight, Search, LayoutGrid, List,
+  ChevronLeft, ChevronRight, Search, LayoutGrid, List, RefreshCw
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { connectionsApi } from '../lib/connectionsApi';
+import toast from 'react-hot-toast';
 
 const LIMIT = 20;
 
@@ -79,6 +81,16 @@ function statusLabel(s: ItemStatus): string {
   return map[s] ?? s;
 }
 
+function isEmailUnread(item: any): boolean {
+  if (item.type !== 'Email' || !item.metadataJson) return false;
+  try {
+    const meta = JSON.parse(item.metadataJson);
+    return meta.isUnread === true || meta.IsUnread === true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── skeleton row ────────────────────────────────────────────────────────────
 function SkeletonRow() {
   return (
@@ -137,8 +149,36 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
 
 // ─── main component ──────────────────────────────────────────────────────────
 export const Inbox = () => {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncAll = async () => {
+    try {
+      setIsSyncing(true);
+      const connections = await connectionsApi.getConnections();
+      const activeConns = connections.filter(c => c.status === 'Active');
+      if (activeConns.length === 0) {
+        toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
+        return;
+      }
+      
+      const toastId = toast.loading('Đang đồng bộ dữ liệu...');
+      try {
+        await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
+        toast.success('Đồng bộ thành công!', { id: toastId });
+        queryClient.invalidateQueries({ queryKey: ['items'] });
+      } catch (err) {
+        toast.error('Lỗi đồng bộ dữ liệu', { id: toastId });
+        handleApiError(err, 'Lỗi đồng bộ dữ liệu', { navigate });
+      }
+    } catch (err) {
+      handleApiError(err, 'Lỗi lấy danh sách kết nối', { navigate });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const getInitialType = (): ItemType | null => {
     if (location.pathname === '/files') return 'File';
@@ -211,7 +251,6 @@ export const Inbox = () => {
     placeholderData: (prev) => prev,
   });
 
-  const queryClient = useQueryClient();
   const { mutate: toggleImportant } = useMutation({
     mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
       itemsApi.updateItemImportant(id, isImportant),
@@ -318,19 +357,30 @@ export const Inbox = () => {
             </p>
           </div>
 
-          {/* View switcher */}
-          <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px]">
-            <button className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] bg-indigo-50 text-indigo-700 text-[13px] font-semibold">
-              <List className="w-4 h-4" />
-              <span>Danh sách</span>
-            </button>
-            <button 
-              onClick={() => navigate('/kanban')}
-              className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSyncAll}
+              disabled={isSyncing}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
             >
-              <LayoutGrid className="w-4 h-4" />
-              <span>Bảng</span>
+              <RefreshCw className={`w-4 h-4 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Đồng bộ</span>
             </button>
+
+            {/* View switcher */}
+            <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px]">
+              <button className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] bg-indigo-50 text-indigo-700 text-[13px] font-semibold">
+                <List className="w-4 h-4" />
+                <span>Danh sách</span>
+              </button>
+              <button 
+                onClick={() => navigate('/kanban')}
+                className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span>Bảng</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -449,8 +499,8 @@ export const Inbox = () => {
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className={`text-[13.5px] ${item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') ? 'font-bold text-slate-900' : 'font-semibold text-slate-900'} truncate leading-snug flex items-center`}>
-                  {item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') && (
+                <div className={`text-[13.5px] ${isEmailUnread(item) ? 'font-bold text-slate-900' : 'font-semibold text-slate-900'} truncate leading-snug flex items-center`}>
+                  {isEmailUnread(item) && (
                     <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5 flex-shrink-0" />
                   )}
                   {item.title}

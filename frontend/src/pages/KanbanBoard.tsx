@@ -8,7 +8,7 @@ import { BulkActionBar } from '../components/BulkActionBar';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
 import {
   Plus, Loader2, Mail, Calendar, FileText, StickyNote, Briefcase,
-  Star, GripVertical, AlertCircle, LayoutGrid, List as ListIcon, Search
+  Star, GripVertical, AlertCircle, LayoutGrid, List as ListIcon, Search, RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
@@ -77,6 +77,16 @@ function Chip({ active, onClick, children }: ChipProps) {
   );
 }
 
+function isEmailUnread(item: any): boolean {
+  if (item.type !== 'Email' || !item.metadataJson) return false;
+  try {
+    const meta = JSON.parse(item.metadataJson);
+    return meta.isUnread === true || meta.IsUnread === true;
+  } catch {
+    return false;
+  }
+}
+
 const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
   { label: 'Tất cả', value: null },
   { label: 'Email', value: 'Email' },
@@ -90,6 +100,33 @@ export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncAll = async () => {
+    try {
+      setIsSyncing(true);
+      const connections = await connectionsApi.getConnections();
+      const activeConns = connections.filter(c => c.status === 'Active');
+      if (activeConns.length === 0) {
+        toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
+        return;
+      }
+      
+      const toastId = toast.loading('Đang đồng bộ dữ liệu...');
+      try {
+        await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
+        toast.success('Đồng bộ thành công!', { id: toastId });
+        queryClient.invalidateQueries({ queryKey: ['items'] });
+      } catch (err) {
+        toast.error('Lỗi đồng bộ dữ liệu', { id: toastId });
+        handleApiError(err, 'Lỗi đồng bộ dữ liệu', { navigate });
+      }
+    } catch (err) {
+      handleApiError(err, 'Lỗi lấy danh sách kết nối', { navigate });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -317,6 +354,15 @@ export const KanbanBoard = () => {
             <p className="text-[13px] text-slate-500">{currentFolderName} · kéo-thả thẻ để đổi trạng thái</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleSyncAll}
+              disabled={isSyncing}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Đồng bộ</span>
+            </button>
+
             <div className="flex items-center gap-1 p-1 bg-slate-100 border border-slate-200 rounded-lg">
               <Link
                 to={selectedFolderId ? `/?folder=${selectedFolderId}` : '/'}
@@ -508,8 +554,8 @@ export const KanbanBoard = () => {
                                 <GripVertical className="w-4 h-4" />
                               </span>
                             </div>
-                            <h4 className={`text-[13.5px] ${item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') ? 'font-bold text-slate-900' : 'font-medium text-slate-900'} leading-snug mb-2 line-clamp-2`}>
-                              {item.type === 'Email' && item.metadataJson?.includes('"isUnread":true') && (
+                            <h4 className={`text-[13.5px] ${isEmailUnread(item) ? 'font-bold text-slate-900' : 'font-medium text-slate-900'} leading-snug mb-2 line-clamp-2`}>
+                              {isEmailUnread(item) && (
                                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5" />
                               )}
                               {item.title}
