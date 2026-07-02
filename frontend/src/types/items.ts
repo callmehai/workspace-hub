@@ -5,7 +5,7 @@ export interface PagedResult<T> {
   limit: number;
 }
 
-export type ItemType = 'Email' | 'Event' | 'File' | 'Note';
+export type ItemType = 'Email' | 'Event' | 'File' | 'Note' | 'Ticket';
 export type ItemStatus = 'Inbox' | 'Doing' | 'Done';
 
 export interface ItemResponse {
@@ -19,6 +19,7 @@ export interface ItemResponse {
   isImportant: boolean;
   externalId: string | null;
   metadataJson: string | null;
+  folderIds: string[];
 }
 
 export interface UpdateItemStatusRequest {
@@ -44,6 +45,20 @@ export interface FolderResponse {
   ownerName: string;
 }
 
+export interface CreateFolderRequest {
+  name: string;
+  color: string;
+  icon: string;
+}
+
+export interface UpdateFolderRequest {
+  name: string;
+  color: string;
+  icon: string;
+  sortOrder: number;
+  isArchived: boolean;
+}
+
 export interface AddItemToFolderRequest {
   itemId: string;
 }
@@ -53,4 +68,27 @@ export interface ItemFolderResponse {
   folderId: string;
   position: number;
   addedAt: string;
+}
+
+export interface PatchItemRequest {
+  isUnread?: boolean;
+  isStarred?: boolean;
+  addLabels?: string[];
+  removeLabels?: string[];
+  isTrashed?: boolean;
+  title?: string;
+  start?: string; // ISO DateTime
+  end?: string; // ISO DateTime
+  location?: string;
+  attendees?: string[];
+  name?: string;
+}
+
+export interface CreateEventRequest {
+  connectionId: string;
+  title: string;
+  start: string;
+  end: string;
+  location?: string;
+  attendees?: string[];
 }

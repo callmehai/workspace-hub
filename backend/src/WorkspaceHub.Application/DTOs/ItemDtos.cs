@@ -23,6 +23,7 @@ public record GetItemsRequest(
 /// PATCH /api/items/{id}/status — body chỉ có status mới
 /// </summary>
 public record UpdateItemStatusRequest(ItemStatus Status);
+public record UpdateItemImportantRequest(bool IsImportant);
 
 /// <summary>
 /// POST /api/items/note — tạo Note mới
@@ -94,6 +95,7 @@ public record ItemResponse(
     DateTime? DueAt,
     bool IsImportant,
     string? ExternalId,
-    string? MetadataJson);
+    string? MetadataJson,
+    List<Guid> FolderIds);
 
 

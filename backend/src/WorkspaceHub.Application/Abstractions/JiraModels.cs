@@ -18,7 +18,8 @@ public record JiraIssue(
     string? PriorityName,
     string? IssueTypeName,
     string? IssueUrl,
-    DateTimeOffset? Updated);
+    DateTimeOffset? Updated,
+    string? StatusCategoryKey = null);
 
 /// <summary>
 /// Kết quả 1 trang search JQL. NextPageToken null = hết trang (API mới /search/jql dùng token thay startAt).

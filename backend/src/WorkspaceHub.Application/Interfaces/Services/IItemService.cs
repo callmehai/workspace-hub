@@ -31,4 +31,9 @@ public interface IItemService
     /// Lấy chi tiết một Item theo ID.
     /// </summary>
     Task<ItemResponse> GetItemByIdAsync(Guid userId, Guid itemId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cập nhật cờ quan trọng (IsImportant) của Item.
+    /// </summary>
+    Task<ItemResponse> ToggleImportantAsync(Guid userId, Guid itemId, bool isImportant, CancellationToken ct = default);
 }

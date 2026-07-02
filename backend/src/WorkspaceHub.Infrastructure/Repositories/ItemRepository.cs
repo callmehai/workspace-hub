@@ -29,6 +29,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     {
         // Base query: items thuộc user, chưa archived, AsNoTracking cho read-only
         var query = Set.AsNoTracking()
+            .Include(i => i.ItemFolders)
             .Where(i => i.UserId == userId && !i.IsArchived);
 
         // ── Optional filters ──
@@ -96,6 +97,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     {
         // Tracked (KHÔNG AsNoTracking) để cập nhật item persist khi SaveChanges.
         var items = await Set
+            .Include(i => i.ItemFolders)
             .Where(i => i.ConnectionId == connectionId && i.ExternalId != null)
             .ToListAsync(ct);
 
@@ -110,7 +112,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     /// <inheritdoc/>
     public async Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default)
     {
-        return await Set.FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
+        return await Set.Include(i => i.ItemFolders).FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
     }
 
     /// <inheritdoc/>

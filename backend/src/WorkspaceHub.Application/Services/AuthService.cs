@@ -29,9 +29,15 @@ public class AuthService : IAuthService
     private readonly IDistributedCache _cache;
     private readonly IOAuthTokenClient _tokenClient;
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
+    private readonly IJwtTokenFactory _jwt;
+    private readonly IOtpService _otp;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
+
+    // Cooldown giả trả về khi email không đủ điều kiện gửi OTP (chống enumeration, review #6).
+    // Khớp cooldown thật trong OtpService để client không phân biệt được.
+    private const int DefaultCooldownSeconds = 60;
 
     public AuthService(
         IUserRepository users,
@@ -40,7 +46,9 @@ public class AuthService : IAuthService
         IValidator<LoginRequest> loginValidator,
         IDistributedCache cache,
         IOAuthTokenClient tokenClient,
-        IGoogleTokenVerifier googleTokenVerifier)
+        IGoogleTokenVerifier googleTokenVerifier,
+        IJwtTokenFactory jwt,
+        IOtpService otp)
     {
         _users = users;
         _config = config;
@@ -49,9 +57,11 @@ public class AuthService : IAuthService
         _cache = cache;
         _tokenClient = tokenClient;
         _googleTokenVerifier = googleTokenVerifier;
+        _jwt = jwt;
+        _otp = otp;
     }
 
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
+    public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
     {
         await _registerValidator.ValidateAndThrowAsync(request, ct);
 
@@ -62,12 +72,15 @@ public class AuthService : IAuthService
 
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
 
+        // SCRUM-64: tạo user trước, verify sau. PhoneVerified=false → login bị chặn tới khi verify OTP.
         var user = new User
         {
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = passwordHash,
             FullName = request.FullName.Trim(),
+            Phone = request.Phone.Trim(),
+            PhoneVerified = false,
             Role = UserRole.User,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
@@ -76,8 +89,8 @@ public class AuthService : IAuthService
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
 
-        var (token, expiresIn) = GenerateJwtToken(user);
-        return new AuthResponse(token, expiresIn, MapToDto(user));
+        var cooldown = await _otp.SendAsync(user.Id, user.Phone, ct);
+        return new RegisterResult(user.Email, RequiresPhoneVerification: true, cooldown);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -97,6 +110,43 @@ public class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedException("Invalid credentials");
 
+        // SCRUM-64: chặn login nếu chưa verify SĐT. FE bắt mã này → mở màn nhập OTP.
+        if (!user.PhoneVerified)
+            throw new ForbiddenException("PHONE_NOT_VERIFIED");
+
+        return await SignInAsync(user, ct);
+    }
+
+    public async Task<int> SendOtpAsync(string email, CancellationToken ct = default)
+    {
+        // Chống user enumeration (review #6): KHÔNG tiết lộ email tồn tại / đã verify / không
+        // có phone. Email không đủ điều kiện → im lặng trả cooldown giả, không gửi gì.
+        var normalized = email.Trim().ToLowerInvariant();
+        var user = await _users.GetByEmailAsync(normalized, ct);
+        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
+            return DefaultCooldownSeconds;
+
+        return await _otp.SendAsync(user.Id, user.Phone, ct);
+    }
+
+    public async Task<AuthResponse> VerifyOtpAsync(string email, string code, CancellationToken ct = default)
+    {
+        var normalized = email.Trim().ToLowerInvariant();
+        var user = await _users.GetByEmailAsync(normalized, ct);
+
+        // Uniform 422 cho mọi case không hợp lệ (user không tồn tại / đã verify / không phone /
+        // mã sai) — không phân biệt để tránh enumeration. OtpService.VerifyAsync cũng throw 422.
+        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
+            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
+
+        var ok = await _otp.VerifyAsync(user.Id, code, ct);
+        if (!ok)
+            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
+
+        user.PhoneVerified = true;
+        await _users.SaveChangesAsync(ct);
+
+        // Verify xong → đăng nhập luôn (phát JWT) cho mượt.
         return await SignInAsync(user, ct);
     }
 
@@ -183,6 +233,11 @@ public class AuthService : IAuthService
         {
             throw new BusinessRuleException("Google rejected the authorization code");
         }
+        // Timeout HttpClient (30s) khi đổi code → TaskCanceledException. Trả lỗi rõ thay vì 500.
+        catch (OperationCanceledException)
+        {
+            throw new BusinessRuleException("Timed out exchanging the Google authorization code. Please try again.");
+        }
 
         GoogleSignInTokenResponse tokenResponse;
         try
@@ -236,7 +291,7 @@ public class AuthService : IAuthService
         await _users.AddAsync(newUser, ct);
         await _users.SaveChangesAsync(ct);
 
-        var (token, expiresIn) = GenerateJwtToken(newUser);
+        var (token, expiresIn) = _jwt.CreateAccessToken(newUser);
         return new AuthResponse(token, expiresIn, MapToDto(newUser));
     }
 
@@ -254,41 +309,8 @@ public class AuthService : IAuthService
         user.LastLoginAt = DateTime.UtcNow;
         await _users.SaveChangesAsync(ct);
 
-        var (token, expiresIn) = GenerateJwtToken(user);
+        var (token, expiresIn) = _jwt.CreateAccessToken(user);
         return new AuthResponse(token, expiresIn, MapToDto(user));
-    }
-
-    private (string token, int expiresIn) GenerateJwtToken(User user)
-    {
-        var jwtSection = _config.GetSection("Jwt");
-
-        var secret = jwtSection["Secret"]
-            ?? throw new InvalidOperationException("Jwt:Secret is not configured");
-        if (secret.Length < 32)
-            throw new InvalidOperationException("Jwt:Secret must be at least 32 characters");
-
-        var issuer = jwtSection["Issuer"];
-        var audience = jwtSection["Audience"];
-        var expiresIn = int.TryParse(jwtSection["ExpiresIn"], out var e) ? e : 3600;
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
-        };
-
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddSeconds(expiresIn),
-            signingCredentials: creds);
-
-        return (new JwtSecurityTokenHandler().WriteToken(token), expiresIn);
     }
 
     private static UserDto MapToDto(User user)

@@ -447,6 +447,16 @@ public class JiraGateway : IJiraGateway
             : null;
 
         string? statusName    = GetNestedString(fields, "status", "name");
+        string? statusCategoryKey = null;
+        if (fields.ValueKind == JsonValueKind.Object
+            && fields.TryGetProperty("status", out var statusEl)
+            && statusEl.ValueKind == JsonValueKind.Object
+            && statusEl.TryGetProperty("statusCategory", out var catEl)
+            && catEl.ValueKind == JsonValueKind.Object)
+        {
+            statusCategoryKey = GetString(catEl, "key");
+        }
+
         string? assignee      = GetNestedString(fields, "assignee", "displayName");
         string? priorityName  = GetNestedString(fields, "priority", "name");
         string? issueTypeName = GetNestedString(fields, "issuetype", "name");
@@ -462,7 +472,7 @@ public class JiraGateway : IJiraGateway
         // Để null thay vì emit link sai (api.atlassian.com/.../browse → API error khi click). Site URL: phase sau.
         return new JiraIssue(
             id, key, projectKey, summary, description,
-            statusName, assignee, priorityName, issueTypeName, null, updated);
+            statusName, assignee, priorityName, issueTypeName, null, updated, statusCategoryKey);
     }
 
     private static string? GetString(JsonElement el, string prop) =>

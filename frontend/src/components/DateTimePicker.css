@@ -1,0 +1,88 @@
+/* Polish react-datepicker (chế độ inline) cho khớp brand (#2563eb). Scope: .wh-dtp. */
+.wh-dtp .react-datepicker {
+  border: none;
+  border-radius: 0;
+  font-family: inherit;
+  box-shadow: none;
+  background: transparent;
+}
+
+.wh-dtp .react-datepicker__month-container {
+  float: none;
+}
+
+/* ── Header tháng ── */
+.wh-dtp .react-datepicker__header {
+  background: #fff;
+  border-bottom: 1px solid #f1f5f9;
+  padding-top: 12px;
+  padding-bottom: 6px;
+}
+
+.wh-dtp .react-datepicker__current-month {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+  margin-bottom: 6px;
+}
+
+.wh-dtp .react-datepicker__day-name {
+  color: #9ca3af;
+  font-size: 11px;
+  width: 2rem;
+  line-height: 2rem;
+  margin: 2px;
+}
+
+.wh-dtp .react-datepicker__navigation {
+  top: 12px;
+}
+
+/* ── Lưới ngày ── */
+.wh-dtp .react-datepicker__month {
+  margin: 10px;
+}
+
+.wh-dtp .react-datepicker__day {
+  width: 2rem;
+  line-height: 2rem;
+  height: 2rem;
+  margin: 2px;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 13px;
+  transition: background-color .12s, color .12s;
+}
+
+.wh-dtp .react-datepicker__day:hover {
+  background: #eff6ff; /* brand-50 */
+  color: #1d4ed8;      /* brand-700 */
+}
+
+.wh-dtp .react-datepicker__day--today {
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.wh-dtp .react-datepicker__day--selected,
+.wh-dtp .react-datepicker__day--keyboard-selected {
+  background: #2563eb !important; /* brand-600 */
+  color: #fff !important;
+}
+
+.wh-dtp .react-datepicker__day--selected:hover {
+  background: #1d4ed8 !important; /* brand-700 */
+}
+
+.wh-dtp .react-datepicker__day--disabled {
+  color: #d1d5db;
+}
+
+.wh-dtp .react-datepicker__day--disabled:hover {
+  background: transparent;
+  color: #d1d5db;
+}
+
+.wh-dtp .react-datepicker__day--outside-month {
+  color: #cbd5e1;
+}

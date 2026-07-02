@@ -153,4 +153,17 @@ public class ItemsController : ApiControllerBase
         await _writeBackService.DeleteItemAsync(id, CurrentUserId, ct);
         return NoContent();
     }
+
+    /// <summary>
+    /// PATCH /api/items/{id}/important — đánh dấu quan trọng (sao) nội bộ.
+    /// </summary>
+    [HttpPatch("{id:guid}/important")]
+    public async Task<ActionResult<ItemResponse>> UpdateImportant(
+        Guid id,
+        [FromBody] UpdateItemImportantRequest request,
+        CancellationToken ct = default)
+    {
+        var updated = await _itemService.ToggleImportantAsync(CurrentUserId, id, request.IsImportant, ct);
+        return Ok(updated);
+    }
 }

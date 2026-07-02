@@ -52,5 +52,9 @@ export const connectionsApi = {
 
   disconnect: async (id: string): Promise<void> => {
     await api.delete(`/connections/${id}`);
+  },
+
+  syncConnection: async (id: string): Promise<void> => {
+    await api.post(`/connections/${id}/sync`);
   }
 };
