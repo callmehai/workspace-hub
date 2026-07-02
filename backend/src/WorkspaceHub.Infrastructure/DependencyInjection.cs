@@ -88,6 +88,7 @@ public static class DependencyInjection
         services.AddScoped<IItemRepository, ItemRepository>();
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
 
         services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();

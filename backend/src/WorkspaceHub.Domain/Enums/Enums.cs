@@ -94,5 +94,6 @@ public enum NotificationType
     ShareInvite,
     ImportantEmail,
     SyncError,
-    ScheduleSent
+    ScheduleSent,
+    ItemSynced
 }

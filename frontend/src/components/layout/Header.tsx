@@ -1,9 +1,36 @@
+import { useEffect, useRef, useState } from 'react';
 import { Search, Bell, Plus } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { Link } from 'react-router-dom';
+import { notificationsApi } from '../../lib/notificationsApi';
+import { UNREAD_COUNT_KEY } from '../../hooks/useNotificationHub';
+import { NotificationsDropdown } from './NotificationsDropdown';
 
 export const Header = () => {
   const { user } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: UNREAD_COUNT_KEY,
+    queryFn: () => notificationsApi.getUnreadCount(),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
 
   return (
     <header className="h-16 border-b border-gray-200 bg-gray-50 flex items-center justify-between px-6 shrink-0">
@@ -26,10 +53,24 @@ export const Header = () => {
           <Plus className="w-4 h-4" />
           <span>Kết nối dịch vụ</span>
         </Link>
-        <button className="text-gray-500 hover:text-gray-700 transition-colors relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-        </button>
+
+        <div className="relative" ref={bellRef}>
+          <button
+            type="button"
+            onClick={() => setIsOpen((prev) => !prev)}
+            className="text-gray-500 hover:text-gray-700 transition-colors relative p-1"
+            aria-label="Thông báo"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-semibold text-white bg-red-500 rounded-full border-2 border-gray-50">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+          {isOpen && <NotificationsDropdown onClose={() => setIsOpen(false)} />}
+        </div>
+
         <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-brand-500 to-purple-500 flex items-center justify-center text-sm font-medium text-white shadow-sm overflow-hidden border border-gray-200">
           {user?.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
         </div>

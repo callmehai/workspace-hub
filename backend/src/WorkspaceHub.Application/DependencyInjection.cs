@@ -50,6 +50,7 @@ public static class DependencyInjection
         // Important contacts (SCRUM-60)
         services.AddScoped<IImportantContactService, ImportantContactService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }

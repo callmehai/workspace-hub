@@ -1,8 +1,11 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
+import { useNotificationHub } from '../hooks/useNotificationHub';
 
 export const MainLayout = () => {
+  useNotificationHub();
+
   return (
     <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
       {/* Sidebar fixed ở bên trái */}
