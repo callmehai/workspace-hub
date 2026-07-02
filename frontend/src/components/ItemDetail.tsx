@@ -6,7 +6,7 @@ import {
   Trash2, Edit3, ExternalLink, Tag, Loader2,
   AlertCircle, Eye, EyeOff, Star, Check, Send
 } from 'lucide-react';
-import { itemsApi } from '../lib/itemsApi';
+import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { type PatchItemRequest } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import toast from 'react-hot-toast';
@@ -59,6 +59,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     queryKey: ['item', itemId],
     queryFn: () => itemsApi.getItemById(itemId),
     enabled: !!itemId,
+  });
+
+  const { data: folders = [] } = useQuery({
+    queryKey: ['folders'],
+    queryFn: () => foldersApi.getFolders()
   });
 
   // Mutate item (writeback PATCH)
@@ -202,7 +207,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
   } else if (item.type === 'Ticket') {
     if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
-    if (metadata.projectKey) rows.push({ label: 'Project',    value: metadata.projectKey });
+    // if (metadata.projectKey) rows.push({ label: 'Project',    value: metadata.projectKey }); // Removed per user request
     if (metadata.issueType)  rows.push({ label: 'Loại',       value: metadata.issueType });
     if (metadata.priority)   rows.push({ label: 'Ưu tiên',    value: metadata.priority });
     if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });
@@ -367,11 +372,21 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-[18px]">
-          {/* Mock Folder Dot (for UI parity with prototype) */}
-          <div className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 px-[11px] py-[5px] rounded-full mb-4">
-            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-            VinClub — Chiến dịch Tết
-          </div>
+          {/* Folders */}
+          {item.folderIds?.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {item.folderIds.map(fId => {
+                const f = folders.find((fol: any) => fol.id === fId);
+                if (!f) return null;
+                return (
+                  <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 px-[11px] py-[5px] rounded-full">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                    {f.name}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Form edit for Event */}
           {isEditing && item.type === 'Event' ? (

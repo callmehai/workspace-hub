@@ -95,7 +95,7 @@ export const KanbanBoard = () => {
 
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
+  const [typeFilter, setTypeFilter] = useState<ItemType | null>('Ticket');
   const [importantOnly, setImportantOnly] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -154,8 +154,17 @@ export const KanbanBoard = () => {
   );
 
   const updateStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string, status: ItemStatus }) =>
-      itemsApi.updateItemStatus(id, { status }),
+    mutationFn: ({ id, status, type }: { id: string, status: ItemStatus, type: ItemType }) => {
+      if (type === 'Ticket') {
+        const transitionMap: Record<ItemStatus, string> = {
+          Inbox: 'To Do',
+          Doing: 'In Progress',
+          Done: 'Done'
+        };
+        return itemsApi.patchItem(id, { statusTransition: transitionMap[status] });
+      }
+      return itemsApi.updateItemStatus(id, { status });
+    },
     onMutate: async ({ id, status }) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<PagedResult<ItemResponse>>(queryKey);
@@ -260,7 +269,10 @@ export const KanbanBoard = () => {
     setDraggingId(null);
     const itemId = e.dataTransfer.getData('itemId');
     if (itemId) {
-      updateStatus.mutate({ id: itemId, status });
+      const draggedItem = items.find((i: ItemResponse) => i.id === itemId);
+      if (draggedItem) {
+        updateStatus.mutate({ id: itemId, status, type: draggedItem.type });
+      }
     }
   };
 
