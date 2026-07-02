@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scheduledEmailsApi, type CreateScheduledEmailRequest, type ScheduledEmailDto } from '../lib/scheduledEmailsApi';
 import { connectionsApi } from '../lib/connectionsApi';
-import { Send, Clock, ChevronLeft, ChevronRight, AlertCircle, X, Mail, Users, Calendar } from 'lucide-react';
+import { Send, Clock, ChevronLeft, ChevronRight, AlertCircle, X, Mail, Users, Calendar, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
-import DatePicker, { registerLocale } from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
-import { vi } from 'date-fns/locale/vi';
 import DOMPurify from 'dompurify';
-
-registerLocale('vi', vi);
+import { DateTimePicker } from '../components/DateTimePicker';
+import { Select } from '../components/Select';
+import { EmailChipsInput } from '../components/EmailChipsInput';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { EMAIL_TEMPLATES } from '../lib/emailTemplates';
+import { sendEmailApi } from '../lib/sendEmailApi';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getStatusConfig(status?: string) {
@@ -168,13 +169,15 @@ export const ScheduledEmails = () => {
   const [statusFilter, setStatusFilter] = useState('All');
 
   // Form State
-  const [cTo, setCTo] = useState('');
-  const [cCc, setCCc] = useState('');
-  const [cBcc, setCBcc] = useState('');
+  const [cTo, setCTo] = useState<string[]>([]);
+  const [cCc, setCCc] = useState<string[]>([]);
+  const [cBcc, setCBcc] = useState<string[]>([]);
   const [cSubject, setCSubject] = useState('');
   const [cBody, setCBody] = useState('');
   const [cWhen, setCWhen] = useState<Date | null>(null);
   const [cConn, setCConn] = useState('');
+  const [template, setTemplate] = useState('blank');
+  const [includeSignature, setIncludeSignature] = useState(true);
 
   // Detail modal
   const [selectedEmail, setSelectedEmail] = useState<ScheduledEmailDto | null>(null);
@@ -194,18 +197,27 @@ export const ScheduledEmails = () => {
   const { data: schedData, isLoading, isError, refetch } = useQuery({
     queryKey: ['scheduled-emails', page, limit, statusFilter],
     queryFn: () => scheduledEmailsApi.getScheduledEmails(skip, limit, statusFilter),
+    // Auto-cron đổi status phía server → poll để UI đồng bộ. Chỉ poll khi còn item "Chờ gửi"
+    // trong danh sách hiện tại; hết Pending thì ngừng (tránh request thừa).
+    refetchInterval: (query) => {
+      const items = query.state.data?.value ?? [];
+      const hasPending = items.some(e => (e.status ?? '').toLowerCase() === 'pending');
+      return hasPending ? 15000 : false;
+    },
+    refetchOnWindowFocus: true,
   });
 
   const createMutation = useMutation({
     mutationFn: scheduledEmailsApi.createScheduledEmail,
     onSuccess: () => {
       toast.success('Đã lên lịch gửi email thành công!');
-      setCTo('');
-      setCCc('');
-      setCBcc('');
+      setCTo([]);
+      setCCc([]);
+      setCBcc([]);
       setCSubject('');
       setCBody('');
       setCWhen(null);
+      setTemplate('blank');
       queryClient.invalidateQueries({ queryKey: ['scheduled-emails'] });
       setPage(1);
     },
@@ -221,37 +233,44 @@ export const ScheduledEmails = () => {
     onError: (err) => handleApiError(err, 'Không thể huỷ lịch gửi')
   });
 
+  // cConn có thể rỗng khi user chưa chủ động chọn — mặc định về Gmail connection đầu tiên.
+  const resolvedConn = cConn || activeGmailConnections[0]?.id || '';
+
+  // Chữ ký THẬT từ Gmail của connection (rỗng nếu chưa đặt / connection cũ thiếu scope settings.basic).
+  const { data: signature = '' } = useQuery({
+    queryKey: ['gmail-signature', resolvedConn],
+    queryFn: () => sendEmailApi.getSignature(resolvedConn),
+    enabled: !!resolvedConn,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const composedHtml = includeSignature && signature
+    ? `${cBody}<br><br>${signature}`
+    : cBody;
+
+  const applyTemplate = (id: string) => {
+    setTemplate(id);
+    const tpl = EMAIL_TEMPLATES.find(t => t.id === id);
+    if (!tpl) return;
+    setCBody(tpl.html);
+    if (tpl.subject && !cSubject.trim()) setCSubject(tpl.subject);
+  };
+
   const handleScheduleSend = () => {
-    const selectedConn = cConn || activeGmailConnections[0]?.id || '';
-    if (!cTo.trim()) return toast.error('Vui lòng nhập người nhận');
+    // To/Cc/Bcc đã được EmailChipsInput validate từng email lúc thêm → chỉ cần check rỗng.
+    if (cTo.length === 0) return toast.error('Vui lòng nhập người nhận');
     if (!cSubject.trim()) return toast.error('Vui lòng nhập tiêu đề email');
     if (!cWhen) return toast.error('Vui lòng chọn thời gian gửi');
-    if (!selectedConn) return toast.error('Vui lòng chọn kết nối Gmail');
+    if (!resolvedConn) return toast.error('Vui lòng chọn kết nối Gmail');
     if (cWhen <= new Date()) return toast.error('Thời gian gửi phải sau thời điểm hiện tại');
 
-    const splitAndTrim = (str: string) => str.split(',').map(s => s.trim()).filter(Boolean);
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    const toList = splitAndTrim(cTo);
-    const ccList = splitAndTrim(cCc);
-    const bccList = splitAndTrim(cBcc);
-
-    const invalidTo = toList.find(e => !emailRegex.test(e));
-    if (invalidTo) return toast.error(`"${invalidTo}" không phải email hợp lệ (To)`);
-
-    const invalidCc = ccList.find(e => !emailRegex.test(e));
-    if (invalidCc) return toast.error(`"${invalidCc}" không phải email hợp lệ (Cc)`);
-
-    const invalidBcc = bccList.find(e => !emailRegex.test(e));
-    if (invalidBcc) return toast.error(`"${invalidBcc}" không phải email hợp lệ (Bcc)`);
-
     const payload: CreateScheduledEmailRequest = {
-      connectionId: selectedConn,
-      to: toList,
-      cc: ccList,
-      bcc: bccList,
+      connectionId: resolvedConn,
+      to: cTo,
+      cc: cCc,
+      bcc: cBcc,
       subject: cSubject,
-      bodyHtml: cBody,
+      bodyHtml: composedHtml,
       sendAt: cWhen.toISOString(),
     };
 
@@ -310,7 +329,7 @@ export const ScheduledEmails = () => {
         />
       )}
 
-      <div className="p-5 md:p-8 max-w-6xl mx-auto h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+      <div className="p-5 md:p-8 max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col overflow-hidden">
         <div className="mb-6 shrink-0">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Email hẹn giờ</h1>
           <p className="text-sm text-gray-500">Soạn và lên lịch gửi email tự động qua Gmail đã kết nối.</p>
@@ -318,89 +337,119 @@ export const ScheduledEmails = () => {
 
         <div className="flex flex-col lg:flex-row gap-6 items-stretch flex-1 min-h-0">
           {/* Compose Form */}
-          <div className="flex-1 w-full lg:w-1/2 bg-white border border-gray-200 rounded-xl p-5 md:p-6 shadow-sm flex flex-col min-h-0">
-            <h2 className="text-base font-semibold text-gray-900 mb-4 shrink-0">Soạn email</h2>
-
-            <label className={labelClass}>Người nhận</label>
-            <input value={cTo} onChange={(e) => setCTo(e.target.value)} placeholder="email1@..., email2@..." className={inputClass} />
-
-            <div className="flex flex-col sm:flex-row sm:gap-3">
-              <div className="flex-1">
-                <label className={labelClass}>Cc</label>
-                <input value={cCc} onChange={(e) => setCCc(e.target.value)} placeholder="email1@..., email2@..." className={inputClass} />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass}>Bcc</label>
-                <input value={cBcc} onChange={(e) => setCBcc(e.target.value)} placeholder="email1@..., email2@..." className={inputClass} />
-              </div>
+          <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
+            <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900">
+              <Pencil className="w-4 h-4 text-gray-400" />
+              <h2 className="text-base font-semibold">Soạn email</h2>
             </div>
-
-            <label className={labelClass}>Tiêu đề</label>
-            <input value={cSubject} onChange={(e) => setCSubject(e.target.value)} placeholder="Tiêu đề email" className={inputClass} />
-
-            <label className={`${labelClass} shrink-0`}>Nội dung</label>
-            <textarea
-              value={cBody}
-              onChange={(e) => setCBody(e.target.value)}
-              placeholder="Soạn nội dung email..."
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors resize-none leading-relaxed flex-1 min-h-[100px]"
-            />
-
-            <div className="flex flex-col sm:flex-row sm:gap-3 shrink-0">
-              <div className="flex-1">
-                <label className={`${labelClass} shrink-0`}>Thời gian gửi</label>
-                <DatePicker
-                  selected={cWhen}
-                  onChange={(date: Date | null) => setCWhen(date)}
-                  showTimeSelect
-                  timeFormat="HH:mm"
-                  timeIntervals={15}
-                  timeCaption="Giờ"
-                  dateFormat="dd/MM/yyyy HH:mm"
-                  locale="vi"
-                  placeholderText="dd/MM/yyyy HH:mm"
-                  className={inputClass}
-                />
+            <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-xl p-5 md:p-6 shadow-sm flex flex-col overflow-y-auto">
+              <label className={`${labelClass} shrink-0`}>Người nhận</label>
+              <div className="shrink-0">
+                <EmailChipsInput value={cTo} onChange={setCTo} placeholder="Nhập email rồi Enter / phẩy hoặc bấm +" />
               </div>
-              <div className="flex-1">
-                <label className={labelClass}>Kết nối</label>
-                <select value={cConn || activeGmailConnections[0]?.id || ''} onChange={(e) => setCConn(e.target.value)} className={inputClass}>
-                  <option value="">Chọn kết nối...</option>
-                  {activeGmailConnections.map(c => (
-                    <option key={c.id} value={c.id}>Gmail · {c.providerAccountId}</option>
-                  ))}
-                </select>
+
+              <div className="flex flex-col sm:flex-row sm:gap-3 shrink-0">
+                <div className="flex-1">
+                  <label className={labelClass}>Cc</label>
+                  <EmailChipsInput value={cCc} onChange={setCCc} placeholder="email@..." />
+                </div>
+                <div className="flex-1">
+                  <label className={labelClass}>Bcc</label>
+                  <EmailChipsInput value={cBcc} onChange={setCBcc} placeholder="email@..." />
+                </div>
               </div>
+
+              <div className="flex flex-col sm:flex-row sm:gap-3 shrink-0">
+                <div className="flex-1">
+                  <label className={labelClass}>Tiêu đề</label>
+                  <input value={cSubject} onChange={(e) => setCSubject(e.target.value)} placeholder="Tiêu đề email" className={inputClass} />
+                </div>
+                <div className="sm:w-44">
+                  <label className={labelClass}>Mẫu HTML</label>
+                  <Select
+                    value={template}
+                    onChange={applyTemplate}
+                    options={EMAIL_TEMPLATES.map(t => ({ value: t.id, label: t.label }))}
+                    className="h-9 mb-3"
+                  />
+                </div>
+              </div>
+
+              <label className={`${labelClass} shrink-0`}>Nội dung</label>
+              <RichTextEditor value={cBody} onChange={setCBody} placeholder="Soạn nội dung email…" className="mb-3 shrink-0" />
+
+              <div className="shrink-0 mb-4">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={includeSignature}
+                    disabled={!signature}
+                    onClick={() => setIncludeSignature((v) => !v)}
+                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 disabled:opacity-40 ${includeSignature && signature ? 'bg-brand-600' : 'bg-gray-300'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${includeSignature && signature ? 'translate-x-4' : ''}`} />
+                  </button>
+                  <span className="text-sm text-gray-700">Kèm chữ ký Gmail</span>
+                </label>
+                {!signature && (
+                  <p className="mt-1.5 text-xs text-gray-400 leading-relaxed">
+                    Tài khoản chưa đặt chữ ký, hoặc connection cũ chưa có quyền đọc chữ ký — đặt chữ ký trong Gmail và <strong>kết nối lại</strong> để dùng.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:gap-3 shrink-0">
+                <div className="flex-1">
+                  <label className={`${labelClass} shrink-0`}>Thời gian gửi</label>
+                  <DateTimePicker
+                    value={cWhen}
+                    onChange={setCWhen}
+                    placeholder="dd/MM/yyyy HH:mm"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className={labelClass}>Kết nối</label>
+                  <Select
+                    value={resolvedConn}
+                    onChange={setCConn}
+                    options={activeGmailConnections.map(c => ({ value: c.id, label: `Gmail · ${c.providerAccountId}` }))}
+                    placeholder="Chọn kết nối..."
+                    className="h-9 mb-3"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleScheduleSend}
+                disabled={createMutation.isPending}
+                className="mt-2 w-full shrink-0 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                <span>{createMutation.isPending ? 'Đang xử lý...' : 'Lên lịch gửi'}</span>
+              </button>
             </div>
-
-            <button
-              onClick={handleScheduleSend}
-              disabled={createMutation.isPending}
-              className="mt-2 w-full shrink-0 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              <Send className="w-4 h-4" />
-              <span>{createMutation.isPending ? 'Đang xử lý...' : 'Lên lịch gửi'}</span>
-            </button>
           </div>
 
           {/* Scheduled List */}
           <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3.5 shrink-0">
               <h2 className="text-base font-semibold text-gray-900">Lịch đã đặt</h2>
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="h-8 px-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-              >
-                <option value="All">Tất cả</option>
-                <option value="Pending">Chờ gửi</option>
-                <option value="Sent">Đã gửi</option>
-                <option value="Failed">Thất bại</option>
-                <option value="Cancelled">Đã huỷ</option>
-              </select>
+              <div className="w-36">
+                <Select
+                  value={statusFilter}
+                  onChange={(v) => { setStatusFilter(v); setPage(1); }}
+                  options={[
+                    { value: 'All', label: 'Tất cả' },
+                    { value: 'Pending', label: 'Chờ gửi' },
+                    { value: 'Sent', label: 'Đã gửi' },
+                    { value: 'Failed', label: 'Thất bại' },
+                    { value: 'Cancelled', label: 'Đã huỷ' },
+                  ]}
+                  className="h-8"
+                />
+              </div>
             </div>
 
             {isError ? (

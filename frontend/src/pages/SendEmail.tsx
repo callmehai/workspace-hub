@@ -1,0 +1,207 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Send, Eye, Pencil } from 'lucide-react';
+import toast from 'react-hot-toast';
+import DOMPurify from 'dompurify';
+import { sendEmailApi, type SendEmailRequest } from '../lib/sendEmailApi';
+import { connectionsApi } from '../lib/connectionsApi';
+import { EMAIL_TEMPLATES } from '../lib/emailTemplates';
+import { handleApiError } from '../lib/errorUtils';
+import { EmailChipsInput } from '../components/EmailChipsInput';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { Select } from '../components/Select';
+
+export const SendEmail = () => {
+  const [to, setTo] = useState<string[]>([]);
+  const [cc, setCc] = useState<string[]>([]);
+  const [bcc, setBcc] = useState<string[]>([]);
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [conn, setConn] = useState('');
+  const [template, setTemplate] = useState('blank');
+  const [includeSignature, setIncludeSignature] = useState(true);
+
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+  });
+
+  const activeGmail = React.useMemo(
+    () => connections.filter(c => c.serviceType.toLowerCase() === 'gmail' && c.status.toLowerCase() === 'active'),
+    [connections],
+  );
+  const resolvedConn = conn || activeGmail[0]?.id || '';
+
+  // Chữ ký THẬT từ Gmail của connection (rỗng nếu chưa đặt / connection cũ thiếu scope settings.basic).
+  const { data: signature = '' } = useQuery({
+    queryKey: ['gmail-signature', resolvedConn],
+    queryFn: () => sendEmailApi.getSignature(resolvedConn),
+    enabled: !!resolvedConn,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const composedHtml = includeSignature && signature
+    ? `${body}<br><br>${signature}`
+    : body;
+
+  const applyTemplate = (id: string) => {
+    setTemplate(id);
+    const tpl = EMAIL_TEMPLATES.find(t => t.id === id);
+    if (!tpl) return;
+    setBody(tpl.html);
+    if (tpl.subject && !subject.trim()) setSubject(tpl.subject);
+  };
+
+  const sendMutation = useMutation({
+    mutationFn: sendEmailApi.send,
+    onSuccess: () => {
+      toast.success('Đã gửi email!');
+      setTo([]); setCc([]); setBcc([]); setSubject(''); setBody(''); setTemplate('blank');
+    },
+    onError: (err) => handleApiError(err, 'Không thể gửi email'),
+  });
+
+  const handleSend = () => {
+    if (to.length === 0) return toast.error('Vui lòng nhập người nhận');
+    if (!subject.trim()) return toast.error('Vui lòng nhập tiêu đề email');
+    if (!body.trim()) return toast.error('Vui lòng nhập nội dung email');
+    if (!resolvedConn) return toast.error('Vui lòng chọn kết nối Gmail');
+
+    const payload: SendEmailRequest = {
+      connectionId: resolvedConn,
+      to, cc, bcc, subject, bodyHtml: composedHtml,
+    };
+    sendMutation.mutate(payload);
+  };
+
+  const labelClass = 'block text-xs font-medium text-gray-500 mb-1.5';
+  const inputClass = 'w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors';
+
+  return (
+    <div className="p-5 md:p-8 max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+      <div className="mb-6 shrink-0">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Gửi email</h1>
+        <p className="text-sm text-gray-500">Soạn email HTML và gửi ngay qua Gmail đã kết nối.</p>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch flex-1 min-h-0">
+        {/* Compose */}
+        <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
+          <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900">
+            <Pencil className="w-4 h-4 text-gray-400" />
+            <h2 className="text-base font-semibold">Soạn email</h2>
+          </div>
+          <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-xl p-5 md:p-6 shadow-sm flex flex-col overflow-y-auto">
+          <label className={`${labelClass} shrink-0`}>Người nhận</label>
+          <div className="shrink-0">
+            <EmailChipsInput value={to} onChange={setTo} placeholder="Nhập email rồi Enter / phẩy hoặc bấm +" />
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:gap-3 shrink-0">
+            <div className="flex-1">
+              <label className={labelClass}>Cc</label>
+              <EmailChipsInput value={cc} onChange={setCc} placeholder="email@..." />
+            </div>
+            <div className="flex-1">
+              <label className={labelClass}>Bcc</label>
+              <EmailChipsInput value={bcc} onChange={setBcc} placeholder="email@..." />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:gap-3 shrink-0">
+            <div className="flex-1">
+              <label className={labelClass}>Tiêu đề</label>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Tiêu đề email" className={`${inputClass} mb-3`} />
+            </div>
+            <div className="sm:w-44">
+              <label className={labelClass}>Mẫu HTML</label>
+              <Select
+                value={template}
+                onChange={applyTemplate}
+                options={EMAIL_TEMPLATES.map(t => ({ value: t.id, label: t.label }))}
+                className="h-9 mb-3"
+              />
+            </div>
+          </div>
+
+          <label className={`${labelClass} shrink-0`}>Nội dung</label>
+          <RichTextEditor value={body} onChange={setBody} placeholder="Soạn nội dung email…" className="mb-3 shrink-0" />
+
+          <div className="shrink-0 mb-4">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={includeSignature}
+                disabled={!signature}
+                onClick={() => setIncludeSignature((v) => !v)}
+                className={`relative w-9 h-5 rounded-full transition-colors shrink-0 disabled:opacity-40 ${includeSignature && signature ? 'bg-brand-600' : 'bg-gray-300'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${includeSignature && signature ? 'translate-x-4' : ''}`} />
+              </button>
+              <span className="text-sm text-gray-700">Kèm chữ ký Gmail</span>
+            </label>
+            {!signature && (
+              <p className="mt-1.5 text-xs text-gray-400 leading-relaxed">
+                Tài khoản chưa đặt chữ ký, hoặc connection cũ chưa có quyền đọc chữ ký — hãy đặt chữ ký trong cài đặt Gmail và <strong>kết nối lại</strong> Gmail để dùng.
+              </p>
+            )}
+          </div>
+
+          <label className={`${labelClass} shrink-0`}>Kết nối</label>
+          <div className="shrink-0 mb-4">
+            <Select
+              value={resolvedConn}
+              onChange={setConn}
+              options={activeGmail.map(c => ({ value: c.id, label: `Gmail · ${c.providerAccountId}` }))}
+              placeholder="Chọn kết nối..."
+              className="h-9"
+            />
+          </div>
+
+          <button
+            onClick={handleSend}
+            disabled={sendMutation.isPending}
+            className="mt-2 w-full shrink-0 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            <Send className="w-4 h-4" />
+            <span>{sendMutation.isPending ? 'Đang gửi...' : 'Gửi ngay'}</span>
+          </button>
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
+          <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900">
+            <Eye className="w-4 h-4 text-gray-400" />
+            <h2 className="text-base font-semibold">Xem trước</h2>
+          </div>
+          <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-3 border-b border-gray-100 shrink-0">
+              <p className="text-xs text-gray-400">Tiêu đề</p>
+              <p className="text-sm font-semibold text-gray-900 truncate">{subject || '(Chưa có tiêu đề)'}</p>
+              {to.length > 0 && (
+                <p className="text-xs text-gray-400 mt-1 truncate">Đến: {to.join(', ')}</p>
+              )}
+              {cc.length > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5 truncate">Cc: {cc.join(', ')}</p>
+              )}
+              {bcc.length > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5 truncate">Bcc: {bcc.join(', ')}</p>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {body.trim() ? (
+                <div className="html-content px-5 py-4" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(composedHtml) }} />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-gray-400 p-8 text-center">
+                  Nội dung email sẽ hiển thị ở đây. Chọn một mẫu HTML hoặc tự soạn.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

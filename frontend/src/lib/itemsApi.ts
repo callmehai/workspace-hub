@@ -2,7 +2,7 @@ import api from './api';
 import type { 
   PagedResult, ItemResponse, UpdateItemStatusRequest, CreateNoteRequest, 
   FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType,
-  PatchItemRequest, CreateEventRequest
+  PatchItemRequest, CreateEventRequest, CreateFolderRequest, UpdateFolderRequest
 } from '../types/items';
 
 export interface GetItemsParams {
@@ -66,6 +66,20 @@ export const foldersApi = {
     return response.data;
   },
   
+  createFolder: async (request: CreateFolderRequest): Promise<FolderResponse> => {
+    const response = await api.post('/folders', request);
+    return response.data;
+  },
+
+  updateFolder: async (id: string, request: UpdateFolderRequest): Promise<FolderResponse> => {
+    const response = await api.put(`/folders/${id}`, request);
+    return response.data;
+  },
+
+  deleteFolder: async (id: string): Promise<void> => {
+    await api.delete(`/folders/${id}`);
+  },
+
   addItemToFolder: async (folderId: string, request: AddItemToFolderRequest): Promise<ItemFolderResponse> => {
     const response = await api.post(`/folders/${folderId}/items`, request);
     return response.data;

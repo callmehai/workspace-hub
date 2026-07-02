@@ -395,6 +395,19 @@ export const Inbox = () => {
                 <div className="text-[12.5px] text-slate-500 truncate mt-0.5 leading-snug">
                   {item.snippet}
                 </div>
+                {item.folderIds && item.folderIds.length > 0 && (
+                  <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                    {item.folderIds.map(fId => {
+                      const f = folders.find(fol => fol.id === fId);
+                      if (!f) return null;
+                      return (
+                        <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
+                          {f.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col items-end gap-1.5 flex-shrink-0">

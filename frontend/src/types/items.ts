@@ -19,6 +19,7 @@ export interface ItemResponse {
   isImportant: boolean;
   externalId: string | null;
   metadataJson: string | null;
+  folderIds: string[];
 }
 
 export interface UpdateItemStatusRequest {
@@ -42,6 +43,20 @@ export interface FolderResponse {
   isOwner: boolean;
   permission: string;
   ownerName: string;
+}
+
+export interface CreateFolderRequest {
+  name: string;
+  color: string;
+  icon: string;
+}
+
+export interface UpdateFolderRequest {
+  name: string;
+  color: string;
+  icon: string;
+  sortOrder: number;
+  isArchived: boolean;
 }
 
 export interface AddItemToFolderRequest {

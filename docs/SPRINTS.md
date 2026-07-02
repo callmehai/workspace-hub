@@ -68,11 +68,11 @@
 |---|---|---|---|---|
 | SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done — map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack ở prod; traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
 | SCRUM-26 | Refactor services + clean architecture | Khánh | — | ✅ Done |
-| SCRUM-27 | API testing + Postman collection | Huy | 24 | 🔍 In Review — Postman collection + environment ở `backend/postman/` (48 request, 10 nhóm: auth/folders/items/connections/scheduled-emails/important-contacts/admin/health). Có test script tự assert + tự capture token/id (chạy Collection Runner / Newman). Phủ 200/201/204/400/401/403/404/409/422; happy-path provider tách riêng. Chờ Huy chạy test. |
+| SCRUM-27 | API testing + Postman collection | Huy | 24 | ✅ Done — Postman collection + environment ở `backend/postman/` (48 request, 10 nhóm: auth/folders/items/connections/scheduled-emails/important-contacts/admin/health). Có test script tự assert + tự capture token/id (chạy Collection Runner / Newman). Phủ 200/201/204/400/401/403/404/409/422; happy-path provider tách riêng. |
 | SCRUM-28 | README backend + setup guide | Dũng | — | ⏳ To Do |
 | SCRUM-29 | Unit test cho service chính | Hải | — | ⏳ To Do |
 | SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ✅ Done — `POST /api/scheduled-emails` (422 nếu Connection ≠ Gmail, 400 nếu sendAt quá khứ); list phân trang; cancel |
-| SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | ⏳ To Do |
+| SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | 🔍 In Review — `POST /api/internal/process-scheduled` (header `X-Cron-Secret`, không JWT). Quét batch Pending tới hạn → `IGmailGateway.SendMessageAsync` (MIME RFC2822, subject encoded-word UTF-8); thành công→Sent+SentAt, lỗi→Failed+RetryCount+LastError; trả `{total,sent,failed}`. Config `Cron:Secret`. 6 unit test (`ProcessScheduledEmailsServiceTests`). |
 | SCRUM-38 | Conflict resolution chung (ETag → 409) | Lộc | 37 | ✅ Done — `WriteBackGuard : IWriteBackGuard.EnsureNoConflict(storedEtag, providerEtag)` (chỉ so sánh, không I/O; lệch → `ConflictException` → 409 qua middleware; null/empty một bên → skip-check). Thay `TempWriteBackGuard` placeholder của Vũ, DI cập nhật. Test: `WriteBackGuardTests` (9 case). Log `LogWarning` khi conflict. |
 | SCRUM-41 | FE: API layer (axios + JWT interceptor + TanStack Query) | Vũ | — | ⏳ To Do |
 | SCRUM-42 | FE: Wire Login/Register vào API | Lộc | 41 | ✅ Done — `Login.tsx` + `RegisterPage.tsx` redesign theo prototype (card + logo W + banner lỗi + inline field error + Google button). Login gọi `POST /api/auth/login` → lưu token qua `tokenStore` + `login()`, redirect `/`; lỗi 401 (sai mật khẩu/khoá) hiện ở banner. Register gọi `POST /api/auth/register` (thêm confirm-password client-side), 409 email trùng → banner. Refresh giữ session qua `AuthContext` (`/auth/me`); logout xoá token. `ApiError` type khớp error envelope SCRUM-24. **Google Sign-In FE:** nút "Đăng nhập/Đăng ký bằng Google" gọi `POST /api/auth/google/start` → redirect Google → callback route riêng `/auth/google/callback` (`GoogleCallback.tsx`) đổi code+state qua `POST /api/auth/google/callback` → login + redirect. Dùng config `Google:SignInRedirectUri` (= `/auth/google/callback`) tách khỏi `/oauth/callback` của connect-để-sync. **Logout:** nút ở user block cuối Sidebar gọi `authApi.logout()` (`POST /api/auth/logout`) + xoá token + clear query cache, redirect `/login`. |
@@ -95,6 +95,7 @@
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
 | SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | ⏳ To Do |
+| SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
 
 ## Phase Jira — Atlassian integration (SCRUM-54→60)
 

@@ -52,8 +52,8 @@ public class RefreshTokenService : IRefreshTokenService
     private readonly string _audience;
     private readonly int _refreshTtl;
 
-    // GETDEL atomic: trả value cũ nếu key tồn tại rồi xoá; không tồn tại → nil.
-    private const string GetDelScript = "local v = redis.call('GET', KEYS[1]); if v then redis.call('DEL', KEYS[1]) end; return v";
+    // Dùng EXISTS + DEL vì IDistributedCache (Redis) lưu dưới dạng Hash, gọi GET trực tiếp sẽ bị lỗi WRONGTYPE.
+    private const string GetDelScript = "local ex = redis.call('EXISTS', KEYS[1]); if ex == 1 then redis.call('DEL', KEYS[1]); return 1; else return nil; end";
 
     public RefreshTokenService(
         IConfiguration config,

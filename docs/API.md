@@ -152,8 +152,14 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 ## Item-Folder — không đổi
 `POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.
 
+## Emails — gửi trực tiếp ⭐
+- `POST /api/emails/send` — [Authorize]. Body `{ connectionId, to[], cc[], bcc[], subject, bodyHtml }`. Gửi **ngay** (đồng bộ) qua Gmail. Validate connection thuộc user + ServiceType=Gmail + Active. Trả `200 { messageId, sentAt }`. (400 validation, 404 connection, 422 connection không phải Gmail / không Active, 502 provider lỗi). Gmail write-back "gửi mới".
+- `GET /api/emails/signature?connectionId=` — [Authorize]. Lấy chữ ký HTML đã đặt trong Gmail của connection (qua `users.settings.sendAs`, ưu tiên primary). Trả `200 { signature }` (rỗng nếu chưa đặt HOẶC connection thiếu scope `gmail.settings.basic` — không lỗi). Lưu ý: Gmail API **không** tự chèn chữ ký khi gửi, FE tự append. Scope `gmail.settings.basic` là **optional** (request thêm khi connect Gmail, không bắt buộc); connection tạo trước thay đổi này phải **reconnect** mới đọc được chữ ký.
+
 ## Scheduled Emails (đổi ConnectionId ⭐)
 - `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (404 connection, 422 connection không phải Gmail)
 - `GET /api/scheduled-emails?status&page&limit` — envelope. **OData ⊕** (target — $filter status, $orderby sendAt, $top/$skip/$count).
 - `PATCH /api/scheduled-emails/{id}/cancel` — (422 đã gửi).
-- `POST /api/internal/process-scheduled` — X-Cron-Secret. Lấy token từ Connections (Gmail).
+- `POST /api/internal/process-scheduled` — header `X-Cron-Secret` (so khớp `Cron:Secret`; thiếu/sai/secret chưa cấu hình → 401). Không JWT. Gửi mọi email Pending có `sendAt <= now` qua Gmail (token tự refresh từ Connection). Mỗi email lỗi → `Failed` (RetryCount++, LastError) chứ không chặn cả batch. Trả `200 { total, sent, failed }`. ✅ SCRUM-31.
+  - **Cron ngoài** gọi endpoint này định kỳ (khuyến nghị 5 phút/lần) — thiết kế mặc định.
+  - **Auto-cron nội bộ (tuỳ chọn):** `Cron:AutoRun=true` → BE tự chạy `ScheduledEmailProcessorService` (BackgroundService) quét/gửi mỗi `Cron:IntervalSeconds` (mặc định 300s), gọi thẳng service không qua HTTP/secret. Prod mặc định `false` (theo CLAUDE.md "BE không tự hẹn giờ"); Development mặc định `true` (interval 60s) để test.
