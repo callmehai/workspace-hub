@@ -50,12 +50,26 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 
 ---
 
-## Auth (email/password) — không đổi
+## Auth (email/password)
 - `POST /api/auth/register` · `POST /api/auth/login` · `GET /api/auth/me` · `POST /api/auth/logout`
+- **SCRUM-62 — cookie auth:** login/register/google **KHÔNG trả `accessToken` trong body** nữa; body = `AuthResultDto { expiresIn, user }`. Access token JWT set vào HttpOnly cookie `wh_access`; kèm cookie `wh_csrf` (đọc được) cho double-submit. Request mutating (POST/PUT/PATCH/DELETE) **bằng cookie** phải gửi header `X-CSRF-Token` = `wh_csrf` (thiếu → 403 `CsrfError`). Request dùng `Authorization: Bearer` (Swagger/Postman) bỏ qua CSRF.
+- `POST /api/auth/logout` — AllowAnonymous; revoke refresh token (Redis) + xoá cookie `wh_access`/`wh_csrf`/`wh_refresh` → 204.
+
+## Auth OTP đăng ký ⭐ SCRUM-64
+- `POST /api/auth/register` — body `{ email, password, fullName, phone }` (phone E.164, vd `+84901234567`). Tạo user `PhoneVerified=false` + gửi OTP SMS. **KHÔNG đăng nhập ngay** — trả `201 RegisterResult { email, requiresPhoneVerification, resendCooldownSeconds }`. 409 email trùng, 400 validation (kể cả phone sai format).
+- `POST /api/auth/send-otp` — body `{ email }` → gửi lại OTP. Trả `{ resendCooldownSeconds }`. 404 user không tồn tại, 422 đã verify / không có phone / đang cooldown.
+- `POST /api/auth/verify-otp` — body `{ email, code }` → verify; đúng → `PhoneVerified=true` + **set cookie auth (đăng nhập)**, trả `AuthResultDto`. 422 mã sai / hết hạn / quá số lần.
+- **Login chặn chưa verify:** đăng nhập khi `PhoneVerified=false` → **403** với `message = "PHONE_NOT_VERIFIED"` (FE bắt mã này → gửi OTP + sang màn verify). Google Sign-In KHÔNG bị chặn (không có phone, `PhoneVerified` mặc định true).
+- OTP: 6 số, lưu **hash** ở Redis (`otp:{userId}`), TTL 5', cooldown gửi lại 60s, tối đa 5 lần sai. Provider Twilio (`Sms:Twilio:*`); thiếu config → dev `LogSmsSender` ghi OTP ra log.
+
+## Auth refresh token ⭐ SCRUM-63
+- `POST /api/auth/refresh` — AllowAnonymous; đọc cookie `wh_refresh` (HttpOnly, Path=`/api/auth/refresh`) → verify + **rotate** (cấp access token mới + refresh token mới, revoke jti cũ) → set lại cookie `wh_access`+`wh_refresh`, body `AuthResultDto`. Token thiếu/hết hạn/đã revoke → **401**. Reuse refresh token đã xoay (token theft) → revoke cả family → 401.
+- Access TTL ngắn (`Jwt:ExpiresIn`, mặc định 900s); refresh TTL dài (`Jwt:RefreshExpiresIn`, mặc định 7 ngày) lưu Redis (`refresh:{jti}`, `refreshfam:{fam}`).
+- FE: interceptor 401 tự gọi `/auth/refresh` 1 lần (single-flight) rồi retry request gốc; fail → về /login.
 
 ## Auth Google Sign-In ⭐ mới
 - `POST /api/auth/google/start` — AllowAnonymous → {authorizationUrl, state}. Scope chỉ openid/email/profile.
-- `POST /api/auth/google/callback` — {code, state} → verify id_token, tìm/tạo/link user, phát JWT. (400 CSRF, 401 token invalid / user khoá)
+- `POST /api/auth/google/callback` — {code, state} → verify id_token, tìm/tạo/link user, set cookie auth (access + refresh). (400 CSRF, 401 token invalid / user khoá)
 > KHÔNG tạo Connection. Chỉ tạo/tìm User. Auto-link nếu email trùng.
 
 ## Admin — ✅ Implemented (SCRUM-49 2026-06-19)
@@ -138,8 +152,14 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 ## Item-Folder — không đổi
 `POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.
 
+## Emails — gửi trực tiếp ⭐
+- `POST /api/emails/send` — [Authorize]. Body `{ connectionId, to[], cc[], bcc[], subject, bodyHtml }`. Gửi **ngay** (đồng bộ) qua Gmail. Validate connection thuộc user + ServiceType=Gmail + Active. Trả `200 { messageId, sentAt }`. (400 validation, 404 connection, 422 connection không phải Gmail / không Active, 502 provider lỗi). Gmail write-back "gửi mới".
+- `GET /api/emails/signature?connectionId=` — [Authorize]. Lấy chữ ký HTML đã đặt trong Gmail của connection (qua `users.settings.sendAs`, ưu tiên primary). Trả `200 { signature }` (rỗng nếu chưa đặt HOẶC connection thiếu scope `gmail.settings.basic` — không lỗi). Lưu ý: Gmail API **không** tự chèn chữ ký khi gửi, FE tự append. Scope `gmail.settings.basic` là **optional** (request thêm khi connect Gmail, không bắt buộc); connection tạo trước thay đổi này phải **reconnect** mới đọc được chữ ký.
+
 ## Scheduled Emails (đổi ConnectionId ⭐)
 - `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (404 connection, 422 connection không phải Gmail)
 - `GET /api/scheduled-emails?status&page&limit` — envelope. **OData ⊕** (target — $filter status, $orderby sendAt, $top/$skip/$count).
 - `PATCH /api/scheduled-emails/{id}/cancel` — (422 đã gửi).
-- `POST /api/internal/process-scheduled` — X-Cron-Secret. Lấy token từ Connections (Gmail).
+- `POST /api/internal/process-scheduled` — header `X-Cron-Secret` (so khớp `Cron:Secret`; thiếu/sai/secret chưa cấu hình → 401). Không JWT. Gửi mọi email Pending có `sendAt <= now` qua Gmail (token tự refresh từ Connection). Mỗi email lỗi → `Failed` (RetryCount++, LastError) chứ không chặn cả batch. Trả `200 { total, sent, failed }`. ✅ SCRUM-31.
+  - **Cron ngoài** gọi endpoint này định kỳ (khuyến nghị 5 phút/lần) — thiết kế mặc định.
+  - **Auto-cron nội bộ (tuỳ chọn):** `Cron:AutoRun=true` → BE tự chạy `ScheduledEmailProcessorService` (BackgroundService) quét/gửi mỗi `Cron:IntervalSeconds` (mặc định 300s), gọi thẳng service không qua HTTP/secret. Prod mặc định `false` (theo CLAUDE.md "BE không tự hẹn giờ"); Development mặc định `true` (interval 60s) để test.

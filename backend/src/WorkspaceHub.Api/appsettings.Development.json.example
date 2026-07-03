@@ -8,16 +8,25 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "Default": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True"
+    "Default": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
+    "Redis": "localhost:6379"
   },
   "Jwt": {
     "Secret": "workspace-hub-super-secret-key-change-in-production-32chars",
     "Issuer": "WorkspaceHub",
     "Audience": "WorkspaceHub",
-    "ExpiresIn": 3600
+    "ExpiresIn": 900,
+    "RefreshExpiresIn": 604800
   },
   "Auth": {
     "CrossSiteCookies": false
+  },
+  "Sms": {
+    "Twilio": {
+      "AccountSid": "",
+      "AuthToken": "",
+      "FromNumber": ""
+    }
   },
   "Google": {
     "RedirectUri": "http://localhost:5173/oauth/callback",

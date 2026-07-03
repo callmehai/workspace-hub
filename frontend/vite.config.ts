@@ -7,9 +7,11 @@ export default defineConfig({
   server: {
     port: 5173,
     // Dev: proxy /api → backend ASP.NET (tránh CORS). Prod: set VITE_API_URL.
+    // Target HTTPS (profile "https" của Api: https://localhost:7010). secure:false để
+    // chấp nhận dev cert tự ký. Chạy BE bằng: dotnet run --launch-profile https
     proxy: {
       '/api': {
-        target: 'http://localhost:5118',
+        target: 'https://localhost:7010',
         changeOrigin: true,
         secure: false,
       },

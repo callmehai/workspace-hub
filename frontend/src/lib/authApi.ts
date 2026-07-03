@@ -1,5 +1,5 @@
 import api from './api';
-import type { AuthResultDto, GoogleAuthStartResponse } from '../types/auth';
+import type { AuthResultDto, GoogleAuthStartResponse, RegisterResult } from '../types/auth';
 
 /**
  * Auth API — Google Sign-In (đăng nhập bằng Google, KHÁC connect-để-sync) + logout.
@@ -22,5 +22,23 @@ export const authApi = {
   /** Logout — backend xoá cookie auth (SCRUM-62), trả 204. */
   logout: async (): Promise<void> => {
     await api.post('/auth/logout');
+  },
+
+  /** SCRUM-64: đăng ký → tạo user (chưa verify) + gửi OTP. KHÔNG đăng nhập ngay. */
+  register: async (body: { fullName: string; email: string; password: string; phone: string }): Promise<RegisterResult> => {
+    const res = await api.post<RegisterResult>('/auth/register', body);
+    return res.data;
+  },
+
+  /** SCRUM-64: gửi lại OTP cho email chưa verify → trả cooldown (giây). */
+  sendOtp: async (email: string): Promise<number> => {
+    const res = await api.post<{ resendCooldownSeconds: number }>('/auth/send-otp', { email });
+    return res.data.resendCooldownSeconds;
+  },
+
+  /** SCRUM-64: verify OTP → set cookie auth (đăng nhập); trả user. */
+  verifyOtp: async (email: string, code: string): Promise<AuthResultDto> => {
+    const res = await api.post<AuthResultDto>('/auth/verify-otp', { email, code });
+    return res.data;
   },
 };

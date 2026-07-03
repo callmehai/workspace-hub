@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Domain.Enums;
 using WorkspaceHub.Infrastructure.Data;
 
 namespace WorkspaceHub.Infrastructure.Repositories;
@@ -24,6 +25,17 @@ public class ScheduledEmailRepository : GenericRepository<ScheduledEmail>, ISche
         return await Set.AsNoTracking()
             .Where(se => se.UserId == userId)
             .OrderByDescending(se => se.SendAt)
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ScheduledEmail>> GetPendingDueEmailsAsync(DateTime nowUtc, int maxBatch, CancellationToken ct = default)
+    {
+        // Tracked: service sẽ cập nhật Status/SentAt/RetryCount/LastError rồi SaveChanges.
+        return await Set
+            .Where(se => se.Status == ScheduledEmailStatus.Pending && se.SendAt <= nowUtc)
+            .OrderBy(se => se.SendAt)
+            .Take(maxBatch)
             .ToListAsync(ct);
     }
 }

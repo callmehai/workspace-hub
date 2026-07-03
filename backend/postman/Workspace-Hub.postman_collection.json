@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "wh-scrum27-collection",
     "name": "Workspace Hub API (SCRUM-27)",
-    "description": "API testing collection cho Workspace Hub backend (ASP.NET Core 8).\n\n## Cách chạy\n1. Import file này + `Workspace-Hub.postman_environment.json`, chọn environment **Workspace Hub — Local**.\n2. Chạy backend: `dotnet run --project src/WorkspaceHub.Api` (mặc định http://localhost:5118).\n3. Mở **Collection Runner** → chọn collection → Run. Các request đã sắp đúng thứ tự, tự đăng ký user mới, tự lưu `accessToken` + các id, và tự assert status code.\n\n## Biến môi trường\n- `baseUrl` — URL backend (mặc định http://localhost:5118).\n- `accessToken` — JWT của user thường, tự set sau khi Login.\n- `adminToken` — JWT của tài khoản **Admin** (tự điền tay nếu muốn chạy nhóm Admin success). Để trống vẫn chạy được phần còn lại.\n- `gmailConnectionId` / `gcalConnectionId` — chỉ cần khi test happy-path provider (cần OAuth thật). Để trống thì các request đó vẫn minh hoạ case lỗi 404/422.\n\n## Phủ status code\n200 · 201 · 204 · 400 (validation) · 401 (no/invalid JWT) · 403 (sai role/không phải owner) · 404 (không tồn tại) · 409 (trùng) · 422 (business rule). Mỗi nhóm endpoint có cả case thành công và case lỗi.\n\n## Lưu ý\nCác happy-path cần provider Google/Jira thật (gửi email, tạo event, tạo ticket, oauth callback, sync) nằm trong folder **Provider-dependent (manual)** — không assert cứng để Runner vẫn xanh khi chưa có connection thật.\n\nWire format: **camelCase**, enum dạng string. Auth: `Authorization: Bearer {{accessToken}}`.",
+    "description": "API testing collection cho Workspace Hub backend (ASP.NET Core 8).\n\n## Cách chạy\n1. Import file này + `Workspace-Hub.postman_environment.json`, chọn environment **Workspace Hub — Local (https)**.\n2. Chạy backend ở **HTTPS**: `dotnet run --project src/WorkspaceHub.Api --launch-profile https` (mặc định https://localhost:7010). Cần Docker `wh-sqlserver` + Redis (xem README).\n3. Trong Postman: **Settings → General → SSL certificate verification = OFF** (cert dev self-signed). Newman: thêm cờ `-k`.\n4. **Cần 1 tài khoản đã verify SĐT** để login lấy token (OTP không chạy blackbox — xem README mục *Tài khoản test*). Điền `userEmail` + `userPassword` của tài khoản đó vào environment.\n5. Mở **Collection Runner** → chọn collection → Run.\n\n## Auth mới (SCRUM-62/63/64) — ĐỌC KỸ\n- Login/verify-otp KHÔNG trả token trong body nữa. Token nằm trong **HttpOnly cookie `wh_access`**. Test script **đọc cookie** này → set biến `accessToken` để các request sau gửi qua header `Authorization: Bearer` (Postman/Newman dùng Bearer nên KHÔNG dính CSRF).\n- Register giờ cần `phone` (E.164) + gửi OTP; login bị chặn `403 PHONE_NOT_VERIFIED` tới khi verify OTP.\n- OTP gửi qua SMS (Twilio). Trial chưa mua số → dùng `LogSmsSender` (ghi mã ra console), **không** đọc được qua API → không thể verify blackbox. Vì vậy các case verify-otp/gửi-OTP chỉ test đường lỗi; happy-path OTP bị **skip**.\n\n## Biến môi trường\n- `baseUrl` — URL backend (mặc định https://localhost:7010).\n- `userEmail` / `userPassword` — tài khoản **đã verify SĐT** (dev tạo sẵn 1 lần). Login đọc cookie → set `accessToken`.\n- `userPhone` — SĐT E.164 dùng cho các case register throwaway (không cần thật).\n- `accessToken` — tự set sau khi Login (đọc từ cookie `wh_access`).\n- `adminToken` — JWT của tài khoản **Admin** (tự điền tay nếu muốn chạy nhóm Admin success). Để trống vẫn chạy được phần còn lại.\n- `gmailConnectionId` / `gcalConnectionId` — chỉ cần khi test happy-path provider (cần OAuth thật). Để trống thì các request đó vẫn minh hoạ case lỗi 404/422.\n\n## Phủ status code\n200 · 201 · 204 · 400 (validation) · 401 (no/invalid JWT) · 403 (sai role / chưa verify SĐT) · 404 (không tồn tại) · 409 (trùng) · 422 (business rule). Mỗi nhóm endpoint có cả case thành công và case lỗi.\n\nWire format: **camelCase**, enum dạng string. Auth: `Authorization: Bearer {{accessToken}}`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -15,12 +15,12 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Seed a unique test user once per environment so the run is repeatable.",
-          "if (!pm.environment.get('userEmail')) {",
-          "  pm.environment.set('userEmail', 'wh_scrum27_' + Date.now() + '@test.local');",
-          "}",
+          "// Default password + phone cho tài khoản test nếu chưa set.",
           "if (!pm.environment.get('userPassword')) {",
           "  pm.environment.set('userPassword', 'Password123!');",
+          "}",
+          "if (!pm.environment.get('userPhone')) {",
+          "  pm.environment.set('userPhone', '+14155550100');",
           "}"
         ]
       }
@@ -30,8 +30,13 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Global: every response should carry the standard error envelope on 4xx/5xx.",
-          "if (pm.response.code >= 400) {",
+          "// Global: mọi lỗi do APP sinh (ExceptionMiddleware) phải có envelope {error,message,traceId}.",
+          "// Chỉ assert khi response THỰC SỰ có body JSON. Bỏ qua:",
+          "//  - 405 Method Not Allowed: do routing framework, không qua middleware → không có envelope.",
+          "//  - Body rỗng: xảy ra khi path-variable rỗng (vd chưa Login → folderId/noteItemId rỗng →",
+          "//    /api/folders/ , /api/items//status) khiến route không khớp → 404/405 rỗng, không phải lỗi app.",
+          "var raw = (pm.response.text() || '').trim();",
+          "if (pm.response.code >= 400 && pm.response.code !== 405 && raw.length > 0) {",
           "  pm.test('error body has standard shape {error,message,traceId}', function () {",
           "    var b = {}; try { b = pm.response.json(); } catch (e) {}",
           "    pm.expect(b).to.have.property('error');",
@@ -77,7 +82,7 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"SCRUM-27 Test User\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"SCRUM-27 Test User\",\n  \"phone\": \"{{userPhone}}\"\n}" },
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
           },
           "event": [
@@ -86,20 +91,83 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.environment.set('userEmail', 'wh_scrum27_' + Date.now() + '@test.local');"
+                  "// Email throwaway (khác userEmail đã verify) để đăng ký lặp lại không đụng tài khoản test.",
+                  "pm.environment.set('throwawayEmail', 'wh_scrum27_' + Date.now() + '@test.local');"
                 ]
               }
             },
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
               "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
               "var b = pm.response.json();",
-              "pm.test('returns accessToken + user', function () {",
-              "  pm.expect(b).to.have.property('accessToken').that.is.a('string');",
-              "  pm.expect(b.user).to.have.property('id');",
-              "  pm.expect(b.user.role).to.eql('User');",
-              "});",
-              "pm.environment.set('accessToken', b.accessToken);",
-              "pm.environment.set('userId', b.user.id);"
+              "pm.test('returns RegisterResult (không có token — phải verify OTP)', function () {",
+              "  pm.expect(b).to.have.property('email');",
+              "  pm.expect(b).to.have.property('requiresPhoneVerification', true);",
+              "  pm.expect(b).to.have.property('resendCooldownSeconds').that.is.a('number');",
+              "  pm.expect(b).to.not.have.property('accessToken');",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Login unverified → PHONE_NOT_VERIFIED (403)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden — chưa verify SĐT', function () { pm.response.to.have.status(403); });",
+              "pm.test('message = PHONE_NOT_VERIFIED', function () {",
+              "  pm.expect(pm.response.json().message).to.eql('PHONE_NOT_VERIFIED');",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Send OTP (200 — luôn 200 chống enumeration)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{sendOtpEmail}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/send-otp", "host": ["{{baseUrl}}"], "path": ["api", "auth", "send-otp"] }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Email chưa từng đăng ký → nhánh anti-enumeration LUÔN trả 200 (không gửi SMS, không cooldown).",
+                  "// KHÔNG dùng throwawayEmail vì Register vừa gửi OTP cho nó → còn cooldown 60s → 422.",
+                  "pm.environment.set('sendOtpEmail', 'wh_nobody_' + Date.now() + '@nowhere.local');"
+                ]
+              }
+            },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('trả resendCooldownSeconds', function () {",
+              "  pm.expect(pm.response.json()).to.have.property('resendCooldownSeconds').that.is.a('number');",
+              "});"
+            ] } }
+          ]
+        },
+        {
+          "name": "Verify OTP — mã sai (422)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"code\": \"000000\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/verify-otp", "host": ["{{baseUrl}}"], "path": ["api", "auth", "verify-otp"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "// Happy-path verify cần đọc mã OTP từ SMS/console → không blackbox được. Chỉ test đường lỗi.",
+              "pm.test('422 — mã OTP sai/hết hạn', function () { pm.response.to.have.status(422); });"
             ] } }
           ]
         },
@@ -109,7 +177,7 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"Duplicate\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"Duplicate\",\n  \"phone\": \"{{userPhone}}\"\n}" },
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
           },
           "event": [
@@ -120,12 +188,12 @@
           ]
         },
         {
-          "name": "Register invalid — short password (400)",
+          "name": "Register invalid — short password + no phone (400)",
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"123\",\n  \"fullName\": \"\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"123\",\n  \"fullName\": \"\",\n  \"phone\": \"\"\n}" },
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
           },
           "event": [
@@ -138,7 +206,7 @@
           ]
         },
         {
-          "name": "Login (200)",
+          "name": "Login (200) — tài khoản đã verify",
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
@@ -148,11 +216,27 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('userEmail')) {",
+              "  pm.test.skip('skipped — set userEmail/userPassword của tài khoản đã verify SĐT (xem README) để chạy phần core');",
+              "  return;",
+              "}",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "var b = pm.response.json();",
-              "pm.test('returns accessToken', function () { pm.expect(b.accessToken).to.be.a('string'); });",
-              "pm.environment.set('accessToken', b.accessToken);",
-              "pm.environment.set('userId', b.user.id);"
+              "pm.test('body trả ExpiresIn + user (KHÔNG token — token ở cookie)', function () {",
+              "  pm.expect(b).to.have.property('expiresIn').that.is.a('number');",
+              "  pm.expect(b.user).to.have.property('id');",
+              "  pm.expect(b).to.not.have.property('accessToken');",
+              "});",
+              "// SCRUM-62: JWT nằm trong HttpOnly cookie wh_access. Đọc từ cookie jar → dùng làm Bearer.",
+              "var token = pm.cookies.get('wh_access');",
+              "pm.test('cookie wh_access được set', function () { pm.expect(token, 'wh_access cookie').to.be.a('string').and.not.empty; });",
+              "if (token) { pm.environment.set('accessToken', token); }",
+              "pm.environment.set('userId', b.user.id);",
+              "// Lưu wh_csrf (KHÔNG HttpOnly) NGAY trong test-script của Login — ở đây pm.cookies.get()",
+              "// đọc được (khác prerequest). Logout dùng lại làm header X-CSRF-Token (double-submit).",
+              "// Cookie wh_csrf giữ nguyên tới lúc logout (giữa 2 request không login lại) nên vẫn khớp.",
+              "var csrf = pm.cookies.get('wh_csrf');",
+              "if (csrf) { pm.environment.set('csrfToken', csrf); }"
             ] } }
           ]
         },
@@ -162,11 +246,13 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"wrong-password\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"nobody-wrong-pass@test.local\",\n  \"password\": \"wrong-password\"\n}" },
             "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "// Email hợp lệ định dạng nhưng không tồn tại → LoginAsync trả 401 'Invalid credentials'.",
+              "// Dùng email cố định (không phụ thuộc userEmail) để luôn 401, không rơi vào 400 validation khi userEmail rỗng.",
               "pm.test('401 Unauthorized', function () { pm.response.to.have.status(401); });"
             ] } }
           ]
@@ -180,6 +266,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công (tài khoản đã verify)'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('id matches logged-in user', function () {",
               "  pm.expect(pm.response.json().id).to.eql(pm.environment.get('userId'));",
@@ -188,15 +275,19 @@
           ]
         },
         {
-          "name": "Get me — no token (401)",
+          "name": "Get me — invalid token (401)",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "invalid.jwt.token", "type": "string" }] },
             "method": "GET",
             "header": [],
             "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "// Gửi Bearer token RÁC → chắc chắn 401 dù cookie jar còn wh_access.",
+              "// (Bearer header được ưu tiên hơn cookie trong OnMessageReceived — Program.cs;",
+              "//  token rác không verify được → 401. Cách này ổn định trên cả Postman GUI lẫn Newman,",
+              "//  không phụ thuộc việc xoá cookie jar.)",
               "pm.test('401 Unauthorized', function () { pm.response.to.have.status(401); });"
             ] } }
           ]
@@ -253,6 +344,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công (tài khoản đã verify)'); return; }",
               "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
               "var b = pm.response.json();",
               "pm.test('owner flag true', function () { pm.expect(b.isOwner).to.eql(true); });",
@@ -269,6 +361,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('array contains created folder', function () {",
               "  var arr = pm.response.json();",
@@ -295,6 +388,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });"
             ] } }
           ]
@@ -309,6 +403,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('400 Bad Request', function () { pm.response.to.have.status(400); });"
             ] } }
           ]
@@ -323,6 +418,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('name updated', function () { pm.expect(pm.response.json().name).to.include('renamed'); });"
             ] } }
@@ -338,6 +434,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 (or 403 — not owner of a non-existent row)', function () {",
               "  pm.expect(pm.response.code).to.be.oneOf([403, 404]);",
               "});"
@@ -359,6 +456,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
               "var b = pm.response.json();",
               "pm.test('type = Note', function () { pm.expect(b.type).to.eql('Note'); });",
@@ -383,6 +481,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('paged envelope {items,total,page,limit}', function () {",
               "  var b = pm.response.json();",
@@ -411,6 +510,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('all returned items are Note', function () {",
               "  pm.response.json().items.forEach(function (i) { pm.expect(i.type).to.eql('Note'); });",
@@ -427,6 +527,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('id matches', function () { pm.expect(pm.response.json().id).to.eql(pm.environment.get('noteItemId')); });"
             ] } }
@@ -441,6 +542,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -455,6 +557,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('status = Doing', function () { pm.expect(pm.response.json().status).to.eql('Doing'); });"
             ] } }
@@ -470,6 +573,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('400 Bad Request', function () { pm.response.to.have.status(400); });"
             ] } }
           ]
@@ -484,6 +588,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('201 Created (or 409 if already linked)', function () { pm.expect(pm.response.code).to.be.oneOf([201, 409]); });"
             ] } }
           ]
@@ -497,6 +602,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
             ] } }
           ]
@@ -511,6 +617,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 connection (or 422 wrong service type)', function () {",
               "  pm.expect(pm.response.code).to.be.oneOf([404, 422]);",
               "});"
@@ -527,6 +634,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('400 Bad Request (validation)', function () { pm.response.to.have.status(400); });"
             ] } }
           ]
@@ -540,6 +648,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
             ] } }
           ]
@@ -558,6 +667,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
               "pm.test('returns array (token masked)', function () {",
               "  var arr = pm.response.json();",
@@ -577,6 +687,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('422 / 400 / 404 rejected', function () {",
               "  pm.expect(pm.response.code).to.be.oneOf([400, 404, 422]);",
               "});"
@@ -592,6 +703,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -605,6 +717,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -623,6 +736,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });"
             ] } }
           ]
@@ -637,6 +751,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 connection (or 422 non-Gmail)', function () {",
               "  pm.expect(pm.response.code).to.be.oneOf([404, 422]);",
               "});"
@@ -653,6 +768,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('400 Bad Request (no recipient/subject)', function () { pm.response.to.have.status(400); });"
             ] } }
           ]
@@ -666,6 +782,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -685,6 +802,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
               "pm.environment.set('contactId', pm.response.json().id);"
             ] } }
@@ -704,6 +822,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });"
             ] } }
           ]
@@ -718,6 +837,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('409 Conflict', function () { pm.response.to.have.status(409); });"
             ] } }
           ]
@@ -731,6 +851,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
             ] } }
           ]
@@ -749,6 +870,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('403 Forbidden (normal user token)', function () { pm.response.to.have.status(403); });"
             ] } }
           ]
@@ -762,6 +884,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('403 Forbidden (normal user token)', function () { pm.response.to.have.status(403); });"
             ] } }
           ]
@@ -820,8 +943,8 @@
           ]
         },
         {
-          "name": "Admin toggle integration \u2014 user token (403)",
-          "description": "SCRUM-40: PATCH /api/admin/integrations/{key}/enable \u2014 endpoint ch\u1ec9 cho Admin. D\u00f9ng token user th\u01b0\u1eddng ph\u1ea3i tr\u1ea3 403 Forbidden.",
+          "name": "Admin toggle integration — user token (403)",
+          "description": "SCRUM-40: PATCH /api/admin/integrations/{key}/enable — endpoint chỉ cho Admin. Dùng token user thường phải trả 403 Forbidden.",
           "request": {
             "method": "PATCH",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -834,7 +957,8 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('403 Forbidden \u2014 user token cannot toggle integration', function () {",
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "pm.test('403 Forbidden — user token cannot toggle integration', function () {",
               "  pm.response.to.have.status(403);",
               "});",
               "pm.test('error = ForbiddenError', function () {",
@@ -844,8 +968,8 @@
           ]
         },
         {
-          "name": "Admin toggle integration \u2014 non-existent key (404) [needs adminToken]",
-          "description": "SCRUM-40: d\u00f9ng adminToken nh\u01b0ng key kh\u00f4ng t\u1ed3n t\u1ea1i \u2192 404 NotFoundError.",
+          "name": "Admin toggle integration — non-existent key (404) [needs adminToken]",
+          "description": "SCRUM-40: dùng adminToken nhưng key không tồn tại → 404 NotFoundError.",
           "request": {
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
             "method": "PATCH",
@@ -860,9 +984,9 @@
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
               "if (!pm.environment.get('adminToken')) {",
-              "  pm.test.skip('skipped \u2014 set adminToken to run admin 404 case');",
+              "  pm.test.skip('skipped — set adminToken to run admin 404 case');",
               "} else {",
-              "  pm.test('404 Not Found \u2014 integration key does not exist', function () {",
+              "  pm.test('404 Not Found — integration key does not exist', function () {",
               "    pm.response.to.have.status(404);",
               "  });",
               "}"
@@ -872,7 +996,7 @@
       ]
     },
     {
-      "name": "08 \u2014 Provider-dependent (manual)",
+      "name": "08 — Provider-dependent (manual)",
       "description": "Happy-path cần OAuth Google/Jira thật (gửi email, tạo event/ticket, sync). Điền `gmailConnectionId`/`gcalConnectionId` rồi chạy tay. Không assert cứng để Collection Runner vẫn xanh khi chưa có connection.",
       "item": [
         {
@@ -885,8 +1009,9 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "if (!pm.environment.get('gmailConnectionId')) { pm.test.skip('skipped — set gmailConnectionId'); }",
-              "else { pm.test('201 Created', function () { pm.response.to.have.status(201); }); }"
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "if (!pm.environment.get('gmailConnectionId')) { pm.test.skip('skipped — set gmailConnectionId'); return; }",
+              "pm.test('201 Created', function () { pm.response.to.have.status(201); });"
             ] } }
           ]
         },
@@ -900,20 +1025,21 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "if (!pm.environment.get('gcalConnectionId')) { pm.test.skip('skipped — set gcalConnectionId'); }",
-              "else { pm.test('201 Created', function () { pm.response.to.have.status(201); }); }"
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "if (!pm.environment.get('gcalConnectionId')) { pm.test.skip('skipped — set gcalConnectionId'); return; }",
+              "pm.test('201 Created', function () { pm.response.to.have.status(201); });"
             ] } }
           ]
         }
       ]
     },
     {
-      "name": "09 \u2014 Jira (error-cases)",
-      "description": "Error-case tests cho c\u00e1c Jira endpoints \u0111\u00e3 implement (SCRUM-54\u219260 Done).\nKh\u00f4ng c\u1ea7n k\u1ebft n\u1ed1i Jira th\u1eadt \u2014 c\u00e1c case d\u01b0\u1edbi \u0111\u00e2y ch\u1ec9 ki\u1ec3m tra 400/404/422 response khi thi\u1ebfu/sai connectionId.\nHappy-path c\u1ea7n Jira th\u1eadt n\u1eb1m trong folder 08.",
+      "name": "09 — Jira (error-cases)",
+      "description": "Error-case tests cho các Jira endpoints đã implement (SCRUM-54→60 Done).\nKhông cần kết nối Jira thật — các case dưới đây chỉ kiểm tra 400/404/422 response khi thiếu/sai connectionId.\nHappy-path cần Jira thật nằm trong folder 08.",
       "item": [
         {
           "name": "GET /api/jira/projects — connectionId omitted → Guid.Empty bound (404)",
-          "description": "Khi b\u1ecf ?connectionId, ASP.NET bind Guid.Empty (default) v\u00ec Guid l\u00e0 value type.\nService g\u1ecdi GetByIdAsync(Guid.Empty) \u2192 null \u2192 NotFoundException \u2192 404.\nKh\u00f4ng tr\u1ea3 400 v\u00ec kh\u00f4ng c\u00f3 [Required] hay validator query-param.",
+          "description": "Khi bỏ ?connectionId, ASP.NET bind Guid.Empty (default) vì Guid là value type.\nService gọi GetByIdAsync(Guid.Empty) → null → NotFoundException → 404.\nKhông trả 400 vì không có [Required] hay validator query-param.",
           "request": {
             "method": "GET",
             "header": [],
@@ -925,7 +1051,8 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('404 Not Found \u2014 Guid.Empty connection not in DB', function () {",
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "pm.test('404 Not Found — Guid.Empty connection not in DB', function () {",
               "  pm.response.to.have.status(404);",
               "});"
             ] } }
@@ -945,6 +1072,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -966,6 +1094,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -984,6 +1113,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -1005,6 +1135,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -1023,6 +1154,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('400 Bad Request — validation', function () {",
               "  pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
               "});",
@@ -1047,6 +1179,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('400 Bad Request — Guid.Empty rejected by validator', function () {",
               "  pm.response.to.have.status(400);",
               "});",
@@ -1074,6 +1207,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found — connection does not exist', function () {",
               "  pm.response.to.have.status(404);",
               "});"
@@ -1095,16 +1229,17 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "if (!pm.environment.get('gmailConnectionId')) {",
               "  pm.test.skip('skipped — set gmailConnectionId to run wrong-service-type case');",
-              "} else {",
-              "  pm.test('422 Unprocessable Entity — wrong service type', function () {",
-              "    pm.response.to.have.status(422);",
-              "  });",
-              "  pm.test('error = BusinessRuleError', function () {",
-              "    pm.expect(pm.response.json().error).to.eql('BusinessRuleError');",
-              "  });",
-              "}"
+              "  return;",
+              "}",
+              "pm.test('422 Unprocessable Entity — wrong service type', function () {",
+              "  pm.response.to.have.status(422);",
+              "});",
+              "pm.test('error = BusinessRuleError', function () {",
+              "  pm.expect(pm.response.json().error).to.eql('BusinessRuleError');",
+              "});"
             ] } }
           ]
         },
@@ -1125,6 +1260,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('404 Not Found', function () { pm.response.to.have.status(404); });"
             ] } }
           ]
@@ -1132,7 +1268,7 @@
       ]
     },
     {
-      "name": "99 \u2014 Session",
+      "name": "99 — Session",
       "item": [
         {
           "name": "Cleanup — delete test folder (204)",
@@ -1143,6 +1279,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
               "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
             ] } }
           ]
@@ -1150,16 +1287,23 @@
         {
           "name": "Logout (204)",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
-            "header": [],
+            "header": [{ "key": "X-CSRF-Token", "value": "{{csrfToken}}" }],
             "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] }
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "// Logout KHÔNG nằm trong CSRF-exempt list. Postman/Newman gửi kèm cookie wh_access + wh_csrf từ jar",
+              "// (dù request 'noauth'), nên phải gửi header X-CSRF-Token khớp cookie wh_csrf (double-submit),",
+              "// giống hệt frontend. csrfToken được lưu ở test-script của Login (interpolate {{csrfToken}} vào header —",
+              "// đồng bộ, đáng tin trên cả Postman GUI lẫn Newman; không dùng jar.get() async vì GUI gửi request",
+              "// trước khi callback kịp upsert header). Chưa login → csrfToken rỗng nhưng cũng không có wh_access → CSRF skip → 204.",
               "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
-              "pm.environment.unset('userEmail');",
               "pm.environment.unset('accessToken');",
-              "pm.environment.unset('userId');",
+              "pm.environment.unset('csrfToken');",
+              "pm.environment.unset('throwawayEmail');",
+              "pm.environment.unset('sendOtpEmail');",
               "pm.environment.unset('folderId');",
               "pm.environment.unset('noteItemId');",
               "pm.environment.unset('contactId');"

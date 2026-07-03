@@ -20,6 +20,13 @@ export interface GoogleAuthStartResponse {
   state: string;
 }
 
+/** SCRUM-64: kết quả register — chưa đăng nhập, cần verify OTP. */
+export interface RegisterResult {
+  email: string;
+  requiresPhoneVerification: boolean;
+  resendCooldownSeconds: number;
+}
+
 /** Error envelope chuẩn của backend (ExceptionMiddleware, SCRUM-24). */
 export interface ApiError {
   error: string;

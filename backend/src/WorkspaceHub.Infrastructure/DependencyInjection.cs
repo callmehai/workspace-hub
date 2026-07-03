@@ -45,9 +45,32 @@ public static class DependencyInjection
         services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
         services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 
-        services.AddDistributedMemoryCache();
+        // SCRUM-63: Redis làm distributed cache (refresh token + OTP + OAuth state).
+        // Có ConnectionStrings:Redis → dùng Redis; thiếu → fallback in-memory (dev),
+        // log cảnh báo vì refresh token sẽ mất khi restart + không chia sẻ giữa instance.
+        var redisConnection = config.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redisConnection))
+        {
+            services.AddStackExchangeRedisCache(o =>
+            {
+                o.Configuration = redisConnection;
+                o.InstanceName = RefreshTokenService.RedisInstanceName; // 1 nguồn — khớp GETDEL atomic
+            });
+            // IConnectionMultiplexer cho thao tác atomic (GETDEL refresh jti — chống TOCTOU).
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(
+                _ => StackExchange.Redis.ConnectionMultiplexer.Connect(redisConnection));
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+            // Không có ILogger lúc cấu hình DI → ghi ra console để cảnh báo rõ.
+            Console.WriteLine(
+                "[WARN] ConnectionStrings:Redis chưa cấu hình — dùng in-memory cache. " +
+                "Refresh token (SCRUM-63) sẽ mất khi restart. Xem docs/SETUP.md.");
+        }
 
-        services.AddHttpClient("OAuthToken");
+        // OAuth token exchange (Google/Jira). Timeout rõ ràng để không treo theo default 100s.
+        services.AddHttpClient("OAuthToken", c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient("Jira", c =>
         {
             // Accept header cấu hình 1 lần ở DI (tránh .Add tích luỹ mỗi request nếu handler được pool).
@@ -65,6 +88,23 @@ public static class DependencyInjection
         services.AddScoped<IItemRepository, ItemRepository>();
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
+
+        services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IOtpService, OtpService>();
+
+        // SMS sender (SCRUM-64): dùng Twilio thật CHỈ khi đủ AccountSid + AuthToken + FromNumber.
+        // Thiếu bất kỳ cái nào (vd FromNumber trống vì Twilio trial chưa mua số) → LogSmsSender
+        // ghi OTP ra console cho dev/demo, KHÔNG gọi Twilio. Đăng ký HttpClient "Twilio" sẵn.
+        services.AddHttpClient("Twilio");
+        var twilioConfigured =
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AuthToken"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:FromNumber"]);
+        if (twilioConfigured)
+            services.AddScoped<ISmsSender, TwilioSmsSender>();
+        else
+            services.AddScoped<ISmsSender, LogSmsSender>();
 
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();

@@ -11,6 +11,7 @@ using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.Services;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace WorkspaceHub.Tests.Services;
@@ -22,6 +23,8 @@ public class GmailSyncServiceTests
     private readonly Mock<IItemRepository> _itemsMock;
     private readonly Mock<IImportantContactRepository> _importantContactsMock;
     private readonly Mock<IConnectionRepository> _connectionsMock;
+    private readonly Mock<ITokenService> _tokenServiceMock;
+    private readonly Mock<ILogger<GmailSyncService>> _loggerMock;
     private readonly GmailSyncService _service;
 
     public GmailSyncServiceTests()
@@ -31,13 +34,17 @@ public class GmailSyncServiceTests
         _itemsMock = new Mock<IItemRepository>();
         _importantContactsMock = new Mock<IImportantContactRepository>();
         _connectionsMock = new Mock<IConnectionRepository>();
+        _tokenServiceMock = new Mock<ITokenService>();
+        _loggerMock = new Mock<ILogger<GmailSyncService>>();
 
         _service = new GmailSyncService(
             _gatewayMock.Object,
             _mapperMock.Object,
             _itemsMock.Object,
             _importantContactsMock.Object,
-            _connectionsMock.Object);
+            _connectionsMock.Object,
+            _tokenServiceMock.Object,
+            _loggerMock.Object);
 
         _importantContactsMock.Setup(m => m.GetIdentifiersAsync(It.IsAny<Guid>(), It.IsAny<ImportantContactType>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<string>());
