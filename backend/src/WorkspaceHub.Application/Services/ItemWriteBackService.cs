@@ -93,6 +93,9 @@ public class ItemWriteBackService : IItemWriteBackService
                 throw new BusinessRuleException("Unsupported item type for writeback.");
         }
 
+        // Gmail ETag (HistoryId) changes constantly when labels are modified from external sources.
+        // This causes frequent false-positive 409 conflicts during write-back (e.g. read/unread/star toggle).
+        // Therefore, we bypass conflict checking (EnsureNoConflict) for emails.
         if (item.Type != ItemType.Email)
         {
             _guard.EnsureNoConflict(item.ETag, providerEtag);

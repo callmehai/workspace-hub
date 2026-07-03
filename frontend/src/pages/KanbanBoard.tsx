@@ -133,7 +133,7 @@ export const KanbanBoard = () => {
 
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>('Ticket');
+  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -152,8 +152,7 @@ export const KanbanBoard = () => {
   
   const [addingFolderItemId, setAddingFolderItemId] = useState<string | null>(null);
 
-  const isEventModalOpenState = useState(false);
-  const [isEventModalOpen, setIsEventModalOpen] = isEventModalOpenState;
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [eventForm, setEventForm] = useState({
     connectionId: '', title: '', start: '', end: '', location: '', attendees: ''
   });

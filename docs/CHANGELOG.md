@@ -133,7 +133,7 @@
 - **Trước:** chỉ đọc, một chiều.
 - **Sau:** thao tác trên app đẩy ngược lên Google. Scope đổi readonly → read-write (gmail.modify+send, calendar, drive.file).
 - **Giới hạn:** email KHÔNG sửa nội dung (Gmail immutable) — chỉ label/read/star/trash + gửi mới. Event/File CRUD đầy đủ hơn.
-- **Conflict:** thêm Items.ETag, so trước khi ghi, lệch → 409.
+- **Conflict:** thêm Items.ETag, so trước khi ghi, lệch → 409. Bỏ qua kiểm tra conflict ETag cho riêng Email do `HistoryId` của Gmail thay đổi liên tục từ các tác vụ bên ngoài, dễ gây ra false-positive 409 khi người dùng cập nhật trạng thái đọc/chưa đọc/sao trên app.
 - **Cách đọc:** **on-demand/lazy** (không polling định kỳ, không webhook); ghi = synchronous khi user thao tác. Webhook ngoài scope.
 
 ### Google Sign-In (đăng nhập bằng Google)

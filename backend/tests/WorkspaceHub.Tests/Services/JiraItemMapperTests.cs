@@ -58,6 +58,14 @@ public class JiraItemMapperTests
         item.Status.Should().Be(expectedStatus);
     }
 
+    [Fact]
+    public void ToItem_PrioritizesCategoryKeyOverStatusName()
+    {
+        // Category key says "done" but status name contains "Progress" (Doing)
+        var item = _mapper.ToItem(SampleIssue(statusCategoryKey: "done", statusName: "In Progress"), Guid.NewGuid(), Guid.NewGuid());
+        item.Status.Should().Be(ItemStatus.Done);
+    }
+
     [Theory]
     [InlineData("To Do", ItemStatus.Inbox)]
     [InlineData("In Progress", ItemStatus.Doing)]

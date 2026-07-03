@@ -169,9 +169,15 @@ public class FolderService : IFolderService
         if (!isOwner)
             throw new ForbiddenException("Only the folder owner can add items to this folder.");
 
-        // Check ownership of items (in reality, we should check each item, but for now we trust or assume the API will handle it correctly or we verify them all)
-        // Since we don't have a GetByIdsAndUserAsync in IItemRepository right now, we can skip it or we can loop. 
-        // But the current logic loops for ItemFolderExists. Let's just do a simple implementation.
+        var uniqueRequestIds = request.ItemIds.Distinct().ToList();
+        var ownedItems = await _itemRepo.GetByIdsAndUserAsync(uniqueRequestIds, userId, ct);
+        var ownedItemIds = ownedItems.Select(i => i.Id).ToHashSet();
+
+        if (uniqueRequestIds.Any(id => !ownedItemIds.Contains(id)))
+        {
+            throw new ForbiddenException("One or more items do not belong to the current user or do not exist.");
+        }
+
         // Get existing items in folder
         var existingItemFolders = await _folderRepo.GetItemFoldersAsync(request.ItemIds, folderId, ct);
         var existingItemIds = existingItemFolders.Select(i => i.ItemId).ToHashSet();

@@ -243,7 +243,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
   } else if (item.type === 'Ticket') {
     if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
-    // if (metadata.projectKey) rows.push({ label: 'Project',    value: metadata.projectKey }); // Removed per user request
     if (metadata.issueType)  rows.push({ label: 'Loại',       value: metadata.issueType });
     if (metadata.priority)   rows.push({ label: 'Ưu tiên',    value: metadata.priority });
     if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });

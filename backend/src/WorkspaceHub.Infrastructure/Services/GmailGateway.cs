@@ -116,9 +116,9 @@ public class GmailGateway : IGmailGateway
                 .SelectMany(h => 
                 {
                     var ids = new List<string>();
-                    if (h.MessagesAdded != null) ids.AddRange(h.MessagesAdded.Select(m => m.Message.Id));
-                    if (h.LabelsAdded != null) ids.AddRange(h.LabelsAdded.Select(m => m.Message.Id));
-                    if (h.LabelsRemoved != null) ids.AddRange(h.LabelsRemoved.Select(m => m.Message.Id));
+                    if (h.MessagesAdded != null) ids.AddRange(h.MessagesAdded.Where(m => m.Message?.Id != null).Select(m => m.Message.Id));
+                    if (h.LabelsAdded != null) ids.AddRange(h.LabelsAdded.Where(m => m.Message?.Id != null).Select(m => m.Message.Id));
+                    if (h.LabelsRemoved != null) ids.AddRange(h.LabelsRemoved.Where(m => m.Message?.Id != null).Select(m => m.Message.Id));
                     return ids;
                 })
                 .Where(id => id != null)

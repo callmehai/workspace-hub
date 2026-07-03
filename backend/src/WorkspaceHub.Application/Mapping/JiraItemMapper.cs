@@ -28,17 +28,8 @@ public class JiraItemMapper : IJiraItemMapper
         };
 
         var mappedStatus = ItemStatus.Inbox;
-        var lowerStatus = issue.StatusName?.ToLower() ?? "";
         
-        if (lowerStatus.Contains("done") || lowerStatus.Contains("xong") || lowerStatus.Contains("hoàn thành") || lowerStatus.Contains("closed"))
-        {
-            mappedStatus = ItemStatus.Done;
-        }
-        else if (lowerStatus.Contains("progress") || lowerStatus.Contains("doing") || lowerStatus.Contains("đang") || lowerStatus.Contains("review") || lowerStatus.Contains("test"))
-        {
-            mappedStatus = ItemStatus.Doing;
-        }
-        else if (!string.IsNullOrEmpty(issue.StatusCategoryKey))
+        if (!string.IsNullOrEmpty(issue.StatusCategoryKey))
         {
             mappedStatus = issue.StatusCategoryKey.ToLower() switch
             {
@@ -47,6 +38,18 @@ public class JiraItemMapper : IJiraItemMapper
                 "done" => ItemStatus.Done,
                 _ => ItemStatus.Inbox
             };
+        }
+        else
+        {
+            var lowerStatus = issue.StatusName?.ToLower() ?? "";
+            if (lowerStatus.Contains("done") || lowerStatus.Contains("xong") || lowerStatus.Contains("hoàn thành") || lowerStatus.Contains("closed"))
+            {
+                mappedStatus = ItemStatus.Done;
+            }
+            else if (lowerStatus.Contains("progress") || lowerStatus.Contains("doing") || lowerStatus.Contains("đang") || lowerStatus.Contains("review") || lowerStatus.Contains("test"))
+            {
+                mappedStatus = ItemStatus.Doing;
+            }
         }
 
         return new Item
