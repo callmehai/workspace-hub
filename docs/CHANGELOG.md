@@ -2,6 +2,16 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-04] Tag management BE (SCRUM-70) + tạo ticket FE (SCRUM-71)
+
+> Entity `Tag`/`TagAssignment` đã tồn tại trong schema từ đầu (migration `InitialCreate`) nhưng **chưa có ticket, chưa có API** — chỉ nằm trong DB. Bổ sung lớp BE để dùng được, đồng thời tạo ticket FE (làm sau).
+
+- **KHÔNG cần migration:** bảng `Tags`/`TagAssignments` đã có sẵn (composite PK, cascade User→Tag→TagAssignment, Item→TagAssignment NoAction để tránh 2 đường cascade). Chỉ thêm Controller/Service/Repository/DTO/Validator theo layered convention.
+- **Unique tên tag = trong phạm vi 1 user, enforce ở service layer** (không thêm unique index DB). Lý do: `Tag.Name` cố ý *không* unique toàn hệ thống (mỗi user có "namespace" tag riêng); check `NameExistsAsync(userId, name, excludeId)` trước create/update → 409. Không đổi schema nên không cần migration.
+- **Assign/unassign qua junction `TagAssignment`** giống pattern `ItemFolder` của Folder (SCRUM-65): `POST /api/tags/{id}/items` + `DELETE /api/tags/{id}/items/{itemId}`. Cả tag lẫn item phải thuộc `CurrentUserId` (404 nếu không), trùng gắn → 409.
+- **Xoá tag = hard delete**, cascade dọn `TagAssignment`, **Item giữ nguyên** (đúng nguyên tắc "không soft delete"; tag chỉ là label, gỡ label không xoá nội dung).
+- **FE tách riêng SCRUM-71** (quản lý tag + chip + gắn/gỡ + filter theo tag) — chưa làm, chờ đợt sau.
+
 ## [2026-06-30 — kế hoạch, ĐANG TRIỂN KHAI theo nhánh] Đại tu Auth: HttpOnly cookie + refresh token (Redis) + OTP đăng ký (Twilio)
 
 > ⚠️ **VƯỢT SCOPE SCRUM-42 và thay đổi NỀN TẢNG AUTH chung** (Lộc/Khánh/Vũ phụ thuộc). Yêu cầu phát sinh từ owner (ngoài board lúc ghi). Đã tách thành **3 ticket mới SCRUM-62/63/64** (xem SPRINTS.md) + làm theo **3 nhánh riêng** để dễ review, không dồn vào PR SCRUM-42. Ghi lại đây để cả nhóm nắm "tại sao" vì nó **đảo nhiều quyết định cũ** ở CLAUDE.md.

@@ -96,6 +96,8 @@
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
 | SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | ⏳ To Do |
 | SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
+| SCRUM-70 | **BE: Tag management** — CRUD tag + gắn/gỡ tag khỏi item | Lộc | ✅ Done — `TagsController` (`GET /api/tags`, `POST`, `PUT /{id}`, `DELETE /{id}`, `POST /{id}/items`, `DELETE /{id}/items/{itemId}`); `ITagService`/`TagService` (owner-scoped CRUD; tên tag unique **trong 1 user** → 409; assign/unassign junction `TagAssignment`, cả tag lẫn item phải thuộc user, trùng gắn → 409); `ITagRepository`/`TagRepository` (list kèm ItemCount, name-exists, assignment CRUD); validators (name ≤100, color hex). Dùng entity `Tag`/`TagAssignment` **có sẵn** → KHÔNG cần migration. DI đăng ký. Unit test: `TagServiceTests` (11). Build + 253 test pass. |
+| SCRUM-71 | **FE: Tag UI** — quản lý tag (list/create/edit/delete) + chip tag + gắn/gỡ tag trên item + filter theo tag | Huy | ⏳ To Do — chờ làm sau (wire vào 6 endpoint của SCRUM-70) |
 
 ## Phase Jira — Atlassian integration (SCRUM-54→60)
 
