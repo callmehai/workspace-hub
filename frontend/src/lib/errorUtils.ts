@@ -47,9 +47,9 @@ export const handleApiError = (
       }
       if (!options?.silent) {
         toast.error('Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại tài khoản.');
-      }
-      if (options?.navigate) {
-        options.navigate('/integrations');
+        if (options?.navigate) {
+          options.navigate('/integrations');
+        }
       }
       return;
     }
