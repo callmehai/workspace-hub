@@ -10,4 +10,6 @@ public interface INotificationRepository : IGenericRepository<Notification>
     Task<Notification?> GetByIdForUserAsync(Guid userId, Guid notificationId, CancellationToken ct = default);
 
     Task MarkAllAsReadAsync(Guid userId, CancellationToken ct = default);
+
+    Task AddRangeAsync(IEnumerable<Notification> notifications, CancellationToken ct = default);
 }

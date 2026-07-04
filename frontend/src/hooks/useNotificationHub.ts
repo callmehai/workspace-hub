@@ -8,6 +8,8 @@ import type { PaginatedResponse } from '../lib/scheduledEmailsApi';
 
 const UNREAD_COUNT_KEY = ['notifications', 'unread-count'] as const;
 const LIST_KEY_PREFIX = 'notifications';
+const CSRF_COOKIE = 'wh_csrf';
+const CSRF_HEADER = 'X-CSRF-Token';
 
 function getHubUrl(): string {
   const apiUrl = import.meta.env.VITE_API_URL;
@@ -16,6 +18,11 @@ function getHubUrl(): string {
   }
   const base = apiUrl.replace(/\/api\/?$/, '');
   return `${base}/hubs/notifications`;
+}
+
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 export function useNotificationHub() {
@@ -30,8 +37,13 @@ export function useNotificationHub() {
       return;
     }
 
+    // Negotiate là POST — CsrfMiddleware yêu cầu X-CSRF-Token khớp cookie wh_csrf.
+    const csrf = readCookie(CSRF_COOKIE);
     const connection = new HubConnectionBuilder()
-      .withUrl(getHubUrl(), { withCredentials: true })
+      .withUrl(getHubUrl(), {
+        withCredentials: true,
+        headers: csrf ? { [CSRF_HEADER]: csrf } : {},
+      })
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)
       .build();

@@ -68,6 +68,43 @@ public class NotificationService : INotificationService
         return dto;
     }
 
+    public async Task<IReadOnlyList<NotificationDto>> CreateAndSendToManyAsync(
+        IReadOnlyList<Guid> userIds,
+        NotificationType type,
+        string title,
+        string body,
+        string linkUrl,
+        CancellationToken ct = default)
+    {
+        if (userIds.Count == 0)
+            return Array.Empty<NotificationDto>();
+
+        var distinctIds = userIds.Distinct().ToList();
+        var now = DateTime.UtcNow;
+
+        var entities = distinctIds.Select(userId => new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Type = type,
+            Title = title,
+            Body = body,
+            LinkUrl = linkUrl,
+            IsRead = false,
+            CreatedAt = now
+        }).ToList();
+
+        await _notifications.AddRangeAsync(entities, ct);
+        await _notifications.SaveChangesAsync(ct);
+
+        // Mỗi user một DTO (Id khác nhau) → publish từng người, song song.
+        var dtos = entities.Select(MapToDto).ToList();
+        await Task.WhenAll(entities.Select((n, i) =>
+            _publisher.PublishToUserAsync(n.UserId, dtos[i], ct)));
+
+        return dtos.AsReadOnly();
+    }
+
     private static NotificationDto MapToDto(Notification n) =>
         new(n.Id, n.Type, n.Title, n.Body, n.LinkUrl, n.IsRead, n.CreatedAt);
 }

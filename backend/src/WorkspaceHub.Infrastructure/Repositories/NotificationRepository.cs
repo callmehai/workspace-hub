@@ -28,4 +28,7 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
             .Where(n => n.UserId == userId && !n.IsRead)
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true), ct);
     }
+
+    public async Task AddRangeAsync(IEnumerable<Notification> notifications, CancellationToken ct = default)
+        => await Set.AddRangeAsync(notifications, ct);
 }

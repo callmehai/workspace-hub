@@ -14,6 +14,21 @@ public class SignalRNotificationPublisher : INotificationPublisher
         _hub = hub;
     }
 
-    public Task PublishToUserAsync(Guid userId, NotificationDto notification, CancellationToken ct = default)
+    public Task PublishToUserAsync(
+        Guid userId, 
+        NotificationDto notification, 
+        CancellationToken ct = default)
         => _hub.Clients.User(userId.ToString()).ReceiveNotification(notification);
+
+    public Task PublishToUsersAsync(
+        IReadOnlyList<Guid> userIds,
+        NotificationDto notification,
+        CancellationToken ct = default)
+    {
+        if (userIds.Count == 0)
+            return Task.CompletedTask;
+
+        var ids = userIds.Select(id => id.ToString()).ToList();
+        return _hub.Clients.Users(ids).ReceiveNotification(notification);
+    }
 }

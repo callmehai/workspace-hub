@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Routing.Attributes;
 using WorkspaceHub.Application.DTOs.Notifications;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Domain.Enums;
@@ -8,7 +9,7 @@ using WorkspaceHub.Domain.Enums;
 namespace WorkspaceHub.Api.Controllers;
 
 [Authorize]
-[Route("api/notifications")]
+[ODataIgnored]
 public class NotificationsController : ApiControllerBase
 {
     private readonly INotificationService _service;
@@ -21,7 +22,7 @@ public class NotificationsController : ApiControllerBase
     }
 
     /// <summary>
-    /// GET /api/Notifications — OData $filter/$orderby/$top/$skip/$count (convention route).
+    /// GET /api/Notifications — OData $filter/$orderby/$top/$skip/$count (in-memory).
     /// </summary>
     [HttpGet]
     [EnableQuery]
