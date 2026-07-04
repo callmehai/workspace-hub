@@ -20,6 +20,9 @@ public class TagRepository : GenericRepository<Tag>, ITagRepository
         return rows.Select(r => (r.Tag, r.ItemCount)).ToList();
     }
 
+    public async Task<int> GetItemCountAsync(Guid tagId, CancellationToken ct = default)
+        => await Db.TagAssignments.AsNoTracking().CountAsync(a => a.TagId == tagId, ct);
+
     public async Task<Tag?> GetByIdAndUserAsync(Guid id, Guid userId, CancellationToken ct = default)
         => await Set.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, ct);
 

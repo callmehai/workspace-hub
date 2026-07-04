@@ -11,6 +11,9 @@ public interface ITagRepository : IGenericRepository<Tag>
     /// <summary>List tag của user kèm số item đang gắn (ItemCount), sắp theo Name.</summary>
     Task<IReadOnlyList<(Tag Tag, int ItemCount)>> GetByUserWithCountAsync(Guid userId, CancellationToken ct = default);
 
+    /// <summary>Đếm số item đang gắn 1 tag (1 COUNT, tránh quét toàn bộ tag của user).</summary>
+    Task<int> GetItemCountAsync(Guid tagId, CancellationToken ct = default);
+
     /// <summary>Lấy tag theo id + user (ownership check trước khi update/delete/assign).</summary>
     Task<Tag?> GetByIdAndUserAsync(Guid id, Guid userId, CancellationToken ct = default);
 

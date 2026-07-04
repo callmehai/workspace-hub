@@ -187,6 +187,10 @@ public class AppDbContext : DbContext
                 .WithMany(u => u.Tags)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Tên tag unique trong 1 user (SCRUM-70 fix TOCTOU). Collation cột mặc định của
+            // SQL Server là case-insensitive → khớp với check case-insensitive ở service layer.
+            e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
         });
 
         b.Entity<TagAssignment>(e =>

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
@@ -43,7 +44,7 @@ public class TagService : ITagService
         };
 
         await _tagRepo.AddAsync(tag, ct);
-        await _tagRepo.SaveChangesAsync(ct);
+        await SaveOrThrowConflictAsync(ct);
 
         return new TagResponse(tag.Id, tag.Name, tag.Color, 0);
     }
@@ -62,10 +63,9 @@ public class TagService : ITagService
         tag.Color = request.Color.Trim();
 
         _tagRepo.Update(tag);
-        await _tagRepo.SaveChangesAsync(ct);
+        await SaveOrThrowConflictAsync(ct);
 
-        var rows = await _tagRepo.GetByUserWithCountAsync(userId, ct);
-        var count = rows.FirstOrDefault(r => r.Tag.Id == id).ItemCount;
+        var count = await _tagRepo.GetItemCountAsync(id, ct);
         return new TagResponse(tag.Id, tag.Name, tag.Color, count);
     }
 
@@ -116,5 +116,21 @@ public class TagService : ITagService
 
         _tagRepo.RemoveAssignment(assignment);
         await _tagRepo.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Lưu; nếu vi phạm unique index (UserId, Name) do race giữa NameExistsAsync và insert/update
+    /// (TOCTOU) thì map DbUpdateException → 409. Đóng cửa sổ race mà check service-layer bỏ sót.
+    /// </summary>
+    private async Task SaveOrThrowConflictAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _tagRepo.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            throw new ConflictException("Bạn đã có tag với tên này.");
+        }
     }
 }

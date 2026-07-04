@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
@@ -93,6 +94,36 @@ public class TagServiceTests
 
         await act.Should().ThrowAsync<ConflictException>();
         _tagRepo.Verify(m => m.Update(It.IsAny<Tag>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_Owned_UsesItemCountQuery()
+    {
+        var id = Guid.NewGuid();
+        var tag = new Tag { Id = id, UserId = _userId, Name = "Old", Color = "#000" };
+        _tagRepo.Setup(m => m.GetByIdAndUserAsync(id, _userId, It.IsAny<CancellationToken>())).ReturnsAsync(tag);
+        _tagRepo.Setup(m => m.NameExistsAsync(_userId, "New", id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _tagRepo.Setup(m => m.GetItemCountAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(5);
+
+        var result = await _service.UpdateAsync(_userId, id, new UpdateTagRequest("New", "#111"));
+
+        result.Name.Should().Be("New");
+        result.ItemCount.Should().Be(5);
+        // Không quét toàn bộ tag của user chỉ để lấy 1 ItemCount.
+        _tagRepo.Verify(m => m.GetItemCountAsync(id, It.IsAny<CancellationToken>()), Times.Once);
+        _tagRepo.Verify(m => m.GetByUserWithCountAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_UniqueIndexRace_MapsDbUpdateExceptionTo409()
+    {
+        // NameExistsAsync qua được (race), nhưng unique index (UserId,Name) chặn ở SaveChanges.
+        _tagRepo.Setup(m => m.NameExistsAsync(_userId, "Urgent", null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _tagRepo.Setup(m => m.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new DbUpdateException("unique violation"));
+
+        var act = () => _service.CreateAsync(_userId, new CreateTagRequest("Urgent", "#FF0000"));
+
+        await act.Should().ThrowAsync<ConflictException>();
     }
 
     [Fact]
