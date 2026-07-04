@@ -37,20 +37,20 @@ function typeLabel(t: ItemType): string {
 function typeIcon(t: ItemType) {
   const cls = 'w-4 h-4';
   switch (t) {
-    case 'Email':  return <Mail className={cls} />;
-    case 'Event':  return <Calendar className={cls} />;
-    case 'File':   return <FileText className={cls} />;
-    case 'Note':   return <StickyNote className={cls} />;
+    case 'Email': return <Mail className={cls} />;
+    case 'Event': return <Calendar className={cls} />;
+    case 'File': return <FileText className={cls} />;
+    case 'Note': return <StickyNote className={cls} />;
     case 'Ticket': return <Briefcase className={cls} />;
   }
 }
 
 function typeTileClass(t: ItemType): string {
   const map: Record<ItemType, string> = {
-    Email:  'bg-blue-50 text-blue-600',
-    Event:  'bg-amber-50 text-amber-600',
-    File:   'bg-emerald-50 text-emerald-600',
-    Note:   'bg-slate-100 text-slate-500',
+    Email: 'bg-blue-50 text-blue-600',
+    Event: 'bg-amber-50 text-amber-600',
+    File: 'bg-emerald-50 text-emerald-600',
+    Note: 'bg-slate-100 text-slate-500',
     Ticket: 'bg-purple-50 text-purple-600',
   };
   return map[t] ?? 'bg-slate-100 text-slate-500';
@@ -60,7 +60,7 @@ function statusChipClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-100 text-slate-600',
     Doing: 'bg-blue-50 text-blue-700',
-    Done:  'bg-emerald-50 text-emerald-700',
+    Done: 'bg-emerald-50 text-emerald-700',
   };
   return map[s] ?? 'bg-slate-100 text-slate-500';
 }
@@ -69,7 +69,7 @@ function statusDotClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-400',
     Doing: 'bg-blue-500',
-    Done:  'bg-emerald-500',
+    Done: 'bg-emerald-500',
   };
   return map[s] ?? 'bg-slate-400';
 }
@@ -356,7 +356,6 @@ export const Inbox = () => {
               {isLoading ? 'Đang tải…' : `${total} mục`}
             </p>
           </div>
-
           <div className="flex items-center gap-3">
             <button
               onClick={handleSyncAll}
@@ -485,27 +484,27 @@ export const Inbox = () => {
               draggable
               onDragStart={(e) => handleDragStart(e, item.id)}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedId === item.id ? 'bg-indigo-50/50' : ''} ${selectedItemIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 relative ${selectedId === item.id ? 'bg-indigo-50/50' : (isEmailUnread(item) ? 'bg-white' : 'bg-slate-50/50')} ${selectedItemIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}
             >
+              {isEmailUnread(item) && (
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-md" />
+              )}
               <input 
                 type="checkbox" 
                 checked={selectedItemIds.has(item.id)}
                 onClick={(e) => toggleSelection(item.id, e)}
                 onChange={() => {}} // handled by onClick
-                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1"
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1 z-10"
               />
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 z-10 ${typeTileClass(item.type)}`}>
                 {typeIcon(item.type)}
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className={`text-[13.5px] ${isEmailUnread(item) ? 'font-bold text-slate-900' : 'font-semibold text-slate-900'} truncate leading-snug flex items-center`}>
-                  {isEmailUnread(item) && (
-                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5 flex-shrink-0" />
-                  )}
+              <div className="flex-1 min-w-0 z-10">
+                <div className={`text-[13.5px] truncate leading-snug ${isEmailUnread(item) ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
                   {item.title}
                 </div>
-                <div className="text-[12.5px] text-slate-500 truncate mt-0.5 leading-snug">
+                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${isEmailUnread(item) ? 'font-medium text-slate-700' : 'text-slate-500'}`}>
                   {item.snippet}
                 </div>
                 {item.folderIds && item.folderIds.length > 0 && (
@@ -542,7 +541,8 @@ export const Inbox = () => {
                 <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── Pagination ── */}

@@ -31,7 +31,7 @@ export const handleApiError = (
     const data = err.response?.data as ApiErrorResponse | undefined;
 
     if (status === 409) {
-      toast.error('Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại...');
+      toast.error(data?.message || 'Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại...');
       if (options?.onConflict) {
         options.onConflict();
       }

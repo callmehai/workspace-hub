@@ -184,6 +184,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     catch { return {}; }
   })();
 
+  const isUnread = metadata.isUnread !== undefined 
+    ? metadata.isUnread === true 
+    : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'));
+
+  const isStarred = metadata.isStarred !== undefined 
+    ? metadata.isStarred === true 
+    : (Array.isArray(metadata.labels) && metadata.labels.includes('STARRED'));
+
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
   const statusLabel = STATUS_LABEL[item.status] ?? item.status;
   const statusColor = STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500';
@@ -578,20 +586,20 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           {item.type === 'Email' && (
             <>
               <button
-                onClick={() => patchMutation.mutate({ isUnread: !metadata.isUnread })}
+                onClick={() => patchMutation.mutate({ isUnread: !isUnread })}
                 disabled={patchMutation.isPending}
                 className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
               >
-                {metadata.isUnread ? <Eye className="w-4 h-4 text-slate-500" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
-                <span>{metadata.isUnread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc'}</span>
+                {isUnread ? <Eye className="w-4 h-4 text-slate-500" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
+                <span>{isUnread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc'}</span>
               </button>
               <button
-                onClick={() => patchMutation.mutate({ isStarred: !metadata.isStarred })}
+                onClick={() => patchMutation.mutate({ isStarred: !isStarred })}
                 disabled={patchMutation.isPending}
                 className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
               >
-                <Star className={`w-4 h-4 ${metadata.isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450'}`} />
-                <span>{metadata.isStarred ? 'Bỏ quan trọng' : 'Quan trọng'}</span>
+                <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450'}`} />
+                <span>{isStarred ? 'Bỏ quan trọng' : 'Quan trọng'}</span>
               </button>
               <button
                 onClick={() => setIsAddingLabel(true)}
