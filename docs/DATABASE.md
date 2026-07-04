@@ -132,8 +132,8 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 
 ## Tags / TagAssignments / ImportantContacts / Notifications
 Không đổi cấu trúc.
-- Tags (UserId, Name không unique toàn hệ thống, Color).
-- TagAssignments composite PK.
+- Tags (UserId, Name không unique toàn hệ thống — **nhưng UNIQUE(UserId, Name)** qua unique index DB `IX_Tags_UserId_Name` (migration `AddTagUserNameUniqueIndex`, thay index FK `IX_Tags_UserId` — UserId là cột đầu nên vẫn cover FK); collation cột CI mặc định → chặn cả case khác nhau, khớp check case-insensitive ở service. Color). CRUD: `GET/POST /api/tags`, `PUT/DELETE /api/tags/{id}`. Cascade User→Tags→TagAssignments.
+- TagAssignments composite PK (TagId, ItemId). Gắn/gỡ: `POST /api/tags/{id}/items`, `DELETE /api/tags/{id}/items/{itemId}` (SCRUM-70). Item→TagAssignment NoAction (tránh 2 đường cascade từ User); xoá Tag cascade dọn junction, Item giữ nguyên.
 - ImportantContacts (Type: Email / **JiraAccount** — ✅ SCRUM-60, Identifier=email (Email) / accountId (JiraAccount); UNIQUE(UserId,Type,Identifier)). CRUD: `GET/POST /api/importantcontacts`, `DELETE /{id}`. Enum lưu string nên thêm JiraAccount KHÔNG cần migration.
 - Notifications (Type: share_invite/important_email/sync_error/schedule_sent; **phase Jira (SCRUM-60, optional) thêm type cho Jira** — vd jira_assigned/jira_mention; tương lai thêm friend_request/automation_triggered nếu làm).
 
