@@ -91,6 +91,13 @@ function isEmailUnread(item: any): boolean {
   }
 }
 
+function getItemStatusLabel(item: any): string {
+  if (item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item)) {
+    return 'Đã xem';
+  }
+  return statusLabel(item.status);
+}
+
 // ─── skeleton row ────────────────────────────────────────────────────────────
 function SkeletonRow() {
   return (
@@ -526,7 +533,7 @@ export const Inbox = () => {
                 <span className="text-[11.5px] text-slate-400">{formatTime(item.occurredAt)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item.status)}`} />
-                  {statusLabel(item.status)}
+                  {getItemStatusLabel(item)}
                 </span>
               </div>
 
@@ -541,8 +548,7 @@ export const Inbox = () => {
                 <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
               </button>
             </div>
-            );
-          })}
+          ))}
         </div>
 
         {/* ── Pagination ── */}

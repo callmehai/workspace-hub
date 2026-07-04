@@ -70,9 +70,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   // Mutate item (writeback PATCH)
   const patchMutation = useMutation({
-    mutationFn: (payload: PatchItemRequest) => itemsApi.patchItem(itemId, payload),
-    onSuccess: () => {
-      toast.success('Đã lưu thay đổi thành công');
+    mutationFn: ({ _isAutoRead, ...payload }: PatchItemRequest & { _isAutoRead?: boolean }) => itemsApi.patchItem(itemId, payload),
+    onSuccess: (data, variables) => {
+      if (!variables._isAutoRead) {
+        toast.success('Đã lưu thay đổi thành công');
+      }
       setIsEditing(false);
       setIsRenamingFile(false);
       setNewLabelName('');
@@ -146,6 +148,36 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     onError: (err) => handleApiError(err, 'Lỗi xóa khỏi thư mục', { navigate })
   });
 
+  const metadata = (() => {
+    try { return item?.metadataJson ? JSON.parse(item.metadataJson) : {}; }
+    catch { return {}; }
+  })();
+
+  const isUnread = item?.type === 'Email' && (
+    metadata.isUnread !== undefined 
+      ? metadata.isUnread === true 
+      : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'))
+  );
+
+  const isStarred = metadata.isStarred !== undefined 
+    ? metadata.isStarred === true 
+    : (Array.isArray(metadata.labels) && metadata.labels.includes('STARRED'));
+
+  const autoReadProcessedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    autoReadProcessedRef.current = false;
+  }, [itemId]);
+
+  React.useEffect(() => {
+    if (item && item.type === 'Email' && !autoReadProcessedRef.current) {
+      autoReadProcessedRef.current = true;
+      if (isUnread) {
+        patchMutation.mutate({ isUnread: false, _isAutoRead: true });
+      }
+    }
+  }, [item, isUnread]);
+
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
@@ -179,21 +211,10 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     );
   }
 
-  const metadata = (() => {
-    try { return item.metadataJson ? JSON.parse(item.metadataJson) : {}; }
-    catch { return {}; }
-  })();
-
-  const isUnread = metadata.isUnread !== undefined 
-    ? metadata.isUnread === true 
-    : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'));
-
-  const isStarred = metadata.isStarred !== undefined 
-    ? metadata.isStarred === true 
-    : (Array.isArray(metadata.labels) && metadata.labels.includes('STARRED'));
-
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
-  const statusLabel = STATUS_LABEL[item.status] ?? item.status;
+  const statusLabel = (item.status === 'Inbox' && item.type === 'Email' && !isUnread)
+    ? 'Đã xem'
+    : (STATUS_LABEL[item.status] ?? item.status);
   const statusColor = STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500';
   const statusDot = STATUS_DOT[item.status] ?? 'bg-slate-400';
 

@@ -263,9 +263,10 @@ export const KanbanBoard = () => {
 
   const addToFolderMutation = useMutation({
     mutationFn: ({ folderId, itemId }: { folderId: string, itemId: string }) => foldersApi.addItemToFolder(folderId, { itemId }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Đã thêm vào thư mục');
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['item', variables.itemId] });
     },
     onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
   });
