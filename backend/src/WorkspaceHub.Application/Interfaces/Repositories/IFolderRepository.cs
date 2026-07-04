@@ -33,11 +33,20 @@ public interface IFolderRepository : IGenericRepository<Folder>
     /// <summary>Lấy ItemFolder junction để remove.</summary>
     Task<ItemFolder?> GetItemFolderAsync(Guid itemId, Guid folderId, CancellationToken ct = default);
 
+    /// <summary>Lấy nhiều ItemFolder junction để remove.</summary>
+    Task<IReadOnlyList<ItemFolder>> GetItemFoldersAsync(IEnumerable<Guid> itemIds, Guid folderId, CancellationToken ct = default);
+
     /// <summary>Thêm Item vào Folder.</summary>
     Task AddItemFolderAsync(ItemFolder itemFolder, CancellationToken ct = default);
 
+    /// <summary>Thêm nhiều Item vào Folder.</summary>
+    Task AddItemsFolderAsync(IEnumerable<ItemFolder> itemFolders, CancellationToken ct = default);
+
     /// <summary>Gỡ Item khỏi Folder.</summary>
     void RemoveItemFolder(ItemFolder itemFolder);
+
+    /// <summary>Gỡ nhiều Item khỏi Folder.</summary>
+    void RemoveItemsFolder(IEnumerable<ItemFolder> itemFolders);
 }
 
 

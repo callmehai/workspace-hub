@@ -98,14 +98,32 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<ItemFolder>> GetItemFoldersAsync(IEnumerable<Guid> itemIds, Guid folderId, CancellationToken ct = default)
+    {
+        return await Db.ItemFolders.Where(ifj => ifj.FolderId == folderId && itemIds.Contains(ifj.ItemId)).ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task AddItemFolderAsync(ItemFolder itemFolder, CancellationToken ct = default)
     {
         await Db.ItemFolders.AddAsync(itemFolder, ct);
     }
 
     /// <inheritdoc/>
+    public async Task AddItemsFolderAsync(IEnumerable<ItemFolder> itemFolders, CancellationToken ct = default)
+    {
+        await Db.ItemFolders.AddRangeAsync(itemFolders, ct);
+    }
+
+    /// <inheritdoc/>
     public void RemoveItemFolder(ItemFolder itemFolder)
     {
         Db.ItemFolders.Remove(itemFolder);
+    }
+
+    /// <inheritdoc/>
+    public void RemoveItemsFolder(IEnumerable<ItemFolder> itemFolders)
+    {
+        Db.ItemFolders.RemoveRange(itemFolders);
     }
 }

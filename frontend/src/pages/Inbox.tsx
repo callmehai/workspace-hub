@@ -7,11 +7,14 @@ import type { ItemType, ItemStatus } from '../types/items';
 import {
   Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, AlertCircle, Inbox as InboxIcon,
-  ChevronLeft, ChevronRight, Search, LayoutGrid, List,
+  ChevronLeft, ChevronRight, Search, LayoutGrid, List, RefreshCw
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
+import { BulkActionBar } from '../components/BulkActionBar';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { connectionsApi } from '../lib/connectionsApi';
+import toast from 'react-hot-toast';
 
 const LIMIT = 20;
 
@@ -34,20 +37,20 @@ function typeLabel(t: ItemType): string {
 function typeIcon(t: ItemType) {
   const cls = 'w-4 h-4';
   switch (t) {
-    case 'Email':  return <Mail className={cls} />;
-    case 'Event':  return <Calendar className={cls} />;
-    case 'File':   return <FileText className={cls} />;
-    case 'Note':   return <StickyNote className={cls} />;
+    case 'Email': return <Mail className={cls} />;
+    case 'Event': return <Calendar className={cls} />;
+    case 'File': return <FileText className={cls} />;
+    case 'Note': return <StickyNote className={cls} />;
     case 'Ticket': return <Briefcase className={cls} />;
   }
 }
 
 function typeTileClass(t: ItemType): string {
   const map: Record<ItemType, string> = {
-    Email:  'bg-blue-50 text-blue-600',
-    Event:  'bg-amber-50 text-amber-600',
-    File:   'bg-emerald-50 text-emerald-600',
-    Note:   'bg-slate-100 text-slate-500',
+    Email: 'bg-blue-50 text-blue-600',
+    Event: 'bg-amber-50 text-amber-600',
+    File: 'bg-emerald-50 text-emerald-600',
+    Note: 'bg-slate-100 text-slate-500',
     Ticket: 'bg-purple-50 text-purple-600',
   };
   return map[t] ?? 'bg-slate-100 text-slate-500';
@@ -57,7 +60,7 @@ function statusChipClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-100 text-slate-600',
     Doing: 'bg-blue-50 text-blue-700',
-    Done:  'bg-emerald-50 text-emerald-700',
+    Done: 'bg-emerald-50 text-emerald-700',
   };
   return map[s] ?? 'bg-slate-100 text-slate-500';
 }
@@ -66,7 +69,7 @@ function statusDotClass(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
     Inbox: 'bg-slate-400',
     Doing: 'bg-blue-500',
-    Done:  'bg-emerald-500',
+    Done: 'bg-emerald-500',
   };
   return map[s] ?? 'bg-slate-400';
 }
@@ -76,6 +79,23 @@ function statusLabel(s: ItemStatus): string {
     Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Done',
   };
   return map[s] ?? s;
+}
+
+function isEmailUnread(item: any): boolean {
+  if (item.type !== 'Email' || !item.metadataJson) return false;
+  try {
+    const meta = JSON.parse(item.metadataJson);
+    return meta.isUnread === true || meta.IsUnread === true;
+  } catch {
+    return false;
+  }
+}
+
+function getItemStatusLabel(item: any): string {
+  if (item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item)) {
+    return 'Đã xem';
+  }
+  return statusLabel(item.status);
 }
 
 // ─── skeleton row ────────────────────────────────────────────────────────────
@@ -136,8 +156,36 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
 
 // ─── main component ──────────────────────────────────────────────────────────
 export const Inbox = () => {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncAll = async () => {
+    try {
+      setIsSyncing(true);
+      const connections = await connectionsApi.getConnections();
+      const activeConns = connections.filter(c => c.status === 'Active');
+      if (activeConns.length === 0) {
+        toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
+        return;
+      }
+      
+      const toastId = toast.loading('Đang đồng bộ dữ liệu...');
+      try {
+        await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
+        toast.success('Đồng bộ thành công!', { id: toastId });
+        queryClient.invalidateQueries({ queryKey: ['items'] });
+      } catch (err) {
+        toast.error('Lỗi đồng bộ dữ liệu', { id: toastId });
+        handleApiError(err, 'Lỗi đồng bộ dữ liệu', { navigate });
+      }
+    } catch (err) {
+      handleApiError(err, 'Lỗi lấy danh sách kết nối', { navigate });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const getInitialType = (): ItemType | null => {
     if (location.pathname === '/files') return 'File';
@@ -155,6 +203,9 @@ export const Inbox = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  
+  // Multi-selection state
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -207,7 +258,6 @@ export const Inbox = () => {
     placeholderData: (prev) => prev,
   });
 
-  const queryClient = useQueryClient();
   const { mutate: toggleImportant } = useMutation({
     mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
       itemsApi.updateItemImportant(id, isImportant),
@@ -232,6 +282,39 @@ export const Inbox = () => {
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
   const rangeStart = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const rangeEnd = Math.min(page * LIMIT, total);
+
+  // Clear selection when page or filters change
+  useEffect(() => {
+    setSelectedItemIds(new Set());
+  }, [page, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
+
+  const toggleSelection = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSet = new Set(selectedItemIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedItemIds(newSet);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedItemIds.size === items.length) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(items.map((i: any) => i.id)));
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    // Pass either the single dragged item, or a JSON array if dragging a selection
+    if (selectedItemIds.has(id) && selectedItemIds.size > 1) {
+      e.dataTransfer.setData('itemIds', JSON.stringify(Array.from(selectedItemIds)));
+    } else {
+      e.dataTransfer.setData('itemId', id);
+    }
+  };
 
   const clearFilters = () => {
     setStatusFilter(null);
@@ -280,20 +363,30 @@ export const Inbox = () => {
               {isLoading ? 'Đang tải…' : `${total} mục`}
             </p>
           </div>
-
-          {/* View switcher */}
-          <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px]">
-            <button className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] bg-indigo-50 text-indigo-700 text-[13px] font-semibold">
-              <List className="w-4 h-4" />
-              <span>Danh sách</span>
-            </button>
-            <button 
-              onClick={() => navigate('/kanban')}
-              className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSyncAll}
+              disabled={isSyncing}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
             >
-              <LayoutGrid className="w-4 h-4" />
-              <span>Bảng</span>
+              <RefreshCw className={`w-4 h-4 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Đồng bộ</span>
             </button>
+
+            {/* View switcher */}
+            <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px]">
+              <button className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] bg-indigo-50 text-indigo-700 text-[13px] font-semibold">
+                <List className="w-4 h-4" />
+                <span>Danh sách</span>
+              </button>
+              <button 
+                onClick={() => navigate('/kanban')}
+                className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span>Bảng</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -378,26 +471,52 @@ export const Inbox = () => {
             </div>
           )}
 
-          {showList && items.map((item) => (
+          {showList && (
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-slate-50">
+              <input 
+                type="checkbox" 
+                checked={items.length > 0 && selectedItemIds.size === items.length}
+                onChange={toggleAllSelection}
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+              />
+              <span className="text-[12.5px] font-medium text-slate-500">
+                Chọn tất cả trang này
+              </span>
+            </div>
+          )}
+
+          {showList && items.map((item: any) => (
             <div
               key={item.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, item.id)}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${selectedId === item.id ? 'bg-indigo-50/50' : ''}`}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 relative ${selectedId === item.id ? 'bg-indigo-50/50' : (isEmailUnread(item) ? 'bg-white' : 'bg-slate-50/50')} ${selectedItemIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}
             >
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
+              {isEmailUnread(item) && (
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-md" />
+              )}
+              <input 
+                type="checkbox" 
+                checked={selectedItemIds.has(item.id)}
+                onClick={(e) => toggleSelection(item.id, e)}
+                onChange={() => {}} // handled by onClick
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1 z-10"
+              />
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 z-10 ${typeTileClass(item.type)}`}>
                 {typeIcon(item.type)}
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-semibold text-slate-900 truncate leading-snug">
+              <div className="flex-1 min-w-0 z-10">
+                <div className={`text-[13.5px] truncate leading-snug ${isEmailUnread(item) ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
                   {item.title}
                 </div>
-                <div className="text-[12.5px] text-slate-500 truncate mt-0.5 leading-snug">
+                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${isEmailUnread(item) ? 'font-medium text-slate-700' : 'text-slate-500'}`}>
                   {item.snippet}
                 </div>
                 {item.folderIds && item.folderIds.length > 0 && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    {item.folderIds.map(fId => {
+                    {item.folderIds.map((fId: string) => {
                       const f = folders.find(fol => fol.id === fId);
                       if (!f) return null;
                       return (
@@ -414,7 +533,7 @@ export const Inbox = () => {
                 <span className="text-[11.5px] text-slate-400">{formatTime(item.occurredAt)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item.status)}`} />
-                  {statusLabel(item.status)}
+                  {getItemStatusLabel(item)}
                 </span>
               </div>
 
@@ -488,6 +607,12 @@ export const Inbox = () => {
           onDeleted={() => setSelectedId(null)}
         />
       )}
+
+      {/* ── Bulk Action Bar ── */}
+      <BulkActionBar 
+        selectedItemIds={selectedItemIds}
+        onClearSelection={() => setSelectedItemIds(new Set())}
+      />
     </div>
   );
 };

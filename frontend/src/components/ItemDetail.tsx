@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
   Trash2, Edit3, ExternalLink, Tag, Loader2,
-  AlertCircle, Eye, EyeOff, Star, Check, Send
+  AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
 } from 'lucide-react';
-import { itemsApi } from '../lib/itemsApi';
+import { itemsApi, foldersApi } from '../lib/itemsApi';
+import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import toast from 'react-hot-toast';
@@ -40,6 +41,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isEditing, setIsEditing] = useState(false);
   const [newLabelName, setNewLabelName] = useState('');
   const [isAddingLabel, setIsAddingLabel] = useState(false);
+  const [isAddingToFolder, setIsAddingToFolder] = useState(false);
 
   // Event form edit state
   const [eventForm, setEventForm] = useState({
@@ -61,11 +63,18 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     enabled: !!itemId,
   });
 
+  const { data: folders = [] } = useQuery({
+    queryKey: ['folders'],
+    queryFn: () => foldersApi.getFolders()
+  });
+
   // Mutate item (writeback PATCH)
   const patchMutation = useMutation({
-    mutationFn: (payload: PatchItemRequest) => itemsApi.patchItem(itemId, payload),
-    onSuccess: () => {
-      toast.success('Đã lưu thay đổi thành công');
+    mutationFn: ({ _isAutoRead, ...payload }: PatchItemRequest & { _isAutoRead?: boolean }) => itemsApi.patchItem(itemId, payload),
+    onSuccess: (data, variables) => {
+      if (!variables._isAutoRead) {
+        toast.success('Đã lưu thay đổi thành công');
+      }
       setIsEditing(false);
       setIsRenamingFile(false);
       setNewLabelName('');
@@ -74,13 +83,21 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => {
+    onError: (err, variables) => {
       handleApiError(err, 'Lỗi cập nhật dữ liệu', {
-        onConflict: () => {
+        onConflict: async () => {
+          if (item?.connectionId) {
+            try {
+              await connectionsApi.syncConnection(item.connectionId);
+            } catch (e) {
+              console.error('Lỗi khi đồng bộ tự động', e);
+            }
+          }
           refetch();
           queryClient.invalidateQueries({ queryKey: ['items'] });
         },
-        navigate
+        navigate,
+        silent: variables?._isAutoRead === true
       });
     }
   });
@@ -96,7 +113,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     },
     onError: (err) => {
       handleApiError(err, 'Không thể xóa dữ liệu', {
-        onConflict: () => {
+        onConflict: async () => {
+          if (item?.connectionId) {
+            try {
+              await connectionsApi.syncConnection(item.connectionId);
+            } catch (e) {
+              console.error('Lỗi khi đồng bộ tự động', e);
+            }
+          }
           refetch();
           queryClient.invalidateQueries({ queryKey: ['items'] });
         },
@@ -104,6 +128,56 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       });
     }
   });
+
+  const addToFolderMutation = useMutation({
+    mutationFn: (folderId: string) => foldersApi.addItemToFolder(folderId, { itemId }),
+    onSuccess: () => {
+      toast.success('Đã thêm vào thư mục');
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
+  });
+
+  const removeFromFolderMutation = useMutation({
+    mutationFn: (folderId: string) => foldersApi.removeItemFromFolder(folderId, itemId),
+    onSuccess: () => {
+      toast.success('Đã xóa khỏi thư mục');
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => handleApiError(err, 'Lỗi xóa khỏi thư mục', { navigate })
+  });
+
+  const metadata = (() => {
+    try { return item?.metadataJson ? JSON.parse(item.metadataJson) : {}; }
+    catch { return {}; }
+  })();
+
+  const isUnread = item?.type === 'Email' && (
+    metadata.isUnread !== undefined 
+      ? metadata.isUnread === true 
+      : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'))
+  );
+
+  const isStarred = metadata.isStarred !== undefined 
+    ? metadata.isStarred === true 
+    : (Array.isArray(metadata.labels) && metadata.labels.includes('STARRED'));
+
+  const autoReadProcessedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    autoReadProcessedRef.current = false;
+  }, [itemId]);
+
+  React.useEffect(() => {
+    if (item && item.type === 'Email' && !autoReadProcessedRef.current) {
+      autoReadProcessedRef.current = true;
+      if (isUnread) {
+        patchMutation.mutate({ isUnread: false, _isAutoRead: true });
+      }
+    }
+  }, [item, isUnread]);
 
   if (isLoading) {
     return (
@@ -138,13 +212,10 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     );
   }
 
-  const metadata = (() => {
-    try { return item.metadataJson ? JSON.parse(item.metadataJson) : {}; }
-    catch { return {}; }
-  })();
-
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
-  const statusLabel = STATUS_LABEL[item.status] ?? item.status;
+  const statusLabel = (item.status === 'Inbox' && item.type === 'Email' && !isUnread)
+    ? 'Đã xem'
+    : (STATUS_LABEL[item.status] ?? item.status);
   const statusColor = STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500';
   const statusDot = STATUS_DOT[item.status] ?? 'bg-slate-400';
 
@@ -202,7 +273,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
   } else if (item.type === 'Ticket') {
     if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
-    if (metadata.projectKey) rows.push({ label: 'Project',    value: metadata.projectKey });
     if (metadata.issueType)  rows.push({ label: 'Loại',       value: metadata.issueType });
     if (metadata.priority)   rows.push({ label: 'Ưu tiên',    value: metadata.priority });
     if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });
@@ -367,10 +437,60 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-[18px]">
-          {/* Mock Folder Dot (for UI parity with prototype) */}
-          <div className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 px-[11px] py-[5px] rounded-full mb-4">
-            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-            VinClub — Chiến dịch Tết
+          {/* Folders */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {item.folderIds?.map(fId => {
+              const f = folders.find((fol: any) => fol.id === fId);
+              if (!f) return null;
+              return (
+                <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 pl-[11px] pr-1 py-1 rounded-full group">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                  <span className="mr-0.5">{f.name}</span>
+                  <button 
+                    onClick={() => removeFromFolderMutation.mutate(f.id)}
+                    disabled={removeFromFolderMutation.isPending}
+                    className="p-0.5 rounded-full text-slate-400 hover:bg-slate-200 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+            
+            {/* Add to folder button & dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsAddingToFolder(!isAddingToFolder)}
+                className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors text-[12px] font-medium"
+                title="Thêm vào thư mục"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm</span>
+              </button>
+              
+              {isAddingToFolder && (
+                <div className="absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                  {folders.filter((f: any) => !item.folderIds?.includes(f.id)).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-500 text-center">Không còn thư mục nào</div>
+                  ) : (
+                    folders.filter((f: any) => !item.folderIds?.includes(f.id)).map((f: any) => (
+                      <button
+                        key={f.id}
+                        onClick={() => {
+                          addToFolderMutation.mutate(f.id);
+                          setIsAddingToFolder(false);
+                        }}
+                        disabled={addToFolderMutation.isPending}
+                        className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                        <span className="truncate">{f.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Form edit for Event */}
@@ -488,20 +608,20 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           {item.type === 'Email' && (
             <>
               <button
-                onClick={() => patchMutation.mutate({ isUnread: !metadata.isUnread })}
+                onClick={() => patchMutation.mutate({ isUnread: !isUnread })}
                 disabled={patchMutation.isPending}
                 className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
               >
-                {metadata.isUnread ? <Eye className="w-4 h-4 text-slate-500" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
-                <span>{metadata.isUnread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc'}</span>
+                {isUnread ? <Eye className="w-4 h-4 text-slate-500" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
+                <span>{isUnread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc'}</span>
               </button>
               <button
-                onClick={() => patchMutation.mutate({ isStarred: !metadata.isStarred })}
+                onClick={() => patchMutation.mutate({ isStarred: !isStarred })}
                 disabled={patchMutation.isPending}
                 className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
               >
-                <Star className={`w-4 h-4 ${metadata.isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450'}`} />
-                <span>{metadata.isStarred ? 'Bỏ quan trọng' : 'Quan trọng'}</span>
+                <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450'}`} />
+                <span>{isStarred ? 'Bỏ quan trọng' : 'Quan trọng'}</span>
               </button>
               <button
                 onClick={() => setIsAddingLabel(true)}

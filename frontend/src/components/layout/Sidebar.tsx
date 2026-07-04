@@ -87,9 +87,23 @@ export const Sidebar = () => {
   const assignItemMutation = useMutation({
     mutationFn: ({ folderId, itemId }: { folderId: string; itemId: string }) => 
       foldersApi.addItemToFolder(folderId, { itemId }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Đã gán mục vào thư mục');
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['item', variables.itemId] });
+    },
+    onError: (err) => {
+      handleApiError(err, 'Lỗi gán thư mục');
+    }
+  });
+
+  const assignItemsBulkMutation = useMutation({
+    mutationFn: ({ folderId, itemIds }: { folderId: string; itemIds: string[] }) => 
+      foldersApi.addItemsToFolderBulk(folderId, itemIds),
+    onSuccess: (_, variables) => {
+      toast.success(`Đã gán ${variables.itemIds.length} mục vào thư mục`);
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['item'] });
     },
     onError: (err) => {
       handleApiError(err, 'Lỗi gán thư mục');
@@ -108,8 +122,20 @@ export const Sidebar = () => {
   const handleDrop = (e: React.DragEvent, folderId: string) => {
     e.preventDefault();
     e.currentTarget.classList.remove('bg-indigo-50');
+    
+    const itemIdsStr = e.dataTransfer.getData('itemIds');
     const itemId = e.dataTransfer.getData('itemId');
-    if (itemId) {
+
+    if (itemIdsStr) {
+      try {
+        const itemIds = JSON.parse(itemIdsStr);
+        if (Array.isArray(itemIds) && itemIds.length > 0) {
+          assignItemsBulkMutation.mutate({ folderId, itemIds });
+        }
+      } catch (e) {
+        console.error("Failed to parse dragged items");
+      }
+    } else if (itemId) {
       assignItemMutation.mutate({ folderId, itemId });
     }
   };

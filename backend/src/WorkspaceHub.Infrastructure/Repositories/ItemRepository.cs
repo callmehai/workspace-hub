@@ -116,6 +116,12 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     }
 
     /// <inheritdoc/>
+    public async Task<List<Item>> GetByIdsAndUserAsync(IEnumerable<Guid> itemIds, Guid userId, CancellationToken ct = default)
+    {
+        return await Set.Where(i => itemIds.Contains(i.Id) && i.UserId == userId).ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
     {
         // 1. Delete associated ItemFolders

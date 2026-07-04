@@ -40,6 +40,11 @@ public interface IItemRepository : IGenericRepository<Item>
     Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
+    /// Tìm danh sách Item theo IDs và User, dùng để check ownership trong bulk operations.
+    /// </summary>
+    Task<List<Item>> GetByIdsAndUserAsync(IEnumerable<Guid> itemIds, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Xóa toàn bộ Items và các liên kết (ItemFolders, TagAssignments) thuộc connectionId.
     /// Dùng khi disconnect connection để tránh vi phạm Unique Index (ConnectionId, ExternalId) do ConnectionId=NULL trùng lặp.
     /// </summary>

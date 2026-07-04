@@ -96,6 +96,7 @@ public record ItemResponse(
     bool IsImportant,
     string? ExternalId,
     string? MetadataJson,
-    List<Guid> FolderIds);
+    List<Guid> FolderIds,
+    Guid? ConnectionId = null);
 
 

@@ -81,7 +81,7 @@ public class GmailSyncService : IGmailSyncService
     {
         var importantList = await _importantContacts.GetIdentifiersAsync(connection.UserId, ImportantContactType.Email, ct);
         var importantSet = new HashSet<string>(importantList, StringComparer.OrdinalIgnoreCase);
-        var existing = await _items.GetExistingExternalIdsAsync(connection.Id, ct);
+        var existingItems = await _items.GetTrackedByConnectionIdAsync(connection.Id, ct);
 
         var newItems = new List<Item>();
         int scanned = 0;
@@ -95,7 +95,7 @@ public class GmailSyncService : IGmailSyncService
             scanned = fullResult.CollectedIds.Count;
             newCursor = fullResult.NewCursor;
 
-            var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existing, newItems, ct);
+            var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existingItems, newItems, ct);
             created = processResult.Created;
             skipped = processResult.Skipped;
         }
@@ -104,7 +104,7 @@ public class GmailSyncService : IGmailSyncService
             string? pageToken = null;
             string? latestHistoryId = null;
             bool expired = false;
-            var addedIds = new List<string>();
+            var affectedIds = new List<string>();
 
             do
             {
@@ -115,7 +115,7 @@ public class GmailSyncService : IGmailSyncService
                     break;
                 }
 
-                addedIds.AddRange(h.AddedMessageIds);
+                affectedIds.AddRange(h.AffectedMessageIds);
                 if (h.LatestHistoryId != null)
                 {
                     latestHistoryId = h.LatestHistoryId;
@@ -130,16 +130,16 @@ public class GmailSyncService : IGmailSyncService
                 scanned = fullResult.CollectedIds.Count;
                 newCursor = fullResult.NewCursor;
 
-                var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existing, newItems, ct);
+                var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existingItems, newItems, ct);
                 created = processResult.Created;
                 skipped = processResult.Skipped;
             }
             else
             {
-                scanned = addedIds.Count;
+                scanned = affectedIds.Count;
                 newCursor = latestHistoryId ?? connection.CursorValue;
 
-                var processResult = await ProcessMessageIdsAsync(connection, addedIds, importantSet, existing, newItems, ct);
+                var processResult = await ProcessMessageIdsAsync(connection, affectedIds, importantSet, existingItems, newItems, ct);
                 created = processResult.Created;
                 skipped = processResult.Skipped;
             }
@@ -192,14 +192,12 @@ public class GmailSyncService : IGmailSyncService
         Connection connection,
         IEnumerable<string> ids,
         ISet<string> importantSet,
-        HashSet<string> existing,
+        Dictionary<string, Item> existingItems,
         List<Item> newItems,
         CancellationToken ct)
     {
-        var idsToFetch = ids.Where(id => !existing.Contains(id)).ToList();
-        var skipped = ids.Count() - idsToFetch.Count;
-        
-        if (idsToFetch.Count == 0) return (0, skipped);
+        var idsToFetch = ids.Distinct().ToList();
+        if (idsToFetch.Count == 0) return (0, 0);
 
         var semaphore = new SemaphoreSlim(10); // Concurrent limit 10
         try
@@ -229,18 +227,37 @@ public class GmailSyncService : IGmailSyncService
             var results = await Task.WhenAll(fetchTasks);
             
             var successfullyCreatedCount = 0;
+            var skippedCount = 0;
             for (int i = 0; i < results.Length; i++)
             {
-                var item = results[i];
-                if (item != null)
+                var mapped = results[i];
+                if (mapped != null)
                 {
-                    newItems.Add(item);
-                    existing.Add(idsToFetch[i]);
-                    successfullyCreatedCount++;
+                    if (existingItems.TryGetValue(mapped.ExternalId!, out var existing))
+                    {
+                        // Check if ETag (HistoryId) differs. If so, update fields.
+                        if (existing.ETag != mapped.ETag)
+                        {
+                            existing.Title = mapped.Title;
+                            existing.Snippet = mapped.Snippet;
+                            existing.MetadataJson = mapped.MetadataJson;
+                            existing.ETag = mapped.ETag;
+                            existing.OccurredAt = mapped.OccurredAt;
+                            existing.IsImportant = mapped.IsImportant;
+                            // Keep existing.Status intact to avoid overwriting Kanban columns.
+                        }
+                        skippedCount++;
+                    }
+                    else
+                    {
+                        newItems.Add(mapped);
+                        existingItems[mapped.ExternalId!] = mapped;
+                        successfullyCreatedCount++;
+                    }
                 }
             }
 
-            return (successfullyCreatedCount, skipped);
+            return (successfullyCreatedCount, skippedCount);
         }
         finally
         {
