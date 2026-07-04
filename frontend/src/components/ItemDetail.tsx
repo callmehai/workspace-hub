@@ -83,7 +83,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => {
+    onError: (err, variables) => {
       handleApiError(err, 'Lỗi cập nhật dữ liệu', {
         onConflict: async () => {
           if (item?.connectionId) {
@@ -96,7 +96,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           refetch();
           queryClient.invalidateQueries({ queryKey: ['items'] });
         },
-        navigate
+        navigate,
+        silent: variables?._isAutoRead === true
       });
     }
   });

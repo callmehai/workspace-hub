@@ -45,22 +45,26 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
   if (selectedItemIds.size === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-300">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-white border-2 border-slate-300 text-slate-700 px-5 py-3 rounded-2xl shadow-[0_10px_35px_-5px_rgba(0,0,0,0.15)] flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-300">
       <div className="flex items-center gap-3">
-        <span className="flex items-center justify-center bg-indigo-500 text-white font-bold w-6 h-6 rounded-full text-xs">
+        <span className="flex items-center justify-center bg-indigo-600 text-white font-bold w-6 h-6 rounded-full text-xs">
           {selectedItemIds.size}
         </span>
-        <span className="text-[13.5px] font-medium">đã chọn</span>
+        <span className="text-[13.5px] font-semibold text-slate-600">đã chọn</span>
       </div>
 
-      <div className="h-5 w-[1px] bg-slate-700"></div>
+      <div className="h-5 w-[1px] bg-slate-200"></div>
 
       <div className="flex items-center gap-2">
         {/* Add to folder */}
         <div className="relative">
           <button 
             onClick={() => { setIsAdding(!isAdding); setIsRemoving(false); }}
-            className="flex items-center gap-2 text-[13px] font-medium hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors"
+            className={`flex items-center gap-2 text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-all ${
+              isAdding 
+                ? 'bg-indigo-50 text-indigo-600' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
           >
             <FolderPlus className="w-4 h-4" />
             Thêm vào...
@@ -68,7 +72,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
           
           {isAdding && (
             <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border border-slate-200 shadow-xl rounded-xl py-1.5 text-slate-800">
-              <div className="px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Thêm vào thư mục</div>
+              <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Thêm vào thư mục</div>
               <div className="max-h-60 overflow-y-auto">
                 {folders.length === 0 ? (
                   <div className="px-4 py-2 text-sm text-slate-500">Chưa có thư mục</div>
@@ -94,7 +98,11 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
         <div className="relative">
           <button 
             onClick={() => { setIsRemoving(!isRemoving); setIsAdding(false); }}
-            className="flex items-center gap-2 text-[13px] font-medium hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors"
+            className={`flex items-center gap-2 text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-all ${
+              isRemoving 
+                ? 'bg-rose-50 text-rose-600' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
           >
             <FolderMinus className="w-4 h-4" />
             Gỡ khỏi...
@@ -102,7 +110,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
           
           {isRemoving && (
             <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border border-slate-200 shadow-xl rounded-xl py-1.5 text-slate-800">
-              <div className="px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Gỡ khỏi thư mục</div>
+              <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Gỡ khỏi thư mục</div>
               <div className="max-h-60 overflow-y-auto">
                 {folders.length === 0 ? (
                   <div className="px-4 py-2 text-sm text-slate-500">Chưa có thư mục</div>
@@ -125,11 +133,11 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
         </div>
       </div>
 
-      <div className="h-5 w-[1px] bg-slate-700"></div>
+      <div className="h-5 w-[1px] bg-slate-200"></div>
 
       <button 
         onClick={onClearSelection}
-        className="p-1.5 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
+        className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
         title="Hủy chọn"
       >
         <X className="w-5 h-5" />

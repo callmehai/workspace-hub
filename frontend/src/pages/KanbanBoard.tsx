@@ -494,13 +494,26 @@ export const KanbanBoard = () => {
                           onClick={() => setSelectedItemId(item.id)}
                           className={`shrink-0 bg-white border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 transition-all relative overflow-hidden ${
                             draggingId === item.id ? 'opacity-40 shadow-none border-slate-200' : 'opacity-100 shadow-sm border-slate-200'
-                          }`}
+                          } ${selectedItemIds.has(item.id) ? 'bg-indigo-50/40 border-indigo-200' : ''}`}
                         >
                           {isUnread && (
                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />
                           )}
                           <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-1.5 flex-wrap">
+                              <input 
+                                type="checkbox" 
+                                checked={selectedItemIds.has(item.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newSet = new Set(selectedItemIds);
+                                  if (newSet.has(item.id)) newSet.delete(item.id);
+                                  else newSet.add(item.id);
+                                  setSelectedItemIds(newSet);
+                                }}
+                                onChange={() => {}}
+                                className={`w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 ${selectedItemIds.has(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                              />
                               <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
                                 {typeIcon(item.type)}
                                 {typeLabel(item.type)}
@@ -514,6 +527,44 @@ export const KanbanBoard = () => {
                                   </span>
                                 );
                               })}
+                              
+                              <div className="relative" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAddingFolderItemId(addingFolderItemId === item.id ? null : item.id);
+                                  }}
+                                  className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Thêm thư mục"
+                                >
+                                  <Plus className="w-2.5 h-2.5" />
+                                  <span>Thêm</span>
+                                </button>
+                                
+                                {addingFolderItemId === item.id && (
+                                  <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                                    {folders.filter((f: any) => !item.folderIds?.includes(f.id)).length === 0 ? (
+                                      <div className="px-3 py-1.5 text-[11px] text-slate-500 text-center">Không còn thư mục</div>
+                                    ) : (
+                                      folders.filter((f: any) => !item.folderIds?.includes(f.id)).map((f: any) => (
+                                        <button
+                                          key={f.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            addToFolderMutation.mutate({ folderId: f.id, itemId: item.id });
+                                            setAddingFolderItemId(null);
+                                          }}
+                                          disabled={addToFolderMutation.isPending}
+                                          className="w-full text-left px-3 py-1.5 text-[11.5px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                                        >
+                                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                                          <span className="truncate">{f.name}</span>
+                                        </button>
+                                      ))
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
                               <GripVertical className="w-4 h-4" />
