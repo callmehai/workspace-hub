@@ -12,7 +12,7 @@ export const AdminRoute = () => {
     );
   }
 
-  if (!isAuthenticated || user?.role !== 'Admin') {
+  if (user?.role !== 'Admin') {
     return <Navigate to="/" replace />;
   }
 

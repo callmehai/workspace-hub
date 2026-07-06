@@ -96,6 +96,10 @@ export const router = createBrowserRouter([
                 index: true,
                 element: <AdminDashboard />,
               },
+              {
+                path: '*',
+                element: <Navigate to="/admin" replace />,
+              },
             ],
           },
         ],

@@ -48,9 +48,9 @@ export const AdminDashboard = () => {
   }, [usersError]);
 
   const pieData = stats ? [
-    { name: 'Active', value: stats.connectionsByStatus.Active },
-    { name: 'Error', value: stats.connectionsByStatus.Error },
-    { name: 'Disconnected', value: stats.connectionsByStatus.Disconnected },
+    { name: 'Active', value: stats.connectionsByStatus.Active ?? 0 },
+    { name: 'Error', value: stats.connectionsByStatus.Error ?? 0 },
+    { name: 'Disconnected', value: stats.connectionsByStatus.Disconnected ?? 0 },
   ] : [];
 
   return (

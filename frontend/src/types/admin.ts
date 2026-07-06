@@ -1,3 +1,5 @@
+import type { PagedResult } from './items';
+
 export interface AdminUserDto {
   id: string;
   email: string;
@@ -15,11 +17,7 @@ export interface AdminStatsDto {
   activeUsers: number;
   lockedUsers: number;
   totalConnections: number;
-  connectionsByStatus: {
-    Active: number;
-    Error: number;
-    Disconnected: number;
-  };
+  connectionsByStatus: Partial<Record<'Active' | 'Error' | 'Disconnected', number>>;
   totalItems: number;
   syncErrorsLast24h: number;
 }
@@ -30,9 +28,3 @@ export interface GetAdminUsersRequest {
   search?: string;
 }
 
-export interface PagedResult<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-}

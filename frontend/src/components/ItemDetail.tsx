@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi } from '../lib/connectionsApi';
-import { type PatchItemRequest } from '../types/items';
+import { type PatchItemRequest, type FolderResponse } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import toast from 'react-hot-toast';
 
