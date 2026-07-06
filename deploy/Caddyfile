@@ -1,9 +1,7 @@
 # Caddy: TLS tự động (Let's Encrypt) + serve SPA + reverse-proxy /api → backend.
-# SITE_ADDRESS / ACME_EMAIL truyền qua biến môi trường (docker-compose.prod.yml).
-{
-	email {$ACME_EMAIL}
-}
-
+# SITE_ADDRESS truyền qua biến môi trường (docker-compose.prod.yml).
+# Không set global email (tuỳ chọn của Let's Encrypt) — để trống sẽ gây lỗi cú pháp
+# `email` rỗng làm Caddy crash; bỏ hẳn cho chắc, cert vẫn xin bình thường.
 {$SITE_ADDRESS} {
 	encode zstd gzip
 
