@@ -5,6 +5,7 @@ import { foldersApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
 import { type FolderResponse } from '../types/items';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 interface BulkActionBarProps {
   selectedItemIds: Set<string>;
