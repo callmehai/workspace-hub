@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { usePollingInterval } from '../hooks/usePollingInterval';
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -100,6 +101,7 @@ export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const pollMs = usePollingInterval(45_000);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSyncAll = async () => {
@@ -111,7 +113,7 @@ export const KanbanBoard = () => {
         toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
         return;
       }
-      
+
       const toastId = toast.loading('Đang đồng bộ dữ liệu...');
       try {
         await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
@@ -149,7 +151,7 @@ export const KanbanBoard = () => {
 
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteForm, setNoteForm] = useState({ title: '', contentMarkdown: '' });
-  
+
   const [addingFolderItemId, setAddingFolderItemId] = useState<string | null>(null);
 
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -169,7 +171,9 @@ export const KanbanBoard = () => {
 
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
-    queryFn: () => foldersApi.getFolders()
+    queryFn: () => foldersApi.getFolders(),
+    refetchInterval: pollMs,
+    refetchOnWindowFocus: true,
   });
 
   const queryKey = ['items', { folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, search }];
@@ -325,7 +329,7 @@ export const KanbanBoard = () => {
     setDraggingId(null);
     const itemId = e.dataTransfer.getData('itemId');
     const itemIds = e.dataTransfer.getData('itemIds');
-    
+
     if (itemIds) {
       const ids = JSON.parse(itemIds);
       ids.forEach((id: string) => {
@@ -459,9 +463,8 @@ export const KanbanBoard = () => {
                     onDragOver={(e) => handleDragOver(e, col.status)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, col.status)}
-                    className={`flex-1 flex flex-col gap-2.5 p-2.5 rounded-xl min-h-[160px] overflow-y-auto transition-colors border-2 ${
-                      isOver ? 'bg-indigo-50 border-indigo-400 border-dashed' : 'bg-slate-100/80 border-transparent'
-                    }`}
+                    className={`flex-1 flex flex-col gap-2.5 p-2.5 rounded-xl min-h-[160px] overflow-y-auto transition-colors border-2 ${isOver ? 'bg-indigo-50 border-indigo-400 border-dashed' : 'bg-slate-100/80 border-transparent'
+                      }`}
                   >
                     {isLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
@@ -477,8 +480,8 @@ export const KanbanBoard = () => {
                         if (item.type === 'Email' && item.metadataJson) {
                           try {
                             const meta = JSON.parse(item.metadataJson);
-                            isUnread = meta.isUnread !== undefined 
-                              ? meta.isUnread === true 
+                            isUnread = meta.isUnread !== undefined
+                              ? meta.isUnread === true
                               : (Array.isArray(meta.labels) && meta.labels.includes('UNREAD'));
                           } catch (e) {
                             // Ignore parse error
@@ -486,100 +489,99 @@ export const KanbanBoard = () => {
                         }
 
                         return (
-                        <div
-                          key={item.id}
-                          draggable={!(updateStatus.isPending && updateStatus.variables?.id === item.id)}
-                          onDragStart={(e) => handleDragStart(e, item.id)}
-                          onDragEnd={handleDragEnd}
-                          onClick={() => setSelectedItemId(item.id)}
-                          className={`shrink-0 bg-white border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 transition-all relative overflow-hidden ${
-                            draggingId === item.id ? 'opacity-40 shadow-none border-slate-200' : 'opacity-100 shadow-sm border-slate-200'
-                          } ${selectedItemIds.has(item.id) ? 'bg-indigo-50/40 border-indigo-200' : ''}`}
-                        >
-                          {isUnread && (
-                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />
-                          )}
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <input 
-                                type="checkbox" 
-                                checked={selectedItemIds.has(item.id)}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const newSet = new Set(selectedItemIds);
-                                  if (newSet.has(item.id)) newSet.delete(item.id);
-                                  else newSet.add(item.id);
-                                  setSelectedItemIds(newSet);
-                                }}
-                                onChange={() => {}}
-                                className={`w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 ${selectedItemIds.has(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
-                              />
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
-                                {typeIcon(item.type)}
-                                {typeLabel(item.type)}
-                              </span>
-                              {item.folderIds?.map(fId => {
-                                const f = folders.find(fol => fol.id === fId);
-                                if (!f) return null;
-                                return (
-                                  <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
-                                    {f.name}
-                                  </span>
-                                );
-                              })}
-                              
-                              <div className="relative" onClick={e => e.stopPropagation()}>
-                                <button
+                          <div
+                            key={item.id}
+                            draggable={!(updateStatus.isPending && updateStatus.variables?.id === item.id)}
+                            onDragStart={(e) => handleDragStart(e, item.id)}
+                            onDragEnd={handleDragEnd}
+                            onClick={() => setSelectedItemId(item.id)}
+                            className={`shrink-0 bg-white border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 transition-all relative overflow-hidden ${draggingId === item.id ? 'opacity-40 shadow-none border-slate-200' : 'opacity-100 shadow-sm border-slate-200'
+                              } ${selectedItemIds.has(item.id) ? 'bg-indigo-50/40 border-indigo-200' : ''}`}
+                          >
+                            {isUnread && (
+                              <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />
+                            )}
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedItemIds.has(item.id)}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setAddingFolderItemId(addingFolderItemId === item.id ? null : item.id);
+                                    const newSet = new Set(selectedItemIds);
+                                    if (newSet.has(item.id)) newSet.delete(item.id);
+                                    else newSet.add(item.id);
+                                    setSelectedItemIds(newSet);
                                   }}
-                                  className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors opacity-0 group-hover:opacity-100"
-                                  title="Thêm thư mục"
-                                >
-                                  <Plus className="w-2.5 h-2.5" />
-                                  <span>Thêm</span>
-                                </button>
-                                
-                                {addingFolderItemId === item.id && (
-                                  <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
-                                    {folders.filter((f: any) => !item.folderIds?.includes(f.id)).length === 0 ? (
-                                      <div className="px-3 py-1.5 text-[11px] text-slate-500 text-center">Không còn thư mục</div>
-                                    ) : (
-                                      folders.filter((f: any) => !item.folderIds?.includes(f.id)).map((f: any) => (
-                                        <button
-                                          key={f.id}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            addToFolderMutation.mutate({ folderId: f.id, itemId: item.id });
-                                            setAddingFolderItemId(null);
-                                          }}
-                                          disabled={addToFolderMutation.isPending}
-                                          className="w-full text-left px-3 py-1.5 text-[11.5px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                                        >
-                                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
-                                          <span className="truncate">{f.name}</span>
-                                        </button>
-                                      ))
-                                    )}
-                                  </div>
-                                )}
+                                  onChange={() => { }}
+                                  className={`w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 ${selectedItemIds.has(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                                />
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
+                                  {typeIcon(item.type)}
+                                  {typeLabel(item.type)}
+                                </span>
+                                {item.folderIds?.map(fId => {
+                                  const f = folders.find(fol => fol.id === fId);
+                                  if (!f) return null;
+                                  return (
+                                    <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
+                                      {f.name}
+                                    </span>
+                                  );
+                                })}
+
+                                <div className="relative" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAddingFolderItemId(addingFolderItemId === item.id ? null : item.id);
+                                    }}
+                                    className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Thêm thư mục"
+                                  >
+                                    <Plus className="w-2.5 h-2.5" />
+                                    <span>Thêm</span>
+                                  </button>
+
+                                  {addingFolderItemId === item.id && (
+                                    <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                                      {folders.filter((f: any) => !item.folderIds?.includes(f.id)).length === 0 ? (
+                                        <div className="px-3 py-1.5 text-[11px] text-slate-500 text-center">Không còn thư mục</div>
+                                      ) : (
+                                        folders.filter((f: any) => !item.folderIds?.includes(f.id)).map((f: any) => (
+                                          <button
+                                            key={f.id}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              addToFolderMutation.mutate({ folderId: f.id, itemId: item.id });
+                                              setAddingFolderItemId(null);
+                                            }}
+                                            disabled={addToFolderMutation.isPending}
+                                            className="w-full text-left px-3 py-1.5 text-[11.5px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                                            <span className="truncate">{f.name}</span>
+                                          </button>
+                                        ))
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
+                              <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
+                                <GripVertical className="w-4 h-4" />
+                              </span>
                             </div>
-                            <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
-                              <GripVertical className="w-4 h-4" />
-                            </span>
+                            <h4 className={`text-[13.5px] leading-snug mb-2 line-clamp-2 ${isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-900'}`}>
+                              {item.title}
+                            </h4>
+                            <div className="flex items-center justify-end gap-2 mt-auto pt-1">
+                              <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 shrink-0">
+                                {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
+                                {formatTime(item.occurredAt)}
+                              </span>
+                            </div>
                           </div>
-                          <h4 className={`text-[13.5px] leading-snug mb-2 line-clamp-2 ${isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-900'}`}>
-                            {item.title}
-                          </h4>
-                          <div className="flex items-center justify-end gap-2 mt-auto pt-1">
-                            <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 shrink-0">
-                              {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
-                              {formatTime(item.occurredAt)}
-                            </span>
-                          </div>
-                        </div>
                         );
                       })
                     )}
@@ -751,7 +753,7 @@ export const KanbanBoard = () => {
       )}
 
       {/* ── Bulk Action Bar ── */}
-      <BulkActionBar 
+      <BulkActionBar
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
       />
