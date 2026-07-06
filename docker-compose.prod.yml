@@ -18,6 +18,9 @@ services:
     mem_limit: ${MSSQL_MEM_LIMIT:-1400m}
     volumes:
       - mssql-data:/var/opt/mssql
+    ports:
+      # CHỈ bind loopback của server (KHÔNG ra internet) → truy cập bằng GUI (DBeaver) qua SSH tunnel.
+      - "127.0.0.1:1433:1433"
     restart: unless-stopped
     healthcheck:
       # $$ để shell trong container tự expand (không phải compose interpolate).
