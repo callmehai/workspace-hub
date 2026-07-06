@@ -1,4 +1,4 @@
-import type { PagedResult } from './items';
+export type { PagedResult } from './items';
 
 export interface AdminUserDto {
   id: string;
