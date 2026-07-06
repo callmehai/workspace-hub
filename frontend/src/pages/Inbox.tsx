@@ -81,7 +81,7 @@ function statusLabel(s: ItemStatus): string {
   return map[s] ?? s;
 }
 
-function isEmailUnread(item: any): boolean {
+function isEmailUnread(item: ItemResponse): boolean {
   if (item.type !== 'Email' || !item.metadataJson) return false;
   try {
     const meta = JSON.parse(item.metadataJson);
@@ -91,7 +91,7 @@ function isEmailUnread(item: any): boolean {
   }
 }
 
-function getItemStatusLabel(item: any): string {
+function getItemStatusLabel(item: ItemResponse): string {
   if (item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item)) {
     return 'Đã xem';
   }
@@ -210,6 +210,7 @@ export const Inbox = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const folder = params.get('folder');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedFolderId(folder || null);
 
     if (location.pathname === '/files') {
@@ -263,14 +264,14 @@ export const Inbox = () => {
       itemsApi.updateItemImportant(id, isImportant),
     onMutate: async ({ id, isImportant }) => {
       await queryClient.cancelQueries({ queryKey: ['items'] });
-      const previous = queryClient.getQueryData(queryKey);
-      queryClient.setQueryData(queryKey, (old: any) => {
+      const previous = queryClient.getQueryData<PagedResult<ItemResponse>>(queryKey);
+      queryClient.setQueryData(queryKey, (old: PagedResult<ItemResponse> | undefined) => {
         if (!old) return old;
-        return { ...old, items: old.items.map((it: any) => it.id === id ? { ...it, isImportant } : it) };
+        return { ...old, items: old.items.map((it: ItemResponse) => it.id === id ? { ...it, isImportant } : it) };
       });
       return { previous };
     },
-    onError: (err, _vars, ctx: any) => {
+    onError: (err, _vars, ctx: { previous?: PagedResult<ItemResponse> } | undefined) => {
       if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
       handleApiError(err, 'Lỗi đánh dấu quan trọng', { navigate });
     },
@@ -285,6 +286,7 @@ export const Inbox = () => {
 
   // Clear selection when page or filters change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
   }, [page, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
 
@@ -303,7 +305,7 @@ export const Inbox = () => {
     if (selectedItemIds.size === items.length) {
       setSelectedItemIds(new Set());
     } else {
-      setSelectedItemIds(new Set(items.map((i: any) => i.id)));
+      setSelectedItemIds(new Set(items.map((i: ItemResponse) => i.id)));
     }
   };
 
@@ -485,7 +487,7 @@ export const Inbox = () => {
             </div>
           )}
 
-          {showList && items.map((item: any) => (
+          {showList && items.map((item: ItemResponse) => (
             <div
               key={item.id}
               draggable

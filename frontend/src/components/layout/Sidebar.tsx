@@ -132,7 +132,7 @@ export const Sidebar = () => {
         if (Array.isArray(itemIds) && itemIds.length > 0) {
           assignItemsBulkMutation.mutate({ folderId, itemIds });
         }
-      } catch (e) {
+      } catch {
         console.error("Failed to parse dragged items");
       }
     } else if (itemId) {

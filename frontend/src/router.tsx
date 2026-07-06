@@ -12,6 +12,9 @@ import { ScheduledEmails } from './pages/ScheduledEmails';
 import { SendEmail } from './pages/SendEmail';
 import { GoogleCallback } from './pages/auth/GoogleCallback';
 import { VerifyOtp } from './pages/auth/VerifyOtp';
+import { AdminRoute } from './components/auth/AdminRoute';
+import { AdminDashboard } from './pages/AdminDashboard';
+
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -79,6 +82,21 @@ export const router = createBrowserRouter([
           {
             path: '*',
             element: <Navigate to="/" replace />,
+          },
+        ],
+      },
+      {
+        path: 'admin',
+        element: <AdminRoute />,
+        children: [
+          {
+            element: <MainLayout />,
+            children: [
+              {
+                index: true,
+                element: <AdminDashboard />,
+              },
+            ],
           },
         ],
       },
