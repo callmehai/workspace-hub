@@ -28,6 +28,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
   useEffect(() => {
     if (isOpen) {
       if (folder) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setName(folder.name);
         setColor(folder.color || COLORS[0]);
       } else {

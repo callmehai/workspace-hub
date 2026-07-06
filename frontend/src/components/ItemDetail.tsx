@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi } from '../lib/connectionsApi';
-import { type PatchItemRequest } from '../types/items';
+import { type PatchItemRequest, type FolderResponse } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import toast from 'react-hot-toast';
 
@@ -70,8 +70,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   // Mutate item (writeback PATCH)
   const patchMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     mutationFn: ({ _isAutoRead, ...payload }: PatchItemRequest & { _isAutoRead?: boolean }) => itemsApi.patchItem(itemId, payload),
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       if (!variables._isAutoRead) {
         toast.success('Đã lưu thay đổi thành công');
       }
@@ -177,6 +178,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         patchMutation.mutate({ isUnread: false, _isAutoRead: true });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, isUnread]);
 
   if (isLoading) {
@@ -440,7 +442,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           {/* Folders */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {item.folderIds?.map(fId => {
-              const f = folders.find((fol: any) => fol.id === fId);
+              const f = folders.find((fol: FolderResponse) => fol.id === fId);
               if (!f) return null;
               return (
                 <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 pl-[11px] pr-1 py-1 rounded-full group">
@@ -470,10 +472,10 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               
               {isAddingToFolder && (
                 <div className="absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
-                  {folders.filter((f: any) => !item.folderIds?.includes(f.id)).length === 0 ? (
+                  {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
                     <div className="px-3 py-2 text-xs text-slate-500 text-center">Không còn thư mục nào</div>
                   ) : (
-                    folders.filter((f: any) => !item.folderIds?.includes(f.id)).map((f: any) => (
+                    folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
                       <button
                         key={f.id}
                         onClick={() => {

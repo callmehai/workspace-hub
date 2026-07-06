@@ -77,15 +77,7 @@ function Chip({ active, onClick, children }: ChipProps) {
   );
 }
 
-function isEmailUnread(item: any): boolean {
-  if (item.type !== 'Email' || !item.metadataJson) return false;
-  try {
-    const meta = JSON.parse(item.metadataJson);
-    return meta.isUnread === true || meta.IsUnread === true;
-  } catch {
-    return false;
-  }
-}
+
 
 const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
   { label: 'Tất cả', value: null },
@@ -163,6 +155,7 @@ export const KanbanBoard = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const folder = params.get('folder');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (folder) setSelectedFolderId(folder);
     else setSelectedFolderId(null);
   }, [location.search]);
@@ -480,7 +473,7 @@ export const KanbanBoard = () => {
                             isUnread = meta.isUnread !== undefined 
                               ? meta.isUnread === true 
                               : (Array.isArray(meta.labels) && meta.labels.includes('UNREAD'));
-                          } catch (e) {
+                          } catch {
                             // Ignore parse error
                           }
                         }
@@ -543,10 +536,10 @@ export const KanbanBoard = () => {
                                 
                                 {addingFolderItemId === item.id && (
                                   <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
-                                    {folders.filter((f: any) => !item.folderIds?.includes(f.id)).length === 0 ? (
+                                    {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
                                       <div className="px-3 py-1.5 text-[11px] text-slate-500 text-center">Không còn thư mục</div>
                                     ) : (
-                                      folders.filter((f: any) => !item.folderIds?.includes(f.id)).map((f: any) => (
+                                      folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
                                         <button
                                           key={f.id}
                                           onClick={(e) => {

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FolderPlus, FolderMinus, X } from 'lucide-react';
 import { foldersApi } from '../lib/itemsApi';
-import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
+import { type FolderResponse } from '../types/items';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 interface BulkActionBarProps {
   selectedItemIds: Set<string>;
@@ -27,6 +28,9 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
     onSuccess: () => {
       toast.success(`Đã thêm ${selectedItemIds.size} thẻ vào thư mục`);
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      selectedItemIds.forEach(id => {
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      });
       onClearSelection();
     },
     onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
@@ -37,6 +41,9 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
     onSuccess: () => {
       toast.success(`Đã gỡ ${selectedItemIds.size} thẻ khỏi thư mục`);
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      selectedItemIds.forEach(id => {
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      });
       onClearSelection();
     },
     onError: (err) => handleApiError(err, 'Lỗi gỡ khỏi thư mục', { navigate })
@@ -77,7 +84,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
                 {folders.length === 0 ? (
                   <div className="px-4 py-2 text-sm text-slate-500">Chưa có thư mục</div>
                 ) : (
-                  folders.map((f: any) => (
+                  folders.map((f: FolderResponse) => (
                     <button
                       key={f.id}
                       disabled={addBulkMutation.isPending}
@@ -115,7 +122,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
                 {folders.length === 0 ? (
                   <div className="px-4 py-2 text-sm text-slate-500">Chưa có thư mục</div>
                 ) : (
-                  folders.map((f: any) => (
+                  folders.map((f: FolderResponse) => (
                     <button
                       key={f.id}
                       disabled={removeBulkMutation.isPending}
