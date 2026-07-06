@@ -169,6 +169,10 @@ if (builder.Configuration.GetValue<bool>("Cron:AutoRun"))
 {
     builder.Services.AddHostedService<WorkspaceHub.Api.BackgroundJobs.ScheduledEmailProcessorService>();
 }
+if (builder.Configuration.GetValue<bool>("Cron:SyncAutoRun"))
+{
+    builder.Services.AddHostedService<WorkspaceHub.Api.BackgroundJobs.ConnectionSyncProcessorService>();
+}
 
 var app = builder.Build();
 
