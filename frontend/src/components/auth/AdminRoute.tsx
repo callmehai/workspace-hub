@@ -2,7 +2,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 export const AdminRoute = () => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isLoading, user } = useAuth();
 
   if (isLoading) {
     return (

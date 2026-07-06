@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
-import type { ItemType, ItemStatus, ItemResponse, PagedResult, FolderResponse } from '../types/items';
+import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
   Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, AlertCircle, Inbox as InboxIcon,
