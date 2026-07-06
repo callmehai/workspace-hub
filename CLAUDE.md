@@ -37,7 +37,7 @@ Nếu một task có vẻ cần webhook, **dừng lại và hỏi** — nhiều 
 - **Frontend:** Vite + React + TypeScript + Tailwind + React Router + TanStack Query + axios + react-hot-toast (SPA gọi REST).
 - **Auth:** JWT Bearer + Google Sign-In (đăng nhập bằng Google, tách khỏi connect-để-sync)
 - **Token encryption:** ASP.NET Data Protection (`IDataProtectionProvider`) — KHÔNG tự viết AES, KHÔNG lưu key trong DB
-- **Deploy:** <!-- CHỐT: Render / Vercel / Azure? -->
+- **Deploy:** AWS Lightsail (1 máy, Docker Compose) — app live tại `https://app.workspace-hub.space`. CI/CD: merge `develop` → auto-deploy. Chi tiết hạ tầng/vận hành/CI-CD/DB access/billing: **`docs/DEPLOY.md`**.
 
 ## Kiến trúc
 
@@ -71,6 +71,7 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 - `docs/SPRINTS.md` — ticket + assignee + dependency + **status** (đồng bộ Jira)
 - `docs/CONVENTIONS.md` — coding style, naming, git
 - `docs/SETUP.md` — cách chạy local, env, migration
+- `docs/DEPLOY.md` — hạ tầng production (AWS Lightsail), CI/CD, vận hành, truy cập DB, billing
 - `docs/CHANGELOG.md` — lịch sử quyết định thiết kế
 
 ## Nguyên tắc khi code

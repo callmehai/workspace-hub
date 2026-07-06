@@ -69,6 +69,19 @@ Tech stack:
 
 ---
 
+## Deployment & CI/CD (production) — chi tiết: `docs/DEPLOY.md`
+
+App live: **https://app.workspace-hub.space** — AWS Lightsail (2GB, Singapore), Docker Compose (`docker-compose.prod.yml`): api (.NET 8) + web (Caddy auto-HTTPS, proxy `/api`) + mssql (cap RAM 1GB) + redis.
+
+- **CD:** merge/push `develop` → GitHub Actions (`deploy.yml`) SSH vào Lightsail `git reset --hard origin/develop` + `docker compose up -d --build`. Cần 4 repo secrets `DEPLOY_HOST/USER/APP_DIR/SSH_KEY`.
+- **CI:** mọi PR/push develop/main (`ci.yml`) → BE `dotnet build`+`test`, FE `npm install`+`lint`+`build` (`tsc`).
+- **Redeploy tay:** SSH → `cd ~/workspace-hub && git pull && docker compose -f docker-compose.prod.yml up -d --build`.
+- **Log / OTP:** `docker compose -f docker-compose.prod.yml logs -f api`; OTP đăng ký log console (Twilio để trống).
+- **DB prod:** DBeaver qua SSH tunnel (docs/DEPLOY.md §6). **Secret prod ở `.env` trên server — KHÔNG commit.**
+- **Gotcha:** FE Dockerfile/CI dùng `npm install` KHÔNG `npm ci` (lockfile đa nền tảng Vite 8/rolldown); Caddyfile KHÔNG global `email` (rỗng làm crash); dual-stack `curl -4`.
+
+---
+
 ## Lệnh hay dùng
 
 ### Backend
