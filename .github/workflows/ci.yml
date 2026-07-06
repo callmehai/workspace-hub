@@ -49,10 +49,11 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # npm ci: cài chính xác theo package-lock.json (reproducible). Lock đã đồng bộ.
+      # npm install (KHÔNG npm ci): lock sinh trên macOS thiếu optional deps chỉ-Linux (@emnapi/*)
+      # của Vite 8/rolldown → npm ci strict fail trên ubuntu; npm install resolve đúng theo nền tảng.
       - name: Install
         working-directory: frontend
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       # Lint là cổng cứng — chặn merge nếu có lỗi (develop hiện sạch).
       - name: Lint
