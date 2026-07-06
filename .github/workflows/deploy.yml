@@ -1,0 +1,31 @@
+name: Deploy (Lightsail)
+
+# Auto-deploy khi push/merge vào develop → SSH vào Lightsail chạy git pull + docker compose up.
+# Bấm chạy tay được từ tab Actions (workflow_dispatch).
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-lightsail
+  cancel-in-progress: false # KHÔNG huỷ deploy đang chạy dở — tránh hạ tầng nửa vời.
+
+jobs:
+  deploy:
+    name: SSH → Lightsail → docker compose up
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_APP_DIR }}
+            git fetch origin develop
+            git reset --hard origin/develop
+            docker compose -f docker-compose.prod.yml up -d --build
+            docker image prune -f
