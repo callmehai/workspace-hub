@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { connectionsApi } from '../lib/connectionsApi';
 import toast from 'react-hot-toast';
+import { usePollingInterval } from '../hooks/usePollingInterval';
 
 const LIMIT = 20;
 
@@ -159,6 +160,7 @@ export const Inbox = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const pollMs = usePollingInterval(45_000);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSyncAll = async () => {
@@ -170,7 +172,7 @@ export const Inbox = () => {
         toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
         return;
       }
-      
+
       const toastId = toast.loading('Đang đồng bộ dữ liệu...');
       try {
         await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
@@ -203,7 +205,7 @@ export const Inbox = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  
+
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
@@ -252,10 +254,12 @@ export const Inbox = () => {
 
   const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit: LIMIT }];
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey,
     queryFn: () => itemsApi.getItems(params),
     placeholderData: (prev) => prev,
+    refetchInterval: pollMs,
+    refetchOnWindowFocus: true,
   });
 
   const { mutate: toggleImportant } = useMutation({
@@ -379,7 +383,7 @@ export const Inbox = () => {
                 <List className="w-4 h-4" />
                 <span>Danh sách</span>
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/kanban')}
                 className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
               >
@@ -473,8 +477,8 @@ export const Inbox = () => {
 
           {showList && (
             <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-slate-50">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={items.length > 0 && selectedItemIds.size === items.length}
                 onChange={toggleAllSelection}
                 className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
@@ -496,11 +500,11 @@ export const Inbox = () => {
               {isEmailUnread(item) && (
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-md" />
               )}
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={selectedItemIds.has(item.id)}
                 onClick={(e) => toggleSelection(item.id, e)}
-                onChange={() => {}} // handled by onClick
+                onChange={() => { }} // handled by onClick
                 className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1 z-10"
               />
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 z-10 ${typeTileClass(item.type)}`}>
@@ -609,7 +613,7 @@ export const Inbox = () => {
       )}
 
       {/* ── Bulk Action Bar ── */}
-      <BulkActionBar 
+      <BulkActionBar
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
       />
