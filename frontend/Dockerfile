@@ -2,12 +2,11 @@
 # FE mặc định gọi API qua '/api' (xem src/lib/api.ts) ⇒ Caddy reverse-proxy same-origin,
 # không cần VITE_API_URL, không dính CORS.
 # node:22-slim (Debian/glibc) thay vì alpine/musl — rolldown (Vite 8) có sẵn binary native glibc,
-# tránh lỗi thiếu @emnapi/*-musl. Dùng `npm install` vì package-lock.json hiện lệch nhẹ với
-# package.json (npm ci yêu cầu khớp tuyệt đối). Muốn build reproducible: re-sync lock rồi đổi lại npm ci.
+# tránh lỗi thiếu @emnapi/*-musl. npm ci: cài chính xác theo lock (reproducible), lock đã đồng bộ.
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 

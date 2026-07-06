@@ -49,17 +49,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # npm install (không phải npm ci) vì package-lock.json hiện lệch nhẹ với package.json
-      # (deps native của Vite 8/rolldown). Đồng bộ lock rồi có thể đổi lại npm ci.
+      # npm ci: cài chính xác theo package-lock.json (reproducible). Lock đã đồng bộ.
       - name: Install
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
-      # Lint không chặn merge: còn 6 lỗi react-hooks/set-state-in-effect có sẵn
-      # (KanbanBoard/Inbox/FolderModal). Vẫn chạy để thấy cảnh báo; sửa hết thì bỏ continue-on-error.
+      # Lint là cổng cứng — chặn merge nếu có lỗi (develop hiện sạch).
       - name: Lint
         working-directory: frontend
-        continue-on-error: true
         run: npm run lint
 
       # `npm run build` = `tsc -b && vite build` — bước tsc chính là chỗ bắt lỗi
