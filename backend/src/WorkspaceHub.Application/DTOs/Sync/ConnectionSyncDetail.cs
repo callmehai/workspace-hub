@@ -9,8 +9,7 @@ public record ConnectionSyncDetail(
     Guid ConnectionId,
     string ServiceType, //Gmail` / `GCal` / `Drive` / `Jira
     string Outcome,// "Success" | "Failed" | "Skipped"
-    string? ErrorMessage=null;
-    int Scanned=0,
-    int Screated=0,
-    int Skipped=0,
-);
+    string? ErrorMessage = null,
+    int Scanned = 0,
+    int Created = 0,
+    int Skipped = 0);

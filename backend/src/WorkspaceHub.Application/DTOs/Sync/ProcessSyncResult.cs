@@ -6,7 +6,7 @@ namespace WorkspaceHub.Application.DTOs.Sync;
 /// </summary>
 
 public record ProcessSyncResult(
-    int TottalConnections, //Số connection Active + integration enabled được quét
+    int TotalConnections, //Số connection Active + integration enabled được quét
     int SuccessCount, //số lượng sync thành công
     int SkippedCount,//Bị debounce (vừa sync gần đây) — không gọi provider
     int ErrorCount,

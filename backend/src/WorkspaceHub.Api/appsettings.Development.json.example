@@ -41,5 +41,11 @@
       "ClientId": "YOUR_ATLASSIAN_CLIENT_ID",
       "ClientSecret": "YOUR_ATLASSIAN_CLIENT_SECRET"
     }
+  }, "Cron": {
+    "Secret": "dev-cron-secret-change-me",
+    "AutoRun": false,
+    "IntervalSeconds": 300,
+    "SyncAutoRun": true,
+    "SyncIntervalSeconds": 60
   }
 }
