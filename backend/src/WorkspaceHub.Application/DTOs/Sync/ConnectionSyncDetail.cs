@@ -8,7 +8,7 @@ namespace WorkspaceHub.Application.DTOs.Sync;
 public record ConnectionSyncDetail(
     Guid ConnectionId,
     string ServiceType, //Gmail` / `GCal` / `Drive` / `Jira
-    string Outcome,// "Success" | "Failed" | "Skipped"
+    string Outcome, // "Success" | "Error" | "Skipped"
     string? ErrorMessage = null,
     int Scanned = 0,
     int Created = 0,

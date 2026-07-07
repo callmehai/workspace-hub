@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Sync;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -71,12 +72,26 @@ public class ProcessConnectionsSyncServiceTests
     }
 
     [Fact]
-    public async Task ProcessConnectionsSyncAsync_SyncThrows_IncrementsErrorCount()
+    public async Task ProcessConnectionsSyncAsync_SyncThrows_Transient_KeepsActiveAndIncrementsErrorCount()
     {
         var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
         SetupTracked(conn);
         _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("API fail"));
+
+        var result = await _sut.ProcessConnectionsSyncAsync();
+
+        result.ErrorCount.Should().Be(1);
+        conn.Status.Should().Be(ConnectionStatus.Active);
+    }
+
+    [Fact]
+    public async Task ProcessConnectionsSyncAsync_SyncThrows_Forbidden_MarksConnectionError()
+    {
+        var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
+        SetupTracked(conn);
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("Token revoked"));
 
         var result = await _sut.ProcessConnectionsSyncAsync();
 

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Sync;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -60,7 +61,6 @@ public class ProcessConnectionsSyncService: IProcessConnectionsSyncService{
             catch (Exception ex)
             {
                 errorCount++;
-                await MarkConnectionErrorAsync(conn.Id, ex.Message, cancellationToken);
                 details.Add(new ConnectionSyncDetail(
                     conn.Id, conn.ServiceType.ToString(), "Error", ex.Message));
 
@@ -119,17 +119,34 @@ public class ProcessConnectionsSyncService: IProcessConnectionsSyncService{
                     connectionId, conn?.ServiceType.ToString() ?? "Unknown", "Error", ex.Message);
             }
         }
-        var result = await _syncDispatcher.SyncAsync(connectionId, userId, ct);
+        try
+        {
+            var result = await _syncDispatcher.SyncAsync(connectionId, userId, ct);
 
-        _logger.LogInformation(
-            "Cron sync OK for {ConnectionId}. Scanned={Scanned}, Created={Created}, Skipped={Skipped}",
-            connectionId, result.Scanned, result.Created, result.Skipped);
+            _logger.LogInformation(
+                "Cron sync OK for {ConnectionId}. Scanned={Scanned}, Created={Created}, Skipped={Skipped}",
+                connectionId, result.Scanned, result.Created, result.Skipped);
 
-        return new ConnectionSyncDetail(
-            connectionId, conn.ServiceType.ToString(), "Success",
-            null, result.Scanned, result.Created, result.Skipped);
+            return new ConnectionSyncDetail(
+                connectionId, conn.ServiceType.ToString(), "Success",
+                null, result.Scanned, result.Created, result.Skipped);
+        }
+        catch (Exception ex)
+        {
+            if (IsPersistentAuthFailure(ex))
+                await MarkConnectionErrorAsync(connectionId, ex.Message, ct);
+            else
+                _logger.LogWarning(ex,
+                    "Transient cron sync failure for {ConnectionId}; keeping Active for retry.",
+                    connectionId);
 
+            return new ConnectionSyncDetail(
+                connectionId, conn.ServiceType.ToString(), "Error", ex.Message);
+        }
     }
+
+    private static bool IsPersistentAuthFailure(Exception ex)
+        => ex is ForbiddenException or UnauthorizedException;
 
     private async Task MarkConnectionErrorAsync(Guid connectionId, string message, CancellationToken ct)
     {
