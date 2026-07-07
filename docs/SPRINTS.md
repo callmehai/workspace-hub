@@ -1,8 +1,6 @@
 # Sprints & Tickets — Workspace Hub
 
-> Cập nhật 2026-06-21: đồng bộ lại toàn bộ theo Jira (export mới). Số SCRUM-39→46 **KHÔNG** còn là Webhook/Jira — đó là việc khác (39=bỏ DB credentials, 40=admin toggle, 41→50=FE, 51=deploy, 52=finalize, 53=defense — xem bảng). Sprint hiện hành: **Sprint 3**. Lịch sử quyết định: CHANGELOG.md.
->
-> Cập nhật 2026-06-28: board Jira đã tạo **7 ticket mới SCRUM-54→60** cho **phase Jira/Atlassian integration** (xem bảng "Phase Jira" cuối file). Tất cả To Do, ở backlog, **chưa code** — current phase vẫn dừng ở SCRUM-38.
+> **Cập nhật 2026-07-07 (Jira export mới nhất):** Sprint hiện hành **Sprint 4**. Nền tảng 2 chiều **đã xong** (write-back Google 37/38, scheduled email 30/31). **Phase Jira 54→60 đã code xong** (không còn "chưa code"). **Auth overhaul 62→64** (cookie/refresh/OTP) phát sinh ngoài board ban đầu, nay là ticket thật. Thêm ticket mới **67/68/69/72** (highlight unread, notifications, People API, cron sync định kỳ). Số SCRUM-39→46 KHÔNG phải Webhook/Jira (39=bỏ DB creds, 40=admin toggle, 41→50=FE, 51=deploy, 52=finalize, 53=defense). Lịch sử quyết định: CHANGELOG.md.
 >
 > **Quy tắc:** sau khi hoàn thành task code nào, cập nhật status ticket đó trong file này (và các .md liên quan).
 
@@ -16,9 +14,8 @@
 | Huy | Nguyễn Quang Huy | Folders/Items/filter/Admin |
 | Dũng | Dũng Hoàng Tuấn | Frontend |
 
-> ⚠️ **Đánh số đã đổi so với bản trước.** Các "ticket tạm" 47*/48*/49* nay có số Jira thật:
-> bỏ DB credentials = **SCRUM-39**, admin toggle integration = **SCRUM-40**, admin users+stats = **SCRUM-23**.
-> **Jira/Atlassian giờ ĐÃ có ticket = SCRUM-54→60** (phase Jira, chưa code — xem bảng cuối file). **Webhook** vẫn **không còn ticket** (ngoài scope đồ án).
+> ⚠️ **Đánh số:** bỏ DB credentials = **SCRUM-39**, admin toggle = **SCRUM-40**, admin users+stats = **SCRUM-23**.
+> **Jira/Atlassian = SCRUM-54→60 ĐÃ CODE XONG** (xem bảng "Phase Jira"). **Webhook** vẫn **ngoài scope** (không có ticket) — nhưng SCRUM-72 có **cron sync định kỳ** (khác webhook, xem bảng Sprint 4).
 
 ---
 
@@ -56,29 +53,29 @@
 | SCRUM-34 | Migration mô hình B: gộp Connections, Items.ConnectionId + ETag | Hải | ✅ Done — migration `ModelBConnections`, đã apply DB dev |
 | SCRUM-35 | OAuth start flow mô hình B (mỗi service authorize riêng) | Khánh | ✅ Done — `InitiateConnectionAsync` nhận `serviceType`, cache vào state; `ProviderStrategyContext` + `BuildAuthUrlAsync` per-service |
 | SCRUM-36 | Đổi scope sang read-write (Google) — callback mô hình B | Khánh | ✅ Done — `CompleteConnectionAsync` đọc `serviceType` từ state, `ValidateAndExtract` chỉ check scope của service đó; scope read-write (gmail.modify+send, calendar, drive) |
-| SCRUM-37 | Item write-back: ghi ngược lên Google (Email + Event + File) | Vũ | 🔍 **In Review** — `PATCH /api/items/{id}` phân nhánh theo Type; Email modify (label/read/star/trash, KHÔNG sửa nội dung), Event update, File rename/trash; thêm `Items.ETag` |
+| SCRUM-37 | Item write-back: ghi ngược lên Google (Email + Event + File) | Vũ | ✅ **Done** — `PATCH /api/items/{id}` phân nhánh theo Type; Email modify (label/read/star/trash, KHÔNG sửa nội dung), Event update, File rename/trash; thêm `Items.ETag` |
 | SCRUM-39 | Bỏ DB credentials cho Integrations → config/env (`OAuth:`) | Khánh | ✅ Done — migration `RemoveClientCredentialsFromIntegration` (drop 2 cột encrypted), bỏ endpoint PUT /credentials + `SetCredentials`, code đọc `OAuth:{provider}:ClientId/Secret` |
 | SCRUM-40 | Admin bật/tắt integration — `PATCH /api/admin/integrations/{key}/enable` | Khánh | ✅ Done — `AdminIntegrationsController`, `ToggleIntegrationAsync`, validator + DTOs |
 
 > Lưu ý sau SCRUM-34: response `POST /api/connections/oauth/callback` đổi shape (trả list connections) — xem API.md; FE cập nhật khi wire.
 
-## Sprint 3 — Hardening + write-back hoàn thiện + scheduled email + bắt đầu FE (hiện hành)
+## Sprint 3 — Hardening + write-back hoàn thiện + scheduled email + bắt đầu FE (Done)
 
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
 | SCRUM-24 | Exception middleware + error format chuẩn `{ error, message, details[], traceId }` | Lộc | — | ✅ Done — map ValidationException→400 (details[] theo field), Unauthorized→401, Forbidden→403, NotFound→404, Conflict→409, BusinessRule→422, Csrf→400, còn lại→500; 500 không lộ stack ở prod; traceId mọi response. Test: `ExceptionMiddlewareTests` (9 case). |
 | SCRUM-26 | Refactor services + clean architecture | Khánh | — | ✅ Done |
 | SCRUM-27 | API testing + Postman collection | Huy | 24 | ✅ Done — Postman collection + environment ở `backend/postman/` (48 request, 10 nhóm: auth/folders/items/connections/scheduled-emails/important-contacts/admin/health). Có test script tự assert + tự capture token/id (chạy Collection Runner / Newman). Phủ 200/201/204/400/401/403/404/409/422; happy-path provider tách riêng. |
-| SCRUM-28 | README backend + setup guide | Dũng | — | ⏳ To Do |
-| SCRUM-29 | Unit test cho service chính | Hải | — | ⏳ To Do |
+| SCRUM-28 | README backend + setup guide | Dũng | — | ✅ Done |
+| SCRUM-29 | Unit test cho service chính | Hải | — | 🔄 In Progress |
 | SCRUM-30 | Scheduled email: tạo / list / cancel (theo Connections) | Vũ | 34, 36 | ✅ Done — `POST /api/scheduled-emails` (422 nếu Connection ≠ Gmail, 400 nếu sendAt quá khứ); list phân trang; cancel |
-| SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | 🔍 In Review — `POST /api/internal/process-scheduled` (header `X-Cron-Secret`, không JWT). Quét batch Pending tới hạn → `IGmailGateway.SendMessageAsync` (MIME RFC2822, subject encoded-word UTF-8); thành công→Sent+SentAt, lỗi→Failed+RetryCount+LastError; trả `{total,sent,failed}`. Config `Cron:Secret`. 6 unit test (`ProcessScheduledEmailsServiceTests`). |
+| SCRUM-31 | Cron process-scheduled: gửi qua Gmail (token từ Connections) | Hải | 30, 37 | ✅ Done — `POST /api/internal/process-scheduled` (header `X-Cron-Secret`, không JWT). Quét batch Pending tới hạn → `IGmailGateway.SendMessageAsync` (MIME RFC2822, subject encoded-word UTF-8); thành công→Sent+SentAt, lỗi→Failed+RetryCount+LastError; trả `{total,sent,failed}`. Config `Cron:Secret`. 6 unit test (`ProcessScheduledEmailsServiceTests`). |
 | SCRUM-38 | Conflict resolution chung (ETag → 409) | Lộc | 37 | ✅ Done — `WriteBackGuard : IWriteBackGuard.EnsureNoConflict(storedEtag, providerEtag)` (chỉ so sánh, không I/O; lệch → `ConflictException` → 409 qua middleware; null/empty một bên → skip-check). Thay `TempWriteBackGuard` placeholder của Vũ, DI cập nhật. Test: `WriteBackGuardTests` (9 case). Log `LogWarning` khi conflict. |
-| SCRUM-41 | FE: API layer (axios + JWT interceptor + TanStack Query) | Vũ | — | ⏳ To Do |
+| SCRUM-41 | FE: API layer (axios + JWT interceptor + TanStack Query) | Dũng | — | ✅ Done |
 | SCRUM-42 | FE: Wire Login/Register vào API | Lộc | 41 | ✅ Done — `Login.tsx` + `RegisterPage.tsx` redesign theo prototype (card + logo W + banner lỗi + inline field error + Google button). Login gọi `POST /api/auth/login` → lưu token qua `tokenStore` + `login()`, redirect `/`; lỗi 401 (sai mật khẩu/khoá) hiện ở banner. Register gọi `POST /api/auth/register` (thêm confirm-password client-side), 409 email trùng → banner. Refresh giữ session qua `AuthContext` (`/auth/me`); logout xoá token. `ApiError` type khớp error envelope SCRUM-24. **Google Sign-In FE:** nút "Đăng nhập/Đăng ký bằng Google" gọi `POST /api/auth/google/start` → redirect Google → callback route riêng `/auth/google/callback` (`GoogleCallback.tsx`) đổi code+state qua `POST /api/auth/google/callback` → login + redirect. Dùng config `Google:SignInRedirectUri` (= `/auth/google/callback`) tách khỏi `/oauth/callback` của connect-để-sync. **Logout:** nút ở user block cuối Sidebar gọi `authApi.logout()` (`POST /api/auth/logout`) + xoá token + clear query cache, redirect `/login`. |
-| SCRUM-43 | FE: Connections page (list/connect/disconnect per-service) | Khánh | 41 | ⏳ To Do |
+| SCRUM-43 | FE: Connections page (list/connect/disconnect per-service) | Khánh | 41 | ✅ Done |
 
-**Phối hợp:** SCRUM-37 (Vũ) đang review; SCRUM-38 (Lộc) thống nhất interface `IWriteBackGuard` trước khi code. Scheduled email (30/31) viết theo mô hình B (`ScheduledEmails.ConnectionId` → Connection ServiceType=Gmail).
+**Phối hợp:** SCRUM-37 (Vũ) + 38 (Lộc) đã done — write-back qua `IWriteBackGuard` (ETag → 409). Scheduled email (30/31) theo mô hình B (`ScheduledEmails.ConnectionId` → Connection ServiceType=Gmail).
 
 ## Sprint 4 — Frontend đầy đủ + deploy + nghiệm thu
 
@@ -88,20 +85,24 @@
 | SCRUM-45 | FE: Kanban 3 cột (drag-drop) + Folder sidebar | Huy | ✅ Done — rebuild `frontend/src/pages/KanbanBoard.tsx` theo prototype (Light mode slate-50/indigo-600); implement HTML5 Drag & Drop với `onMutate` optimistic cache update; tích hợp Folder sidebar filter (sync URL query `?folder=`); fix TS errors. |
 | SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ✅ Done — Hỗ trợ Email (star/read/label/trash), Event (CRUD), File (rename/trash), Ticket (assignee/priority/transition/comment) kèm ETag/version conflict resolution |
 | SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Khánh | ✅ Done — Giao diện 2 cột, validation client, OData filter/pagination, modal HTML. |
-| SCRUM-48 | FE: Loading/error/toast chuẩn | Khánh | ⏳ To Do |
-| SCRUM-49 | FE: Admin dashboard (users list + stats charts) | Huy | ⏳ To Do |
+| SCRUM-48 | FE: Loading/error/toast chuẩn | Khánh | ✅ Done |
+| SCRUM-49 | FE: Admin dashboard (users list + stats charts) | Huy | 🔄 In Progress |
 | SCRUM-50 | FE: Responsive polish + dashboard chart + dark mode | Dũng | ⏳ To Do |
-| SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do |
+| SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do (board) — **thực tế đã deploy** lên AWS Lightsail (`app.workspace-hub.space`, Docker Compose + CI/CD auto-deploy develop); còn lại: chốt OAuth redirect prod cho từng account, đóng ticket. Xem `docs/DEPLOY.md`. |
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
-| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | ⏳ To Do |
+| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | 🔄 In Progress |
 | SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
+| SCRUM-67 | FE: Highlight email chưa đọc (đồng bộ trạng thái read/unread với Gmail; fix payload sai → 409) — **không thêm cột DB** | Vũ | ⏳ To Do |
+| SCRUM-68 | Notifications in-app (chuông + badge unread + dropdown mark-as-read; BE API list phân trang + cập nhật trạng thái đọc) | Khánh | 🔄 In Progress |
+| SCRUM-69 | Tích hợp Google People API gợi ý contact khi soạn email (autocomplete To/Cc/Bcc, debounce, chip; fallback nhập tay khi API lỗi) | Khánh | ⏳ To Do |
+| SCRUM-72 | **[BE+FE] Cron sync connection định kỳ + FE auto-refresh** — `POST /api/internal/process-sync` (X-Cron-Secret, exempt CSRF) quét Connection Active + refresh token + dispatch sync theo ServiceType; FE polling Inbox/Kanban/Integrations (tắt khi tab hidden). **BỔ SUNG** sync định kỳ ngoài on-demand, KHÔNG phải webhook. | Dũng | ⏳ To Do |
 | SCRUM-70 | **BE: Tag management** — CRUD tag + gắn/gỡ tag khỏi item | Lộc | ✅ Done — `TagsController` (`GET /api/tags`, `POST`, `PUT /{id}`, `DELETE /{id}`, `POST /{id}/items`, `DELETE /{id}/items/{itemId}`); `ITagService`/`TagService` (owner-scoped CRUD; tên tag unique **trong 1 user** → 409; assign/unassign junction `TagAssignment`, cả tag lẫn item phải thuộc user, trùng gắn → 409); `ITagRepository`/`TagRepository` (list kèm ItemCount, name-exists, assignment CRUD); validators (name ≤100, color hex). Dùng entity `Tag`/`TagAssignment` **có sẵn**. DI đăng ký. **Fix code-review PR #70:** (1) unique index `IX_Tags_UserId_Name` (migration `AddTagUserNameUniqueIndex`, đã apply DB) đóng TOCTOU race, `DbUpdateException`→409 qua `SaveOrThrowConflictAsync`; (2) `UpdateAsync` dùng `GetItemCountAsync` (1 COUNT) thay vì quét toàn bộ tag của user. Unit test: `TagServiceTests` (13). Build + 255 test pass. |
 | SCRUM-71 | **FE: Tag UI** — quản lý tag (list/create/edit/delete) + chip tag + gắn/gỡ tag trên item + filter theo tag | Huy | ⏳ To Do — chờ làm sau (wire vào 6 endpoint của SCRUM-70) |
 
 ## Phase Jira — Atlassian integration (SCRUM-54→60)
 
-> **Cụm task BE cho tích hợp Jira (CRUD đầy đủ).** Đã lên kế hoạch + tạo ticket trên board (To Do, backlog) nhưng **chưa bắt đầu code** — current phase vẫn dừng ở SCRUM-38. Bắt đầu sau khi Sprint 3 (write-back Google + conflict) ổn định. Mô hình B áp dụng nguyên: Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). Quyết định + lưu ý kỹ thuật (ADF, version-token thay ETag): xem CHANGELOG.md.
+> **Cụm task BE cho tích hợp Jira (CRUD đầy đủ) — ĐÃ CODE XONG (55→60 Done).** Mô hình B: Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). Migration `EnableJiraIntegration` bật `atlassian` IsEnabled=true (prod tự apply khi deploy). Quyết định + lưu ý kỹ thuật (ADF 2 chiều, `fields.updated` làm version-token thay ETag HTTP): xem CHANGELOG.md. *Board vẫn đánh SCRUM-54 "To Do" nhưng JiraStrategy/OAuth 3LO/cloudId đã có trong code — cần đóng ticket 54 trên Jira cho khớp.*
 
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
@@ -119,7 +120,7 @@
 
 ## Auth overhaul — cookie + refresh/Redis + OTP (SCRUM-62→64)
 
-> ⚠️ **Phát sinh ngoài board (yêu cầu owner 2026-06-30), VƯỢT SCOPE SCRUM-42, ĐẢO nhiều quyết định nền tảng auth** (xem CHANGELOG mục [2026-06-30]). Làm theo **3 nhánh riêng** (không dồn vào PR SCRUM-42) theo thứ tự phụ thuộc: 62 → 63 → 64. **Cần báo team trước khi merge** vì đụng auth chung (Lộc/Khánh/Vũ). Số ticket 62/63/64 là **tạm gán ở docs** — tạo ticket Jira thật trước khi merge.
+> ⚠️ **Phát sinh ngoài board (yêu cầu owner 2026-06-30), VƯỢT SCOPE SCRUM-42, ĐẢO nhiều quyết định nền tảng auth** (xem CHANGELOG mục [2026-06-30]). 62/63/64 **nay là ticket Jira thật** (assignee Lộc). Thứ tự phụ thuộc 62 → 63 → 64. **Board:** 62 Done, 63 To Do, 64 In Progress; code 62/63 đã xong trên nhánh (`feat/SCRUM-62/63...`), 64 OTP đang làm. **Báo team trước khi merge** vì đụng auth chung.
 
 | Ticket | Việc | Assignee | Dependency | Status |
 |---|---|---|---|---|
@@ -132,6 +133,19 @@
 - 63 đổi `AddDistributedMemoryCache` → Redis: ảnh hưởng cả `ConnectionsService` (đang dùng `IDistributedCache` cho OAuth state) — verify state OAuth vẫn chạy trên Redis.
 - 64 migration thêm cột Users: `PhoneVerified` default **true** cho user cũ (không phá login hiện có); chỉ user đăng ký mới sau migration mới phải verify.
 - Twilio = trial; dev fallback `LogSmsSender` (OTP ra log) khi chưa cấu hình `Sms:Twilio:*`.
+
+---
+
+## UI polish + Theme + i18n + Profile (đề xuất — CHƯA có trên Jira, số tạm SCRUM-73→76)
+
+> Phát sinh từ owner 2026-07-07: review UI (fix lệch tông màu brand blue↔indigo, Header nền, avatar) + **theme Sáng/Tối**, **song ngữ VI/EN** (đổi KHÔNG remount), **trang Profile** (chuẩn bị avatar/R2). 4 task này **chưa có trên board** — draft đầy đủ + CSV import ở `docs/tickets-ui-i18n-theme-profile.md`; quyết định kỹ thuật: `docs/CHANGELOG.md` [2026-07-07].
+
+| Ticket (tạm) | Việc | Labels | Status |
+|---|---|---|---|
+| SCRUM-73 | FE: Song ngữ VI/EN (i18n tự viết, `useI18n().t()`, đổi lang KHÔNG remount) | frontend, i18n | 🔄 In Progress — hạ tầng + shell/auth/profile/toolbar + nhãn chính Inbox/Kanban/Integrations xong; ScheduledEmails/SendEmail/Admin/ItemDetail/modals mở rộng dần |
+| SCRUM-74 | FE: Trang Hồ sơ người dùng `/profile` (info + tuỳ chọn theme/ngôn ngữ; link Header+Sidebar) | frontend, profile | ✅ Done — vùng avatar chừa chỗ cho SCRUM-75 |
+| SCRUM-75 | Avatar upload + lưu trữ **Cloudflare R2** (cột `Users.AvatarUrl` + migration, `POST/DELETE /api/users/me/avatar`, config env `R2:*`) | backend, frontend, storage, r2 | ⏳ To Do — **task kế tiếp** (owner đã báo) |
+| SCRUM-76 | FE: Theme Sáng/Tối (toggle, persist `wh-theme`, class `.dark`, no remount, chống FOUC) | frontend, theme | ✅ Done (dark) — phủ **toàn app**: shell + auth + profile + Inbox/Kanban/Integrations + Admin + ScheduledEmails/SendEmail + ItemDetail drawer + tất cả modal + RichTextEditor/BulkActionBar/DateTimePicker/EmailChipsInput + badge tint đã chỉnh contrast. **Có thể gộp vào SCRUM-50**. |
 
 ---
 

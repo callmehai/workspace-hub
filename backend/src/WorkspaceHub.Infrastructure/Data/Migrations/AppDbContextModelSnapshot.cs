@@ -265,7 +265,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                             Description = "Jira",
                             DisplayName = "Atlassian Jira",
                             IconUrl = "https://www.atlassian.com/favicon.ico",
-                            IsEnabled = false,
+                            IsEnabled = true,
                             Key = "atlassian",
                             Provider = "Atlassian",
                             SupportedServices = "[\"Jira\"]",

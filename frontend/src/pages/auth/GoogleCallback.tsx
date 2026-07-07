@@ -51,10 +51,10 @@ export const GoogleCallback = () => {
   const failed = isError || !code || !state;
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen w-full items-center justify-center bg-gray-50 dark:bg-slate-950">
       {failed ? (
         <div className="flex flex-col items-center space-y-4">
-          <p className="font-medium text-red-500">
+          <p className="font-medium text-red-500 dark:text-red-400">
             Đăng nhập bằng Google thất bại.
           </p>
           <button
@@ -67,7 +67,7 @@ export const GoogleCallback = () => {
       ) : (
         <div className="flex flex-col items-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
-          <p className="font-medium text-gray-600">
+          <p className="font-medium text-gray-600 dark:text-slate-300">
             Đang đăng nhập bằng Google...
           </p>
         </div>

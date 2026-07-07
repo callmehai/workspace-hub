@@ -13,6 +13,29 @@
 - **FE polling (TanStack Query):** Inbox/Kanban `items` 45s; Integrations `connections` 60s; chỉ poll khi tab visible (`usePollingInterval`). Manual sync trên Integrations invalidate cả `items`.
 - **Không làm:** WebSocket/SSE, Gmail push notification — UI cập nhật qua poll sau khi cron ghi DB.
 
+## [2026-07-07] UI polish + Theme Sáng/Tối + Song ngữ VI/EN + Trang Profile
+
+> Review UI phát hiện **lệch tông màu**: Login/Header dùng `brand`=blue-600 (#2563eb) trong khi Sidebar/Inbox/toolbar dùng indigo-600 (#4f46e5) — logo "W" + nút primary hai màu xanh khác nhau; Header nền `gray-50` lệch app nền `slate-50`; avatar Header (gradient) khác avatar Sidebar. Cùng lúc bổ sung theme + i18n + profile (chuẩn bị avatar/R2).
+
+- **Thống nhất palette:** `brand` (tailwind.config) đổi blue → **indigo** (SSOT màu thương hiệu) + thêm shade 200/300/400/800/900. Mọi bề mặt `brand-*` (Login/Header/nút/focus ring) nay đồng tông với indigo của sidebar/inbox. Header đổi `gray-50`→`bg-white` (khớp chrome sidebar), avatar Header đồng bộ `brand-50/brand-600`.
+- **Theme Sáng/Tối:** `darkMode:'class'`; `ThemeProvider` toggle class `.dark` trên `<html>` + persist `localStorage['wh-theme']`; inline script `index.html` set class **trước paint** (chống FOUC). **Đổi theme = thao tác DOM thuần → KHÔNG remount** cây React (giữ state/scroll/query cache). Style dark phủ **toàn app**: shell + auth (Login/Register/VerifyOtp/callbacks) + Profile + Inbox/Kanban/Integrations + AdminDashboard + ScheduledEmails/SendEmail + ItemDetail drawer + mọi modal (CreateNote/CreateEvent/Folder) + RichTextEditor (+css `.dark .wh-rte`)/BulkActionBar/DateTimePicker/EmailChipsInput/Select/PageSizeSelect/WorkspaceToolbar/Toaster. Badge tint (`bg-*-50/100`) → `dark:bg-*-500/15 dark:text-*-300` để hết loá trên nền tối.
+- **Song ngữ VI/EN:** i18n **tự viết, không thêm lib** (`src/i18n/` — `translations.ts` từ điển phẳng VI/EN + `I18nProvider` + `useI18n().t()`, nội suy `{var}`), persist `localStorage['wh-lang']`. Đổi ngôn ngữ = đổi context value → **re-render, KHÔNG remount** (không mất state form, không refetch query). VI mặc định. Dịch đủ shell/auth/profile/toolbar + nhãn chính core; page phụ mở rộng dần bằng cách thêm key.
+- **Trang Profile:** route `/profile`, vào từ avatar Header + block user Sidebar; hiển thị tài khoản + tuỳ chọn theme/ngôn ngữ; vùng avatar đặt sẵn nút "Đổi ảnh đại diện" (disabled) — **chừa chỗ cho task avatar upload + Cloudflare R2** (kế tiếp).
+- **Tickets (chưa có trên Jira):** draft ở `docs/tickets-ui-i18n-theme-profile.md` (SCRUM-73 i18n, 74 Profile, 75 Avatar/R2, 76 Theme + CSV import). Dark mode vốn nằm trong SCRUM-50 (gộp responsive+dashboard) — tách 76 hoặc đánh dấu tiến độ ở 50.
+- **Files:** `tailwind.config.js`, `index.html`, `src/index.css`, `src/App.tsx`, `src/context/{theme-context.ts,ThemeProvider.tsx}`, `src/i18n/*`, `src/hooks/{useTheme,useI18n}.ts`, `src/components/ThemeLangControls.tsx`, `src/pages/ProfilePage.tsx`, `src/router.tsx`, shell + Login/Register/Inbox/KanbanBoard/Integrations + Select/PageSizeSelect/WorkspaceToolbar/GoogleSignInButton.
+
+## [2026-07-07] UX overhaul: Folder = context (không phải filter) + prototype v2
+
+> Cơ chế folder/Inbox/Kanban cũ bị lai: sidebar coi folder như trang, Inbox coi folder như filter chip, nav Inbox/Kanban làm rớt `?folder=` khi click, tiêu đề trang luôn "Inbox" (đụng tên status `Inbox`). Chốt lại mô hình **Folder = context, view = cách hiển thị context**.
+
+- **Mô hình:** một context (Tất cả mục / 1 thư mục) có 2 view — Danh sách (`/`) và Bảng (`/kanban`), context qua `?folder={id}`. **Bất biến:** đổi view giữ context, đổi context giữ view; xoá folder đang xem → về Tất cả mục (giữ view).
+- **Sidebar:** bỏ nav "Inbox"/"Bảng Kanban" (view toggle nằm trong page); nav chính có **"Tất cả mục"**; section THƯ MỤC chỉ chứa folder thật + itemCount badge. Active duy nhất 1 mục tại mọi thời điểm.
+- **Header trang = context:** chấm màu + tên thư mục (hoặc "Tất cả mục") + subtitle đếm; folder **không** còn trong dải chip "Đang lọc"; chip folder trên item ẩn folder đang đứng trong.
+- **Từ ngữ:** không dùng "Inbox" trong UI; status label `Done`→"Hoàn thành"; chip "Tất cả" lặp → "Mọi trạng thái"/"Mọi loại". 3 empty state riêng (filter / folder trống / chưa có dữ liệu).
+- **Dọn:** bỏ dead routes `/tasks` `/files` `/calendar` + trang `Projects` placeholder.
+- **Prototype v2:** `docs/prototype/workspace-v2.html` — prototype tương tác self-contained (đổi context/view, drag-drop cột + gán folder, drawer, dark mode, URL contract sống) + 7 nhóm spec viết. FE code/fix theo file này.
+- Files: `Sidebar.tsx`, `Inbox.tsx`, `KanbanBoard.tsx`, `router.tsx` (xoá `Projects.tsx`).
+
 ## [2026-07-04] Tag management BE (SCRUM-70) + tạo ticket FE (SCRUM-71)
 
 > Entity `Tag`/`TagAssignment` đã tồn tại trong schema từ đầu (migration `InitialCreate`) nhưng **chưa có ticket, chưa có API** — chỉ nằm trong DB. Bổ sung lớp BE để dùng được, đồng thời tạo ticket FE (làm sau).

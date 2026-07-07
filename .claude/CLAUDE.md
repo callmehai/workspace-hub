@@ -9,9 +9,9 @@ File này load tự động vào mọi Claude session khi mở repo. Bổ trợ 
 **Đồ án PRN232 Fullstack ASP.NET, nhóm 6 người, 60/40 BE-FE.**
 App aggregator: gom **Gmail / Google Calendar / Drive** về 1 nơi (Jira ở phase sau).
 Concept: `Item` (Email/Event/File/Note) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
-Phase hiện tại (Sprint 4): **mô hình B** (mỗi service 1 Connection, token riêng — ✅ đã migrate, SCRUM-34) + **OAuth per-service** (✅ SCRUM-35/36) + **write-back 2 chiều lên Google** (⏳ SCRUM-37/38) + **Google Sign-In** (✅). Phase dừng ở SCRUM-38.
+Sprint hiện hành **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Nền tảng 2 chiều **đã xong**: mô hình B (SCRUM-34/35/36) + Google Sign-In + **write-back Google 37/38 ✅** + scheduled email 30/31 ✅. **Phase Jira 54→60 đã code xong** (Atlassian OAuth 3LO + sync/CRUD issue → Item Type=Ticket). **Auth overhaul** cookie/refresh/OTP (62/63 ✅, 64 🔄). Đang làm: FE polish + admin dashboard + tag UI + notifications + cron sync định kỳ (72).
 
-Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (đồng bộ Jira).
+Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (⚠️ dòng "Phase Jira chưa code" trong SPRINTS.md đã stale — Jira đã code). Deploy/ops: `docs/DEPLOY.md`.
 
 Tech stack:
 - BE: **ASP.NET Core 8** + EF Core 8 (SQL Server) + JWT + FluentValidation + Data Protection + Swagger
@@ -46,7 +46,7 @@ Tech stack:
 - Namespace `WorkspaceHub.{Domain|Application|Infrastructure|Api}.*`. Route `/api/...` lowercase.
 - Guid PK, enum lưu string, UTC `datetime2`, JSON `nvarchar(max)`.
 - **Mô hình B:** mỗi service = 1 row `Connections`. KHÔNG cột Scopes/Permission — scope suy từ ServiceType trong code. Đừng tạo lại OAuthConnections/ServiceConnections cũ.
-- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 8: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 fix review — unique `Tags(UserId,Name)`).
+- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 9: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 — unique `Tags(UserId,Name)`), `EnableJiraIntegration` (bật `atlassian` IsEnabled=true). Prod tự chạy migration khi deploy (`Db__AutoMigrate=true`); local phải `dotnet ef database update` tay.
 - DB dev: SQL Server chạy Docker container `wh-sqlserver` (xem docs/SETUP.md). KHÔNG phải SQLite/Postgres.
 
 ### Frontend
@@ -61,11 +61,27 @@ Tech stack:
 
 ---
 
-## Status hiện tại (2026-06-18 — chi tiết: docs/SPRINTS.md)
+## Status hiện tại (2026-07-07 — nguồn: Jira export; chi tiết: docs/SPRINTS.md)
 
-- ✅ Done: SCRUM-5→14, 18, 19, 20, 21 (nền tảng, auth, OAuth start/callback, connection list/disconnect/refresh, Folder CRUD, Items filter, Kanban+Note, FE setup) + SCRUM-24 (exception middleware) + SCRUM-32/33 (multi-auth + Google Sign-In) + **SCRUM-34** (migration mô hình B) + **SCRUM-35/36** (OAuth per-service + scope read-write) + SCRUM-48 (admin toggle integration) + SCRUM-47 (bỏ DB credentials, dùng config `OAuth:` — done in code, chưa có issue Jira).
-- ⏳ Kế tiếp: SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc) song song → SCRUM-30/31 (scheduled email). **Phase dừng ở SCRUM-38.**
-- ⏳ Còn nợ phase 1: SCRUM-22 (auth pages wire API), và các ticket 15–17, 23, 25–29.
+- ✅ **Done (BE nền tảng):** SCRUM-5→40 phần lớn (solution/schema/auth/OAuth/mô hình B/sync đọc/Folder/Items/Kanban/admin/logging/exception) + **37/38 write-back Google + conflict ETag** + **30/31 scheduled email + cron gửi** + 26/27/28 (refactor/Postman/README).
+- ✅ **Done (Jira phase 55→60):** client + sync issue→Item(Ticket), tạo/update/xoá issue, metadata helpers, ImportantContacts JiraAccount. Migration `EnableJiraIntegration` bật `atlassian`. *(Board đánh 54 vẫn "To Do" nhưng code JiraStrategy/OAuth đã có — status board lag.)*
+- ✅ **Done (auth overhaul):** 62 HttpOnly cookie + CSRF, 63 refresh token + Redis rotation. 64 OTP Twilio đang 🔄.
+- ✅ **Done (FE Sprint 4):** 41 API layer, 42 wire login/register, 43 Connections, 44 Inbox, 45 Kanban, 46 write-back UI, 47 scheduled UI, 48 loading/toast, 65 Folder CRUD FE. + 70 Tag BE.
+- 🔄 **Đang làm:** 29 unit test (Hải), 49 FE admin dashboard (Huy), 61 FE admin toggle (Khánh), 64 OTP (Lộc), 68 notifications (Khánh).
+- ⏳ **To Do:** 50 responsive/dark (Dũng), 51 deploy config (đã deploy thực tế lên Lightsail rồi), 52 finalize (Hải), 53 defense (Lộc), 67 highlight unread (Vũ), 69 People API (Khánh), 71 Tag UI (Lộc), 72 cron sync định kỳ + FE poll (Dũng).
+
+---
+
+## Deployment & CI/CD (production) — chi tiết: `docs/DEPLOY.md`
+
+App live: **https://app.workspace-hub.space** — AWS Lightsail (2GB, Singapore), Docker Compose (`docker-compose.prod.yml`): api (.NET 8) + web (Caddy auto-HTTPS, proxy `/api`) + mssql (cap RAM 1GB) + redis.
+
+- **CD:** merge/push `develop` → GitHub Actions (`deploy.yml`) SSH vào Lightsail `git reset --hard origin/develop` + `docker compose up -d --build`. Cần 4 repo secrets `DEPLOY_HOST/USER/APP_DIR/SSH_KEY`.
+- **CI:** mọi PR/push develop/main (`ci.yml`) → BE `dotnet build`+`test`, FE `npm install`+`lint`+`build` (`tsc`).
+- **Redeploy tay:** SSH → `cd ~/workspace-hub && git pull && docker compose -f docker-compose.prod.yml up -d --build`.
+- **Log / OTP:** `docker compose -f docker-compose.prod.yml logs -f api`; OTP đăng ký log console (Twilio để trống).
+- **DB prod:** DBeaver qua SSH tunnel (docs/DEPLOY.md §6). **Secret prod ở `.env` trên server — KHÔNG commit.**
+- **Gotcha:** FE Dockerfile/CI dùng `npm install` KHÔNG `npm ci` (lockfile đa nền tảng Vite 8/rolldown); Caddyfile KHÔNG global `email` (rỗng làm crash); dual-stack `curl -4`.
 
 ---
 
@@ -103,7 +119,7 @@ npm run build && npm run lint
 
 ## Khi user yêu cầu code
 
-- Bám phase hiện tại (CLAUDE.md root). Webhook/Jira → hỏi trước.
+- Bám phase hiện tại (CLAUDE.md root). Webhook realtime (ngoài scope) → hỏi trước; Jira đã có nền tảng, mở rộng thì đối chiếu code.
 - Đối chiếu `docs/DATABASE.md` + `docs/API.md` trước khi tạo entity/endpoint.
 - BE: Controller → Service → Repository. FE: page → component → hook → axios.
 - Test build sau mỗi nhóm thay đổi lớn (`dotnet build` + `dotnet test` BE, `npm run build` FE).

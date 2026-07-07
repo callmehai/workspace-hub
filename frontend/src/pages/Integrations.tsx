@@ -1,19 +1,24 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { connectionsApi } from '../lib/connectionsApi';
 import { handleApiError } from '../lib/errorUtils';
+import { useI18n } from '../hooks/useI18n';
+import type { TranslationKey } from '../i18n/translations';
 import toast from 'react-hot-toast';
 import { Loader2, Lock, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { vi, enUS } from 'date-fns/locale';
 import { usePollingInterval } from '../hooks/usePollingInterval';
 
-const SERVICES = [
+const SERVICES: {
+  integrationKey: string; provider: string; serviceType: string;
+  name: string; descKey: TranslationKey; icon: string; bgColor: string;
+}[] = [
   {
     integrationKey: 'google',
     provider: 'google',
     serviceType: 'Gmail',
     name: 'Google Gmail',
-    description: 'Đồng bộ hộp thư trực tiếp vào không gian làm việc.',
+    descKey: 'integrations.descGmail',
     icon: '/icons/gmail.svg',
     bgColor: 'bg-gray-50',
   },
@@ -22,7 +27,7 @@ const SERVICES = [
     provider: 'google',
     serviceType: 'GCal',
     name: 'Google Calendar',
-    description: 'Quản lý sự kiện và lịch trình một cách liền mạch.',
+    descKey: 'integrations.descGCal',
     icon: '/icons/gcal.svg',
     bgColor: 'bg-gray-50',
   },
@@ -31,7 +36,7 @@ const SERVICES = [
     provider: 'google',
     serviceType: 'Drive',
     name: 'Google Drive',
-    description: 'Truy cập và sắp xếp tệp tin từ Drive.',
+    descKey: 'integrations.descDrive',
     icon: '/icons/drive.svg',
     bgColor: 'bg-gray-50',
   },
@@ -40,7 +45,7 @@ const SERVICES = [
     provider: 'atlassian',
     serviceType: 'Jira',
     name: 'Atlassian Jira',
-    description: 'Nhập ticket, theo dõi sprint và cập nhật tiến độ.',
+    descKey: 'integrations.descJira',
     icon: '/icons/jira.svg',
     bgColor: 'bg-gray-50',
   },
@@ -49,6 +54,9 @@ const SERVICES = [
 export const Integrations = () => {
   const queryClient = useQueryClient();
   const pollMs = usePollingInterval(60_000);
+  const { t, lang } = useI18n();
+  const dfLocale = lang === 'vi' ? vi : enUS;
+
   const { data: connections = [], isLoading: loading, isError, refetch, isFetching } = useQuery({
     queryKey: ['connections'],
     queryFn: connectionsApi.getConnections,
@@ -60,10 +68,10 @@ export const Integrations = () => {
   const disconnectMutation = useMutation({
     mutationFn: connectionsApi.disconnect,
     onSuccess: () => {
-      toast.success('Đã ngắt kết nối thành công');
+      toast.success(t('integrations.disconnected'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
-    onError: (err) => handleApiError(err, 'Không thể ngắt kết nối'),
+    onError: (err) => handleApiError(err, t('integrations.disconnectFail')),
   });
 
   const connectMutation = useMutation({
@@ -72,17 +80,17 @@ export const Integrations = () => {
     onSuccess: (res) => {
       window.location.assign(res.authorizationUrl);
     },
-    onError: (err) => handleApiError(err, 'Không thể bắt đầu kết nối'),
+    onError: (err) => handleApiError(err, t('integrations.connectFail')),
   });
 
   const syncMutation = useMutation({
     mutationFn: connectionsApi.syncConnection,
     onSuccess: () => {
-      toast.success('Đã gửi yêu cầu đồng bộ');
+      toast.success(t('integrations.syncRequested'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => handleApiError(err, 'Đồng bộ thất bại'),
+    onError: (err) => handleApiError(err, t('integrations.syncFail')),
   });
 
   const handleConnect = (integrationKey: string, serviceType: string) => {
@@ -92,22 +100,22 @@ export const Integrations = () => {
 
 
   return (
-    <div className="p-5 md:p-8 max-w-5xl mx-auto text-gray-800">
+    <div className="p-5 md:p-8 max-w-5xl mx-auto text-gray-800 dark:text-slate-200">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-          Kết nối dịch vụ
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-1">
+          {t('integrations.title')}
           {isFetching && !loading && <Loader2 className="w-4 h-4 animate-spin inline-block ml-2 text-gray-400" />}
         </h1>
-        <p className="text-sm text-gray-500">
-          Cấp quyền để Workspace Hub đọc và ghi dữ liệu của bạn.
+        <p className="text-sm text-gray-500 dark:text-slate-400">
+          {t('integrations.subtitle')}
         </p>
       </div>
 
-      <div className="flex items-start gap-3 bg-brand-50 border border-brand-100/50 rounded-xl p-3 mb-6 text-sm">
-        <Lock className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
-        <div className="text-brand-800/80 leading-relaxed">
-          <strong className="font-semibold text-brand-900">Đăng nhập bằng Google ≠ Kết nối dịch vụ.</strong>{' '}
-          Đăng nhập chỉ xác thực tài khoản của bạn. Để đồng bộ hai chiều, bạn cần cấp quyền (scope) riêng cho từng dịch vụ bên dưới.
+      <div className="flex items-start gap-3 bg-brand-50 border border-brand-100/50 rounded-xl p-3 mb-6 text-sm dark:bg-brand-500/10 dark:border-brand-500/20">
+        <Lock className="w-5 h-5 text-brand-600 dark:text-brand-400 flex-shrink-0 mt-0.5" />
+        <div className="text-brand-800/80 dark:text-brand-200/80 leading-relaxed">
+          <strong className="font-semibold text-brand-900 dark:text-brand-200">{t('integrations.bannerTitle')}</strong>{' '}
+          {t('integrations.bannerBody')}
         </div>
       </div>
 
@@ -116,17 +124,17 @@ export const Integrations = () => {
           <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
         </div>
       ) : isError ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm p-12 flex flex-col items-center justify-center text-center">
+          <div className="w-12 h-12 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mb-4">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-semibold text-gray-900 mb-1">Không tải được kết nối</h3>
-          <p className="text-sm text-gray-500 mb-6">Vui lòng thử lại sau giây lát.</p>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100 mb-1">{t('integrations.loadError')}</h3>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">{t('integrations.loadErrorHint')}</p>
           <button
             onClick={() => refetch()}
             className="h-9 px-6 bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-medium rounded-lg transition-colors shadow-sm"
           >
-            Thử lại
+            {t('common.retry')}
           </button>
         </div>
       ) : (
@@ -142,33 +150,33 @@ export const Integrations = () => {
             const isActive = status.toLowerCase() === 'active';
             const isConnectionError = status.toLowerCase() === 'error';
 
-            let statusBg = 'bg-gray-100';
-            let statusFg = 'text-gray-600';
+            let statusBg = 'bg-gray-100 dark:bg-slate-700';
+            let statusFg = 'text-gray-600 dark:text-slate-300';
             let statusDot = 'bg-gray-400';
-            let statusLabel = 'Chưa kết nối';
+            let statusLabel = t('integrations.statusDisconnected');
 
             if (isConnected) {
               if (isActive) {
-                statusBg = 'bg-green-100';
-                statusFg = 'text-green-700';
+                statusBg = 'bg-green-100 dark:bg-green-500/15';
+                statusFg = 'text-green-700 dark:text-green-300';
                 statusDot = 'bg-green-500';
-                statusLabel = 'Đang hoạt động';
+                statusLabel = t('integrations.statusActive');
               } else if (isConnectionError) {
-                statusBg = 'bg-red-100';
-                statusFg = 'text-red-700';
+                statusBg = 'bg-red-100 dark:bg-red-500/15';
+                statusFg = 'text-red-700 dark:text-red-300';
                 statusDot = 'bg-red-500';
-                statusLabel = 'Lỗi đồng bộ';
+                statusLabel = t('integrations.statusError');
               } else {
-                statusBg = 'bg-yellow-100';
-                statusFg = 'text-yellow-700';
+                statusBg = 'bg-yellow-100 dark:bg-yellow-500/15';
+                statusFg = 'text-yellow-700 dark:text-yellow-300';
                 statusDot = 'bg-yellow-500';
                 statusLabel = status;
               }
             }
 
             const lastSyncedText = connection?.lastSyncedAt
-              ? `Đồng bộ ${formatDistanceToNow(new Date(connection.lastSyncedAt), { addSuffix: true, locale: vi })}`
-              : 'Chưa đồng bộ';
+              ? t('integrations.syncedAgo', { ago: formatDistanceToNow(new Date(connection.lastSyncedAt), { addSuffix: true, locale: dfLocale }) })
+              : t('integrations.neverSynced');
 
             const isLoadingAction =
               (disconnectMutation.isPending && disconnectMutation.variables === connection?.id) ||
@@ -176,17 +184,17 @@ export const Integrations = () => {
               (connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType);
 
             return (
-              <div key={`${service.integrationKey}-${service.serviceType}`} className={`bg-white rounded-xl border flex flex-col p-5 shadow-sm transition-shadow hover:shadow-md ${isConnectionError ? 'border-red-200' : 'border-gray-200'}`}>
+              <div key={`${service.integrationKey}-${service.serviceType}`} className={`bg-white dark:bg-slate-900 rounded-xl border flex flex-col p-5 shadow-sm transition-shadow hover:shadow-md ${isConnectionError ? 'border-red-200 dark:border-red-900/50' : 'border-gray-200 dark:border-slate-800'}`}>
 
                 <div className="flex items-start gap-3.5 mb-3.5">
-                  <div className={`w-11 h-11 rounded-xl ${service.bgColor} flex items-center justify-center border border-gray-100 flex-shrink-0`}>
+                  <div className={`w-11 h-11 rounded-xl ${service.bgColor} dark:bg-slate-800 flex items-center justify-center border border-gray-100 dark:border-slate-700 flex-shrink-0`}>
                     <img src={service.icon} alt={service.name} className="w-6 h-6 object-contain drop-shadow-sm" />
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-semibold text-gray-900">{service.name}</div>
-                    <div className="text-[12.5px] text-gray-500 truncate">
-                      {isConnected && connection.providerAccountId ? connection.providerAccountId : 'Chưa có tài khoản'}
+                    <div className="text-[15px] font-semibold text-gray-900 dark:text-slate-100">{service.name}</div>
+                    <div className="text-[12.5px] text-gray-500 dark:text-slate-400 truncate">
+                      {isConnected && connection.providerAccountId ? connection.providerAccountId : t('integrations.noAccount')}
                     </div>
                   </div>
 
@@ -196,12 +204,12 @@ export const Integrations = () => {
                   </div>
                 </div>
 
-                <div className="text-[13px] text-gray-600 leading-relaxed mb-4">
-                  {service.description}
+                <div className="text-[13px] text-gray-600 dark:text-slate-400 leading-relaxed mb-4">
+                  {t(service.descKey)}
                 </div>
 
                 <div className="mt-auto pt-2 flex items-center justify-between gap-3">
-                  <span className="text-xs text-gray-400 truncate min-w-0">
+                  <span className="text-xs text-gray-400 dark:text-slate-500 truncate min-w-0">
                     {isConnected ? lastSyncedText : ''}
                   </span>
 
@@ -212,19 +220,19 @@ export const Integrations = () => {
                           <button
                             onClick={() => syncMutation.mutate(connection.id)}
                             disabled={isLoadingAction}
-                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 hover:border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending && syncMutation.variables === connection.id ? 'animate-spin' : ''}`} />
-                            <span>Đồng bộ</span>
+                            <span>{t('toolbar.sync')}</span>
                           </button>
                         )}
                         {(isActive || isConnectionError) && (
                           <button
                             onClick={() => disconnectMutation.mutate(connection.id)}
                             disabled={isLoadingAction}
-                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:border-red-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:border-red-500 hover:text-red-600 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/50 transition-colors disabled:opacity-50"
                           >
-                            Ngắt
+                            {t('integrations.disconnect')}
                           </button>
                         )}
                         {isConnectionError && (
@@ -233,7 +241,7 @@ export const Integrations = () => {
                             disabled={isLoadingAction}
                             className="inline-flex items-center gap-1.5 h-8 px-3 border border-transparent rounded-lg bg-brand-600 text-white text-xs font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
                           >
-                            Kết nối lại
+                            {t('integrations.reconnect')}
                           </button>
                         )}
                       </>
@@ -244,7 +252,7 @@ export const Integrations = () => {
                         className="inline-flex items-center gap-1.5 h-8 px-3 border border-transparent rounded-lg bg-brand-600 text-white text-xs font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Kết nối</span>
+                        <span>{t('integrations.connect')}</span>
                       </button>
                     )}
                   </div>

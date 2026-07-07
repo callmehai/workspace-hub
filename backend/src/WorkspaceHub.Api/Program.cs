@@ -4,6 +4,7 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.OData;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.ModelBuilder;
 using Microsoft.OpenApi.Models;
@@ -175,6 +176,16 @@ if (builder.Configuration.GetValue<bool>("Cron:SyncAutoRun"))
 }
 
 var app = builder.Build();
+
+// Prod deploy 1-instance: tự áp EF migration lúc khởi động khi Db:AutoMigrate=true.
+// Mặc định TẮT — môi trường multi-instance nên chạy migration riêng (tránh race).
+if (app.Configuration.GetValue<bool>("Db:AutoMigrate"))
+{
+    using var migrateScope = app.Services.CreateScope();
+    migrateScope.ServiceProvider
+        .GetRequiredService<WorkspaceHub.Infrastructure.Data.AppDbContext>()
+        .Database.Migrate();
+}
 
 // Request logging (SCRUM-25) — đặt NGOÀI CÙNG để đo trọn thời gian xử lý và đọc đúng
 // status code cuối (kể cả 5xx do ExceptionMiddleware set sau khi nuốt exception).
