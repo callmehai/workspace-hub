@@ -10,7 +10,7 @@ Web app gom email / sự kiện / file / note (và ticket ở phase Jira) từ *
 
 ## Scope & Phase — ĐỌC KỸ
 
-App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Triển khai **theo phase**, đừng làm hết một lúc:
+App gom + **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Hầu hết đã xong; vài ticket còn "In Review" nhưng code đã merge. Status từng ticket: `docs/SPRINTS.md` (⚠️ SPRINTS.md dòng "Phase Jira chưa code" đã stale — Jira đã code, xem dưới).
 
 ### Sprint hiện hành: **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Status chi tiết từng ticket: `docs/SPRINTS.md` (nguồn = Jira export mới nhất).
 
@@ -82,7 +82,7 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 
 ## Nguyên tắc khi code
 
-1. Bám đúng phase hiện tại ở trên. Phase sau (webhook/Jira) → hỏi trước.
+1. Bám đúng phase hiện tại ở trên. Việc ngoài scope (webhook realtime) → hỏi trước. Mở rộng Jira thì OK (đã có nền tảng BE+FE) — đối chiếu code hiện có.
 2. Tuân thủ quy ước nền tảng (ID/timestamp/enum/cascade).
 3. Theo layered architecture, dùng DTO.
 4. Validate input; trả status code đúng (xem `docs/API.md`). Write-back: 403 thiếu scope, 409 conflict ETag, 502 provider lỗi.

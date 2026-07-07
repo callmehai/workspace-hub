@@ -11,7 +11,7 @@ App aggregator: gom **Gmail / Google Calendar / Drive** về 1 nơi (Jira ở ph
 Concept: `Item` (Email/Event/File/Note) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
 Sprint hiện hành **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Nền tảng 2 chiều **đã xong**: mô hình B (SCRUM-34/35/36) + Google Sign-In + **write-back Google 37/38 ✅** + scheduled email 30/31 ✅. **Phase Jira 54→60 đã code xong** (Atlassian OAuth 3LO + sync/CRUD issue → Item Type=Ticket). **Auth overhaul** cookie/refresh/OTP (62/63 ✅, 64 🔄). Đang làm: FE polish + admin dashboard + tag UI + notifications + cron sync định kỳ (72).
 
-Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (đồng bộ Jira).
+Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (⚠️ dòng "Phase Jira chưa code" trong SPRINTS.md đã stale — Jira đã code). Deploy/ops: `docs/DEPLOY.md`.
 
 Tech stack:
 - BE: **ASP.NET Core 8** + EF Core 8 (SQL Server) + JWT + FluentValidation + Data Protection + Swagger
@@ -119,7 +119,7 @@ npm run build && npm run lint
 
 ## Khi user yêu cầu code
 
-- Bám phase hiện tại (CLAUDE.md root). Webhook/Jira → hỏi trước.
+- Bám phase hiện tại (CLAUDE.md root). Webhook realtime (ngoài scope) → hỏi trước; Jira đã có nền tảng, mở rộng thì đối chiếu code.
 - Đối chiếu `docs/DATABASE.md` + `docs/API.md` trước khi tạo entity/endpoint.
 - BE: Controller → Service → Repository. FE: page → component → hook → axios.
 - Test build sau mỗi nhóm thay đổi lớn (`dotnet build` + `dotnet test` BE, `npm run build` FE).

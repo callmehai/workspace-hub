@@ -2,6 +2,18 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-07] UX overhaul: Folder = context (không phải filter) + prototype v2
+
+> Cơ chế folder/Inbox/Kanban cũ bị lai: sidebar coi folder như trang, Inbox coi folder như filter chip, nav Inbox/Kanban làm rớt `?folder=` khi click, tiêu đề trang luôn "Inbox" (đụng tên status `Inbox`). Chốt lại mô hình **Folder = context, view = cách hiển thị context**.
+
+- **Mô hình:** một context (Tất cả mục / 1 thư mục) có 2 view — Danh sách (`/`) và Bảng (`/kanban`), context qua `?folder={id}`. **Bất biến:** đổi view giữ context, đổi context giữ view; xoá folder đang xem → về Tất cả mục (giữ view).
+- **Sidebar:** bỏ nav "Inbox"/"Bảng Kanban" (view toggle nằm trong page); nav chính có **"Tất cả mục"**; section THƯ MỤC chỉ chứa folder thật + itemCount badge. Active duy nhất 1 mục tại mọi thời điểm.
+- **Header trang = context:** chấm màu + tên thư mục (hoặc "Tất cả mục") + subtitle đếm; folder **không** còn trong dải chip "Đang lọc"; chip folder trên item ẩn folder đang đứng trong.
+- **Từ ngữ:** không dùng "Inbox" trong UI; status label `Done`→"Hoàn thành"; chip "Tất cả" lặp → "Mọi trạng thái"/"Mọi loại". 3 empty state riêng (filter / folder trống / chưa có dữ liệu).
+- **Dọn:** bỏ dead routes `/tasks` `/files` `/calendar` + trang `Projects` placeholder.
+- **Prototype v2:** `docs/prototype/workspace-v2.html` — prototype tương tác self-contained (đổi context/view, drag-drop cột + gán folder, drawer, dark mode, URL contract sống) + 7 nhóm spec viết. FE code/fix theo file này.
+- Files: `Sidebar.tsx`, `Inbox.tsx`, `KanbanBoard.tsx`, `router.tsx` (xoá `Projects.tsx`).
+
 ## [2026-07-04] Tag management BE (SCRUM-70) + tạo ticket FE (SCRUM-71)
 
 > Entity `Tag`/`TagAssignment` đã tồn tại trong schema từ đầu (migration `InitialCreate`) nhưng **chưa có ticket, chưa có API** — chỉ nằm trong DB. Bổ sung lớp BE để dùng được, đồng thời tạo ticket FE (làm sau).

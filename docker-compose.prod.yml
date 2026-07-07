@@ -61,6 +61,10 @@ services:
       Cron__IntervalSeconds: "60"
       OAuth__google__ClientId: ${GOOGLE_CLIENT_ID}
       OAuth__google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      # Jira/Atlassian OAuth — code đọc theo integration Key = "atlassian" (KHÔNG phải "jira").
+      # Để trống ⇒ connect Jira báo "Chưa cấu hình ClientId cho 'atlassian'". Redirect Jira do FE gửi (/oauth/callback).
+      OAuth__atlassian__ClientId: ${ATLASSIAN_CLIENT_ID:-}
+      OAuth__atlassian__ClientSecret: ${ATLASSIAN_CLIENT_SECRET:-}
       # Redirect URI trỏ tới route FE (Caddy serve) — phải khớp Google Cloud Console.
       Google__RedirectUri: "https://${SITE_ADDRESS}/oauth/callback"
       Google__SignInRedirectUri: "https://${SITE_ADDRESS}/auth/google/callback"

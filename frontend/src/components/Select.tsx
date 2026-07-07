@@ -14,10 +14,12 @@ interface SelectProps {
   /** Thêm class cho nút trigger (thường set height, vd "h-9"). */
   className?: string;
   disabled?: boolean;
+  /** Bung menu LÊN TRÊN (dùng khi select nằm đáy trang, vd footer phân trang). */
+  dropUp?: boolean;
 }
 
 /** Dropdown/listbox tự style (thay native <select>) — khớp tông brand, bo góc, có tick chọn. */
-export function Select({ value, onChange, options, placeholder = 'Chọn...', className = '', disabled }: SelectProps) {
+export function Select({ value, onChange, options, placeholder = 'Chọn...', className = '', disabled, dropUp }: SelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
@@ -55,7 +57,9 @@ export function Select({ value, onChange, options, placeholder = 'Chọn...', cl
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1.5 w-full min-w-max bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto">
+        <div className={`absolute z-30 w-full min-w-max bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
+          dropUp ? 'bottom-full mb-1.5' : 'mt-1.5'
+        }`}>
           {options.length === 0 ? (
             <div className="px-3 py-2 text-sm text-gray-400">Không có lựa chọn</div>
           ) : (

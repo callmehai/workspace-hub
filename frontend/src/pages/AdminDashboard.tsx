@@ -4,6 +4,7 @@ import { adminApi } from '../lib/adminApi';
 import { handleApiError } from '../lib/errorUtils';
 import { Users, UserCheck, Lock, AlertCircle, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PageSizeSelect } from '../components/PageSizeSelect';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -20,6 +21,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export const AdminDashboard = () => {
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 350);
 
@@ -34,8 +36,8 @@ export const AdminDashboard = () => {
   });
 
   const { data: usersData, isLoading: usersLoading, error: usersError, isPlaceholderData } = useQuery({
-    queryKey: ['admin', 'users', { page, search: debouncedSearch }],
-    queryFn: () => adminApi.getUsers({ page, limit: 20, search: debouncedSearch }),
+    queryKey: ['admin', 'users', { page, limit, search: debouncedSearch }],
+    queryFn: () => adminApi.getUsers({ page, limit, search: debouncedSearch }),
     placeholderData: (prev) => prev,
   });
 
@@ -185,9 +187,12 @@ export const AdminDashboard = () => {
 
         {usersData && usersData.total > 0 && (
           <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-            <div className="text-xs text-slate-500">
-              Trang <span className="font-medium text-slate-900">{usersData.page}</span> / <span className="font-medium text-slate-900">{Math.ceil(usersData.total / usersData.limit)}</span>
-              {' '} ({usersData.total} người dùng)
+            <div className="flex items-center gap-3">
+              <PageSizeSelect value={limit} onChange={(n) => { setLimit(n); setPage(1); }} />
+              <div className="text-xs text-slate-500">
+                Trang <span className="font-medium text-slate-900">{usersData.page}</span> / <span className="font-medium text-slate-900">{Math.ceil(usersData.total / usersData.limit)}</span>
+                {' '} ({usersData.total} người dùng)
+              </div>
             </div>
             <div className="flex gap-2">
               <button

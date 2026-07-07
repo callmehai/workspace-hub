@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Inbox,
-  Kanban,
+  Layers,
   Plug,
   Clock,
   Send,
@@ -30,10 +29,15 @@ export const Sidebar = () => {
   
   const currentFolder = searchParams.get('folder');
 
+  // Folder = CONTEXT (không phải filter). Context có 2 view: Danh sách (/) và Bảng (/kanban).
+  // Đổi context giữ nguyên view đang xem; đổi view (trong page) giữ nguyên context.
+  const isItemsView = location.pathname === '/' || location.pathname === '/kanban';
+  const viewPath = isItemsView ? location.pathname : '/';
+
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<FolderResponse | undefined>();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-  
+
   const menuRef = useRef<HTMLDivElement>(null);
 
   const { data: folders = [] } = useQuery({
@@ -43,9 +47,11 @@ export const Sidebar = () => {
 
   const deleteMutation = useMutation({
     mutationFn: foldersApi.deleteFolder,
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       toast.success('Đã xóa thư mục');
       queryClient.invalidateQueries({ queryKey: ['folders'] });
+      // Đang đứng trong folder vừa xoá → quay về "Tất cả mục" (giữ view)
+      if (currentFolder === deletedId) navigate(viewPath);
     },
     onError: () => {
       toast.error('Lỗi khi xóa thư mục');
@@ -71,18 +77,11 @@ export const Sidebar = () => {
   };
 
   const handleFolderClick = (folderId: string | null) => {
-    if (location.pathname !== '/' && location.pathname !== '/kanban') {
-      navigate(folderId ? `/?folder=${folderId}` : '/');
-    } else {
-      const newParams = new URLSearchParams(searchParams);
-      if (!folderId) {
-        newParams.delete('folder');
-      } else {
-        newParams.set('folder', folderId);
-      }
-      navigate(`${location.pathname}?${newParams.toString()}`);
-    }
+    navigate(folderId ? `${viewPath}?folder=${folderId}` : viewPath);
   };
+
+  const allItemsActive = isItemsView && !currentFolder;
+  const isFolderActive = (id: string) => isItemsView && currentFolder === id;
 
   const assignItemMutation = useMutation({
     mutationFn: ({ folderId, itemId }: { folderId: string; itemId: string }) => 
@@ -162,15 +161,11 @@ export const Sidebar = () => {
 
         {/* ── Main Nav ── */}
         <nav className="flex flex-col gap-0.5">
-          <NavLink to="/" end className={({ isActive }) => navItemClass(isActive)}>
-            <Inbox className="w-[18px] h-[18px] shrink-0" />
-            <span className="flex-1 text-left">Inbox</span>
-          </NavLink>
-
-          <NavLink to="/kanban" className={({ isActive }) => navItemClass(isActive)}>
-            <Kanban className="w-[18px] h-[18px] shrink-0" />
-            <span className="flex-1 text-left">Bảng Kanban</span>
-          </NavLink>
+          {/* Context mặc định: mọi item. View (Danh sách/Bảng) đổi trong page, giữ nguyên khi đổi context. */}
+          <button onClick={() => handleFolderClick(null)} className={navItemClass(allItemsActive)}>
+            <Layers className="w-[18px] h-[18px] shrink-0" />
+            <span className="flex-1 text-left">Tất cả mục</span>
+          </button>
 
           <NavLink to="/integrations" className={({ isActive }) => navItemClass(isActive)}>
             <Plug className="w-[18px] h-[18px] shrink-0" />
@@ -213,14 +208,12 @@ export const Sidebar = () => {
         </div>
 
         <div className="flex flex-col gap-0.5 overflow-y-auto flex-1 min-h-0 hide-scrollbar">
-          <button
-            onClick={() => handleFolderClick(null)}
-            className={navItemClass(!currentFolder)}
-          >
-            <span className="w-2 h-2 rounded-full shrink-0 bg-slate-400" />
-            <span className="flex-1 text-left truncate">Tất cả</span>
-          </button>
-          
+          {folders.length === 0 && (
+            <div className="px-[10px] py-2 text-[12px] text-slate-400 leading-relaxed">
+              Chưa có thư mục. Tạo thư mục để gom item theo dự án / khách hàng.
+            </div>
+          )}
+
           {folders.map(folder => (
             <div 
               key={folder.id} 
@@ -231,13 +224,16 @@ export const Sidebar = () => {
             >
               <button
                 onClick={() => handleFolderClick(folder.id)}
-                className={navItemClass(currentFolder === folder.id)}
+                className={navItemClass(isFolderActive(folder.id))}
               >
-                <span 
-                  className="w-2 h-2 rounded-full shrink-0" 
-                  style={{ backgroundColor: folder.color || '#94a3b8' }} 
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: folder.color || '#94a3b8' }}
                 />
                 <span className="flex-1 text-left truncate">{folder.name}</span>
+                <span className="text-[11px] tabular-nums text-slate-400 shrink-0 group-hover:opacity-0 transition-opacity">
+                  {folder.itemCount}
+                </span>
               </button>
               
               <button
