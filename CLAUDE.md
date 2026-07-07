@@ -10,25 +10,28 @@ Web app gom email / sự kiện / file / note (và ticket ở phase Jira) từ *
 
 ## Scope & Phase — ĐỌC KỸ
 
-App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Triển khai **theo phase**, đừng làm hết một lúc:
+App gom + **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Hầu hết đã xong; vài ticket còn "In Review" nhưng code đã merge. Status từng ticket: `docs/SPRINTS.md` (⚠️ SPRINTS.md dòng "Phase Jira chưa code" đã stale — Jira đã code, xem dưới).
 
-### Phase hiện tại (Sprint 4) — Mô hình B + Write-back Google + Google Sign-In
-- **Mô hình connection B:** mỗi service (Gmail/GCal/Drive) = 1 row `Connections` riêng, token riêng. User authorize riêng từng service. ✅ DB đã migrate (SCRUM-34).
-- **Google Sign-In:** đăng nhập app bằng Google, tách biệt connect-để-sync. ✅ Done (SCRUM-32/33).
-- **OAuth per-service (mô hình B):** start + callback theo từng service, scope read-write. ✅ Done (SCRUM-35/36).
-- **2 chiều bằng polling + write-back:** cron đọc như cũ (1 chiều pull); thao tác trên app ghi ngược lên Google ngay (synchronous). ⏳ SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc).
-  - Ghi được: Email (label/read/star/trash + gửi mới — **KHÔNG sửa nội dung**, Gmail immutable), Event (CRUD đầy đủ), File (rename/trash).
-  - Conflict qua `Items.ETag` → 409.
-- Kế tiếp: SCRUM-37 + 38 (song song), rồi 30/31 (scheduled email). **Phase hiện tại dừng ở SCRUM-38.** Status chi tiết: `docs/SPRINTS.md`.
+### Đã làm — Google + nền tảng
+- **Mô hình connection B:** mỗi service = 1 row `Connections`, token riêng, authorize riêng. ✅ (SCRUM-34)
+- **Google Sign-In** (đăng nhập, tách connect-để-sync) ✅ + **OAuth per-service** scope read-write ✅ (SCRUM-32/33/35/36).
+- **Sync on-demand** (Gmail/Calendar/Drive → Item; KHÔNG cron pull định kỳ) ✅ (SCRUM-16).
+- **Write-back Google:** Email (label/read/star/trash + gửi mới, KHÔNG sửa nội dung), Event (CRUD), File (rename/trash); conflict `Items.ETag`→409 ✅ (SCRUM-37 In Review / 38 Done).
+- **Scheduled email** (tạo/list/cancel + cron `POST /api/internal/process-scheduled`) ✅, đã deploy prod.
+- **FE đầy đủ:** Inbox, Kanban drag-drop + Folder, write-back UI, scheduled email, integrations, **admin dashboard**; **Tags** (SCRUM-70) ✅.
 
-### Phase Jira — đã lên kế hoạch, CHƯA bắt đầu code (SCRUM-54→60)
-Tích hợp **Jira / Atlassian** (CRUD đầy đủ) đã có ticket trên board (SCRUM-54→60, To Do, backlog) nhưng **chưa code** — current phase vẫn dừng ở SCRUM-38. Làm theo mô hình B: Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). Gồm: OAuth 3LO + cloudId (54), client + sync issue → Item(Ticket) (55), tạo issue (56), write-back update qua `IWriteBackGuard` (57), xoá issue (58), metadata helpers (59), ImportantContacts JiraAccount + Notification (60). Chi tiết + dependency: `docs/SPRINTS.md` (bảng "Phase Jira"); quyết định kỹ thuật (ADF, version-token thay ETag): `docs/CHANGELOG.md`. **Đừng bắt đầu khi chưa chốt xong Sprint 3 — hỏi trước.**
+### Jira / Atlassian — **ĐÃ CODE** (không còn "chưa bắt đầu")
+Tích hợp theo mô hình B (Atlassian = 1 Integration; mỗi Jira account = Connection `ServiceType=Jira`; issue → Item type `Ticket`):
+- **BE done:** OAuth 3LO + cloudId (54) qua `JiraStrategy`; sync issue→Item (55) `JiraSyncService`+`JiraItemMapper`; tạo/sửa/xoá/transition issue qua `IJiraGateway` (`CreateIssue/UpdateIssue/DeleteIssue/GetTransitions/TransitionIssue`, 56-58); metadata `GET /api/jira/{projects,issue-types,priorities,assignable-users,transitions}` (59) `JiraMetadataService`. Đã đăng ký DI đầy đủ.
+- **FE done:** Ticket write-back (assignee/priority/transition/comment) trong Kanban/Items (SCRUM-46, PR #69).
+- **Seed `Integrations` Atlassian mặc định `IsEnabled=false`** (cố ý) — bật/tắt **runtime** qua admin toggle `PATCH /api/admin/integrations/{key}/enable` (SCRUM-40), **KHÔNG cần migration**. Cần config `OAuth:atlassian:ClientId/Secret` để hoạt động thật.
+- SCRUM-60 (ImportantContacts JiraAccount + Notification): xác nhận status ở board Jira / `docs/SPRINTS.md`.
 
-### NGOÀI scope (đừng code, chỉ tham khảo roadmap)
-- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) → phase sau, **chưa có ticket**.
+### NGOÀI scope (đừng code, chỉ roadmap — hỏi trước)
+- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) → **chưa có ticket**.
 - Social / friend system, AI workflow → future.
 
-Nếu một task có vẻ cần webhook, **dừng lại và hỏi** — nhiều khả năng đang vượt phase. Jira đã có ticket (54→60) nhưng vẫn chưa tới lượt — cũng hỏi trước khi code.
+Task có vẻ cần **webhook** → dừng lại hỏi (nhiều khả năng vượt scope).
 
 ## Tech Stack
 
@@ -76,7 +79,7 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 
 ## Nguyên tắc khi code
 
-1. Bám đúng phase hiện tại ở trên. Phase sau (webhook/Jira) → hỏi trước.
+1. Bám đúng phase hiện tại ở trên. Việc ngoài scope (webhook realtime) → hỏi trước. Mở rộng Jira thì OK (đã có nền tảng BE+FE) — đối chiếu code hiện có.
 2. Tuân thủ quy ước nền tảng (ID/timestamp/enum/cascade).
 3. Theo layered architecture, dùng DTO.
 4. Validate input; trả status code đúng (xem `docs/API.md`). Write-back: 403 thiếu scope, 409 conflict ETag, 502 provider lỗi.

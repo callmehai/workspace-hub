@@ -7,11 +7,11 @@ File này load tự động vào mọi Claude session khi mở repo. Bổ trợ 
 ## TL;DR — project là gì
 
 **Đồ án PRN232 Fullstack ASP.NET, nhóm 6 người, 60/40 BE-FE.**
-App aggregator: gom **Gmail / Google Calendar / Drive** về 1 nơi (Jira ở phase sau).
-Concept: `Item` (Email/Event/File/Note) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
-Phase hiện tại (Sprint 4): **mô hình B** (mỗi service 1 Connection, token riêng — ✅ đã migrate, SCRUM-34) + **OAuth per-service** (✅ SCRUM-35/36) + **write-back 2 chiều lên Google** (⏳ SCRUM-37/38) + **Google Sign-In** (✅). Phase dừng ở SCRUM-38.
+App aggregator: gom **Gmail / Google Calendar / Drive + Jira** về 1 nơi.
+Concept: `Item` (Email/Event/File/Note/**Ticket**) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
+Đã xong phần lớn: **mô hình B** + **OAuth per-service** + **Google Sign-In** + **write-back Google** (Email/Event/File, ETag→409) + **scheduled email** (đã deploy prod) + **FE đầy đủ** (Inbox/Kanban/admin/tags) + **Jira/Atlassian tích hợp** (BE OAuth/sync/CRUD/metadata + FE Ticket write-back). Vài ticket "In Review" nhưng code đã merge.
 
-Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (đồng bộ Jira).
+Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (⚠️ dòng "Phase Jira chưa code" trong SPRINTS.md đã stale — Jira đã code). Deploy/ops: `docs/DEPLOY.md`.
 
 Tech stack:
 - BE: **ASP.NET Core 8** + EF Core 8 (SQL Server) + JWT + FluentValidation + Data Protection + Swagger
@@ -61,11 +61,11 @@ Tech stack:
 
 ---
 
-## Status hiện tại (2026-06-18 — chi tiết: docs/SPRINTS.md)
+## Status hiện tại (2026-07-07 — chi tiết: docs/SPRINTS.md)
 
-- ✅ Done: SCRUM-5→14, 18, 19, 20, 21 (nền tảng, auth, OAuth start/callback, connection list/disconnect/refresh, Folder CRUD, Items filter, Kanban+Note, FE setup) + SCRUM-24 (exception middleware) + SCRUM-32/33 (multi-auth + Google Sign-In) + **SCRUM-34** (migration mô hình B) + **SCRUM-35/36** (OAuth per-service + scope read-write) + SCRUM-48 (admin toggle integration) + SCRUM-47 (bỏ DB credentials, dùng config `OAuth:` — done in code, chưa có issue Jira).
-- ⏳ Kế tiếp: SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc) song song → SCRUM-30/31 (scheduled email). **Phase dừng ở SCRUM-38.**
-- ⏳ Còn nợ phase 1: SCRUM-22 (auth pages wire API), và các ticket 15–17, 23, 25–29.
+- ✅ **Done (BE + FE):** nền tảng/auth/OAuth (5–14, 18–23, 32–36), exception middleware (24), sync on-demand Gmail/Calendar/Drive (15–17), write-back Google + ETag→409 (37 In Review / 38), scheduled email + cron (30/31), admin (toggle integration 40, users/stats 23, dashboard #71), OTP đăng ký Twilio (64), refresh token Redis (63), **Tags** (70), **Jira/Atlassian tích hợp** (54–59: OAuth/sync/CRUD/transition/metadata BE + FE Ticket write-back 46).
+- ✅ **Đã deploy production** — AWS Lightsail + CI/CD (merge `develop` → auto-deploy). Xem `docs/DEPLOY.md`.
+- ⏳ Còn lại: SCRUM-60 (Jira ImportantContacts + notification — xác nhận board), thêm redirect URI prod vào Google Console cho Google Sign-In, các ticket lẻ — xem `docs/SPRINTS.md`/board.
 
 ---
 
@@ -116,7 +116,7 @@ npm run build && npm run lint
 
 ## Khi user yêu cầu code
 
-- Bám phase hiện tại (CLAUDE.md root). Webhook/Jira → hỏi trước.
+- Bám phase hiện tại (CLAUDE.md root). Webhook realtime (ngoài scope) → hỏi trước; Jira đã có nền tảng, mở rộng thì đối chiếu code.
 - Đối chiếu `docs/DATABASE.md` + `docs/API.md` trước khi tạo entity/endpoint.
 - BE: Controller → Service → Repository. FE: page → component → hook → axios.
 - Test build sau mỗi nhóm thay đổi lớn (`dotnet build` + `dotnet test` BE, `npm run build` FE).
