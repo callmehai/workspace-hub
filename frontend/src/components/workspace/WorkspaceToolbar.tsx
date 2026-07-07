@@ -47,6 +47,8 @@ interface WorkspaceToolbarProps {
   /** Context không tìm thấy trong list folders (share/ẩn) nhưng vẫn đang chọn */
   folderId: string | null;
   subtitle: string;
+  /** Poll/refetch nền (TanStack isFetching && !isLoading) — hiện "Đang cập nhật…" cạnh tiêu đề */
+  isBackgroundFetching?: boolean;
 
   statusFilter: ItemStatus | null;
   onStatusFilter: (s: ItemStatus | null) => void;
@@ -59,7 +61,7 @@ interface WorkspaceToolbarProps {
 }
 
 export const WorkspaceToolbar = ({
-  view, folder, folderId, subtitle,
+  view, folder, folderId, subtitle, isBackgroundFetching = false,
   statusFilter, onStatusFilter,
   typeFilter, onTypeFilter,
   importantOnly, onImportantToggle,
@@ -115,6 +117,9 @@ export const WorkspaceToolbar = ({
             <h1 className="text-[22px] font-semibold text-slate-900 dark:text-slate-100 leading-tight m-0">
               {folderId ? (folder?.name ?? t('toolbar.folder')) : t('nav.allItems')}
             </h1>
+            {isBackgroundFetching && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">{t('common.updating')}</span>
+            )}
           </div>
           <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
             {folderId ? t('toolbar.folderPrefix') : ''}{subtitle}

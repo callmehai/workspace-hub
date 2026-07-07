@@ -14,6 +14,7 @@ export const vi = {
   // ── common ──
   'common.appName': 'Workspace Hub',
   'common.loading': 'Đang tải…',
+  'common.updating': 'Đang cập nhật…',
   'common.save': 'Lưu',
   'common.saving': 'Đang lưu…',
   'common.cancel': 'Huỷ',
@@ -452,6 +453,7 @@ export const en: Record<TranslationKey, string> = {
   // ── common ──
   'common.appName': 'Workspace Hub',
   'common.loading': 'Loading…',
+  'common.updating': 'Updating…',
   'common.save': 'Save',
   'common.saving': 'Saving…',
   'common.cancel': 'Cancel',
