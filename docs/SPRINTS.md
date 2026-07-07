@@ -93,7 +93,7 @@
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
 | SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | 🔄 In Progress |
 | SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
-| SCRUM-67 | FE: Highlight email chưa đọc (đồng bộ trạng thái read/unread với Gmail; fix payload sai → 409) — **không thêm cột DB** | Vũ | ⏳ To Do |
+| SCRUM-67 | FE: Highlight email chưa đọc (đồng bộ trạng thái read/unread với Gmail; fix payload sai → 409) — **không thêm cột DB** | Vũ | ✅ Done |
 | SCRUM-68 | Notifications in-app (chuông + badge unread + dropdown mark-as-read; BE API list phân trang + cập nhật trạng thái đọc) | Khánh | 🔄 In Progress |
 | SCRUM-69 | Tích hợp Google People API gợi ý contact khi soạn email (autocomplete To/Cc/Bcc, debounce, chip; fallback nhập tay khi API lỗi) | Khánh | ⏳ To Do |
 | SCRUM-72 | **[BE+FE] Cron sync connection định kỳ + FE auto-refresh** — `POST /api/internal/process-sync` (X-Cron-Secret, exempt CSRF) quét Connection Active + refresh token + dispatch sync theo ServiceType; FE polling Inbox/Kanban/Integrations (tắt khi tab hidden). **BỔ SUNG** sync định kỳ ngoài on-demand, KHÔNG phải webhook. | Dũng | ⏳ To Do |
