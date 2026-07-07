@@ -7,9 +7,9 @@ File này load tự động vào mọi Claude session khi mở repo. Bổ trợ 
 ## TL;DR — project là gì
 
 **Đồ án PRN232 Fullstack ASP.NET, nhóm 6 người, 60/40 BE-FE.**
-App aggregator: gom **Gmail / Google Calendar / Drive + Jira** về 1 nơi.
-Concept: `Item` (Email/Event/File/Note/**Ticket**) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
-Đã xong phần lớn: **mô hình B** + **OAuth per-service** + **Google Sign-In** + **write-back Google** (Email/Event/File, ETag→409) + **scheduled email** (đã deploy prod) + **FE đầy đủ** (Inbox/Kanban/admin/tags) + **Jira/Atlassian tích hợp** (BE OAuth/sync/CRUD/metadata + FE Ticket write-back). Vài ticket "In Review" nhưng code đã merge.
+App aggregator: gom **Gmail / Google Calendar / Drive** về 1 nơi (Jira ở phase sau).
+Concept: `Item` (Email/Event/File/Note) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
+Sprint hiện hành **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Nền tảng 2 chiều **đã xong**: mô hình B (SCRUM-34/35/36) + Google Sign-In + **write-back Google 37/38 ✅** + scheduled email 30/31 ✅. **Phase Jira 54→60 đã code xong** (Atlassian OAuth 3LO + sync/CRUD issue → Item Type=Ticket). **Auth overhaul** cookie/refresh/OTP (62/63 ✅, 64 🔄). Đang làm: FE polish + admin dashboard + tag UI + notifications + cron sync định kỳ (72).
 
 Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (⚠️ dòng "Phase Jira chưa code" trong SPRINTS.md đã stale — Jira đã code). Deploy/ops: `docs/DEPLOY.md`.
 
@@ -46,7 +46,7 @@ Tech stack:
 - Namespace `WorkspaceHub.{Domain|Application|Infrastructure|Api}.*`. Route `/api/...` lowercase.
 - Guid PK, enum lưu string, UTC `datetime2`, JSON `nvarchar(max)`.
 - **Mô hình B:** mỗi service = 1 row `Connections`. KHÔNG cột Scopes/Permission — scope suy từ ServiceType trong code. Đừng tạo lại OAuthConnections/ServiceConnections cũ.
-- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 8: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 fix review — unique `Tags(UserId,Name)`).
+- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 9: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 — unique `Tags(UserId,Name)`), `EnableJiraIntegration` (bật `atlassian` IsEnabled=true). Prod tự chạy migration khi deploy (`Db__AutoMigrate=true`); local phải `dotnet ef database update` tay.
 - DB dev: SQL Server chạy Docker container `wh-sqlserver` (xem docs/SETUP.md). KHÔNG phải SQLite/Postgres.
 
 ### Frontend
@@ -61,11 +61,14 @@ Tech stack:
 
 ---
 
-## Status hiện tại (2026-07-07 — chi tiết: docs/SPRINTS.md)
+## Status hiện tại (2026-07-07 — nguồn: Jira export; chi tiết: docs/SPRINTS.md)
 
-- ✅ **Done (BE + FE):** nền tảng/auth/OAuth (5–14, 18–23, 32–36), exception middleware (24), sync on-demand Gmail/Calendar/Drive (15–17), write-back Google + ETag→409 (37 In Review / 38), scheduled email + cron (30/31), admin (toggle integration 40, users/stats 23, dashboard #71), OTP đăng ký Twilio (64), refresh token Redis (63), **Tags** (70), **Jira/Atlassian tích hợp** (54–59: OAuth/sync/CRUD/transition/metadata BE + FE Ticket write-back 46).
-- ✅ **Đã deploy production** — AWS Lightsail + CI/CD (merge `develop` → auto-deploy). Xem `docs/DEPLOY.md`.
-- ⏳ Còn lại: SCRUM-60 (Jira ImportantContacts + notification — xác nhận board), thêm redirect URI prod vào Google Console cho Google Sign-In, các ticket lẻ — xem `docs/SPRINTS.md`/board.
+- ✅ **Done (BE nền tảng):** SCRUM-5→40 phần lớn (solution/schema/auth/OAuth/mô hình B/sync đọc/Folder/Items/Kanban/admin/logging/exception) + **37/38 write-back Google + conflict ETag** + **30/31 scheduled email + cron gửi** + 26/27/28 (refactor/Postman/README).
+- ✅ **Done (Jira phase 55→60):** client + sync issue→Item(Ticket), tạo/update/xoá issue, metadata helpers, ImportantContacts JiraAccount. Migration `EnableJiraIntegration` bật `atlassian`. *(Board đánh 54 vẫn "To Do" nhưng code JiraStrategy/OAuth đã có — status board lag.)*
+- ✅ **Done (auth overhaul):** 62 HttpOnly cookie + CSRF, 63 refresh token + Redis rotation. 64 OTP Twilio đang 🔄.
+- ✅ **Done (FE Sprint 4):** 41 API layer, 42 wire login/register, 43 Connections, 44 Inbox, 45 Kanban, 46 write-back UI, 47 scheduled UI, 48 loading/toast, 65 Folder CRUD FE. + 70 Tag BE.
+- 🔄 **Đang làm:** 29 unit test (Hải), 49 FE admin dashboard (Huy), 61 FE admin toggle (Khánh), 64 OTP (Lộc), 68 notifications (Khánh).
+- ⏳ **To Do:** 50 responsive/dark (Dũng), 51 deploy config (đã deploy thực tế lên Lightsail rồi), 52 finalize (Hải), 53 defense (Lộc), 67 highlight unread (Vũ), 69 People API (Khánh), 71 Tag UI (Lộc), 72 cron sync định kỳ + FE poll (Dũng).
 
 ---
 

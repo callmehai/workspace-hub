@@ -12,26 +12,29 @@ Web app gom email / sự kiện / file / note (và ticket ở phase Jira) từ *
 
 App gom + **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Hầu hết đã xong; vài ticket còn "In Review" nhưng code đã merge. Status từng ticket: `docs/SPRINTS.md` (⚠️ SPRINTS.md dòng "Phase Jira chưa code" đã stale — Jira đã code, xem dưới).
 
-### Đã làm — Google + nền tảng
-- **Mô hình connection B:** mỗi service = 1 row `Connections`, token riêng, authorize riêng. ✅ (SCRUM-34)
-- **Google Sign-In** (đăng nhập, tách connect-để-sync) ✅ + **OAuth per-service** scope read-write ✅ (SCRUM-32/33/35/36).
-- **Sync on-demand** (Gmail/Calendar/Drive → Item; KHÔNG cron pull định kỳ) ✅ (SCRUM-16).
-- **Write-back Google:** Email (label/read/star/trash + gửi mới, KHÔNG sửa nội dung), Event (CRUD), File (rename/trash); conflict `Items.ETag`→409 ✅ (SCRUM-37 In Review / 38 Done).
-- **Scheduled email** (tạo/list/cancel + cron `POST /api/internal/process-scheduled`) ✅, đã deploy prod.
-- **FE đầy đủ:** Inbox, Kanban drag-drop + Folder, write-back UI, scheduled email, integrations, **admin dashboard**; **Tags** (SCRUM-70) ✅.
+### Sprint hiện hành: **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Status chi tiết từng ticket: `docs/SPRINTS.md` (nguồn = Jira export mới nhất).
 
-### Jira / Atlassian — **ĐÃ CODE** (không còn "chưa bắt đầu")
-Tích hợp theo mô hình B (Atlassian = 1 Integration; mỗi Jira account = Connection `ServiceType=Jira`; issue → Item type `Ticket`):
-- **BE done:** OAuth 3LO + cloudId (54) qua `JiraStrategy`; sync issue→Item (55) `JiraSyncService`+`JiraItemMapper`; tạo/sửa/xoá/transition issue qua `IJiraGateway` (`CreateIssue/UpdateIssue/DeleteIssue/GetTransitions/TransitionIssue`, 56-58); metadata `GET /api/jira/{projects,issue-types,priorities,assignable-users,transitions}` (59) `JiraMetadataService`. Đã đăng ký DI đầy đủ.
-- **FE done:** Ticket write-back (assignee/priority/transition/comment) trong Kanban/Items (SCRUM-46, PR #69).
-- **Seed `Integrations` Atlassian mặc định `IsEnabled=false`** (cố ý) — bật/tắt **runtime** qua admin toggle `PATCH /api/admin/integrations/{key}/enable` (SCRUM-40), **KHÔNG cần migration**. Cần config `OAuth:atlassian:ClientId/Secret` để hoạt động thật.
-- SCRUM-60 (ImportantContacts JiraAccount + Notification): xác nhận status ở board Jira / `docs/SPRINTS.md`.
+**✅ ĐÃ XONG (nền tảng 2 chiều + Jira + auth overhaul):**
+- **Mô hình B + OAuth per-service + Google Sign-In:** SCRUM-34/35/36 + 32/33. Bật service = full scope read-write.
+- **Write-back Google (2 chiều, synchronous):** `PATCH/POST/DELETE /api/items` — Email (label/read/star/trash + gửi mới, **KHÔNG sửa nội dung** Gmail immutable), Event (CRUD), File (rename/trash). Conflict qua `Items.ETag` → 409 (`IWriteBackGuard`). ✅ SCRUM-37/38.
+- **Scheduled email + cron gửi:** `/api/internal/process-scheduled` (X-Cron-Secret). ✅ SCRUM-30/31.
+- **Phase Jira/Atlassian (CRUD đầy đủ) — ĐÃ CODE XONG:** Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). OAuth 3LO+cloudId (54), sync issue→Item(Ticket) (55), tạo (56), write-back update qua cùng `IWriteBackGuard` — `fields.updated` làm version-token thay ETag (57), xoá (58), metadata helpers (59), ImportantContacts JiraAccount (60). Description = ADF 2 chiều. Migration `EnableJiraIntegration` đã bật `atlassian` IsEnabled=true trên develop.
+- **Auth overhaul:** access token → **HttpOnly cookie + CSRF** (62 ✅), refresh token + Redis rotation (63 ✅ trên nhánh). OAuth key Jira = `atlassian` (đọc `OAuth:atlassian:ClientId/Secret`).
+- **Tag BE:** CRUD + assign/unassign (70 ✅).
 
-### NGOÀI scope (đừng code, chỉ roadmap — hỏi trước)
-- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) → **chưa có ticket**.
+**🔄 Đang làm / ⏳ còn lại (Sprint 4):**
+- 🔄 OTP đăng ký Twilio (64, Lộc) · FE Admin dashboard (49, Huy) · FE Admin toggle integration (61, Khánh) · Notifications in-app (68, Khánh).
+- ⏳ FE: Tag UI (71) · Highlight email chưa đọc (67) · People API gợi ý contact (69) · responsive/dark mode (50).
+- ⏳ **Cron sync connection định kỳ + FE auto-refresh (72, Dũng)** — **THÊM** sync định kỳ ngoài on-demand (xem lưu ý sync bên dưới).
+- ⏳ Unit test service (29, Hải) · deploy prod config (51) · finalize Swagger+E2E (52) · defense (53).
+
+> **Lưu ý mô hình sync:** hiện đọc = **on-demand** (không background pull, không webhook). SCRUM-72 sẽ **bổ sung** cron sync định kỳ (`/api/internal/process-sync`) + FE polling — vẫn KHÔNG phải webhook. Webhook/push realtime vẫn **ngoài scope, chưa có ticket**.
+
+### NGOÀI scope (đừng code, chưa có ticket)
+- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch).
 - Social / friend system, AI workflow → future.
 
-Task có vẻ cần **webhook** → dừng lại hỏi (nhiều khả năng vượt scope).
+Nếu một task có vẻ cần **webhook**, dừng lại và hỏi. Jira/write-back/auth-cookie **đã code xong** — sửa/mở rộng bình thường theo ticket, không cần hỏi "có thuộc phase không" nữa.
 
 ## Tech Stack
 
