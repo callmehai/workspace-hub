@@ -64,7 +64,7 @@ function statusDotClass(s: ItemStatus): string {
 
 function statusLabel(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
-    Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Hoàn thành',
+    Inbox: 'Chưa xem', Doing: 'Đang xử lý', Done: 'Hoàn thành',
   };
   return map[s] ?? s;
 }

@@ -18,7 +18,7 @@ interface ItemDetailProps {
   onDeleted?: () => void;
 }
 
-const STATUS_LABEL: Record<string, string> = { Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Done' };
+const STATUS_LABEL: Record<string, string> = { Inbox: 'Chưa xem', Doing: 'Đang xử lý', Done: 'Done' };
 const STATUS_COLOR: Record<string, string> = {
   Inbox: 'bg-slate-100 text-slate-600 border border-slate-200',
   Doing: 'bg-blue-50 text-blue-700 border border-blue-100',

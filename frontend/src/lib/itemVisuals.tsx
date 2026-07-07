@@ -13,7 +13,7 @@ export const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
 
 export const STATUS_FILTERS: { label: string; value: ItemStatus | null }[] = [
   { label: 'Mọi trạng thái', value: null },
-  { label: 'Cần xem', value: 'Inbox' },
+  { label: 'Chưa xem', value: 'Inbox' },
   { label: 'Đang xử lý', value: 'Doing' },
   { label: 'Hoàn thành', value: 'Done' },
 ];

@@ -40,7 +40,7 @@ function typeTileClass(t: ItemType): string {
 }
 
 const COLUMNS: { title: string, status: ItemStatus, dotColor: string }[] = [
-  { title: 'Cần xem', status: 'Inbox', dotColor: 'bg-slate-400' },
+  { title: 'Chưa xem', status: 'Inbox', dotColor: 'bg-slate-400' },
   { title: 'Đang xử lý', status: 'Doing', dotColor: 'bg-blue-500' },
   { title: 'Hoàn thành', status: 'Done', dotColor: 'bg-emerald-500' },
 ];
