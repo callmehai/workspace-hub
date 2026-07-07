@@ -74,24 +74,24 @@ export const SendEmail = () => {
     sendMutation.mutate(payload);
   };
 
-  const labelClass = 'block text-xs font-medium text-gray-500 mb-1.5';
-  const inputClass = 'w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors';
+  const labelClass = 'block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5';
+  const inputClass = 'w-full h-9 px-3 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors';
 
   return (
     <div className="p-5 md:p-8 max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col overflow-hidden">
       <div className="mb-6 shrink-0">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Gửi email</h1>
-        <p className="text-sm text-gray-500">Soạn email HTML và gửi ngay qua Gmail đã kết nối.</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-1">Gửi email</h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400">Soạn email HTML và gửi ngay qua Gmail đã kết nối.</p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6 items-stretch flex-1 min-h-0">
         {/* Compose */}
         <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
-          <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900">
-            <Pencil className="w-4 h-4 text-gray-400" />
+          <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900 dark:text-slate-100">
+            <Pencil className="w-4 h-4 text-gray-400 dark:text-slate-500" />
             <h2 className="text-base font-semibold">Soạn email</h2>
           </div>
-          <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-xl p-5 md:p-6 shadow-sm flex flex-col overflow-y-auto">
+          <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-5 md:p-6 shadow-sm flex flex-col overflow-y-auto">
           <label className={`${labelClass} shrink-0`}>Người nhận</label>
           <div className="shrink-0">
             <EmailChipsInput value={to} onChange={setTo} placeholder="Nhập email rồi Enter / phẩy hoặc bấm +" />
@@ -135,14 +135,14 @@ export const SendEmail = () => {
                 aria-checked={includeSignature}
                 disabled={!signature}
                 onClick={() => setIncludeSignature((v) => !v)}
-                className={`relative w-9 h-5 rounded-full transition-colors shrink-0 disabled:opacity-40 ${includeSignature && signature ? 'bg-brand-600' : 'bg-gray-300'}`}
+                className={`relative w-9 h-5 rounded-full transition-colors shrink-0 disabled:opacity-40 ${includeSignature && signature ? 'bg-brand-600' : 'bg-gray-300 dark:bg-slate-700'}`}
               >
                 <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${includeSignature && signature ? 'translate-x-4' : ''}`} />
               </button>
-              <span className="text-sm text-gray-700">Kèm chữ ký Gmail</span>
+              <span className="text-sm text-gray-700 dark:text-slate-200">Kèm chữ ký Gmail</span>
             </label>
             {!signature && (
-              <p className="mt-1.5 text-xs text-gray-400 leading-relaxed">
+              <p className="mt-1.5 text-xs text-gray-400 dark:text-slate-500 leading-relaxed">
                 Tài khoản chưa đặt chữ ký, hoặc connection cũ chưa có quyền đọc chữ ký — hãy đặt chữ ký trong cài đặt Gmail và <strong>kết nối lại</strong> Gmail để dùng.
               </p>
             )}
@@ -172,29 +172,29 @@ export const SendEmail = () => {
 
         {/* Preview */}
         <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
-          <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900">
-            <Eye className="w-4 h-4 text-gray-400" />
+          <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900 dark:text-slate-100">
+            <Eye className="w-4 h-4 text-gray-400 dark:text-slate-500" />
             <h2 className="text-base font-semibold">Xem trước</h2>
           </div>
-          <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-            <div className="px-5 py-3 border-b border-gray-100 shrink-0">
-              <p className="text-xs text-gray-400">Tiêu đề</p>
-              <p className="text-sm font-semibold text-gray-900 truncate">{subject || '(Chưa có tiêu đề)'}</p>
+          <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-3 border-b border-gray-100 dark:border-slate-800 shrink-0">
+              <p className="text-xs text-gray-400 dark:text-slate-500">Tiêu đề</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{subject || '(Chưa có tiêu đề)'}</p>
               {to.length > 0 && (
-                <p className="text-xs text-gray-400 mt-1 truncate">Đến: {to.join(', ')}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 truncate">Đến: {to.join(', ')}</p>
               )}
               {cc.length > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5 truncate">Cc: {cc.join(', ')}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 truncate">Cc: {cc.join(', ')}</p>
               )}
               {bcc.length > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5 truncate">Bcc: {bcc.join(', ')}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 truncate">Bcc: {bcc.join(', ')}</p>
               )}
             </div>
             <div className="flex-1 overflow-y-auto">
               {body.trim() ? (
                 <div className="html-content px-5 py-4" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(composedHtml) }} />
               ) : (
-                <div className="h-full flex items-center justify-center text-sm text-gray-400 p-8 text-center">
+                <div className="h-full flex items-center justify-center text-sm text-gray-400 dark:text-slate-500 p-8 text-center">
                   Nội dung email sẽ hiển thị ở đây. Chọn một mẫu HTML hoặc tự soạn.
                 </div>
               )}

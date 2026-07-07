@@ -51,7 +51,7 @@ interface TimePartProps {
 
 function TimePart({ value, placeholder, ariaLabel, onChange, onBlur, onStep }: TimePartProps) {
   return (
-    <div className="flex items-stretch h-9 rounded-lg border border-gray-300 bg-white overflow-hidden transition-colors focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
+    <div className="flex items-stretch h-9 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden transition-colors focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
       <input
         type="text"
         inputMode="numeric"
@@ -65,13 +65,13 @@ function TimePart({ value, placeholder, ariaLabel, onChange, onBlur, onStep }: T
         }}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="w-11 px-2 border-0 bg-transparent text-center text-sm tabular-nums outline-none"
+        className="w-11 px-2 border-0 bg-transparent text-center text-sm tabular-nums outline-none text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500"
       />
-      <div className="flex flex-col border-l border-gray-200">
-        <button type="button" tabIndex={-1} onClick={() => onStep(1)} className="flex-1 px-1 flex items-center justify-center text-gray-500 hover:bg-gray-100">
+      <div className="flex flex-col border-l border-gray-200 dark:border-slate-700">
+        <button type="button" tabIndex={-1} onClick={() => onStep(1)} className="flex-1 px-1 flex items-center justify-center text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700">
           <ChevronUp className="w-3 h-3" />
         </button>
-        <button type="button" tabIndex={-1} onClick={() => onStep(-1)} className="flex-1 px-1 flex items-center justify-center text-gray-500 hover:bg-gray-100 border-t border-gray-200">
+        <button type="button" tabIndex={-1} onClick={() => onStep(-1)} className="flex-1 px-1 flex items-center justify-center text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 border-t border-gray-200 dark:border-slate-700">
           <ChevronDown className="w-3 h-3" />
         </button>
       </div>
@@ -198,8 +198,8 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
         onClick={toggleOpen}
         className={`flex items-center gap-2 text-left ${className ?? ''} ${open ? '!border-brand-500 ring-2 ring-brand-500/20' : ''}`}
       >
-        <CalendarIcon className="w-4 h-4 text-gray-400 shrink-0" />
-        <span className={`flex-1 truncate ${value ? 'text-gray-800' : 'text-gray-400'}`}>
+        <CalendarIcon className="w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0" />
+        <span className={`flex-1 truncate ${value ? 'text-gray-800 dark:text-slate-200' : 'text-gray-400 dark:text-slate-500'}`}>
           {value ? displayText : (placeholder ?? 'Chọn thời gian')}
         </span>
         {value && (
@@ -207,7 +207,7 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
             role="button"
             tabIndex={-1}
             onClick={(e) => { e.stopPropagation(); commit(null); }}
-            className="shrink-0 text-gray-400 hover:text-gray-600 p-0.5 rounded"
+            className="shrink-0 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 p-0.5 rounded"
             aria-label="Xoá thời gian"
           >
             <X className="w-3.5 h-3.5" />
@@ -222,10 +222,10 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
           style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom }}
           className="z-[9999] wh-dtp"
         >
-          <div className="flex items-stretch rounded-xl overflow-hidden shadow-2xl border border-gray-200 bg-white">
+          <div className="flex items-stretch rounded-xl overflow-hidden shadow-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             {/* Preset column */}
-            <div className="w-44 shrink-0 border-r border-gray-100 bg-gray-50/60 py-3 px-2.5 flex flex-col">
-              <p className="flex items-center gap-1.5 px-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            <div className="w-44 shrink-0 border-r border-gray-100 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-900/40 py-3 px-2.5 flex flex-col">
+              <p className="flex items-center gap-1.5 px-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
                 <Zap className="w-3.5 h-3.5" /> Chọn nhanh
               </p>
               <div className="flex flex-col gap-1">
@@ -237,7 +237,7 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
                       type="button"
                       onClick={() => { commit(tidy(p.get())); setOpen(false); }}
                       className={`text-left whitespace-nowrap px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                        active ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-brand-50 hover:text-brand-700'
+                        active ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-brand-500/10 hover:text-brand-700 dark:hover:text-brand-400'
                       }`}
                     >
                       {p.label}
@@ -256,8 +256,8 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
                 minDate={startOfDay(now)}
                 locale="vi"
               />
-              <div className="flex items-center justify-center gap-2 px-3 py-2.5 border-t border-gray-100">
-                <Clock className="w-4 h-4 text-gray-400" />
+              <div className="flex items-center justify-center gap-2 px-3 py-2.5 border-t border-gray-100 dark:border-slate-700">
+                <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                 <TimePart
                   value={hourDraft}
                   placeholder="HH"
@@ -266,7 +266,7 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
                   onBlur={() => padOnBlur(hourDraft, 23, 'hour')}
                   onStep={(d) => stepPart(d, 'hour')}
                 />
-                <span className="font-semibold text-gray-400">:</span>
+                <span className="font-semibold text-gray-400 dark:text-slate-500">:</span>
                 <TimePart
                   value={minuteDraft}
                   placeholder="mm"
@@ -276,12 +276,12 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
                   onStep={(d) => stepPart(d, 'minute')}
                 />
               </div>
-              <div className="flex items-center justify-between px-3 py-2.5 border-t border-gray-100">
+              <div className="flex items-center justify-between px-3 py-2.5 border-t border-gray-100 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => commit(null)}
                   disabled={!value}
-                  className="px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                  className="px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-slate-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
                 >
                   Xoá
                 </button>

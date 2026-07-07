@@ -56,10 +56,10 @@ export const AdminDashboard = () => {
   ] : [];
 
   return (
-    <div className="p-5 md:p-8 max-w-7xl mx-auto text-slate-800">
+    <div className="p-5 md:p-8 max-w-7xl mx-auto text-slate-800 dark:text-slate-200">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 mb-1">Quản trị hệ thống</h1>
-        <p className="text-sm text-slate-500">Giám sát hoạt động và quản lý người dùng</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Quản trị hệ thống</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Giám sát hoạt động và quản lý người dùng</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -70,11 +70,11 @@ export const AdminDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm col-span-1 lg:col-span-1">
-          <h3 className="text-sm font-semibold text-slate-900 mb-4">Trạng thái kết nối</h3>
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm col-span-1 lg:col-span-1">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">Trạng thái kết nối</h3>
           {statsLoading ? (
              <div className="h-48 flex items-center justify-center">
-               <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+               <Loader2 className="w-6 h-6 animate-spin text-slate-300 dark:text-slate-500" />
              </div>
           ) : statsError ? (
              <div className="h-48 flex items-center justify-center text-sm text-rose-500">
@@ -97,7 +97,7 @@ export const AdminDashboard = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }} />
+                  <Tooltip contentStyle={{ background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', color: '#e2e8f0', fontSize: '13px' }} itemStyle={{ color: '#e2e8f0' }} />
                   <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -106,17 +106,17 @@ export const AdminDashboard = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-4">
-          <h3 className="text-base font-semibold text-slate-900">Danh sách người dùng</h3>
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Danh sách người dùng</h3>
           <div className="relative w-64">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Tìm kiếm email, tên..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
         </div>
@@ -124,7 +124,7 @@ export const AdminDashboard = () => {
         <div className="overflow-x-auto min-h-[300px]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider">
                 <th className="px-5 py-3">Người dùng</th>
                 <th className="px-5 py-3">Vai trò</th>
                 <th className="px-5 py-3">Trạng thái</th>
@@ -132,7 +132,7 @@ export const AdminDashboard = () => {
                 <th className="px-5 py-3">Ngày tạo</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 text-sm">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
               {usersLoading ? (
                 <tr>
                   <td colSpan={5} className="px-5 py-10 text-center">
@@ -145,37 +145,37 @@ export const AdminDashboard = () => {
                 </tr>
               ) : usersData?.items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-slate-500 text-sm">Không tìm thấy người dùng nào phù hợp.</td>
+                  <td colSpan={5} className="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">Không tìm thấy người dùng nào phù hợp.</td>
                 </tr>
               ) : (
                 usersData?.items.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-xs shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 flex items-center justify-center font-semibold text-xs shrink-0">
                           {u.fullName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <div className="font-medium text-slate-900">{u.fullName}</div>
-                          <div className="text-xs text-slate-500">{u.email}</div>
+                          <div className="font-medium text-slate-900 dark:text-slate-100">{u.fullName}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">{u.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium ${u.role === 'Admin' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'}`}>
+                      <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium ${u.role === 'Admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>
                         {u.role}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${u.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${u.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
                         {u.isActive ? 'Active' : 'Locked'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-slate-600">
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
                       {u.connectionCount}
                     </td>
-                    <td className="px-5 py-3 text-slate-500 text-xs">
+                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400 text-xs">
                       {format(new Date(u.createdAt), 'dd MMM yyyy, HH:mm', { locale: vi })}
                     </td>
                   </tr>
@@ -186,11 +186,11 @@ export const AdminDashboard = () => {
         </div>
 
         {usersData && usersData.total > 0 && (
-          <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <PageSizeSelect value={limit} onChange={(n) => { setLimit(n); setPage(1); }} />
-              <div className="text-xs text-slate-500">
-                Trang <span className="font-medium text-slate-900">{usersData.page}</span> / <span className="font-medium text-slate-900">{Math.ceil(usersData.total / usersData.limit)}</span>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Trang <span className="font-medium text-slate-900 dark:text-slate-100">{usersData.page}</span> / <span className="font-medium text-slate-900 dark:text-slate-100">{Math.ceil(usersData.total / usersData.limit)}</span>
                 {' '} ({usersData.total} người dùng)
               </div>
             </div>
@@ -198,14 +198,14 @@ export const AdminDashboard = () => {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={usersData.page === 1 || isPlaceholderData}
-                className="p-1 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                className="p-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={usersData.page >= Math.ceil(usersData.total / usersData.limit) || isPlaceholderData}
-                className="p-1 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                className="p-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -218,14 +218,14 @@ export const AdminDashboard = () => {
 };
 
 const StatCard = ({ title, value, icon, isLoading }: { title: string; value?: number; icon: React.ReactNode; isLoading: boolean }) => (
-  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-    <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 border border-slate-100">
+  <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+    <div className="w-10 h-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-800">
       {icon}
     </div>
     <div>
-      <div className="text-sm text-slate-500 font-medium mb-0.5">{title}</div>
-      <div className="text-2xl font-bold text-slate-900">
-        {isLoading ? <div className="w-12 h-8 bg-slate-200 animate-pulse rounded"></div> : value ?? '-'}
+      <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-0.5">{title}</div>
+      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+        {isLoading ? <div className="w-12 h-8 bg-slate-200 dark:bg-slate-800 animate-pulse rounded"></div> : value ?? '-'}
       </div>
     </div>
   </div>

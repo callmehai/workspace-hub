@@ -11,6 +11,8 @@ import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } 
 import { Plus, Star, GripVertical, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
+import { useI18n } from '../hooks/useI18n';
+import type { TranslationKey } from '../i18n/translations';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -30,19 +32,19 @@ function typeLabel(t: ItemType): string {
 
 function typeTileClass(t: ItemType): string {
   const map: Record<ItemType, string> = {
-    Email: 'bg-blue-50 text-blue-700',
-    Event: 'bg-amber-50 text-amber-700',
-    File: 'bg-emerald-50 text-emerald-700',
-    Note: 'bg-slate-100 text-slate-600',
-    Ticket: 'bg-violet-50 text-violet-700',
+    Email: 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+    Event: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+    File: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+    Note: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    Ticket: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
   };
-  return map[t] ?? 'bg-gray-100 text-gray-700';
+  return map[t] ?? 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300';
 }
 
-const COLUMNS: { title: string, status: ItemStatus, dotColor: string }[] = [
-  { title: 'Chưa xem', status: 'Inbox', dotColor: 'bg-amber-500' },
-  { title: 'Đang xử lý', status: 'Doing', dotColor: 'bg-blue-500' },
-  { title: 'Hoàn thành', status: 'Done', dotColor: 'bg-emerald-500' },
+const COLUMNS: { titleKey: TranslationKey, status: ItemStatus, dotColor: string }[] = [
+  { titleKey: 'kanban.colInbox', status: 'Inbox', dotColor: 'bg-amber-500' },
+  { titleKey: 'kanban.colDoing', status: 'Doing', dotColor: 'bg-blue-500' },
+  { titleKey: 'kanban.colDone', status: 'Done', dotColor: 'bg-emerald-500' },
 ];
 
 /** Số thẻ load mỗi lần cho 1 cột — bấm "Tải thêm" ở đáy cột để lấy tiếp (không còn cap 100). */
@@ -51,6 +53,7 @@ const COL_PAGE_SIZE = 30;
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [searchParams] = useSearchParams();
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect, hết nháy header khi đổi view)
@@ -249,7 +252,7 @@ export const KanbanBoard = () => {
     : null;
 
   return (
-    <div className="h-full flex flex-col min-w-0 overflow-hidden bg-slate-50 text-slate-900">
+    <div className="h-full flex flex-col min-w-0 overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <div className="max-w-[1400px] mx-auto px-6 py-5 w-full flex flex-col flex-1 min-h-0">
 
         {/* ── Toolbar dùng chung với view Danh sách — layout GIỐNG HỆT khi đổi view ── */}
@@ -257,7 +260,7 @@ export const KanbanBoard = () => {
           view="board"
           folder={currentFolder}
           folderId={selectedFolderId}
-          subtitle="Bảng Kanban · kéo-thả thẻ để đổi trạng thái"
+          subtitle={t('kanban.subtitle')}
           statusFilter={statusFilter}
           onStatusFilter={setStatusFilter}
           typeFilter={typeFilter}
@@ -271,14 +274,14 @@ export const KanbanBoard = () => {
         {/* Board content */}
         <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
           {isError ? (
-            <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl bg-white p-8 text-center max-w-md mx-auto">
-              <div className="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mb-4">
+            <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 p-8 text-center max-w-md mx-auto">
+              <div className="w-12 h-12 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-500 flex items-center justify-center mb-4">
                 <AlertCircle className="w-6 h-6" />
               </div>
-              <span className="text-slate-900 text-sm font-semibold mb-1">Không tải được bảng</span>
-              <p className="text-[13px] text-slate-500 mb-4">Mất kết nối tới máy chủ. Vui lòng thử lại.</p>
-              <button onClick={refetchAll} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg">
-                Thử lại
+              <span className="text-slate-900 dark:text-slate-100 text-sm font-semibold mb-1">{t('kanban.loadError')}</span>
+              <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">{t('kanban.loadErrorHint')}</p>
+              <button onClick={refetchAll} className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-medium rounded-lg">
+                {t('common.retry')}
               </button>
             </div>
           ) : (
@@ -293,8 +296,8 @@ export const KanbanBoard = () => {
                   <div key={col.status} className="flex-1 w-80 flex flex-col min-h-0">
                     <div className="flex items-center gap-2 px-1 mb-2">
                       <span className={`w-2 h-2 rounded-full ${col.dotColor}`}></span>
-                      <span className="text-[14px] font-semibold text-slate-900">{col.title}</span>
-                      <span className="text-[12px] font-semibold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">
+                      <span className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">{t(col.titleKey)}</span>
+                      <span className="text-[12px] font-semibold text-slate-500 bg-slate-200 dark:bg-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full">
                         {isColLoading ? '…' : colTotal}
                       </span>
                     </div>
@@ -304,15 +307,15 @@ export const KanbanBoard = () => {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, col.status)}
                       className={`flex-1 flex flex-col gap-2.5 p-2.5 rounded-xl min-h-[160px] overflow-y-auto transition-colors border-2 ${
-                        isOver ? 'bg-indigo-50 border-indigo-400 border-dashed' : 'bg-slate-100/80 border-transparent'
+                        isOver ? 'bg-brand-50 border-brand-400 border-dashed dark:bg-brand-500/10 dark:border-brand-500' : 'bg-slate-100/80 border-transparent dark:bg-slate-900/60'
                       }`}
                     >
                       {isColLoading ? (
                         Array.from({ length: 3 }).map((_, i) => (
-                          <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 animate-pulse">
-                            <div className="h-4 bg-slate-200 rounded w-1/4 mb-3"></div>
-                            <div className="h-3 bg-slate-200 rounded w-3/4 mb-2"></div>
-                            <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                          <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 animate-pulse">
+                            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4 mb-3"></div>
+                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-2"></div>
+                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
                           </div>
                         ))
                       ) : (
@@ -329,14 +332,14 @@ export const KanbanBoard = () => {
                             onDragStart={(e) => handleDragStart(e, item.id)}
                             onDragEnd={handleDragEnd}
                             onClick={() => setSelectedItemId(item.id)}
-                            className={`shrink-0 border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 transition-all relative overflow-hidden ${
+                            className={`shrink-0 border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all relative overflow-hidden ${
                               draggingId === item.id ? 'opacity-40 shadow-none' : 'opacity-100 shadow-sm'
                             } ${
                               selectedItemIds.has(item.id)
-                                ? 'bg-indigo-50/40 border-indigo-200'
+                                ? 'bg-brand-50/40 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/40'
                                 : readEmail
-                                  ? 'bg-slate-50 border-slate-200'
-                                  : 'bg-white border-slate-200'
+                                  ? 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700'
+                                  : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'
                             }`}
                           >
                             <div className="flex justify-between items-center mb-2">
@@ -352,16 +355,16 @@ export const KanbanBoard = () => {
                                     setSelectedItemIds(newSet);
                                   }}
                                   onChange={() => {}}
-                                  className={`w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 ${selectedItemIds.has(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                                  className={`w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600 ${selectedItemIds.has(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
                                 />
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
                                   {typeIcon(item.type, 'w-3.5 h-3.5')}
                                   {typeLabel(item.type)}
                                 </span>
                                 {unread && (
-                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-blue-600" aria-label="Chưa đọc">
+                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-blue-600 dark:text-blue-400" aria-label={t('kanban.unread')}>
                                     <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                    Chưa đọc
+                                    {t('kanban.unread')}
                                   </span>
                                 )}
                                 {item.folderIds?.filter(fId => fId !== selectedFolderId).map(fId => {
@@ -380,7 +383,7 @@ export const KanbanBoard = () => {
                                       e.stopPropagation();
                                       setAddingFolderItemId(addingFolderItemId === item.id ? null : item.id);
                                     }}
-                                    className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors opacity-0 group-hover:opacity-100"
+                                    className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors opacity-0 group-hover:opacity-100"
                                     title="Thêm thư mục"
                                   >
                                     <Plus className="w-2.5 h-2.5" />
@@ -388,9 +391,9 @@ export const KanbanBoard = () => {
                                   </button>
 
                                   {addingFolderItemId === item.id && (
-                                    <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="absolute top-full left-0 mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
                                       {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
-                                        <div className="px-3 py-1.5 text-[11px] text-slate-500 text-center">Không còn thư mục</div>
+                                        <div className="px-3 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 text-center">Không còn thư mục</div>
                                       ) : (
                                         folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
                                           <button
@@ -401,7 +404,7 @@ export const KanbanBoard = () => {
                                               setAddingFolderItemId(null);
                                             }}
                                             disabled={addToFolderMutation.isPending}
-                                            className="w-full text-left px-3 py-1.5 text-[11.5px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                                            className="w-full text-left px-3 py-1.5 text-[11.5px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
                                           >
                                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
                                             <span className="truncate">{f.name}</span>
@@ -417,12 +420,12 @@ export const KanbanBoard = () => {
                               </span>
                             </div>
                             <h4 className={`text-[13.5px] leading-snug mb-2 line-clamp-2 ${
-                              unread ? 'font-bold text-slate-900' : readEmail ? 'font-medium text-slate-600' : 'font-medium text-slate-900'
+                              unread ? 'font-bold text-slate-900 dark:text-slate-100' : readEmail ? 'font-medium text-slate-600 dark:text-slate-400' : 'font-medium text-slate-900 dark:text-slate-200'
                             }`}>
                               {item.title}
                             </h4>
                             <div className="flex items-center justify-end gap-2 mt-auto pt-1">
-                              <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 shrink-0">
+                              <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
                                 {formatTime(item.occurredAt)}
                               </span>
@@ -433,8 +436,8 @@ export const KanbanBoard = () => {
                       )}
 
                       {!isColLoading && colItems.length === 0 && (
-                        <div className="flex items-center justify-center p-4 border-[1.5px] border-dashed border-slate-300 rounded-xl text-[12.5px] text-slate-400 text-center h-20">
-                          Kéo thẻ vào đây
+                        <div className="flex items-center justify-center p-4 border-[1.5px] border-dashed border-slate-300 dark:border-slate-700 rounded-xl text-[12.5px] text-slate-400 dark:text-slate-500 text-center h-20">
+                          {t('kanban.dropHere')}
                         </div>
                       )}
 
@@ -443,11 +446,11 @@ export const KanbanBoard = () => {
                         <button
                           onClick={() => q.fetchNextPage()}
                           disabled={q.isFetchingNextPage}
-                          className="shrink-0 w-full py-2 rounded-lg border border-slate-200 bg-white text-[12.5px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors disabled:opacity-50"
+                          className="shrink-0 w-full py-2 rounded-lg border border-slate-200 bg-white text-[12.5px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                         >
                           {q.isFetchingNextPage
-                            ? 'Đang tải…'
-                            : `Tải thêm (${colItems.length}/${colTotal})`}
+                            ? t('kanban.loadingMore')
+                            : `${t('kanban.loadMore')} (${colItems.length}/${colTotal})`}
                         </button>
                       )}
                     </div>

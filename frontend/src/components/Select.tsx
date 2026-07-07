@@ -46,22 +46,22 @@ export function Select({ value, onChange, options, placeholder = 'Chọn...', cl
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className={`w-full flex items-center justify-between gap-2 px-3 border rounded-lg text-sm bg-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-          open ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-300 hover:border-gray-400'
+        className={`w-full flex items-center justify-between gap-2 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+          open ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-300 hover:border-gray-400 dark:border-slate-700 dark:hover:border-slate-600'
         } ${className}`}
       >
-        <span className={`truncate text-left ${selected ? 'text-gray-800' : 'text-gray-400'}`}>
+        <span className={`truncate text-left ${selected ? 'text-gray-800 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}`}>
           {selected ? selected.label : placeholder}
         </span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className={`absolute z-30 w-full min-w-max bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
+        <div className={`absolute z-30 w-full min-w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
           dropUp ? 'bottom-full mb-1.5' : 'mt-1.5'
         }`}>
           {options.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-gray-400">Không có lựa chọn</div>
+            <div className="px-3 py-2 text-sm text-gray-400 dark:text-slate-500">Không có lựa chọn</div>
           ) : (
             options.map((o) => {
               const active = o.value === value;
@@ -74,7 +74,7 @@ export function Select({ value, onChange, options, placeholder = 'Chọn...', cl
                     setOpen(false);
                   }}
                   className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors ${
-                    active ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                    active ? 'bg-brand-50 text-brand-700 font-medium dark:bg-brand-500/15 dark:text-brand-300' : 'text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-700'
                   }`}
                 >
                   <span className="truncate">{o.label}</span>

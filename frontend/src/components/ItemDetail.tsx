@@ -20,18 +20,18 @@ interface ItemDetailProps {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  Inbox: 'bg-slate-100 text-slate-600 border border-slate-200',
-  Doing: 'bg-blue-50 text-blue-700 border border-blue-100',
-  Done: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  Inbox: 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+  Doing: 'bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20',
+  Done: 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
 };
 const STATUS_DOT: Record<string, string> = { Inbox: 'bg-slate-400', Doing: 'bg-blue-500', Done: 'bg-emerald-500' };
 
 const TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; bg: string }> = {
-  Email:  { label: 'Email',    icon: <Mail className="w-5 h-5" />,      bg: 'bg-blue-50 text-blue-600' },
-  Event:  { label: 'Sự kiện', icon: <Calendar className="w-5 h-5" />,   bg: 'bg-amber-50 text-amber-600' },
-  File:   { label: 'Tệp',     icon: <FileText className="w-5 h-5" />,   bg: 'bg-emerald-50 text-emerald-600' },
-  Note:   { label: 'Ghi chú', icon: <StickyNote className="w-5 h-5" />, bg: 'bg-slate-100 text-slate-500' },
-  Ticket: { label: 'Ticket',  icon: <Briefcase className="w-5 h-5" />,  bg: 'bg-purple-50 text-purple-600' },
+  Email:  { label: 'Email',    icon: <Mail className="w-5 h-5" />,      bg: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400' },
+  Event:  { label: 'Sự kiện', icon: <Calendar className="w-5 h-5" />,   bg: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400' },
+  File:   { label: 'Tệp',     icon: <FileText className="w-5 h-5" />,   bg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' },
+  Note:   { label: 'Ghi chú', icon: <StickyNote className="w-5 h-5" />, bg: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+  Ticket: { label: 'Ticket',  icon: <Briefcase className="w-5 h-5" />,  bg: 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400' },
 };
 
 export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDeleted }) => {
@@ -199,11 +199,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
-        <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
-        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex items-center justify-center" style={{ animation: 'wh-slide-in .25s ease' }}>
+        <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
+        <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex items-center justify-center" style={{ animation: 'wh-slide-in .25s ease' }}>
           <div className="flex flex-col items-center space-y-3">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-            <span className="text-sm font-medium text-slate-500">Đang tải chi tiết...</span>
+            <Loader2 className="w-8 h-8 animate-spin text-brand-600 dark:text-brand-400" />
+            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Đang tải chi tiết...</span>
           </div>
         </div>
       </div>
@@ -213,14 +213,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   if (isError || !item) {
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
-        <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
-        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500" style={{ animation: 'wh-slide-in .25s ease' }}>
-          <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
-          <h3 className="text-base font-semibold text-slate-850 mb-1">Không thể tải thông tin chi tiết</h3>
-          <p className="text-xs text-slate-450 text-center max-w-xs mb-4">Vui lòng thử lại sau hoặc tải lại trang.</p>
+        <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
+        <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500 dark:text-slate-400" style={{ animation: 'wh-slide-in .25s ease' }}>
+          <AlertCircle className="w-12 h-12 text-rose-500 dark:text-rose-400 mb-3" />
+          <h3 className="text-base font-semibold text-slate-850 dark:text-slate-100 mb-1">Không thể tải thông tin chi tiết</h3>
+          <p className="text-xs text-slate-450 dark:text-slate-500 text-center max-w-xs mb-4">Vui lòng thử lại sau hoặc tải lại trang.</p>
           <button
             onClick={() => refetch()}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+            className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
           >
             Tải lại
           </button>
@@ -236,10 +236,10 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const statusLabel = getStatusLabel(item);
   // Màu: Ticket trung tính theo category (xám/xanh dương/xanh lá). Email/khác: Inbox chưa xử lý = cam, đã xem = xám.
   const statusColor = isTicket
-    ? (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200')
+    ? (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700')
     : item.status === 'Inbox'
-      ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200')
-      : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500');
+      ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20')
+      : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400');
   const statusDot = isTicket
     ? (STATUS_DOT[item.status] ?? 'bg-slate-400')
     : item.status === 'Inbox'
@@ -262,8 +262,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             {metadata.labels.map((label: string, idx: number) => (
               <span key={label} className="inline-flex items-center gap-0.5">
                 {label}
-                <button onClick={() => handleRemoveLabel(label)} className="text-slate-400 hover:text-rose-500 ml-0.5">&times;</button>
-                {idx < metadata.labels.length - 1 && <span className="text-slate-900">,</span>}
+                <button onClick={() => handleRemoveLabel(label)} className="text-slate-400 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 ml-0.5">&times;</button>
+                {idx < metadata.labels.length - 1 && <span className="text-slate-900 dark:text-slate-100">,</span>}
               </span>
             ))}
           </div>
@@ -281,7 +281,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         value: (
           <div className="flex flex-wrap gap-1 mt-1">
             {metadata.attendees.map((email: string) => (
-              <span key={email} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px]">
+              <span key={email} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded text-[11px]">
                 {email}
               </span>
             ))}
@@ -311,7 +311,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         value: (
           <div className="flex flex-wrap gap-1 mt-1">
             {metadata.labels.map((l: string) => (
-              <span key={l} className="px-2 py-0.5 bg-purple-50 text-purple-750 border border-purple-100 rounded text-[11px]">
+              <span key={l} className="px-2 py-0.5 bg-purple-50 dark:bg-purple-500/10 text-purple-750 dark:text-purple-400 border border-purple-100 dark:border-purple-500/20 rounded text-[11px]">
                 {l}
               </span>
             ))}
@@ -412,13 +412,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
-      <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
+      <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
 
       {/* Drawer */}
-      <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col" style={{ animation: 'wh-slide-in .25s ease' }}>
+      <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col" style={{ animation: 'wh-slide-in .25s ease' }}>
 
         {/* Header */}
-        <div className="px-5 py-[18px] border-b border-slate-200 shrink-0">
+        <div className="px-5 py-[18px] border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="flex items-start justify-between mb-3.5">
             <div className="flex items-center gap-3">
               <div className={`w-[42px] h-[42px] rounded-xl flex items-center justify-center shrink-0 ${tInfo.bg}`}>
@@ -432,7 +432,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </span>
               </div>
             </div>
-            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg shrink-0 transition-colors -mr-1.5 -mt-1.5">
+            <button onClick={onClose} className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg shrink-0 transition-colors -mr-1.5 -mt-1.5">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -442,7 +442,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 type="text"
                 value={fileName}
                 onChange={e => setFileName(e.target.value)}
-                className="flex-1 min-w-0 bg-white border border-indigo-400 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                className="flex-1 min-w-0 bg-white dark:bg-slate-800 border border-indigo-400 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 onKeyDown={e => {
                   if (e.key === 'Enter') handleRenameFile();
                   else if (e.key === 'Escape') setIsRenamingFile(false);
@@ -452,13 +452,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               <button
                 onClick={handleRenameFile}
                 disabled={patchMutation.isPending}
-                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                className="p-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
               >
                 {patchMutation.isPending ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Check className="w-4.5 h-4.5" />}
               </button>
             </div>
           ) : (
-            <h2 className="text-[20px] font-bold text-slate-800 leading-[1.35] m-0">{item.title}</h2>
+            <h2 className="text-[20px] font-bold text-slate-800 dark:text-slate-100 leading-[1.35] m-0">{item.title}</h2>
           )}
         </div>
 
@@ -470,13 +470,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               const f = folders.find((fol: FolderResponse) => fol.id === fId);
               if (!f) return null;
               return (
-                <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 pl-[11px] pr-1 py-1 rounded-full group">
+                <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 pl-[11px] pr-1 py-1 rounded-full group">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
                   <span className="mr-0.5">{f.name}</span>
-                  <button 
+                  <button
                     onClick={() => removeFromFolderMutation.mutate(f.id)}
                     disabled={removeFromFolderMutation.isPending}
-                    className="p-0.5 rounded-full text-slate-400 hover:bg-slate-200 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-0.5 rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-rose-500 dark:hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -488,7 +488,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             <div className="relative">
               <button 
                 onClick={() => setIsAddingToFolder(!isAddingToFolder)}
-                className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors text-[12px] font-medium"
+                className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-[12px] font-medium"
                 title="Thêm vào thư mục"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -496,9 +496,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               </button>
               
               {isAddingToFolder && (
-                <div className="absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute top-full left-0 mt-1.5 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
                   {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-slate-500 text-center">Không còn thư mục nào</div>
+                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">Không còn thư mục nào</div>
                   ) : (
                     folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
                       <button
@@ -508,7 +508,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                           setIsAddingToFolder(false);
                         }}
                         disabled={addToFolderMutation.isPending}
-                        className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                        className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
                       >
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
                         <span className="truncate">{f.name}</span>
@@ -522,67 +522,67 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {/* Form edit for Event */}
           {isEditing && item.type === 'Event' ? (
-            <div className="border border-slate-200 rounded-[10px] p-4 bg-slate-50/50 space-y-4 mb-[18px]">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chỉnh sửa sự kiện</h3>
+            <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] p-4 bg-slate-50/50 dark:bg-slate-800/50 space-y-4 mb-[18px]">
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Chỉnh sửa sự kiện</h3>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Tiêu đề sự kiện</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Tiêu đề sự kiện</label>
                 <input
                   type="text"
                   value={eventForm.title}
                   onChange={e => setEventForm({...eventForm, title: e.target.value})}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Bắt đầu (Local)</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Bắt đầu (Local)</label>
                   <input
                     type="datetime-local"
                     value={eventForm.start}
                     onChange={e => setEventForm({...eventForm, start: e.target.value})}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Kết thúc (Local)</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Kết thúc (Local)</label>
                   <input
                     type="datetime-local"
                     value={eventForm.end}
                     onChange={e => setEventForm({...eventForm, end: e.target.value})}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Địa điểm</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Địa điểm</label>
                 <input
                   type="text"
                   value={eventForm.location}
                   onChange={e => setEventForm({...eventForm, location: e.target.value})}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Người tham gia (Ngăn cách bởi dấu phẩy)</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Người tham gia (Ngăn cách bởi dấu phẩy)</label>
                 <input
                   type="text"
                   value={eventForm.attendees}
                   onChange={e => setEventForm({...eventForm, attendees: e.target.value})}
                   placeholder="vd1@gmail.com, vd2@gmail.com"
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="px-3.5 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-650 hover:bg-slate-100 transition-colors"
+                  className="px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-650 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   onClick={handleSaveEvent}
                   disabled={patchMutation.isPending}
-                  className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-750 transition-colors flex items-center gap-1.5"
+                  className="px-3.5 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-750 transition-colors flex items-center gap-1.5"
                 >
                   {patchMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Lưu</span>
@@ -592,11 +592,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           ) : (
             /* Metadata Rows */
             rows.length > 0 && (
-              <div className="border border-slate-200 rounded-[10px] overflow-hidden mb-[18px]">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] overflow-hidden mb-[18px]">
                 {rows.map((row, i) => (
-                  <div key={i} className="flex gap-3 px-[13px] py-[9px] border-b border-slate-200 last:border-b-0">
-                    <span className="text-[12.5px] text-slate-400 w-[118px] shrink-0">{row.label}</span>
-                    <span className="text-[12.5px] text-slate-900 flex-1 break-words">{row.value}</span>
+                  <div key={i} className="flex gap-3 px-[13px] py-[9px] border-b border-slate-200 dark:border-slate-800 last:border-b-0">
+                    <span className="text-[12.5px] text-slate-400 dark:text-slate-500 w-[118px] shrink-0">{row.label}</span>
+                    <span className="text-[12.5px] text-slate-900 dark:text-slate-100 flex-1 break-words">{row.value}</span>
                   </div>
                 ))}
               </div>
@@ -604,63 +604,63 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           )}
 
           {item.type === 'Email' && isAddingLabel && (
-            <div className="mb-4 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              <span className="text-[12px] font-semibold text-slate-500 shrink-0">Thêm nhãn:</span>
+            <div className="mb-4 flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+              <span className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">Thêm nhãn:</span>
               <input
                 type="text"
                 value={newLabelName}
                 onChange={e => setNewLabelName(e.target.value)}
                 placeholder="NHÃN MỚI"
-                className="bg-white border border-slate-200 rounded px-2 py-1 text-[13px] focus:outline-none focus:border-indigo-500 flex-1 min-w-0"
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-[13px] text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 flex-1 min-w-0"
                 onKeyDown={e => {
                   if (e.key === 'Enter') { handleAddLabel(); setIsAddingLabel(false); }
                   else if (e.key === 'Escape') setIsAddingLabel(false);
                 }}
                 autoFocus
               />
-              <button onClick={() => { handleAddLabel(); setIsAddingLabel(false); }} className="text-[12px] text-indigo-650 hover:text-indigo-800 font-semibold px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded transition-colors shrink-0">Thêm</button>
-              <button onClick={() => setIsAddingLabel(false)} className="text-[12px] text-slate-500 hover:text-slate-800 font-semibold px-2.5 py-1.5 hover:bg-slate-100 rounded transition-colors shrink-0">Hủy</button>
+              <button onClick={() => { handleAddLabel(); setIsAddingLabel(false); }} className="text-[12px] text-indigo-650 dark:text-brand-400 hover:text-indigo-800 dark:hover:text-brand-300 font-semibold px-2.5 py-1.5 bg-indigo-50 dark:bg-brand-500/10 hover:bg-indigo-100 dark:hover:bg-brand-500/20 rounded transition-colors shrink-0">Thêm</button>
+              <button onClick={() => setIsAddingLabel(false)} className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-semibold px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors shrink-0">Hủy</button>
             </div>
           )}
 
           {/* Body Content */}
-          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 mb-2">Nội dung</div>
-          <div className="text-[13.5px] text-slate-900 leading-[1.65] whitespace-pre-wrap bg-slate-50 rounded-[10px] p-[14px]">
-            {bodyText || <span className="text-slate-400 italic">Không có nội dung</span>}
+          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">Nội dung</div>
+          <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
+            {bodyText || <span className="text-slate-400 dark:text-slate-500 italic">Không có nội dung</span>}
           </div>
         </div>
 
         {/* Footer actions — per type */}
-        <div className="shrink-0 border-t border-slate-200 px-5 py-[14px] flex flex-wrap gap-2">
+        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 px-5 py-[14px] flex flex-wrap gap-2">
           {item.type === 'Email' && (
             <>
               <button
                 onClick={() => patchMutation.mutate({ isUnread: !isUnread })}
                 disabled={patchMutation.isPending}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
               >
-                {isUnread ? <Eye className="w-4 h-4 text-slate-500" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
+                {isUnread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
                 <span>{isUnread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc'}</span>
               </button>
               <button
                 onClick={() => patchMutation.mutate({ isStarred: !isStarred })}
                 disabled={patchMutation.isPending}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
               >
-                <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450'}`} />
+                <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450 dark:text-slate-500'}`} />
                 <span>{isStarred ? 'Bỏ quan trọng' : 'Quan trọng'}</span>
               </button>
               <button
                 onClick={() => setIsAddingLabel(true)}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
-                <Tag className="w-4 h-4 text-slate-400" /><span>Nhãn</span>
+                <Tag className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>Nhãn</span>
               </button>
               <button
                 onClick={() => navigate('/scheduled')}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
-                <Send className="w-4 h-4 text-slate-400" /><span>Soạn mới</span>
+                <Send className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>Soạn mới</span>
               </button>
               <button
                 onClick={() => {
@@ -669,7 +669,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   }
                 }}
                 disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
                 {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </button>
@@ -681,7 +681,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               {!isEditing && (
                 <button
                   onClick={startEditingEvent}
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-650 text-white hover:bg-indigo-755 shadow-sm transition-colors"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-650 text-white hover:bg-brand-755 shadow-sm transition-colors"
                 >
                   <Edit3 className="w-4 h-4" /><span>Sửa sự kiện</span>
                 </button>
@@ -691,9 +691,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   href={metadata.meetUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
                 >
-                  <ExternalLink className="w-4 h-4 text-slate-500" /><span>Google Meet</span>
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>Google Meet</span>
                 </a>
               )}
               <button
@@ -703,7 +703,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   }
                 }}
                 disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
                 {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </button>
@@ -714,7 +714,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             <>
               <button
                 onClick={startRenamingFile}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
+                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
               >
                 <Edit3 className="w-4 h-4" /><span>Đổi tên</span>
               </button>
@@ -723,9 +723,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   href={metadata.webViewLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
                 >
-                  <ExternalLink className="w-4 h-4 text-slate-500" /><span>Mở trên Drive</span>
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>Mở trên Drive</span>
                 </a>
               )}
               <button
@@ -735,7 +735,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   }
                 }}
                 disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
                 {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </button>

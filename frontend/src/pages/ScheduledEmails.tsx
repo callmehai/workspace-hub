@@ -16,18 +16,18 @@ import { PageSizeSelect } from '../components/PageSizeSelect';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getStatusConfig(status?: string) {
-  if (!status) return { label: 'Không xác định', fg: 'text-gray-500', bg: 'bg-gray-100', dot: 'bg-gray-400' };
+  if (!status) return { label: 'Không xác định', fg: 'text-gray-500 dark:text-slate-400', bg: 'bg-gray-100 dark:bg-slate-800', dot: 'bg-gray-400' };
   switch (status.toLowerCase()) {
     case 'pending':
-      return { label: 'Chờ gửi', fg: 'text-amber-600', bg: 'bg-amber-100', dot: 'bg-amber-600' };
+      return { label: 'Chờ gửi', fg: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-500/10', dot: 'bg-amber-600' };
     case 'sent':
-      return { label: 'Đã gửi', fg: 'text-emerald-700', bg: 'bg-emerald-100', dot: 'bg-emerald-600' };
+      return { label: 'Đã gửi', fg: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-500/10', dot: 'bg-emerald-600' };
     case 'failed':
-      return { label: 'Thất bại', fg: 'text-red-700', bg: 'bg-red-100', dot: 'bg-red-600' };
+      return { label: 'Thất bại', fg: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-500/10', dot: 'bg-red-600' };
     case 'cancelled':
-      return { label: 'Đã huỷ', fg: 'text-gray-500', bg: 'bg-gray-100', dot: 'bg-gray-400' };
+      return { label: 'Đã huỷ', fg: 'text-gray-500 dark:text-slate-400', bg: 'bg-gray-100 dark:bg-slate-800', dot: 'bg-gray-400' };
     default:
-      return { label: status, fg: 'text-gray-600', bg: 'bg-gray-100', dot: 'bg-gray-500' };
+      return { label: status, fg: 'text-gray-600 dark:text-slate-400', bg: 'bg-gray-100 dark:bg-slate-800', dot: 'bg-gray-500' };
   }
 }
 
@@ -53,11 +53,11 @@ const DetailModal = ({ email, connectionName, onClose, onCancel, isCancelling }:
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100 dark:border-slate-800">
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-semibold text-gray-900 leading-tight mb-2 pr-6" title={email.subject}>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100 leading-tight mb-2 pr-6" title={email.subject}>
               {email.subject || '(Không tiêu đề)'}
             </h2>
             <span className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${conf.bg} ${conf.fg}`}>
@@ -67,83 +67,83 @@ const DetailModal = ({ email, connectionName, onClose, onCancel, isCancelling }:
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 dark:text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Meta */}
-        <div className="px-6 py-4 space-y-3 border-b border-gray-100">
+        <div className="px-6 py-4 space-y-3 border-b border-gray-100 dark:border-slate-800">
           <div className="flex items-start gap-2.5">
-            <Users className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+            <Users className="w-4 h-4 text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Đến</p>
-              <p className="text-sm text-gray-800">{email.to.join(', ')}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mb-0.5">Đến</p>
+              <p className="text-sm text-gray-800 dark:text-slate-200">{email.to.join(', ')}</p>
             </div>
           </div>
           {email.cc.length > 0 && (
             <div className="flex items-start gap-2.5">
-              <Users className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+              <Users className="w-4 h-4 text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-gray-400 mb-0.5">Cc</p>
-                <p className="text-sm text-gray-800">{email.cc.join(', ')}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mb-0.5">Cc</p>
+                <p className="text-sm text-gray-800 dark:text-slate-200">{email.cc.join(', ')}</p>
               </div>
             </div>
           )}
           {email.bcc.length > 0 && (
             <div className="flex items-start gap-2.5">
-              <Users className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+              <Users className="w-4 h-4 text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-gray-400 mb-0.5">Bcc</p>
-                <p className="text-sm text-gray-800">{email.bcc.join(', ')}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mb-0.5">Bcc</p>
+                <p className="text-sm text-gray-800 dark:text-slate-200">{email.bcc.join(', ')}</p>
               </div>
             </div>
           )}
           <div className="flex items-start gap-2.5">
-            <Calendar className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+            <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Thời gian gửi</p>
-              <p className="text-sm text-gray-800">{sendAtLocal}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mb-0.5">Thời gian gửi</p>
+              <p className="text-sm text-gray-800 dark:text-slate-200">{sendAtLocal}</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5">
-            <Mail className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+            <Mail className="w-4 h-4 text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Kết nối</p>
-              <p className="text-sm text-gray-800">Gmail · {connectionName}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mb-0.5">Kết nối</p>
+              <p className="text-sm text-gray-800 dark:text-slate-200">Gmail · {connectionName}</p>
             </div>
           </div>
         </div>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <p className="text-xs text-gray-400 mb-2">Nội dung</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mb-2">Nội dung</p>
           {email.bodyHtml ? (() => {
             const isHtml = /<[a-z][\s\S]*>/i.test(email.bodyHtml);
             return (
               <div
-                className={`bg-gray-50 rounded-xl p-4 border border-gray-100 html-content overflow-hidden ${!isHtml ? 'whitespace-pre-wrap' : ''}`}
+                className={`bg-gray-50 dark:bg-slate-800 rounded-xl p-4 border border-gray-100 dark:border-slate-800 html-content overflow-hidden ${!isHtml ? 'whitespace-pre-wrap' : ''}`}
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.bodyHtml) }}
               />
             );
           })() : (
-            <p className="text-sm text-gray-400 italic">(Không có nội dung)</p>
+            <p className="text-sm text-gray-400 dark:text-slate-500 italic">(Không có nội dung)</p>
           )}
         </div>
 
         {/* Error */}
         {email.lastError && (
-          <div className="mx-6 mb-3 text-xs text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl">
+          <div className="mx-6 mb-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 p-3 rounded-xl">
             <span className="font-medium">Lỗi:</span> {email.lastError}
           </div>
         )}
 
         {/* Footer */}
-        <div className="px-6 pb-5 pt-3 flex justify-end gap-3 border-t border-gray-100">
+        <div className="px-6 pb-5 pt-3 flex justify-end gap-3 border-t border-gray-100 dark:border-slate-800">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-200 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
           >
             Đóng
           </button>
@@ -301,16 +301,16 @@ export const ScheduledEmails = () => {
       <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <PageSizeSelect value={limit} onChange={(n) => { setLimit(n); setPage(1); }} />
-          <span className="text-sm text-gray-500">{startItem}–{endItem} trên {totalItems} mục</span>
+          <span className="text-sm text-gray-500 dark:text-slate-400">{startItem}–{endItem} trên {totalItems} mục</span>
         </div>
         <div className="flex items-center space-x-1">
-          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <ChevronLeft className="w-4 h-4" />
           </button>
           {pageButtons.map((p) => (
-            <button key={p} onClick={() => setPage(p)} className={`w-7 h-7 flex items-center justify-center rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}>{p}</button>
+            <button key={p} onClick={() => setPage(p)} className={`w-7 h-7 flex items-center justify-center rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-gray-200 dark:bg-slate-800 text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'}`}>{p}</button>
           ))}
-          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -318,8 +318,8 @@ export const ScheduledEmails = () => {
     );
   };
 
-  const inputClass = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors";
-  const labelClass = "block text-xs font-medium text-gray-500 mb-1.5";
+  const inputClass = "w-full h-9 px-3 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors";
+  const labelClass = "block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5";
 
   return (
     <>
@@ -335,18 +335,18 @@ export const ScheduledEmails = () => {
 
       <div className="p-5 md:p-8 max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col overflow-hidden">
         <div className="mb-6 shrink-0">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Email hẹn giờ</h1>
-          <p className="text-sm text-gray-500">Soạn và lên lịch gửi email tự động qua Gmail đã kết nối.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-1">Email hẹn giờ</h1>
+          <p className="text-sm text-gray-500 dark:text-slate-400">Soạn và lên lịch gửi email tự động qua Gmail đã kết nối.</p>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6 items-stretch flex-1 min-h-0">
           {/* Compose Form */}
           <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
-            <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900">
-              <Pencil className="w-4 h-4 text-gray-400" />
+            <div className="flex items-center gap-2 mb-3.5 shrink-0 text-gray-900 dark:text-slate-100">
+              <Pencil className="w-4 h-4 text-gray-400 dark:text-slate-500" />
               <h2 className="text-base font-semibold">Soạn email</h2>
             </div>
-            <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-xl p-5 md:p-6 shadow-sm flex flex-col overflow-y-auto">
+            <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-5 md:p-6 shadow-sm flex flex-col overflow-y-auto">
               <label className={`${labelClass} shrink-0`}>Người nhận</label>
               <div className="shrink-0">
                 <EmailChipsInput value={cTo} onChange={setCTo} placeholder="Nhập email rồi Enter / phẩy hoặc bấm +" />
@@ -390,14 +390,14 @@ export const ScheduledEmails = () => {
                     aria-checked={includeSignature}
                     disabled={!signature}
                     onClick={() => setIncludeSignature((v) => !v)}
-                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 disabled:opacity-40 ${includeSignature && signature ? 'bg-brand-600' : 'bg-gray-300'}`}
+                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 disabled:opacity-40 ${includeSignature && signature ? 'bg-brand-600' : 'bg-gray-300 dark:bg-slate-700'}`}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${includeSignature && signature ? 'translate-x-4' : ''}`} />
                   </button>
-                  <span className="text-sm text-gray-700">Kèm chữ ký Gmail</span>
+                  <span className="text-sm text-gray-700 dark:text-slate-200">Kèm chữ ký Gmail</span>
                 </label>
                 {!signature && (
-                  <p className="mt-1.5 text-xs text-gray-400 leading-relaxed">
+                  <p className="mt-1.5 text-xs text-gray-400 dark:text-slate-500 leading-relaxed">
                     Tài khoản chưa đặt chữ ký, hoặc connection cũ chưa có quyền đọc chữ ký — đặt chữ ký trong Gmail và <strong>kết nối lại</strong> để dùng.
                   </p>
                 )}
@@ -439,7 +439,7 @@ export const ScheduledEmails = () => {
           {/* Scheduled List */}
           <div className="flex-1 w-full lg:w-1/2 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3.5 shrink-0">
-              <h2 className="text-base font-semibold text-gray-900">Lịch đã đặt</h2>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Lịch đã đặt</h2>
               <div className="w-36">
                 <Select
                   value={statusFilter}
@@ -457,31 +457,31 @@ export const ScheduledEmails = () => {
             </div>
 
             {isError ? (
-              <div className="bg-white border border-red-200 rounded-xl p-8 text-center shadow-sm">
-                <div className="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-3">
+              <div className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-500/20 rounded-xl p-8 text-center shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 flex items-center justify-center mx-auto mb-3">
                   <AlertCircle className="w-6 h-6" />
                 </div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">Không tải được lịch</h3>
-                <p className="text-xs text-gray-500 mb-4">Vui lòng thử lại sau.</p>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-1">Không tải được lịch</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Vui lòng thử lại sau.</p>
                 <button onClick={() => refetch()} className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700">Thử lại</button>
               </div>
             ) : isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map(i => (
-                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm animate-pulse">
-                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                  <div key={i} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-4 shadow-sm animate-pulse">
+                    <div className="h-4 bg-gray-200 dark:bg-slate-800 rounded w-3/4 mb-3"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-slate-800 rounded w-1/2 mb-2"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-slate-800 rounded w-1/3"></div>
                   </div>
                 ))}
               </div>
             ) : !hasItems ? (
-              <div className="bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
-                <div className="w-12 h-12 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center mx-auto mb-3">
+              <div className="bg-white dark:bg-slate-900 border border-dashed border-gray-300 dark:border-slate-700 rounded-xl p-10 text-center">
+                <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 flex items-center justify-center mx-auto mb-3">
                   <Clock className="w-6 h-6" />
                 </div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">Chưa có email nào được hẹn giờ</h3>
-                <p className="text-xs text-gray-500">Soạn email bên trái và đặt thời gian để lên lịch gửi.</p>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-1">Chưa có email nào được hẹn giờ</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Soạn email bên trái và đặt thời gian để lên lịch gửi.</p>
               </div>
             ) : (
               <>
@@ -499,10 +499,10 @@ export const ScheduledEmails = () => {
                       <div
                         key={s.id}
                         onClick={() => setSelectedEmail(s)}
-                        className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-300 transition-all cursor-pointer group"
+                        className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-300 transition-all cursor-pointer group"
                       >
                         <div className="flex items-start justify-between gap-3 mb-2">
-                          <h4 className="text-sm font-medium text-gray-900 truncate group-hover:text-brand-600 transition-colors" title={s.subject}>
+                          <h4 className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate group-hover:text-brand-600 transition-colors" title={s.subject}>
                             {s.subject || '(Không tiêu đề)'}
                           </h4>
                           <span className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${conf.bg} ${conf.fg}`}>
@@ -510,22 +510,22 @@ export const ScheduledEmails = () => {
                             <span>{conf.label}</span>
                           </span>
                         </div>
-                        <div className="text-[13px] text-gray-500 mb-2 truncate" title={s.to.join(', ')}>
+                        <div className="text-[13px] text-gray-500 dark:text-slate-400 mb-2 truncate" title={s.to.join(', ')}>
                           Đến: {s.to.join(', ')}
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-slate-500">
                           <Clock className="w-3.5 h-3.5" />
                           <span className="truncate">{sendAtLocal} · Gmail ({connectionName})</span>
                         </div>
                         {s.lastError && (
-                          <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded-md">{s.lastError}</div>
+                          <div className="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 p-2 rounded-md">{s.lastError}</div>
                         )}
                         {canCancel && (
                           <div className="mt-3 flex justify-end">
                             <button
                               onClick={(e) => { e.stopPropagation(); cancelMutation.mutate(s.id); }}
                               disabled={cancelMutation.isPending}
-                              className="px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-gray-200 rounded-md hover:border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
+                              className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md hover:border-red-200 dark:hover:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50"
                             >
                               {cancelMutation.isPending && cancelMutation.variables === s.id ? 'Đang huỷ...' : 'Huỷ lịch'}
                             </button>

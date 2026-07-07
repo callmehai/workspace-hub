@@ -11,7 +11,7 @@ interface Props {
  * Dùng Select custom (KHÔNG native <select>) + dropUp vì footer nằm đáy trang.
  */
 export const PageSizeSelect = ({ value, onChange }: Props) => (
-  <label className="inline-flex items-center gap-1.5 text-[12.5px] text-slate-500 whitespace-nowrap">
+  <label className="inline-flex items-center gap-1.5 text-[12.5px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
     Hiển thị
     <Select
       value={String(value)}

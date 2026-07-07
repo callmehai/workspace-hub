@@ -7,6 +7,8 @@ import { AlertCircle } from 'lucide-react';
 import { authApi } from '../lib/authApi';
 import { EMAIL_RE } from '../lib/validation';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
+import { ThemeLangControls } from '../components/ThemeLangControls';
+import { useI18n } from '../hooks/useI18n';
 import type { ApiError } from '../types/auth';
 
 // SĐT định dạng E.164 (vd +84901234567) — khớp validator backend SCRUM-64.
@@ -14,6 +16,7 @@ const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -39,7 +42,7 @@ export const RegisterPage = () => {
     onError: (error) => {
       const data = isAxiosError<ApiError>(error) ? error.response?.data : undefined;
       // 409 email trùng hoặc lỗi khác → banner.
-      setBanner(data?.message ?? 'Đăng ký thất bại (email có thể đã được sử dụng)');
+      setBanner(data?.message ?? t('register.failed'));
     },
   });
 
@@ -57,11 +60,11 @@ export const RegisterPage = () => {
     e.preventDefault();
     setBanner('');
 
-    const eFullName = fullName.trim().length === 0 ? 'Vui lòng nhập họ tên' : '';
-    const eEmail = !EMAIL_RE.test(email) ? 'Email không hợp lệ' : '';
-    const ePhone = !PHONE_RE.test(phone) ? 'SĐT phải dạng E.164, vd +84901234567' : '';
-    const ePwd = password.length < 8 ? 'Mật khẩu phải từ 8 ký tự trở lên' : '';
-    const eConfirm = confirm !== password ? 'Mật khẩu nhập lại không khớp' : '';
+    const eFullName = fullName.trim().length === 0 ? t('valid.nameRequired') : '';
+    const eEmail = !EMAIL_RE.test(email) ? t('valid.emailInvalid') : '';
+    const ePhone = !PHONE_RE.test(phone) ? t('valid.phoneE164') : '';
+    const ePwd = password.length < 8 ? t('valid.passwordMin') : '';
+    const eConfirm = confirm !== password ? t('valid.confirmMismatch') : '';
     setErrFullName(eFullName);
     setErrEmail(eEmail);
     setErrPhone(ePhone);
@@ -73,107 +76,111 @@ export const RegisterPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6 font-sans text-gray-900">
+    <div className="relative flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 font-sans text-slate-900 dark:text-slate-100">
+      <div className="absolute right-4 top-4">
+        <ThemeLangControls />
+      </div>
+
       <div className="w-full max-w-[404px]">
         {/* Logo */}
         <div className="mb-[22px] flex items-center justify-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-brand-600 text-[17px] font-bold text-white">
             W
           </div>
-          <span className="text-lg font-semibold text-gray-900">Workspace Hub</span>
+          <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('common.appName')}</span>
         </div>
 
         {/* Card */}
-        <div className="rounded-[14px] border border-gray-200 bg-white p-7 shadow-sm">
-          <h1 className="mb-1 text-[22px] font-semibold text-gray-900">Tạo tài khoản</h1>
-          <p className="mb-5 text-sm text-gray-500">Bắt đầu gom tất cả công việc về một nơi.</p>
+        <div className="rounded-[14px] border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-7 shadow-sm">
+          <h1 className="mb-1 text-[22px] font-semibold text-slate-900 dark:text-slate-100">{t('register.title')}</h1>
+          <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">{t('register.subtitle')}</p>
 
           {banner && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/40 px-3 py-2.5 text-[13px] text-red-700 dark:text-red-300">
               <AlertCircle className="h-4 w-4 flex-none" />
               <span>{banner}</span>
             </div>
           )}
 
           <form onSubmit={handleRegister} noValidate>
-            <label htmlFor="fullName" className="mb-1.5 block text-[13px] font-medium text-gray-900">Họ và tên</label>
+            <label htmlFor="fullName" className="mb-1.5 block text-[13px] font-medium text-slate-900 dark:text-slate-200">{t('register.fullName')}</label>
             <input
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Nguyễn Văn A"
-              className={`h-[38px] w-full rounded-lg border px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
-                errFullName ? 'border-red-400' : 'border-gray-300'
+              placeholder={t('register.fullNamePlaceholder')}
+              className={`h-[38px] w-full rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
+                errFullName ? 'border-red-400' : 'border-slate-300 dark:border-slate-700'
               }`}
             />
-            {errFullName && <div className="mt-1 text-xs text-red-600">{errFullName}</div>}
+            {errFullName && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{errFullName}</div>}
 
-            <label htmlFor="email" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Email</label>
+            <label htmlFor="email" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-slate-900 dark:text-slate-200">{t('login.email')}</label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ban@congty.vn"
-              className={`h-[38px] w-full rounded-lg border px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
-                errEmail ? 'border-red-400' : 'border-gray-300'
+              className={`h-[38px] w-full rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
+                errEmail ? 'border-red-400' : 'border-slate-300 dark:border-slate-700'
               }`}
             />
-            {errEmail && <div className="mt-1 text-xs text-red-600">{errEmail}</div>}
+            {errEmail && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{errEmail}</div>}
 
-            <label htmlFor="phone" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Số điện thoại</label>
+            <label htmlFor="phone" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-slate-900 dark:text-slate-200">{t('register.phone')}</label>
             <input
               id="phone"
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+84901234567"
-              className={`h-[38px] w-full rounded-lg border px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
-                errPhone ? 'border-red-400' : 'border-gray-300'
+              className={`h-[38px] w-full rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
+                errPhone ? 'border-red-400' : 'border-slate-300 dark:border-slate-700'
               }`}
             />
-            {errPhone && <div className="mt-1 text-xs text-red-600">{errPhone}</div>}
+            {errPhone && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{errPhone}</div>}
 
-            <label htmlFor="password" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Mật khẩu</label>
+            <label htmlFor="password" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-slate-900 dark:text-slate-200">{t('register.password')}</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Tối thiểu 8 ký tự"
-              className={`h-[38px] w-full rounded-lg border px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
-                errPwd ? 'border-red-400' : 'border-gray-300'
+              placeholder={t('login.passwordPlaceholder')}
+              className={`h-[38px] w-full rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
+                errPwd ? 'border-red-400' : 'border-slate-300 dark:border-slate-700'
               }`}
             />
-            {errPwd && <div className="mt-1 text-xs text-red-600">{errPwd}</div>}
+            {errPwd && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{errPwd}</div>}
 
-            <label htmlFor="confirm" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-gray-900">Nhập lại mật khẩu</label>
+            <label htmlFor="confirm" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-slate-900 dark:text-slate-200">{t('register.confirm')}</label>
             <input
               id="confirm"
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              placeholder="Nhập lại mật khẩu"
-              className={`h-[38px] w-full rounded-lg border px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
-                errConfirm ? 'border-red-400' : 'border-gray-300'
+              placeholder={t('register.confirmPlaceholder')}
+              className={`h-[38px] w-full rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
+                errConfirm ? 'border-red-400' : 'border-slate-300 dark:border-slate-700'
               }`}
             />
-            {errConfirm && <div className="mt-1 text-xs text-red-600">{errConfirm}</div>}
+            {errConfirm && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{errConfirm}</div>}
 
             <button
               type="submit"
               disabled={register.isPending}
               className="mt-4 h-10 w-full rounded-lg bg-brand-600 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
             >
-              {register.isPending ? 'Đang tạo...' : 'Đăng ký'}
+              {register.isPending ? t('register.submitting') : t('register.submit')}
             </button>
           </form>
 
           {/* Divider */}
           <div className="my-[18px] flex items-center gap-3">
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs text-gray-400">hoặc</span>
-            <div className="h-px flex-1 bg-gray-200" />
+            <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+            <span className="text-xs text-slate-400 dark:text-slate-500">{t('common.or')}</span>
+            <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
           </div>
 
           <GoogleSignInButton
@@ -182,14 +189,14 @@ export const RegisterPage = () => {
               setBanner('');
               googleMutation.mutate();
             }}
-            label="Đăng ký"
+            label={t('register.submit')}
           />
         </div>
 
-        <p className="mt-4 text-center text-sm text-gray-500">
-          Đã có tài khoản?{' '}
-          <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-700">
-            Đăng nhập
+        <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+          {t('register.haveAccount')}{' '}
+          <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+            {t('register.loginLink')}
           </Link>
         </p>
       </div>
