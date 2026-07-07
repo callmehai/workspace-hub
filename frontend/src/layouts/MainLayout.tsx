@@ -7,7 +7,7 @@ export const MainLayout = () => {
   useNotificationHub();
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
+    <div className="flex h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans overflow-hidden">
       {/* Sidebar fixed ở bên trái */}
       <Sidebar />
 

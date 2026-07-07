@@ -1,0 +1,67 @@
+name: CI
+
+# Chạy trên mọi PR vào develop/main và mọi push lên 2 nhánh đó.
+# Mục tiêu: chặn lỗi build/test TRƯỚC khi review — đặc biệt lỗi type chỉ lộ ở `tsc -b`
+# (npm run dev / eslint không bắt được), thứ đã khiến PR #71 phải review 5 vòng.
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# PR mới push lên sẽ huỷ run cũ đang chạy dở của cùng nhánh (tiết kiệm CI minutes).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (build + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        working-directory: backend
+        run: dotnet restore
+
+      - name: Build
+        working-directory: backend
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        working-directory: backend
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm install (KHÔNG npm ci): lock sinh trên macOS thiếu optional deps chỉ-Linux (@emnapi/*)
+      # của Vite 8/rolldown → npm ci strict fail trên ubuntu; npm install resolve đúng theo nền tảng.
+      - name: Install
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      # Lint là cổng cứng — chặn merge nếu có lỗi (develop hiện sạch).
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      # `npm run build` = `tsc -b && vite build` — bước tsc chính là chỗ bắt lỗi
+      # import/export type mà dev server bỏ qua.
+      - name: Build
+        working-directory: frontend
+        run: npm run build

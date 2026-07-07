@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
@@ -28,7 +28,7 @@ public class CalendarItemMapper : ICalendarItemMapper
             OccurredAt = ev.OccurredAt?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata)
+            MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
         };
     }
 }

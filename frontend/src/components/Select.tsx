@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
+import { useI18n } from '../hooks/useI18n';
 
 export interface SelectOption {
   value: string;
@@ -14,10 +15,14 @@ interface SelectProps {
   /** Thêm class cho nút trigger (thường set height, vd "h-9"). */
   className?: string;
   disabled?: boolean;
+  /** Bung menu LÊN TRÊN (dùng khi select nằm đáy trang, vd footer phân trang). */
+  dropUp?: boolean;
 }
 
 /** Dropdown/listbox tự style (thay native <select>) — khớp tông brand, bo góc, có tick chọn. */
-export function Select({ value, onChange, options, placeholder = 'Chọn...', className = '', disabled }: SelectProps) {
+export function Select({ value, onChange, options, placeholder, className = '', disabled, dropUp }: SelectProps) {
+  const { t } = useI18n();
+  const ph = placeholder ?? t('common.select');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
@@ -44,20 +49,22 @@ export function Select({ value, onChange, options, placeholder = 'Chọn...', cl
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className={`w-full flex items-center justify-between gap-2 px-3 border rounded-lg text-sm bg-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-          open ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-300 hover:border-gray-400'
+        className={`w-full flex items-center justify-between gap-2 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+          open ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-300 hover:border-gray-400 dark:border-slate-700 dark:hover:border-slate-600'
         } ${className}`}
       >
-        <span className={`truncate text-left ${selected ? 'text-gray-800' : 'text-gray-400'}`}>
-          {selected ? selected.label : placeholder}
+        <span className={`truncate text-left ${selected ? 'text-gray-800 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}`}>
+          {selected ? selected.label : ph}
         </span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1.5 w-full min-w-max bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto">
+        <div className={`absolute z-30 w-full min-w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
+          dropUp ? 'bottom-full mb-1.5' : 'mt-1.5'
+        }`}>
           {options.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-gray-400">Không có lựa chọn</div>
+            <div className="px-3 py-2 text-sm text-gray-400 dark:text-slate-500">{t('common.noOptions')}</div>
           ) : (
             options.map((o) => {
               const active = o.value === value;
@@ -70,7 +77,7 @@ export function Select({ value, onChange, options, placeholder = 'Chọn...', cl
                     setOpen(false);
                   }}
                   className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors ${
-                    active ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                    active ? 'bg-brand-50 text-brand-700 font-medium dark:bg-brand-500/15 dark:text-brand-300' : 'text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-700'
                   }`}
                 >
                   <span className="truncate">{o.label}</span>

@@ -28,7 +28,7 @@ public class CalendarSyncService : ICalendarSyncService
 
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, CancellationToken ct = default)
     {
-        var existing = await _items.GetExistingExternalIdsAsync(connection.Id, ct);
+        var existingItems = await _items.GetTrackedByConnectionIdAsync(connection.Id, ct);
         var newItems = new List<Item>();
 
         string? syncToken = connection.CursorType == CursorType.SyncToken ? connection.CursorValue : null;
@@ -43,14 +43,26 @@ public class CalendarSyncService : ICalendarSyncService
 
         foreach (var ev in result.Events)
         {
-            if (existing.Contains(ev.Id))
+            var mapped = _mapper.ToItem(ev, connection.UserId, connection.Id);
+
+            if (existingItems.TryGetValue(ev.Id, out var existing))
             {
+                if (existing.ETag != mapped.ETag)
+                {
+                    existing.Title = mapped.Title;
+                    existing.Snippet = mapped.Snippet;
+                    existing.MetadataJson = mapped.MetadataJson;
+                    existing.ETag = mapped.ETag;
+                    existing.OccurredAt = mapped.OccurredAt;
+                    existing.DueAt = mapped.DueAt;
+                    // Keep Status intact to avoid resetting Kanban columns.
+                }
                 skipped++;
                 continue;
             }
 
-            newItems.Add(_mapper.ToItem(ev, connection.UserId, connection.Id));
-            existing.Add(ev.Id);
+            newItems.Add(mapped);
+            existingItems[ev.Id] = mapped;
             created++;
         }
 

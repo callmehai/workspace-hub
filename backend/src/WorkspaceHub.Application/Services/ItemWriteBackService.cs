@@ -93,7 +93,13 @@ public class ItemWriteBackService : IItemWriteBackService
                 throw new BusinessRuleException("Unsupported item type for writeback.");
         }
 
-        _guard.EnsureNoConflict(item.ETag, providerEtag);
+        // Gmail ETag (HistoryId) changes constantly when labels are modified from external sources.
+        // This causes frequent false-positive 409 conflicts during write-back (e.g. read/unread/star toggle).
+        // Therefore, we bypass conflict checking (EnsureNoConflict) for emails.
+        if (item.Type != ItemType.Email)
+        {
+            _guard.EnsureNoConflict(item.ETag, providerEtag);
+        }
 
         string? newETag = null;
 
@@ -202,7 +208,7 @@ public class ItemWriteBackService : IItemWriteBackService
         if (newETag != null) item.ETag = newETag;
         
         await _items.SaveChangesAsync(ct);
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList());
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
     }
 
     public async Task<ItemResponse> CreateEventAsync(Guid userId, CreateEventRequest payload, CancellationToken ct = default)
@@ -245,7 +251,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList());
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
     }
 
     public async Task<ItemResponse> CreateTicketAsync(Guid userId, CreateTicketRequest payload, CancellationToken ct = default)
@@ -276,7 +282,7 @@ public class ItemWriteBackService : IItemWriteBackService
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
 
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList());
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
     }
 
     /// <summary>
@@ -348,7 +354,7 @@ public class ItemWriteBackService : IItemWriteBackService
         item.Status = mapped.Status;
 
         await _items.SaveChangesAsync(ct);
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList());
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
     }
 
     public async Task DeleteItemAsync(Guid itemId, Guid userId, CancellationToken ct = default)

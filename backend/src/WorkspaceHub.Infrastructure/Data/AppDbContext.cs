@@ -187,6 +187,10 @@ public class AppDbContext : DbContext
                 .WithMany(u => u.Tags)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Tên tag unique trong 1 user (SCRUM-70 fix TOCTOU). Collation cột mặc định của
+            // SQL Server là case-insensitive → khớp với check case-insensitive ở service layer.
+            e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
         });
 
         b.Entity<TagAssignment>(e =>
@@ -263,7 +267,9 @@ public class AppDbContext : DbContext
                 SupportedServices = "[\"Gmail\",\"GCal\",\"Drive\"]",
                 IsEnabled = true
             },
-            // Atlassian / Jira — phase Jira (SCRUM-54). IsEnabled=false cho đến khi cấu hình OAuth:atlassian:ClientId/Secret.
+            // Atlassian / Jira (SCRUM-54). Bật mặc định (migration EnableJiraIntegration).
+            // LƯU Ý: cần config OAuth:atlassian:ClientId/Secret thì connect Jira mới hoạt động thật;
+            // thiếu creds thì integration hiện nhưng OAuth sẽ lỗi. Có thể tắt runtime qua admin toggle (SCRUM-40).
             new Integration
             {
                 Id = AtlassianIntegrationId,
@@ -275,7 +281,7 @@ public class AppDbContext : DbContext
                 AuthorizationEndpoint = "https://auth.atlassian.com/authorize",
                 TokenEndpoint = "https://auth.atlassian.com/oauth/token",
                 SupportedServices = "[\"Jira\"]",
-                IsEnabled = false
+                IsEnabled = true
             });
     }
 }

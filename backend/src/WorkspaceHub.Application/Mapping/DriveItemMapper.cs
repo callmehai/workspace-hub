@@ -30,7 +30,7 @@ public class DriveItemMapper : IDriveItemMapper
             OccurredAt = file.ModifiedTime?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata),
+            MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
             ETag = file.Version?.ToString() ?? file.HeadRevisionId ?? file.ModifiedTime?.ToString("o")
         };
     }

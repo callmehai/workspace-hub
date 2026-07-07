@@ -1,8 +1,10 @@
 // Template HTML email dựng sẵn — khung nhất quán (header + body + footer), inline style chuẩn email client.
 
+import type { TranslationKey } from '../i18n/translations';
+
 export interface EmailTemplate {
   id: string;
-  label: string;
+  labelKey: TranslationKey;
   subject?: string;
   html: string;
 }
@@ -40,11 +42,11 @@ const p = (text: string) =>
   `<p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.7;">${text}</p>`;
 
 export const EMAIL_TEMPLATES: EmailTemplate[] = [
-  { id: 'blank', label: 'Trống', html: '' },
+  { id: 'blank', labelKey: 'template.blank', html: '' },
 
   {
     id: 'announcement',
-    label: 'Thông báo',
+    labelKey: 'template.announcement',
     subject: 'Thông báo quan trọng',
     html: shell({
       title: '📣 Thông báo',
@@ -60,7 +62,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   {
     id: 'welcome',
-    label: 'Chào mừng',
+    labelKey: 'template.welcome',
     subject: 'Chào mừng bạn!',
     html: shell({
       accent: '#4f46e5',
@@ -90,7 +92,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   {
     id: 'meeting',
-    label: 'Mời họp',
+    labelKey: 'template.meeting',
     subject: 'Lời mời họp',
     html: shell({
       title: '📅 Lời mời họp',
@@ -121,7 +123,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   {
     id: 'reminder',
-    label: 'Nhắc nhở',
+    labelKey: 'template.reminder',
     subject: 'Nhắc nhở',
     html: shell({
       accent: '#d97706',
@@ -142,7 +144,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   {
     id: 'thanks',
-    label: 'Cảm ơn',
+    labelKey: 'template.thankyou',
     subject: 'Cảm ơn bạn',
     html: shell({
       accent: '#059669',
@@ -163,7 +165,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   {
     id: 'newsletter',
-    label: 'Bản tin',
+    labelKey: 'template.newsletter',
     subject: 'Bản tin cập nhật',
     html: shell({
       title: '📰 Bản tin',

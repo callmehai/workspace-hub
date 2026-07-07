@@ -60,14 +60,17 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         }
 
         // ── Search: Title hoặc Snippet ──
-        // SQL Server dùng collation CI (Case-Insensitive) mặc định,
-        // nên LIKE '%...%' đã case-insensitive sẵn, KHÔNG cần .ToLower()
-        // (dùng ToLower sẽ sinh LOWER() trong SQL → ngăn sử dụng index).
+        // Ép collation Latin1_General_100_CI_AI ngay trong predicate:
+        //   CI = case-insensitive, AI = ACCENT-insensitive → gõ "bao gia" khớp "Báo giá",
+        //   "đ" khớp "d" (không bắt user gõ đúng dấu tiếng Việt 100%).
+        // LIKE '%...%' vốn đã không dùng được index nên Collate không làm chậm thêm.
+        // Escape ký tự wildcard của LIKE (%, _, [) để search theo nghĩa đen.
         if (!string.IsNullOrWhiteSpace(search))
         {
+            var pattern = $"%{EscapeLikePattern(search.Trim())}%";
             query = query.Where(i =>
-                i.Title.Contains(search) ||
-                i.Snippet.Contains(search));
+                EF.Functions.Like(EF.Functions.Collate(i.Title, "Latin1_General_100_CI_AI"), pattern) ||
+                EF.Functions.Like(EF.Functions.Collate(i.Snippet, "Latin1_General_100_CI_AI"), pattern));
         }
 
         // ── Count total (trước khi paging) ──
@@ -116,6 +119,12 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     }
 
     /// <inheritdoc/>
+    public async Task<List<Item>> GetByIdsAndUserAsync(IEnumerable<Guid> itemIds, Guid userId, CancellationToken ct = default)
+    {
+        return await Set.Where(i => itemIds.Contains(i.Id) && i.UserId == userId).ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
     {
         // 1. Delete associated ItemFolders
@@ -133,4 +142,11 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             .Where(i => i.ConnectionId == connectionId)
             .ExecuteDeleteAsync(ct);
     }
+
+    /// <summary>
+    /// Escape ký tự wildcard của SQL LIKE (%, _, [) để chuỗi search được so theo nghĩa đen.
+    /// EF.Functions.Like KHÔNG tự escape như string.Contains.
+    /// </summary>
+    private static string EscapeLikePattern(string input) =>
+        input.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
 }

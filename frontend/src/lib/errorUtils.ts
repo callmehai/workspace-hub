@@ -1,5 +1,6 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { translate } from '../i18n/translations';
 
 export interface ApiErrorResponse {
   error?: string;
@@ -11,6 +12,7 @@ export interface ApiErrorResponse {
 export interface HandleApiErrorOptions {
   onConflict?: () => void;
   navigate?: (path: string) => void;
+  silent?: boolean;
 }
 
 /**
@@ -18,8 +20,8 @@ export interface HandleApiErrorOptions {
  * Ưu tiên: Xử lý status code (409, 403, 502) > details[] > message > fallbackMessage
  */
 export const handleApiError = (
-  err: unknown, 
-  fallbackMessage: string = 'Có lỗi xảy ra',
+  err: unknown,
+  fallbackMessage: string = translate('errors.generic'),
   options?: HandleApiErrorOptions
 ): void => {
   if (import.meta.env.DEV) {
@@ -31,7 +33,9 @@ export const handleApiError = (
     const data = err.response?.data as ApiErrorResponse | undefined;
 
     if (status === 409) {
-      toast.error('Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại...');
+      if (!options?.silent) {
+        toast.error(data?.message || translate('errors.conflict'));
+      }
       if (options?.onConflict) {
         options.onConflict();
       }
@@ -42,33 +46,45 @@ export const handleApiError = (
       if (data?.error === 'CsrfError') {
         return; // Interceptor đã xử lý CsrfError
       }
-      toast.error('Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại tài khoản.');
-      if (options?.navigate) {
-        options.navigate('/integrations');
+      if (!options?.silent) {
+        toast.error(translate('errors.forbiddenScope'));
+        if (options?.navigate) {
+          options.navigate('/integrations');
+        }
       }
       return;
     }
 
     if (status === 502) {
-      toast.error('Lỗi từ nhà cung cấp dịch vụ (Google/Jira). Vui lòng thử lại sau.');
+      if (!options?.silent) {
+        toast.error(translate('errors.provider'));
+      }
       return;
     }
     
     if (data?.details && data.details.length > 0) {
-      toast.error(data.details[0]); // Chỉ hiển thị lỗi đầu tiên tránh spam toast
+      if (!options?.silent) {
+        toast.error(data.details[0]); // Chỉ hiển thị lỗi đầu tiên tránh spam toast
+      }
       return;
     }
     
     if (data?.message) {
-      toast.error(data.message);
+      if (!options?.silent) {
+        toast.error(data.message);
+      }
       return;
     }
 
     if (data?.error) {
-      toast.error(data.error);
+      if (!options?.silent) {
+        toast.error(data.error);
+      }
       return;
     }
   }
   
-  toast.error(fallbackMessage);
+  if (!options?.silent) {
+    toast.error(fallbackMessage);
+  }
 };

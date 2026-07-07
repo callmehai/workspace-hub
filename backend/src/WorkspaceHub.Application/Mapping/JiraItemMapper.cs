@@ -28,6 +28,7 @@ public class JiraItemMapper : IJiraItemMapper
         };
 
         var mappedStatus = ItemStatus.Inbox;
+        
         if (!string.IsNullOrEmpty(issue.StatusCategoryKey))
         {
             mappedStatus = issue.StatusCategoryKey.ToLower() switch
@@ -38,9 +39,9 @@ public class JiraItemMapper : IJiraItemMapper
                 _ => ItemStatus.Inbox
             };
         }
-        else if (!string.IsNullOrEmpty(issue.StatusName))
+        else
         {
-            var lowerStatus = issue.StatusName.ToLower();
+            var lowerStatus = issue.StatusName?.ToLower() ?? "";
             if (lowerStatus.Contains("done") || lowerStatus.Contains("xong") || lowerStatus.Contains("hoàn thành") || lowerStatus.Contains("closed"))
             {
                 mappedStatus = ItemStatus.Done;
@@ -66,7 +67,7 @@ public class JiraItemMapper : IJiraItemMapper
             OccurredAt = issue.Updated?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata)
+            MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
         };
     }
 }

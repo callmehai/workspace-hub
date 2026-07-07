@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<IConnectionRepository, ConnectionRepository>();
         services.AddScoped<IItemRepository, ItemRepository>();
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
+        services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
 
