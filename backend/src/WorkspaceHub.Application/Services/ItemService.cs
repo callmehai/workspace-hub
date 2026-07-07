@@ -65,10 +65,11 @@ public class ItemService : IItemService
         var (items, totalCount) = await _itemRepo.GetPagedAsync(
             userId,
             request.FolderId,
-            request.Status,
-            request.Type,
+            request.Statuses,
+            request.Types,
             request.IsImportant,
             request.Search?.Trim(),
+            request.TagId,
             page,
             limit,
             ct);
@@ -182,5 +183,9 @@ public class ItemService : IItemService
         ExternalId: item.ExternalId,
         MetadataJson: item.MetadataJson,
         FolderIds: item.ItemFolders.Select(f => f.FolderId).ToList(),
+        Tags: item.TagAssignments
+            .Where(ta => ta.Tag != null)
+            .Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color))
+            .ToList(),
         ConnectionId: item.ConnectionId);
 }

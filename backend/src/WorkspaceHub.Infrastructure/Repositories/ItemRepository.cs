@@ -19,10 +19,11 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     public async Task<(IReadOnlyList<Item> Items, int TotalCount)> GetPagedAsync(
         Guid userId,
         Guid? folderId = null,
-        ItemStatus? status = null,
-        ItemType? type = null,
+        IReadOnlyList<ItemStatus>? statuses = null,
+        IReadOnlyList<ItemType>? types = null,
         bool? isImportant = null,
         string? search = null,
+        Guid? tagId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -30,6 +31,8 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         // Base query: items thuộc user, chưa archived, AsNoTracking cho read-only
         var query = Set.AsNoTracking()
             .Include(i => i.ItemFolders)
+            .Include(i => i.TagAssignments)
+                .ThenInclude(ta => ta.Tag)
             .Where(i => i.UserId == userId && !i.IsArchived);
 
         // ── Optional filters ──
@@ -41,16 +44,23 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 i.ItemFolders.Any(ifj => ifj.FolderId == folderId.Value));
         }
 
-        // Status: Kanban column filter (Inbox/Doing/Done)
-        if (status.HasValue)
+        // TagId: join qua TagAssignments junction table
+        if (tagId.HasValue)
         {
-            query = query.Where(i => i.Status == status.Value);
+            query = query.Where(i =>
+                i.TagAssignments.Any(ta => ta.TagId == tagId.Value));
         }
 
-        // Type: Email/Event/File/Note
-        if (type.HasValue)
+        // Status: Kanban column filter (Inbox/Doing/Done) — đa chọn
+        if (statuses is { Count: > 0 })
         {
-            query = query.Where(i => i.Type == type.Value);
+            query = query.Where(i => statuses.Contains(i.Status));
+        }
+
+        // Type: Email/Event/File/Note — đa chọn
+        if (types is { Count: > 0 })
+        {
+            query = query.Where(i => types.Contains(i.Type));
         }
 
         // IsImportant flag
@@ -115,7 +125,11 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     /// <inheritdoc/>
     public async Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default)
     {
-        return await Set.Include(i => i.ItemFolders).FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
+        return await Set
+            .Include(i => i.ItemFolders)
+            .Include(i => i.TagAssignments)
+                .ThenInclude(ta => ta.Tag)
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
     }
 
     /// <inheritdoc/>
