@@ -362,7 +362,12 @@ export const Inbox = () => {
         {/* ── Page header ── */}
         <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
           <div>
-            <h1 className="text-[22px] font-semibold text-slate-900 leading-tight m-0">Inbox</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-[22px] font-semibold text-slate-900 leading-tight m-0">Inbox</h1>
+              {isFetching && !isLoading && (
+                <span className="text-xs text-slate-400">Đang cập nhật…</span>
+              )}
+            </div>
             <p className="text-[13px] text-slate-500 mt-0.5">
               {isLoading ? 'Đang tải…' : `${total} mục`}
             </p>

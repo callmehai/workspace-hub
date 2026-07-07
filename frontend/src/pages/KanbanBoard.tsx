@@ -177,7 +177,7 @@ export const KanbanBoard = () => {
   });
 
   const queryKey = ['items', { folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, search }];
-  const { data: pagedItems, isLoading, isError, refetch } = useQuery({
+  const { data: pagedItems, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey,
     queryFn: () => itemsApi.getItems({
       folderId: selectedFolderId || undefined,
@@ -185,7 +185,9 @@ export const KanbanBoard = () => {
       isImportant: importantOnly || undefined,
       search: search || undefined,
       limit: 100
-    })
+    }),
+    refetchInterval: pollMs,
+    refetchOnWindowFocus: true,
   });
 
   const items = pagedItems?.items || [];
@@ -354,7 +356,12 @@ export const KanbanBoard = () => {
       <div className="px-6 py-4 border-b border-slate-200 bg-white flex flex-col shrink-0 gap-4">
         <div className="flex justify-between items-end flex-wrap gap-4">
           <div>
-            <h1 className="text-[22px] font-semibold text-slate-900 leading-tight mb-0.5">Bảng Kanban</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-[22px] font-semibold text-slate-900 leading-tight mb-0.5">Bảng Kanban</h1>
+              {isFetching && !isLoading && (
+                <span className="text-xs text-slate-400">Đang cập nhật…</span>
+              )}
+            </div>
             <p className="text-[13px] text-slate-500">{currentFolderName} · kéo-thả thẻ để đổi trạng thái</p>
           </div>
           <div className="flex items-center gap-3">
