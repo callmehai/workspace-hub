@@ -1,0 +1,10 @@
+# Giảm build context + tránh copy nhầm secret vào image.
+**/bin/
+**/obj/
+**/dp-keys/
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/.env
+**/.env.*
+**/*.user
+tests/

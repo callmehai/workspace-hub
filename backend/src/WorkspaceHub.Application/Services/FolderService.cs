@@ -162,6 +162,45 @@ public class FolderService : IFolderService
     }
 
     /// <inheritdoc/>
+    public async Task AddItemsToFolderAsync(
+        Guid userId, Guid folderId, AddItemsToFolderBulkRequest request, CancellationToken ct = default)
+    {
+        var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
+        if (!isOwner)
+            throw new ForbiddenException("Only the folder owner can add items to this folder.");
+
+        var uniqueRequestIds = request.ItemIds.Distinct().ToList();
+        var ownedItems = await _itemRepo.GetByIdsAndUserAsync(uniqueRequestIds, userId, ct);
+        var ownedItemIds = ownedItems.Select(i => i.Id).ToHashSet();
+
+        if (uniqueRequestIds.Any(id => !ownedItemIds.Contains(id)))
+        {
+            throw new ForbiddenException("One or more items do not belong to the current user or do not exist.");
+        }
+
+        // Get existing items in folder
+        var existingItemFolders = await _folderRepo.GetItemFoldersAsync(request.ItemIds, folderId, ct);
+        var existingItemIds = existingItemFolders.Select(i => i.ItemId).ToHashSet();
+
+        var itemIdsToAdd = request.ItemIds.Where(id => !existingItemIds.Contains(id)).Distinct().ToList();
+        if (!itemIdsToAdd.Any())
+            return; // Nothing to add
+
+        var maxPos = await _folderRepo.GetMaxItemPositionAsync(folderId, ct);
+        
+        var newFolders = itemIdsToAdd.Select((itemId, index) => new ItemFolder
+        {
+            ItemId = itemId,
+            FolderId = folderId,
+            Position = maxPos + 1 + index,
+            AddedAt = DateTime.UtcNow
+        }).ToList();
+
+        await _folderRepo.AddItemsFolderAsync(newFolders, ct);
+        await _folderRepo.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task RemoveItemFromFolderAsync(
         Guid userId, Guid folderId, Guid itemId, CancellationToken ct = default)
     {
@@ -174,6 +213,22 @@ public class FolderService : IFolderService
 
         _folderRepo.RemoveItemFolder(itemFolder);
         await _folderRepo.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task RemoveItemsFromFolderAsync(
+        Guid userId, Guid folderId, RemoveItemsFromFolderBulkRequest request, CancellationToken ct = default)
+    {
+        var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
+        if (!isOwner)
+            throw new ForbiddenException("Only the folder owner can remove items from this folder.");
+
+        var itemFolders = await _folderRepo.GetItemFoldersAsync(request.ItemIds, folderId, ct);
+        if (itemFolders.Any())
+        {
+            _folderRepo.RemoveItemsFolder(itemFolders);
+            await _folderRepo.SaveChangesAsync(ct);
+        }
     }
 
     // ───────────────────────── Private helpers ─────────────────────────

@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,6 +7,17 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/*
+ * Inter mặc định: chữ I hoa và l thường GIỐNG HỆT nhau (không serif).
+ * Bật các OpenType feature "Disambiguation" của Inter:
+ *   ss02 = bộ phân biệt tổng (I có chân, l có đuôi, 0 gạch chéo)
+ *   cv05 = l thường có đuôi cong · cv08 = I hoa có chân ngang
+ * (khai cả 3 — build font thiếu feature nào thì bỏ qua feature đó, không vỡ gì)
+ */
+html {
+  font-feature-settings: 'ss02' 1, 'cv05' 1, 'cv08' 1;
 }
 
 @layer components {

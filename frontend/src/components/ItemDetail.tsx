@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
   Trash2, Edit3, ExternalLink, Tag, Loader2,
-  AlertCircle, Eye, EyeOff, Star, Check, Send
+  AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
 } from 'lucide-react';
-import { itemsApi } from '../lib/itemsApi';
-import { type PatchItemRequest } from '../types/items';
+import { itemsApi, foldersApi } from '../lib/itemsApi';
+import { connectionsApi } from '../lib/connectionsApi';
+import { type PatchItemRequest, type FolderResponse, type ItemResponse } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
+import { getStatusLabel } from '../lib/itemMeta';
 import toast from 'react-hot-toast';
 
 interface ItemDetailProps {
@@ -17,7 +19,6 @@ interface ItemDetailProps {
   onDeleted?: () => void;
 }
 
-const STATUS_LABEL: Record<string, string> = { Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Done' };
 const STATUS_COLOR: Record<string, string> = {
   Inbox: 'bg-slate-100 text-slate-600 border border-slate-200',
   Doing: 'bg-blue-50 text-blue-700 border border-blue-100',
@@ -40,6 +41,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isEditing, setIsEditing] = useState(false);
   const [newLabelName, setNewLabelName] = useState('');
   const [isAddingLabel, setIsAddingLabel] = useState(false);
+  const [isAddingToFolder, setIsAddingToFolder] = useState(false);
 
   // Event form edit state
   const [eventForm, setEventForm] = useState({
@@ -54,18 +56,41 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [fileName, setFileName] = useState('');
   const [isRenamingFile, setIsRenamingFile] = useState(false);
 
-  // Fetch item by ID
+  // Fetch item by ID.
+  // placeholderData: mồi từ cache list/board đang có → drawer mở TỨC THÌ với data sẵn,
+  // fetch chi tiết chạy nền — không còn màn spinner nháy trước khi hiện nội dung.
   const { data: item, isLoading, isError, refetch } = useQuery({
     queryKey: ['item', itemId],
     queryFn: () => itemsApi.getItemById(itemId),
     enabled: !!itemId,
+    placeholderData: () => {
+      for (const [, data] of queryClient.getQueriesData<unknown>({ queryKey: ['items'] })) {
+        if (!data) continue;
+        const asInfinite = data as { pages?: { items?: ItemResponse[] }[] };
+        const asPaged = data as { items?: ItemResponse[] };
+        const arr: ItemResponse[] = Array.isArray(asInfinite.pages)
+          ? asInfinite.pages.flatMap(pg => pg.items ?? [])
+          : (asPaged.items ?? []);
+        const found = arr.find(i => i.id === itemId);
+        if (found) return found;
+      }
+      return undefined;
+    },
+  });
+
+  const { data: folders = [] } = useQuery({
+    queryKey: ['folders'],
+    queryFn: () => foldersApi.getFolders()
   });
 
   // Mutate item (writeback PATCH)
   const patchMutation = useMutation({
-    mutationFn: (payload: PatchItemRequest) => itemsApi.patchItem(itemId, payload),
-    onSuccess: () => {
-      toast.success('Đã lưu thay đổi thành công');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mutationFn: ({ _isAutoRead, ...payload }: PatchItemRequest & { _isAutoRead?: boolean }) => itemsApi.patchItem(itemId, payload),
+    onSuccess: (_, variables) => {
+      if (!variables._isAutoRead) {
+        toast.success('Đã lưu thay đổi thành công');
+      }
       setIsEditing(false);
       setIsRenamingFile(false);
       setNewLabelName('');
@@ -74,13 +99,21 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => {
+    onError: (err, variables) => {
       handleApiError(err, 'Lỗi cập nhật dữ liệu', {
-        onConflict: () => {
+        onConflict: async () => {
+          if (item?.connectionId) {
+            try {
+              await connectionsApi.syncConnection(item.connectionId);
+            } catch (e) {
+              console.error('Lỗi khi đồng bộ tự động', e);
+            }
+          }
           refetch();
           queryClient.invalidateQueries({ queryKey: ['items'] });
         },
-        navigate
+        navigate,
+        silent: variables?._isAutoRead === true
       });
     }
   });
@@ -96,7 +129,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     },
     onError: (err) => {
       handleApiError(err, 'Không thể xóa dữ liệu', {
-        onConflict: () => {
+        onConflict: async () => {
+          if (item?.connectionId) {
+            try {
+              await connectionsApi.syncConnection(item.connectionId);
+            } catch (e) {
+              console.error('Lỗi khi đồng bộ tự động', e);
+            }
+          }
           refetch();
           queryClient.invalidateQueries({ queryKey: ['items'] });
         },
@@ -105,11 +145,62 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     }
   });
 
+  const addToFolderMutation = useMutation({
+    mutationFn: (folderId: string) => foldersApi.addItemToFolder(folderId, { itemId }),
+    onSuccess: () => {
+      toast.success('Đã thêm vào thư mục');
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
+  });
+
+  const removeFromFolderMutation = useMutation({
+    mutationFn: (folderId: string) => foldersApi.removeItemFromFolder(folderId, itemId),
+    onSuccess: () => {
+      toast.success('Đã xóa khỏi thư mục');
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => handleApiError(err, 'Lỗi xóa khỏi thư mục', { navigate })
+  });
+
+  const metadata = (() => {
+    try { return item?.metadataJson ? JSON.parse(item.metadataJson) : {}; }
+    catch { return {}; }
+  })();
+
+  const isUnread = item?.type === 'Email' && (
+    metadata.isUnread !== undefined 
+      ? metadata.isUnread === true 
+      : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'))
+  );
+
+  const isStarred = metadata.isStarred !== undefined 
+    ? metadata.isStarred === true 
+    : (Array.isArray(metadata.labels) && metadata.labels.includes('STARRED'));
+
+  const autoReadProcessedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    autoReadProcessedRef.current = false;
+  }, [itemId]);
+
+  React.useEffect(() => {
+    if (item && item.type === 'Email' && !autoReadProcessedRef.current) {
+      autoReadProcessedRef.current = true;
+      if (isUnread) {
+        patchMutation.mutate({ isUnread: false, _isAutoRead: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, isUnread]);
+
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
         <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
-        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex items-center justify-center">
+        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex items-center justify-center" style={{ animation: 'wh-slide-in .25s ease' }}>
           <div className="flex flex-col items-center space-y-3">
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
             <span className="text-sm font-medium text-slate-500">Đang tải chi tiết...</span>
@@ -123,7 +214,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
         <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
-        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500">
+        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500" style={{ animation: 'wh-slide-in .25s ease' }}>
           <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
           <h3 className="text-base font-semibold text-slate-850 mb-1">Không thể tải thông tin chi tiết</h3>
           <p className="text-xs text-slate-450 text-center max-w-xs mb-4">Vui lòng thử lại sau hoặc tải lại trang.</p>
@@ -138,23 +229,22 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     );
   }
 
-  const metadata = (() => {
-    try { return item.metadataJson ? JSON.parse(item.metadataJson) : {}; }
-    catch { return {}; }
-  })();
-
-  const isUnread = metadata.isUnread !== undefined 
-    ? metadata.isUnread === true 
-    : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'));
-
-  const isStarred = metadata.isStarred !== undefined 
-    ? metadata.isStarred === true 
-    : (Array.isArray(metadata.labels) && metadata.labels.includes('STARRED'));
-
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
-  const statusLabel = STATUS_LABEL[item.status] ?? item.status;
-  const statusColor = STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500';
-  const statusDot = STATUS_DOT[item.status] ?? 'bg-slate-400';
+  const isTicket = item.type === 'Ticket';
+  const isSeen = item.status === 'Inbox' && item.type === 'Email' && !isUnread;
+  // Nhãn: Ticket = status thô từ Jira (giữ nguyên); Email = Chưa xem/Đã xem; còn lại = triage chung.
+  const statusLabel = getStatusLabel(item);
+  // Màu: Ticket trung tính theo category (xám/xanh dương/xanh lá). Email/khác: Inbox chưa xử lý = cam, đã xem = xám.
+  const statusColor = isTicket
+    ? (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200')
+    : item.status === 'Inbox'
+      ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200')
+      : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500');
+  const statusDot = isTicket
+    ? (STATUS_DOT[item.status] ?? 'bg-slate-400')
+    : item.status === 'Inbox'
+      ? (isSeen ? 'bg-slate-300' : 'bg-amber-500')
+      : (STATUS_DOT[item.status] ?? 'bg-slate-400');
 
   const typeChip = `inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${tInfo.bg}`;
 
@@ -210,7 +300,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
   } else if (item.type === 'Ticket') {
     if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
-    if (metadata.projectKey) rows.push({ label: 'Project',    value: metadata.projectKey });
     if (metadata.issueType)  rows.push({ label: 'Loại',       value: metadata.issueType });
     if (metadata.priority)   rows.push({ label: 'Ưu tiên',    value: metadata.priority });
     if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });
@@ -375,10 +464,60 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-[18px]">
-          {/* Mock Folder Dot (for UI parity with prototype) */}
-          <div className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 px-[11px] py-[5px] rounded-full mb-4">
-            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-            VinClub — Chiến dịch Tết
+          {/* Folders */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {item.folderIds?.map(fId => {
+              const f = folders.find((fol: FolderResponse) => fol.id === fId);
+              if (!f) return null;
+              return (
+                <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 bg-slate-100 pl-[11px] pr-1 py-1 rounded-full group">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                  <span className="mr-0.5">{f.name}</span>
+                  <button 
+                    onClick={() => removeFromFolderMutation.mutate(f.id)}
+                    disabled={removeFromFolderMutation.isPending}
+                    className="p-0.5 rounded-full text-slate-400 hover:bg-slate-200 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+            
+            {/* Add to folder button & dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsAddingToFolder(!isAddingToFolder)}
+                className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors text-[12px] font-medium"
+                title="Thêm vào thư mục"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm</span>
+              </button>
+              
+              {isAddingToFolder && (
+                <div className="absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                  {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-500 text-center">Không còn thư mục nào</div>
+                  ) : (
+                    folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
+                      <button
+                        key={f.id}
+                        onClick={() => {
+                          addToFolderMutation.mutate(f.id);
+                          setIsAddingToFolder(false);
+                        }}
+                        disabled={addToFolderMutation.isPending}
+                        className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                        <span className="truncate">{f.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Form edit for Event */}

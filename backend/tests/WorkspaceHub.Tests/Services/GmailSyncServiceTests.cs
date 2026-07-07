@@ -61,8 +61,8 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string> { "1", "2", "3" }, null));
 
-        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(connection.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<string>());
+        _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item>());
 
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Connection c, string id, CancellationToken ct) => 
@@ -94,15 +94,15 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string> { "1", "2", "3" }, null));
 
-        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(connection.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<string> { "2" });
+        _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item> { { "2", new Item { ExternalId = "2", ETag = "old" } } });
 
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Connection c, string id, CancellationToken ct) => 
                 new GmailMessage(id, "t", "S", null, new List<string>(), null, new List<string>(), false, null));
 
         _mapperMock.Setup(m => m.ToItem(It.IsAny<GmailMessage>(), connection.UserId, connection.Id, It.IsAny<ISet<string>>()))
-            .Returns((GmailMessage msg, Guid u, Guid c, ISet<string> s) => new Item { ExternalId = msg.Id });
+            .Returns((GmailMessage msg, Guid u, Guid c, ISet<string> s) => new Item { ExternalId = msg.Id, ETag = "new" });
 
         var result = await _service.SyncConnectionAsync(connection);
 
@@ -115,8 +115,8 @@ public class GmailSyncServiceTests
     {
         var connection = new Connection { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), CursorValue = "50", CursorType = CursorType.HistoryId };
 
-        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(connection.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<string>());
+        _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item>());
 
         _gatewayMock.Setup(m => m.ListHistoryAsync(connection, "50", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailHistory(false, new List<string> { "m1", "m2" }, null, "120"));
@@ -142,8 +142,8 @@ public class GmailSyncServiceTests
     {
         var connection = new Connection { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), CursorValue = "50", CursorType = CursorType.HistoryId };
 
-        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(connection.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<string>());
+        _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item>());
 
         _gatewayMock.Setup(m => m.ListHistoryAsync(connection, "50", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailHistory(true, new List<string>(), null, null));
@@ -181,8 +181,8 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string>(), null));
 
-        _itemsMock.Setup(m => m.GetExistingExternalIdsAsync(connection.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<string>());
+        _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item>());
 
         var result = await _service.SyncConnectionAsync(connection);
 

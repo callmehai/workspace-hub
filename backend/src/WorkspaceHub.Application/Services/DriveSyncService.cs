@@ -1,4 +1,4 @@
-﻿using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.Mapping;
@@ -28,8 +28,8 @@ public class DriveSyncService : IDriveSyncService
 
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, CancellationToken ct = default)
     {
-        // 1. Lấy danh sách ID đã lưu để tránh tạo trùng item
-        var existing = await _items.GetExistingExternalIdsAsync(connection.Id, ct);
+        // 1. Lấy danh sách ID đã lưu để cập nhật
+        var existingItems = await _items.GetTrackedByConnectionIdAsync(connection.Id, ct);
         var newItems = new List<Item>();
 
         // 2. Lấy thẻ đánh dấu trang của Google Drive (PageToken)
@@ -51,11 +51,25 @@ public class DriveSyncService : IDriveSyncService
         // 4. Lọc trùng & Dịch sang định dạng Item (Mapping)
         foreach (var file in result.Files)
         {
-            if (existing.Contains(file.Id))
+            var mapped = _mapper.ToItem(file, connection.UserId, connection.Id);
+
+            if (existingItems.TryGetValue(file.Id, out var existing))
             {
-                // Ở phiên bản thực tế, đoạn này nếu file bị xoá (file.Trashed = true), 
-                // ta nên gọi hàm Update cái Item cũ trong DB để IsArchived = true.
-                // Tuy nhiên đây là bản MVP siêu tốc, tạm thời ta đếm vào số skipped để đơn giản.
+                // Nếu file bị xoá (file.Trashed = true), ta cập nhật IsArchived = true
+                if (file.Trashed)
+                {
+                    existing.IsArchived = true;
+                }
+                else if (existing.ETag != mapped.ETag)
+                {
+                    existing.Title = mapped.Title;
+                    existing.Snippet = mapped.Snippet;
+                    existing.MetadataJson = mapped.MetadataJson;
+                    existing.ETag = mapped.ETag;
+                    existing.OccurredAt = mapped.OccurredAt;
+                    existing.IsImportant = mapped.IsImportant;
+                    // Keep Status intact to avoid resetting Kanban columns.
+                }
                 skipped++;
                 continue;
             }
@@ -67,10 +81,8 @@ public class DriveSyncService : IDriveSyncService
                 continue;
             }
 
-            // Dịch ra Entity Item
-            var item = _mapper.ToItem(file, connection.UserId, connection.Id);
-            newItems.Add(item);
-            existing.Add(file.Id);
+            newItems.Add(mapped);
+            existingItems[file.Id] = mapped;
             created++;
         }
 

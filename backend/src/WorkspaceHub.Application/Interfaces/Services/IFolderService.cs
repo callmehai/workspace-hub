@@ -23,6 +23,12 @@ public interface IFolderService
     /// <summary>Gắn item vào folder. Trả lỗi 409 nếu đã được gắn.</summary>
     Task<ItemFolderResponse> AddItemToFolderAsync(Guid userId, Guid folderId, AddItemToFolderRequest request, CancellationToken ct = default);
 
+    /// <summary>Gắn nhiều item vào folder.</summary>
+    Task AddItemsToFolderAsync(Guid userId, Guid folderId, AddItemsToFolderBulkRequest request, CancellationToken ct = default);
+
     /// <summary>Gỡ item khỏi folder.</summary>
     Task RemoveItemFromFolderAsync(Guid userId, Guid folderId, Guid itemId, CancellationToken ct = default);
+
+    /// <summary>Gỡ nhiều item khỏi folder.</summary>
+    Task RemoveItemsFromFolderAsync(Guid userId, Guid folderId, RemoveItemsFromFolderBulkRequest request, CancellationToken ct = default);
 }

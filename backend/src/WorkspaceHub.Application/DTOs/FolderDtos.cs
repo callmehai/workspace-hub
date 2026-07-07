@@ -18,6 +18,12 @@ public record UpdateFolderRequest(
 /// <summary>POST /api/folders/{folderId}/items — gắn item vào folder</summary>
 public record AddItemToFolderRequest(Guid ItemId);
 
+/// <summary>POST /api/folders/{folderId}/items/bulk — gắn nhiều item vào folder</summary>
+public record AddItemsToFolderBulkRequest(List<Guid> ItemIds);
+
+/// <summary>DELETE /api/folders/{folderId}/items/bulk — xóa nhiều item khỏi folder</summary>
+public record RemoveItemsFromFolderBulkRequest(List<Guid> ItemIds);
+
 // ───────────────────────── Response DTO ─────────────────────────
 
 /// <summary>

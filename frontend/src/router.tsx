@@ -4,7 +4,6 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Login } from './pages/Login';
 import { RegisterPage } from './pages/RegisterPage';
 import { Inbox } from './pages/Inbox';
-import { Projects } from './pages/Projects';
 import { KanbanBoard } from './pages/KanbanBoard';
 import { Integrations } from './pages/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
@@ -12,6 +11,9 @@ import { ScheduledEmails } from './pages/ScheduledEmails';
 import { SendEmail } from './pages/SendEmail';
 import { GoogleCallback } from './pages/auth/GoogleCallback';
 import { VerifyOtp } from './pages/auth/VerifyOtp';
+import { AdminRoute } from './components/auth/AdminRoute';
+import { AdminDashboard } from './pages/AdminDashboard';
+
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -45,22 +47,6 @@ export const router = createBrowserRouter([
             element: <Inbox />,
           },
           {
-            path: 'tasks',
-            element: <Inbox />,
-          },
-          {
-            path: 'files',
-            element: <Inbox />,
-          },
-          {
-            path: 'calendar',
-            element: <Inbox />,
-          },
-          {
-            path: 'projects',
-            element: <Projects />,
-          },
-          {
             path: 'kanban',
             element: <KanbanBoard />,
           },
@@ -79,6 +65,25 @@ export const router = createBrowserRouter([
           {
             path: '*',
             element: <Navigate to="/" replace />,
+          },
+        ],
+      },
+      {
+        path: 'admin',
+        element: <AdminRoute />,
+        children: [
+          {
+            element: <MainLayout />,
+            children: [
+              {
+                index: true,
+                element: <AdminDashboard />,
+              },
+              {
+                path: '*',
+                element: <Navigate to="/admin" replace />,
+              },
+            ],
           },
         ],
       },
