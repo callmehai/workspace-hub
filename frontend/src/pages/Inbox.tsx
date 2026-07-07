@@ -16,6 +16,7 @@ import { typeIcon } from '../lib/itemVisuals';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import toast from 'react-hot-toast';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -208,8 +209,12 @@ export const Inbox = () => {
   });
 
   const { mutate: toggleImportant } = useMutation({
-    mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
-      itemsApi.updateItemImportant(id, isImportant),
+    mutationFn: ({ id, isImportant, type }: { id: string; isImportant: boolean; type: string }) => {
+      if (type === 'Email') {
+        return itemsApi.patchItem(id, { isStarred: isImportant });
+      }
+      return itemsApi.updateItemImportant(id, isImportant);
+    },
     onMutate: async ({ id, isImportant }) => {
       await queryClient.cancelQueries({ queryKey: ['items'] });
       const previous = queryClient.getQueryData<PagedResult<ItemResponse>>(queryKey);
@@ -223,7 +228,13 @@ export const Inbox = () => {
       if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
       handleApiError(err, 'Lỗi đánh dấu quan trọng', { navigate });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
+    onSuccess: (_, vars) => {
+      toast.success(vars.isImportant ? 'Đã đánh dấu quan trọng' : 'Đã bỏ đánh dấu quan trọng');
+    },
+    onSettled: (_, __, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['item', vars.id] });
+    },
   });
 
   const items = data?.items ?? [];
@@ -429,7 +440,7 @@ export const Inbox = () => {
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  toggleImportant({ id: item.id, isImportant: !item.isImportant });
+                  toggleImportant({ id: item.id, isImportant: !item.isImportant, type: item.type });
                 }}
                 aria-label="Đánh dấu quan trọng"
                 className="flex-shrink-0 p-1.5 rounded-md text-slate-300 hover:text-amber-400 hover:bg-amber-50 transition-colors"

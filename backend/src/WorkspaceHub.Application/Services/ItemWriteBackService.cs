@@ -145,7 +145,11 @@ public class ItemWriteBackService : IItemWriteBackService
                 
                 var metaDictEmail = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
                 if (isUnreadChanged) metaDictEmail["isUnread"] = payload.IsUnread!.Value;
-                if (isStarredChanged) metaDictEmail["isStarred"] = payload.IsStarred!.Value;
+                if (isStarredChanged)
+                {
+                    metaDictEmail["isStarred"] = payload.IsStarred!.Value;
+                    item.IsImportant = payload.IsStarred.Value;
+                }
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEmail);
 
                 break;
