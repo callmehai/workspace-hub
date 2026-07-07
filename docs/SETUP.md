@@ -158,7 +158,7 @@ Header: X-Cron-Secret: <Cron:Secret>
 
 Trả `200` + `ProcessSyncResult` (`totalConnections`, `successCount`, `skippedCount`, `errorCount`, `details?`).
 
-**FE auto-refresh:** Inbox/Kanban poll `items` mỗi 45s; Integrations poll `connections` mỗi 60s (chỉ khi tab visible) — không cần F5 sau cron.
+**FE auto-refresh:** Inbox/Kanban poll `items` mỗi 45s; Integrations poll `connections` mỗi 60s (`refetchIntervalInBackground` — poll cả tab nền); không cần F5 sau cron.
 
 **Test thủ công (không đợi timer):**
 

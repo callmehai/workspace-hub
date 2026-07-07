@@ -103,6 +103,7 @@ export const KanbanBoard = () => {
     },
     staleTime: 0,
     refetchInterval: pollMs,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 

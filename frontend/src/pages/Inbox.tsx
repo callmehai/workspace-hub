@@ -184,6 +184,16 @@ export const Inbox = () => {
 
   const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit }];
 
+  // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
+  // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
+  const filterKey = JSON.stringify({
+    status: params.status,
+    type: params.type,
+    isImportant: params.isImportant,
+    search: params.search,
+    folderId: params.folderId,
+  });
+
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey,
     queryFn: () => itemsApi.getItems(params),
@@ -192,18 +202,20 @@ export const Inbox = () => {
     // nếu không, quay lại "Tất cả" sẽ hiện cache cũ trong khi tab lọc Email vẫn poll được mail mới.
     staleTime: 0,
     refetchInterval: pollMs,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 
-  // Khi poll phát hiện total đổi (mail mới từ cron sync) → refresh mọi query items (tab/bộ lọc khác).
-  const prevTotalRef = useRef<number | null>(null);
+  // Khi poll (cùng bộ lọc) phát hiện total đổi → refresh mọi query items (tab/bộ lọc khác).
+  const prevTotalRef = useRef<{ filterKey: string; total: number } | null>(null);
   useEffect(() => {
     if (data?.total == null) return;
-    if (prevTotalRef.current !== null && prevTotalRef.current !== data.total) {
+    const prev = prevTotalRef.current;
+    if (prev?.filterKey === filterKey && prev.total !== data.total) {
       queryClient.invalidateQueries({ queryKey: ['items'] });
     }
-    prevTotalRef.current = data.total;
-  }, [data?.total, queryClient]);
+    prevTotalRef.current = { filterKey, total: data.total };
+  }, [data?.total, filterKey, queryClient]);
 
   const { mutate: toggleImportant } = useMutation({
     mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
