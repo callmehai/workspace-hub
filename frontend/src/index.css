@@ -20,16 +20,29 @@ html {
   font-feature-settings: 'ss02' 1, 'cv05' 1, 'cv08' 1;
 }
 
+/* Nền gốc theo theme — tránh viền trắng/đen khi content chưa phủ hết viewport (overscroll). */
+body {
+  @apply bg-slate-50 dark:bg-slate-950;
+}
+
+/* Ẩn scrollbar cho sidebar folder list (đã dùng class `hide-scrollbar`). */
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @layer components {
   .html-content {
-    @apply text-sm text-gray-800 leading-relaxed;
+    @apply text-sm text-gray-800 dark:text-slate-300 leading-relaxed;
   }
 
   .html-content h1,
   .html-content h2,
   .html-content h3,
   .html-content h4 {
-    @apply font-bold text-gray-900 mt-4 mb-2;
+    @apply font-bold text-gray-900 dark:text-slate-100 mt-4 mb-2;
   }
 
   .html-content h1 {
@@ -57,11 +70,11 @@ html {
   }
 
   .html-content a {
-    @apply text-blue-600 hover:underline;
+    @apply text-brand-600 dark:text-brand-400 hover:underline;
   }
 
   .html-content blockquote {
-    @apply border-l-4 border-gray-200 pl-4 italic text-gray-600 my-4;
+    @apply border-l-4 border-gray-200 dark:border-slate-700 pl-4 italic text-gray-600 dark:text-slate-400 my-4;
   }
 
   .html-content img {

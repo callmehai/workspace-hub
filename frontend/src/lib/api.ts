@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
+import { translate } from '../i18n/translations'
 
 /** Cờ đánh dấu request đã thử refresh 1 lần (tránh vòng lặp refresh vô hạn). */
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean }
@@ -67,22 +68,24 @@ api.interceptors.response.use(
     const original = error.config as RetriableConfig | undefined
     const url: string = original?.url ?? ''
 
-    // /auth/me là PROBE "tôi là ai" — 401 ở đây nghĩa là CHƯA đăng nhập (bình thường),
-    // KHÔNG phải hết phiên. Không refresh, KHÔNG redirect (nếu không sẽ đá người dùng đang
-    // ở trang public như /verify-otp, /login về /login khi đổi tab → query refetch on focus).
+    // /auth/me là PROBE "tôi là ai". 401 ở đây có 2 nghĩa: (a) access token hết hạn
+    // nhưng phiên còn (refresh được) — PHẢI refresh như mọi endpoint khác, nếu không
+    // /auth/me sẽ 401 mãi trong khi các request khác tự hồi (access token chỉ sống 15').
+    // (b) thật sự chưa đăng nhập — refresh cũng 401. Điểm KHÁC probe: dù refresh fail
+    // cũng KHÔNG tự redirect (tránh đá người đang ở trang public /login, /verify-otp).
     const isProbe = url.includes('/auth/me')
 
     // 401 → thử refresh 1 lần rồi retry. Không refresh cho chính endpoint auth
-    // (login/refresh/logout/google) hay probe /auth/me, và không retry lần 2 (_retried).
+    // (login/refresh/logout/google) và không retry lần 2 (_retried). /auth/me VẪN refresh.
     const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh') ||
       url.includes('/auth/logout') || url.includes('/auth/google')
-    if (status === 401 && original && !original._retried && !isAuthEndpoint && !isProbe) {
+    if (status === 401 && original && !original._retried && !isAuthEndpoint) {
       original._retried = true
       try {
         await runRefresh()
         return api(original) // retry request gốc với cookie access mới
       } catch {
-        redirectToLogin() // refresh fail → hết phiên
+        if (!isProbe) redirectToLogin() // refresh fail → hết phiên (trừ probe /auth/me)
         return Promise.reject(error)
       }
     }
@@ -93,7 +96,7 @@ api.interceptors.response.use(
     }
     // 403 CsrfError → cookie CSRF thiếu/lệch (bị xoá tay hoặc trình duyệt chặn cookie).
     else if (status === 403 && error.response?.data?.error === 'CsrfError') {
-      toast.error('Phiên bảo mật không hợp lệ. Vui lòng tải lại trang và thử lại.')
+      toast.error(translate('errors.csrf'))
     }
     return Promise.reject(error)
   },

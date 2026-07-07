@@ -6,6 +6,19 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#2563eb" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Đặt class .dark TRƯỚC khi React/CSS paint để tránh nháy Sáng→Tối (FOUC) khi user đã chọn Tối.
+         Nguồn chân lý runtime là ThemeProvider; script này chỉ đồng bộ sớm với localStorage. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('wh-theme');
+          if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          var e = document.documentElement;
+          e.classList.toggle('dark', t === 'dark');
+          e.style.colorScheme = t;
+        } catch (_) {}
+      })();
+    </script>
     <!-- Inter từ CDN CHÍNH CHỦ rsms.me (bản Google Fonts bị LƯỢC OpenType features
          → không bật được ss02/cv05/cv08 phân biệt I/l). Bản này đầy đủ features + subset vietnamese. -->
     <link rel="preconnect" href="https://rsms.me/" crossorigin />

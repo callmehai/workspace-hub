@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { connectionsApi } from '../../lib/connectionsApi';
+import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
 import { TYPE_FILTERS, STATUS_FILTERS, typeIcon } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse } from '../../types/items';
@@ -31,8 +32,8 @@ function Chip({ active, onClick, children }: ChipProps) {
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors whitespace-nowrap
         ${active
-          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+          ? 'bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/30'
+          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
         }`}
     >
       {children}
@@ -66,6 +67,7 @@ export const WorkspaceToolbar = ({
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
@@ -78,21 +80,21 @@ export const WorkspaceToolbar = ({
       const connections = await connectionsApi.getConnections();
       const activeConns = connections.filter(c => c.status === 'Active');
       if (activeConns.length === 0) {
-        toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
+        toast.error(t('toolbar.noActiveConn'));
         return;
       }
-      const toastId = toast.loading('Đang đồng bộ dữ liệu...');
+      const toastId = toast.loading(t('toolbar.syncing'));
       try {
         await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
-        toast.success('Đồng bộ thành công!', { id: toastId });
+        toast.success(t('toolbar.syncDone'), { id: toastId });
         queryClient.invalidateQueries({ queryKey: ['items'] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
       } catch (err) {
-        toast.error('Lỗi đồng bộ dữ liệu', { id: toastId });
-        handleApiError(err, 'Lỗi đồng bộ dữ liệu', { navigate });
+        toast.error(t('integrations.syncErrorToast'), { id: toastId });
+        handleApiError(err, t('integrations.syncErrorToast'), { navigate });
       }
     } catch (err) {
-      handleApiError(err, 'Lỗi lấy danh sách kết nối', { navigate });
+      handleApiError(err, t('integrations.connectionsError'), { navigate });
     } finally {
       setIsSyncing(false);
     }
@@ -110,12 +112,12 @@ export const WorkspaceToolbar = ({
                 style={{ backgroundColor: folder.color || '#94a3b8' }}
               />
             )}
-            <h1 className="text-[22px] font-semibold text-slate-900 leading-tight m-0">
-              {folderId ? (folder?.name ?? 'Thư mục') : 'Tất cả mục'}
+            <h1 className="text-[22px] font-semibold text-slate-900 dark:text-slate-100 leading-tight m-0">
+              {folderId ? (folder?.name ?? t('toolbar.folder')) : t('nav.allItems')}
             </h1>
           </div>
-          <p className="text-[13px] text-slate-500 mt-0.5">
-            {folderId ? 'Thư mục · ' : ''}{subtitle}
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
+            {folderId ? t('toolbar.folderPrefix') : ''}{subtitle}
           </p>
         </div>
 
@@ -123,50 +125,50 @@ export const WorkspaceToolbar = ({
           <button
             onClick={handleSyncAll}
             disabled={isSyncing}
-            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>Đồng bộ</span>
+            <RefreshCw className={`w-4 h-4 text-slate-500 dark:text-slate-400 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{t('toolbar.sync')}</span>
           </button>
 
           {/* View switcher — luôn giữ ?folder= khi đổi view */}
-          <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px]">
+          <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px] dark:bg-slate-800 dark:border-slate-700">
             <button
               onClick={() => view !== 'list' && navigate(`/${q}`)}
               className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${
                 view === 'list'
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                  : 'text-slate-500 font-medium hover:bg-slate-50'
+                  ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
+                  : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
               }`}
             >
               <List className="w-4 h-4" />
-              <span>Danh sách</span>
+              <span>{t('toolbar.list')}</span>
             </button>
             <button
               onClick={() => view !== 'board' && navigate(`/kanban${q}`)}
               className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${
                 view === 'board'
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                  : 'text-slate-500 font-medium hover:bg-slate-50'
+                  ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
+                  : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
               }`}
             >
               <LayoutGrid className="w-4 h-4" />
-              <span>Bảng</span>
+              <span>{t('toolbar.board')}</span>
             </button>
           </div>
 
           {/* Tạo nội dung — có ở CẢ 2 view */}
           <button
             onClick={() => setIsNoteOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
           >
-            <Plus className="w-4 h-4" /> Ghi chú
+            <Plus className="w-4 h-4" /> {t('toolbar.note')}
           </button>
           <button
             onClick={() => setIsEventOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
           >
-            <Plus className="w-4 h-4" /> Sự kiện
+            <Plus className="w-4 h-4" /> {t('toolbar.event')}
           </button>
         </div>
       </div>
@@ -175,27 +177,27 @@ export const WorkspaceToolbar = ({
       <div className="flex flex-wrap gap-2 items-center mb-3">
         {STATUS_FILTERS.map(f => (
           <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => onStatusFilter(f.value)}>
-            {f.label}
+            {t(f.labelKey)}
           </Chip>
         ))}
 
-        <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
+        <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
         {TYPE_FILTERS.map(f => (
           <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => onTypeFilter(f.value)}>
             {f.value ? (
               <span className="inline-flex items-center gap-1">
-                {typeIcon(f.value, 'w-3.5 h-3.5')}{f.label}
+                {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
               </span>
-            ) : f.label}
+            ) : t(f.labelKey)}
           </Chip>
         ))}
 
-        <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
+        <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
         <Chip active={importantOnly} onClick={onImportantToggle}>
           <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
-          Quan trọng
+          {t('toolbar.important')}
         </Chip>
       </div>
 
@@ -206,8 +208,8 @@ export const WorkspaceToolbar = ({
           type="text"
           value={searchInput}
           onChange={e => onSearchChange(e.target.value)}
-          placeholder="Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)"
-          className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
+          placeholder={t('toolbar.search')}
+          className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
         />
       </div>
 

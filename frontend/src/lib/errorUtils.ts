@@ -1,5 +1,6 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { translate } from '../i18n/translations';
 
 export interface ApiErrorResponse {
   error?: string;
@@ -19,8 +20,8 @@ export interface HandleApiErrorOptions {
  * Ưu tiên: Xử lý status code (409, 403, 502) > details[] > message > fallbackMessage
  */
 export const handleApiError = (
-  err: unknown, 
-  fallbackMessage: string = 'Có lỗi xảy ra',
+  err: unknown,
+  fallbackMessage: string = translate('errors.generic'),
   options?: HandleApiErrorOptions
 ): void => {
   if (import.meta.env.DEV) {
@@ -33,7 +34,7 @@ export const handleApiError = (
 
     if (status === 409) {
       if (!options?.silent) {
-        toast.error(data?.message || 'Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại...');
+        toast.error(data?.message || translate('errors.conflict'));
       }
       if (options?.onConflict) {
         options.onConflict();
@@ -46,7 +47,7 @@ export const handleApiError = (
         return; // Interceptor đã xử lý CsrfError
       }
       if (!options?.silent) {
-        toast.error('Quyền truy cập không đủ (Thiếu scope). Vui lòng kết nối lại tài khoản.');
+        toast.error(translate('errors.forbiddenScope'));
         if (options?.navigate) {
           options.navigate('/integrations');
         }
@@ -56,7 +57,7 @@ export const handleApiError = (
 
     if (status === 502) {
       if (!options?.silent) {
-        toast.error('Lỗi từ nhà cung cấp dịch vụ (Google/Jira). Vui lòng thử lại sau.');
+        toast.error(translate('errors.provider'));
       }
       return;
     }

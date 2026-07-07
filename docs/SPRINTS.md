@@ -136,6 +136,19 @@
 
 ---
 
+## UI polish + Theme + i18n + Profile (đề xuất — CHƯA có trên Jira, số tạm SCRUM-73→76)
+
+> Phát sinh từ owner 2026-07-07: review UI (fix lệch tông màu brand blue↔indigo, Header nền, avatar) + **theme Sáng/Tối**, **song ngữ VI/EN** (đổi KHÔNG remount), **trang Profile** (chuẩn bị avatar/R2). 4 task này **chưa có trên board** — draft đầy đủ + CSV import ở `docs/tickets-ui-i18n-theme-profile.md`; quyết định kỹ thuật: `docs/CHANGELOG.md` [2026-07-07].
+
+| Ticket (tạm) | Việc | Labels | Status |
+|---|---|---|---|
+| SCRUM-73 | FE: Song ngữ VI/EN (i18n tự viết, `useI18n().t()`, đổi lang KHÔNG remount) | frontend, i18n | 🔄 In Progress — hạ tầng + shell/auth/profile/toolbar + nhãn chính Inbox/Kanban/Integrations xong; ScheduledEmails/SendEmail/Admin/ItemDetail/modals mở rộng dần |
+| SCRUM-74 | FE: Trang Hồ sơ người dùng `/profile` (info + tuỳ chọn theme/ngôn ngữ; link Header+Sidebar) | frontend, profile | ✅ Done — vùng avatar chừa chỗ cho SCRUM-75 |
+| SCRUM-75 | Avatar upload + lưu trữ **Cloudflare R2** (cột `Users.AvatarUrl` + migration, `POST/DELETE /api/users/me/avatar`, config env `R2:*`) | backend, frontend, storage, r2 | ⏳ To Do — **task kế tiếp** (owner đã báo) |
+| SCRUM-76 | FE: Theme Sáng/Tối (toggle, persist `wh-theme`, class `.dark`, no remount, chống FOUC) | frontend, theme | ✅ Done (dark) — phủ **toàn app**: shell + auth + profile + Inbox/Kanban/Integrations + Admin + ScheduledEmails/SendEmail + ItemDetail drawer + tất cả modal + RichTextEditor/BulkActionBar/DateTimePicker/EmailChipsInput + badge tint đã chỉnh contrast. **Có thể gộp vào SCRUM-50**. |
+
+---
+
 ## Ngoài scope (KHÔNG có ticket Jira)
 
 Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — chỉ là định hướng tương lai, đừng code, đừng gán số SCRUM (số 39–46 nay đã dùng cho việc khác; Jira giờ là 54→60):
