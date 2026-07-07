@@ -133,7 +133,7 @@ public class ProcessConnectionsSyncService: IProcessConnectionsSyncService{
         }
         catch (Exception ex)
         {
-            if (IsPersistentAuthFailure(ex))
+            if (ConnectionSyncExceptions.IsPersistentAuthFailure(ex))
                 await MarkConnectionErrorAsync(connectionId, ex.Message, ct);
             else
                 _logger.LogWarning(ex,
@@ -144,9 +144,6 @@ public class ProcessConnectionsSyncService: IProcessConnectionsSyncService{
                 connectionId, conn.ServiceType.ToString(), "Error", ex.Message);
         }
     }
-
-    private static bool IsPersistentAuthFailure(Exception ex)
-        => ex is ForbiddenException or UnauthorizedException;
 
     private async Task MarkConnectionErrorAsync(Guid connectionId, string message, CancellationToken ct)
     {

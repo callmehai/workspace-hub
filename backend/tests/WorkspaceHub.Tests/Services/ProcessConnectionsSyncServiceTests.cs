@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
+using System.Net;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Sync;
@@ -78,6 +79,34 @@ public class ProcessConnectionsSyncServiceTests
         SetupTracked(conn);
         _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("API fail"));
+
+        var result = await _sut.ProcessConnectionsSyncAsync();
+
+        result.ErrorCount.Should().Be(1);
+        conn.Status.Should().Be(ConnectionStatus.Active);
+    }
+
+    [Fact]
+    public async Task ProcessConnectionsSyncAsync_SyncThrows_ProviderForbidden_MarksConnectionError()
+    {
+        var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
+        SetupTracked(conn);
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ProviderException("Google API trả về lỗi 403: invalid_grant", HttpStatusCode.Forbidden));
+
+        var result = await _sut.ProcessConnectionsSyncAsync();
+
+        result.ErrorCount.Should().Be(1);
+        conn.Status.Should().Be(ConnectionStatus.Error);
+    }
+
+    [Fact]
+    public async Task ProcessConnectionsSyncAsync_SyncThrows_ProviderServerError_KeepsActive()
+    {
+        var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
+        SetupTracked(conn);
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ProviderException("Google API trả về lỗi 503: unavailable", HttpStatusCode.ServiceUnavailable));
 
         var result = await _sut.ProcessConnectionsSyncAsync();
 
