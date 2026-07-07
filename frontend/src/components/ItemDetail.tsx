@@ -10,6 +10,7 @@ import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
+import { getStatusLabel } from '../lib/itemMeta';
 import toast from 'react-hot-toast';
 
 interface ItemDetailProps {
@@ -18,7 +19,6 @@ interface ItemDetailProps {
   onDeleted?: () => void;
 }
 
-const STATUS_LABEL: Record<string, string> = { Inbox: 'Chưa xem', Doing: 'Đang xử lý', Done: 'Done' };
 const STATUS_COLOR: Record<string, string> = {
   Inbox: 'bg-slate-100 text-slate-600 border border-slate-200',
   Doing: 'bg-blue-50 text-blue-700 border border-blue-100',
@@ -230,17 +230,21 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   }
 
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
+  const isTicket = item.type === 'Ticket';
   const isSeen = item.status === 'Inbox' && item.type === 'Email' && !isUnread;
-  const statusLabel = isSeen
-    ? 'Đã xem'
-    : (STATUS_LABEL[item.status] ?? item.status);
-  // Inbox chưa xem = cam (cần chú ý); đã xem = xám. Doing/Done giữ nguyên.
-  const statusColor = item.status === 'Inbox'
-    ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200')
-    : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500');
-  const statusDot = item.status === 'Inbox'
-    ? (isSeen ? 'bg-slate-300' : 'bg-amber-500')
-    : (STATUS_DOT[item.status] ?? 'bg-slate-400');
+  // Nhãn: Ticket = status thô từ Jira (giữ nguyên); Email = Chưa xem/Đã xem; còn lại = triage chung.
+  const statusLabel = getStatusLabel(item);
+  // Màu: Ticket trung tính theo category (xám/xanh dương/xanh lá). Email/khác: Inbox chưa xử lý = cam, đã xem = xám.
+  const statusColor = isTicket
+    ? (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200')
+    : item.status === 'Inbox'
+      ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200')
+      : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500');
+  const statusDot = isTicket
+    ? (STATUS_DOT[item.status] ?? 'bg-slate-400')
+    : item.status === 'Inbox'
+      ? (isSeen ? 'bg-slate-300' : 'bg-amber-500')
+      : (STATUS_DOT[item.status] ?? 'bg-slate-400');
 
   const typeChip = `inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${tInfo.bg}`;
 

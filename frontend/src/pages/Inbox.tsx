@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
-import { isEmailUnread } from '../lib/itemMeta';
+import { isEmailUnread, getStatusLabel } from '../lib/itemMeta';
 import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
   Star, AlertCircle, Inbox as InboxIcon,
@@ -49,26 +49,30 @@ function isSeen(item: ItemResponse): boolean {
   return item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item);
 }
 
+// Màu theo category Kanban (dùng cho Ticket & các loại khác ở Doing/Done): xám / xanh dương / xanh lá.
+const CHIP_BY_STATUS: Record<string, string> = {
+  Inbox: 'bg-slate-100 text-slate-600',
+  Doing: 'bg-blue-50 text-blue-700',
+  Done: 'bg-emerald-50 text-emerald-700',
+};
+const DOT_BY_STATUS: Record<string, string> = {
+  Inbox: 'bg-slate-400',
+  Doing: 'bg-blue-500',
+  Done: 'bg-emerald-500',
+};
+
 function statusChipClass(item: ItemResponse): string {
-  if (item.status === 'Inbox') {
-    return isSeen(item) ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700';
-  }
-  const map: Record<string, string> = {
-    Doing: 'bg-blue-50 text-blue-700',
-    Done: 'bg-emerald-50 text-emerald-700',
-  };
-  return map[item.status] ?? 'bg-slate-100 text-slate-500';
+  // Ticket (Jira): trung tính theo category — KHÔNG dùng cam "chưa xem" (status Jira tuỳ biến).
+  if (item.type === 'Ticket') return CHIP_BY_STATUS[item.status] ?? 'bg-slate-100 text-slate-600';
+  // Email/khác ở Inbox: chưa xử lý = cam, đã xem = xám.
+  if (item.status === 'Inbox') return isSeen(item) ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700';
+  return CHIP_BY_STATUS[item.status] ?? 'bg-slate-100 text-slate-500';
 }
 
 function statusDotClass(item: ItemResponse): string {
-  if (item.status === 'Inbox') {
-    return isSeen(item) ? 'bg-slate-300' : 'bg-amber-500';
-  }
-  const map: Record<string, string> = {
-    Doing: 'bg-blue-500',
-    Done: 'bg-emerald-500',
-  };
-  return map[item.status] ?? 'bg-slate-400';
+  if (item.type === 'Ticket') return DOT_BY_STATUS[item.status] ?? 'bg-slate-400';
+  if (item.status === 'Inbox') return isSeen(item) ? 'bg-slate-300' : 'bg-amber-500';
+  return DOT_BY_STATUS[item.status] ?? 'bg-slate-400';
 }
 
 function statusLabel(s: ItemStatus): string {
@@ -76,13 +80,6 @@ function statusLabel(s: ItemStatus): string {
     Inbox: 'Chưa xem', Doing: 'Đang xử lý', Done: 'Hoàn thành',
   };
   return map[s] ?? s;
-}
-
-function getItemStatusLabel(item: ItemResponse): string {
-  if (item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item)) {
-    return 'Đã xem';
-  }
-  return statusLabel(item.status);
 }
 
 /*
@@ -425,7 +422,7 @@ export const Inbox = () => {
                 <span className={`text-[11.5px] ${v.time}`}>{formatTime(item.occurredAt)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item)}`} />
-                  {getItemStatusLabel(item)}
+                  {getStatusLabel(item)}
                 </span>
               </div>
 
