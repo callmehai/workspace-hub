@@ -76,7 +76,7 @@ function statusDotClass(s: ItemStatus): string {
 
 function statusLabel(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
-    Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Done',
+    Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Hoàn thành',
   };
   return map[s] ?? s;
 }
@@ -187,23 +187,17 @@ export const Inbox = () => {
     }
   };
 
-  const getInitialType = (): ItemType | null => {
-    if (location.pathname === '/files') return 'File';
-    if (location.pathname === '/calendar') return 'Event';
-    if (location.pathname === '/tasks') return 'Ticket';
-    return null;
-  };
-
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>(getInitialType);
+  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Folder = CONTEXT của trang (từ ?folder=), KHÔNG phải filter — filter (status/type/…) áp bên trong context.
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  
+
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
@@ -212,18 +206,8 @@ export const Inbox = () => {
     const folder = params.get('folder');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedFolderId(folder || null);
-
-    if (location.pathname === '/files') {
-      setTypeFilter('File');
-    } else if (location.pathname === '/calendar') {
-      setTypeFilter('Event');
-    } else if (location.pathname === '/tasks') {
-      setTypeFilter('Ticket');
-    } else {
-      setTypeFilter(null);
-    }
     setPage(1);
-  }, [location.pathname, location.search]);
+  }, [location.search]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -327,23 +311,22 @@ export const Inbox = () => {
     setPage(1);
   };
 
-  const handleRemoveFolderFilter = () => {
-    const params = new URLSearchParams(location.search);
-    params.delete('folder');
-    navigate(`${location.pathname}?${params.toString()}`);
-  };
+  const currentFolder = selectedFolderId
+    ? folders.find(f => f.id === selectedFolderId) ?? null
+    : null;
+  const hasActiveFilters = Boolean(statusFilter || typeFilter || importantOnly || search);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
 
   const STATUS_FILTERS: { label: string; value: ItemStatus | null }[] = [
-    { label: 'Tất cả', value: null },
+    { label: 'Mọi trạng thái', value: null },
     { label: 'Cần xem', value: 'Inbox' },
     { label: 'Đang xử lý', value: 'Doing' },
-    { label: 'Done', value: 'Done' },
+    { label: 'Hoàn thành', value: 'Done' },
   ];
   const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
-    { label: 'Tất cả', value: null },
+    { label: 'Mọi loại', value: null },
     { label: 'Email', value: 'Email' },
     { label: 'Sự kiện', value: 'Event' },
     { label: 'Tệp', value: 'File' },
@@ -357,12 +340,22 @@ export const Inbox = () => {
     <div className="flex-1 min-h-0 bg-slate-50 overflow-y-auto">
       <div className="max-w-[1120px] mx-auto px-6 py-5">
 
-        {/* ── Page header ── */}
+        {/* ── Page header: hiển thị CONTEXT (Tất cả mục / tên thư mục) ── */}
         <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
           <div>
-            <h1 className="text-[22px] font-semibold text-slate-900 leading-tight m-0">Inbox</h1>
+            <div className="flex items-center gap-2.5">
+              {currentFolder && (
+                <span
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ backgroundColor: currentFolder.color || '#94a3b8' }}
+                />
+              )}
+              <h1 className="text-[22px] font-semibold text-slate-900 leading-tight m-0">
+                {selectedFolderId ? (currentFolder?.name ?? 'Thư mục') : 'Tất cả mục'}
+              </h1>
+            </div>
             <p className="text-[13px] text-slate-500 mt-0.5">
-              {isLoading ? 'Đang tải…' : `${total} mục`}
+              {selectedFolderId ? 'Thư mục · ' : ''}{isLoading ? 'Đang tải…' : `${total} mục`}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -381,8 +374,8 @@ export const Inbox = () => {
                 <List className="w-4 h-4" />
                 <span>Danh sách</span>
               </button>
-              <button 
-                onClick={() => navigate('/kanban')}
+              <button
+                onClick={() => navigate(selectedFolderId ? `/kanban?folder=${selectedFolderId}` : '/kanban')}
                 className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -432,16 +425,10 @@ export const Inbox = () => {
           />
         </div>
 
-        {/* ── Active filter summary ── */}
-        {(statusFilter || typeFilter || importantOnly || search || selectedFolderId) && (
+        {/* ── Active filter summary (KHÔNG gồm folder — folder là context, hiển thị ở header) ── */}
+        {hasActiveFilters && (
           <div className="flex items-center gap-2 mb-3 text-[12.5px] text-slate-500 flex-wrap">
             <span>Đang lọc:</span>
-            {selectedFolderId && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                Thư mục: {folders.find(f => f.id === selectedFolderId)?.name || 'Ẩn'}
-                <button onClick={handleRemoveFolderFilter} className="hover:text-indigo-900 font-bold ml-1">×</button>
-              </span>
-            )}
             {statusFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{statusLabel(statusFilter)}</span>}
             {typeFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{typeLabel(typeFilter)}</span>}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">⭐ Quan trọng</span>}
@@ -464,11 +451,27 @@ export const Inbox = () => {
           )}
 
           {isEmpty && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 px-6 text-center">
               <InboxIcon className="w-10 h-10 text-slate-300" />
-              <p className="text-[13.5px] text-slate-400">Không có mục nào.</p>
-              {(statusFilter || typeFilter || importantOnly || search) && (
-                <button onClick={clearFilters} className="text-[13px] text-indigo-600 hover:underline">Xoá bộ lọc</button>
+              {hasActiveFilters ? (
+                <>
+                  <p className="text-[13.5px] text-slate-400">Không có mục nào khớp bộ lọc.</p>
+                  <button onClick={clearFilters} className="text-[13px] text-indigo-600 hover:underline">Xoá bộ lọc</button>
+                </>
+              ) : selectedFolderId ? (
+                <>
+                  <p className="text-[13.5px] text-slate-500 font-medium">Thư mục này chưa có mục nào.</p>
+                  <p className="text-[12.5px] text-slate-400 max-w-[360px]">
+                    Mở <span className="font-medium text-slate-500">Tất cả mục</span> rồi kéo-thả item vào thư mục ở sidebar, hoặc dùng nút gán thư mục trên từng item.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13.5px] text-slate-500 font-medium">Chưa có mục nào.</p>
+                  <p className="text-[12.5px] text-slate-400 max-w-[360px]">
+                    Kết nối Gmail / Calendar / Drive / Jira rồi bấm <span className="font-medium text-slate-500">Đồng bộ</span> để kéo dữ liệu về.
+                  </p>
+                </>
               )}
             </div>
           )}
@@ -518,7 +521,7 @@ export const Inbox = () => {
                 </div>
                 {item.folderIds && item.folderIds.length > 0 && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    {item.folderIds.map((fId: string) => {
+                    {item.folderIds.filter(fId => fId !== selectedFolderId).map((fId: string) => {
                       const f = folders.find(fol => fol.id === fId);
                       if (!f) return null;
                       return (

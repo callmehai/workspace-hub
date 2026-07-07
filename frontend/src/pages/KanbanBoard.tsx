@@ -54,7 +54,7 @@ function typeTileClass(t: ItemType): string {
 const COLUMNS: { title: string, status: ItemStatus, dotColor: string }[] = [
   { title: 'Cần xem', status: 'Inbox', dotColor: 'bg-slate-400' },
   { title: 'Đang xử lý', status: 'Doing', dotColor: 'bg-blue-500' },
-  { title: 'Done', status: 'Done', dotColor: 'bg-emerald-500' },
+  { title: 'Hoàn thành', status: 'Done', dotColor: 'bg-emerald-500' },
 ];
 
 interface ChipProps {
@@ -80,7 +80,7 @@ function Chip({ active, onClick, children }: ChipProps) {
 
 
 const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
-  { label: 'Tất cả', value: null },
+  { label: 'Mọi loại', value: null },
   { label: 'Email', value: 'Email' },
   { label: 'Sự kiện', value: 'Event' },
   { label: 'Tệp', value: 'File' },
@@ -333,9 +333,10 @@ export const KanbanBoard = () => {
     }
   };
 
-  const currentFolderName = selectedFolderId
-    ? (folders.find((f: FolderResponse) => f.id === selectedFolderId)?.name || 'Thư mục ẩn')
-    : 'Tất cả thư mục';
+  // Folder = CONTEXT của trang (từ ?folder=), đồng bộ hành vi với view Danh sách (Inbox.tsx)
+  const currentFolder = selectedFolderId
+    ? folders.find((f: FolderResponse) => f.id === selectedFolderId) ?? null
+    : null;
 
   return (
     <div className="h-full flex flex-col min-w-0 overflow-hidden bg-slate-50 text-slate-900">
@@ -343,8 +344,20 @@ export const KanbanBoard = () => {
       <div className="px-6 py-4 border-b border-slate-200 bg-white flex flex-col shrink-0 gap-4">
         <div className="flex justify-between items-end flex-wrap gap-4">
           <div>
-            <h1 className="text-[22px] font-semibold text-slate-900 leading-tight mb-0.5">Bảng Kanban</h1>
-            <p className="text-[13px] text-slate-500">{currentFolderName} · kéo-thả thẻ để đổi trạng thái</p>
+            <div className="flex items-center gap-2.5">
+              {currentFolder && (
+                <span
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ backgroundColor: currentFolder.color || '#94a3b8' }}
+                />
+              )}
+              <h1 className="text-[22px] font-semibold text-slate-900 leading-tight mb-0.5">
+                {selectedFolderId ? (currentFolder?.name ?? 'Thư mục') : 'Tất cả mục'}
+              </h1>
+            </div>
+            <p className="text-[13px] text-slate-500">
+              {selectedFolderId ? 'Thư mục · ' : ''}Bảng Kanban · kéo-thả thẻ để đổi trạng thái
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -511,7 +524,7 @@ export const KanbanBoard = () => {
                                 {typeIcon(item.type)}
                                 {typeLabel(item.type)}
                               </span>
-                              {item.folderIds?.map(fId => {
+                              {item.folderIds?.filter(fId => fId !== selectedFolderId).map(fId => {
                                 const f = folders.find(fol => fol.id === fId);
                                 if (!f) return null;
                                 return (
@@ -595,7 +608,14 @@ export const KanbanBoard = () => {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="text-[16px] font-semibold text-slate-900">Tạo ghi chú mới</h2>
+              <h2 className="text-[16px] font-semibold text-slate-900">
+                Tạo ghi chú mới
+                {currentFolder && (
+                  <span className="ml-2 text-[12px] font-medium text-slate-500">
+                    → thư mục "{currentFolder.name}"
+                  </span>
+                )}
+              </h2>
               <button onClick={() => setIsNoteModalOpen(false)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-lg transition-colors">
                 &times;
               </button>

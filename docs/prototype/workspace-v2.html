@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workspace Hub — Prototype v2: Folder context + Danh sách/Bảng</title>
+<style>
+/* ═══════════ Design tokens — khớp app thật (Tailwind slate + indigo) ═══════════ */
+:root{
+  --ground:#f8fafc; --surface:#ffffff; --surface-2:#f1f5f9; --border:#e2e8f0; --border-soft:#f1f5f9;
+  --ink:#0f172a; --ink-2:#334155; --muted:#64748b; --faint:#94a3b8;
+  --accent:#4f46e5; --accent-soft:#eef2ff; --accent-ink:#4338ca;
+  --info:#3b82f6; --info-soft:#eff6ff; --ok:#10b981; --ok-soft:#ecfdf5;
+  --warn:#f59e0b; --warn-soft:#fffbeb; --danger:#e11d48;
+  --violet:#7c3aed; --violet-soft:#f5f3ff;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.06);
+  --shadow-lg:0 8px 30px rgba(15,23,42,.16);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --ground:#0b1120; --surface:#101a2e; --surface-2:#16213a; --border:#233150; --border-soft:#1a2742;
+    --ink:#e6ecf7; --ink-2:#c3cde0; --muted:#8496b5; --faint:#5d6f8f;
+    --accent:#818cf8; --accent-soft:#1e2350; --accent-ink:#a5b4fc;
+    --info:#60a5fa; --info-soft:#122544; --ok:#34d399; --ok-soft:#0d2b22;
+    --warn:#fbbf24; --warn-soft:#2d2410; --danger:#fb7185;
+    --violet:#a78bfa; --violet-soft:#221a3d;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.35);
+    --shadow-lg:0 8px 30px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="light"]{
+  --ground:#f8fafc; --surface:#ffffff; --surface-2:#f1f5f9; --border:#e2e8f0; --border-soft:#f1f5f9;
+  --ink:#0f172a; --ink-2:#334155; --muted:#64748b; --faint:#94a3b8;
+  --accent:#4f46e5; --accent-soft:#eef2ff; --accent-ink:#4338ca;
+  --info:#3b82f6; --info-soft:#eff6ff; --ok:#10b981; --ok-soft:#ecfdf5;
+  --warn:#f59e0b; --warn-soft:#fffbeb; --danger:#e11d48;
+  --violet:#7c3aed; --violet-soft:#f5f3ff;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.06);
+  --shadow-lg:0 8px 30px rgba(15,23,42,.16);
+}
+:root[data-theme="dark"]{
+  --ground:#0b1120; --surface:#101a2e; --surface-2:#16213a; --border:#233150; --border-soft:#1a2742;
+  --ink:#e6ecf7; --ink-2:#c3cde0; --muted:#8496b5; --faint:#5d6f8f;
+  --accent:#818cf8; --accent-soft:#1e2350; --accent-ink:#a5b4fc;
+  --info:#60a5fa; --info-soft:#122544; --ok:#34d399; --ok-soft:#0d2b22;
+  --warn:#fbbf24; --warn-soft:#2d2410; --danger:#fb7185;
+  --violet:#a78bfa; --violet-soft:#221a3d;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.5);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ground); color:var(--ink);
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* ═══════════ Khung tài liệu ═══════════ */
+.doc{max-width:1280px;margin:0 auto;padding:28px 24px 80px}
+.doc-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.doc-head h1{font-size:21px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.doc-head .sub{color:var(--muted);font-size:13px;margin-top:4px}
+.doc-tools{display:flex;gap:8px}
+.tool-btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:12.5px;font-weight:600;color:var(--ink-2);transition:background .15s}
+.tool-btn:hover{background:var(--surface-2)}
+.tool-btn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+
+/* Thanh URL giả lập — hợp đồng routing */
+.urlbar{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-bottom:none;border-radius:12px 12px 0 0;padding:9px 14px}
+.urlbar .dots{display:flex;gap:5px}
+.urlbar .dots i{width:10px;height:10px;border-radius:50%;background:var(--border)}
+.urlbar .addr{flex:1;background:var(--surface-2);border-radius:7px;padding:4px 12px;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);white-space:nowrap;overflow-x:auto}
+.urlbar .addr b{color:var(--accent-ink);font-weight:600}
+
+/* ═══════════ App shell ═══════════ */
+.frame{position:relative;height:680px;display:flex;border:1px solid var(--border);border-radius:0 0 12px 12px;overflow:hidden;background:var(--ground);box-shadow:var(--shadow)}
+
+/* Sidebar */
+.sb{width:232px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 12px;flex-shrink:0}
+.sb-brand{display:flex;align-items:center;gap:10px;padding:2px 8px 16px}
+.sb-brand .logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px}
+.sb-brand span{font-weight:600;font-size:15px}
+.sb nav{display:flex;flex-direction:column;gap:2px}
+.sb-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;font-size:13.5px;font-weight:500;color:var(--muted);text-align:left;transition:background .12s}
+.sb-item:hover{background:var(--surface-2)}
+.sb-item.active{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.sb-item .ic{width:17px;text-align:center;flex-shrink:0;opacity:.85}
+.sb-item .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-item .count{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.sb-sec{display:flex;align-items:center;justify-content:space-between;margin:20px 10px 6px}
+.sb-sec span{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.sb-sec button{color:var(--faint);width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:15px;line-height:1}
+.sb-sec button:hover{background:var(--surface-2);color:var(--ink)}
+.sb-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sb-item.droptarget{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.sb-user{margin-top:auto;border-top:1px solid var(--border);padding-top:10px;display:flex;align-items:center;gap:9px;padding-left:4px}
+.sb-user .av{width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-weight:600;font-size:13px}
+.sb-user .who{flex:1;min-width:0}
+.sb-user .who b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user .who i{display:block;font-style:normal;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{height:52px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:14px;padding:0 18px;flex-shrink:0}
+.topbar .search{flex:1;max-width:520px;display:flex;align-items:center;gap:8px;background:var(--ground);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--faint);font-size:13px}
+.topbar .spacer{flex:1}
+.topbar .bell{position:relative;color:var(--muted);font-size:16px}
+.topbar .bell i{position:absolute;top:-2px;right:-3px;width:7px;height:7px;background:var(--danger);border-radius:50%;border:2px solid var(--surface)}
+.content{flex:1;overflow-y:auto;padding:18px 22px}
+
+/* Page header = CONTEXT */
+.ctx-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ctx-head .t{display:flex;align-items:center;gap:10px}
+.ctx-head .t .dot{width:12px;height:12px;border-radius:50%}
+.ctx-head h2{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+.ctx-head .meta{font-size:12.5px;color:var(--muted);margin-top:3px}
+.ctx-actions{display:flex;align-items:center;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface);font-size:13px;font-weight:600;color:var(--ink-2);box-shadow:0 1px 1px rgba(15,23,42,.04);transition:background .12s}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.seg{display:flex;gap:2px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:9px}
+.seg button{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--muted)}
+.seg button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.seg button:not(.on):hover{background:var(--surface-2)}
+
+/* Filter chips */
+.chips{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:500;color:var(--muted);white-space:nowrap;transition:border-color .12s}
+.chip:hover{border-color:var(--faint)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.chips .sep{width:1px;height:20px;background:var(--border)}
+
+/* List view */
+.list{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.row{position:relative;display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .1s}
+.row:last-child{border-bottom:none}
+.row:hover{background:var(--surface-2)}
+.row.unread::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--info)}
+.tile{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:15px;flex-shrink:0}
+.t-Email{background:var(--info-soft);color:var(--info)} .t-Event{background:var(--warn-soft);color:var(--warn)}
+.t-File{background:var(--ok-soft);color:var(--ok)} .t-Note{background:var(--surface-2);color:var(--muted)}
+.t-Ticket{background:var(--violet-soft);color:var(--violet)}
+.row .body{flex:1;min-width:0}
+.row .title{font-size:13.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.unread .title{font-weight:700}
+.row .snip{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.fchips{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.fchip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px}
+.row .side{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.row .time{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2.5px 9px;border-radius:999px;font-size:10.5px;font-weight:600}
+.pill i{width:6px;height:6px;border-radius:50%}
+.p-Inbox{background:var(--surface-2);color:var(--muted)} .p-Inbox i{background:var(--faint)}
+.p-Doing{background:var(--info-soft);color:var(--info)} .p-Doing i{background:var(--info)}
+.p-Done{background:var(--ok-soft);color:var(--ok)} .p-Done i{background:var(--ok)}
+.star{color:var(--border);font-size:15px;flex-shrink:0;padding:4px;border-radius:6px}
+.star:hover{background:var(--warn-soft)}
+.star.on{color:var(--warn)}
+
+/* Board view */
+.board{display:flex;gap:16px;align-items:flex-start;min-height:420px}
+.col{flex:1;min-width:230px;display:flex;flex-direction:column}
+.col-h{display:flex;align-items:center;gap:8px;padding:0 4px 8px;font-size:13.5px;font-weight:600}
+.col-h i{width:8px;height:8px;border-radius:50%}
+.col-h .n{font-size:11px;font-weight:700;color:var(--muted);background:var(--surface-2);padding:1px 8px;border-radius:999px;font-variant-numeric:tabular-nums}
+.col-body{flex:1;display:flex;flex-direction:column;gap:9px;background:var(--surface-2);border:2px solid transparent;border-radius:12px;padding:9px;min-height:340px;transition:border-color .12s,background .12s}
+.col-body.over{border-color:var(--accent);border-style:dashed;background:var(--accent-soft)}
+.card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:11px 12px;cursor:grab;box-shadow:0 1px 1px rgba(15,23,42,.04);overflow:hidden;transition:box-shadow .12s}
+.card:hover{box-shadow:var(--shadow)}
+.card.dragging{opacity:.35}
+.card.unread::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--info)}
+.card .top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2.5px 8px;border-radius:6px}
+.card h4{margin:0;font-size:13px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card.unread h4{font-weight:700}
+.card .foot{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.col-empty{border:1.5px dashed var(--border);border-radius:10px;padding:18px 10px;text-align:center;font-size:12px;color:var(--faint)}
+
+/* Empty states */
+.empty{padding:56px 24px;text-align:center}
+.empty .glyph{font-size:34px;opacity:.4}
+.empty h3{font-size:14px;font-weight:600;margin:10px 0 6px;color:var(--ink-2)}
+.empty p{font-size:12.5px;color:var(--muted);max-width:380px;margin:0 auto;line-height:1.6}
+.empty p b{color:var(--ink-2);font-weight:600}
+
+/* Drawer */
+.drawer{position:absolute;top:0;right:0;bottom:0;width:380px;max-width:85%;background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);transform:translateX(105%);transition:transform .2s ease;display:flex;flex-direction:column;z-index:30}
+.drawer.open{transform:translateX(0)}
+.drawer-h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+.drawer-h b{font-size:14px}
+.drawer-h button{color:var(--muted);font-size:18px;width:28px;height:28px;border-radius:7px;display:grid;place-items:center}
+.drawer-h button:hover{background:var(--surface-2)}
+.drawer-body{padding:16px;overflow-y:auto;font-size:13px;color:var(--ink-2);display:flex;flex-direction:column;gap:14px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;font-size:12.5px}
+.kv dt{color:var(--faint)} .kv dd{margin:0;color:var(--ink-2)}
+.drawer-acts{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Toast */
+.toast-wrap{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:40;pointer-events:none}
+.toast{background:var(--ink);color:var(--ground);font-size:12.5px;font-weight:500;padding:9px 16px;border-radius:9px;box-shadow:var(--shadow-lg);animation:pop .18s ease}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ═══════════ Spec sheet (phần viết cho dev) ═══════════ */
+.spec{margin-top:36px}
+.spec h2{font-size:16px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
+.spec .lead{color:var(--muted);font-size:13px;margin:0 0 18px;max-width:70ch}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.spec-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.spec-card h3{margin:0 0 10px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.spec-card h3 .no{width:20px;height:20px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-size:11px;font-weight:700;flex-shrink:0}
+.spec-card ul{margin:0;padding-left:18px;font-size:12.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:6px}
+.spec-card li b{font-weight:600}
+.spec-card code{font:11.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px;white-space:nowrap}
+.spec-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.spec-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:700;padding:6px 10px;border-bottom:1px solid var(--border)}
+.spec-table td{padding:8px 10px;border-bottom:1px solid var(--border-soft);color:var(--ink-2);vertical-align:top}
+.spec-table tr:last-child td{border-bottom:none}
+.spec-table .overflow{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <div class="doc-head">
+    <div>
+      <h1>Workspace Hub — Prototype v2 · Folder context &amp; Danh sách/Bảng</h1>
+      <div class="sub">Prototype tương tác + spec cơ chế. Team code FE bám theo file này — mọi hành vi bên dưới đều click/kéo được thật.</div>
+    </div>
+    <div class="doc-tools">
+      <button class="tool-btn" id="themeBtn" aria-pressed="false">◐ Dark mode</button>
+      <button class="tool-btn" id="resetBtn">↺ Reset demo</button>
+    </div>
+  </div>
+
+  <!-- Thanh URL: hợp đồng routing hiển thị sống -->
+  <div class="urlbar">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <div class="addr" id="urlbar">app.workspace-hub.space<b>/</b></div>
+  </div>
+
+  <!-- ═══════════ APP FRAME ═══════════ -->
+  <div class="frame" id="frame">
+    <aside class="sb">
+      <div class="sb-brand"><div class="logo">W</div><span>Workspace Hub</span></div>
+      <nav id="navMain"></nav>
+      <div class="sb-sec"><span>Thư mục</span><button title="Thư mục mới" onclick="toast('Mở modal tạo thư mục (FolderModal)')">+</button></div>
+      <nav id="navFolders" style="overflow-y:auto;flex:1;min-height:0"></nav>
+      <div class="sb-user">
+        <div class="av">H</div>
+        <div class="who"><b>Hải Trần Việt</b><i>hai@workspace-hub.space</i></div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="search">⌕&nbsp; Tìm kiếm trên mọi công cụ…</div>
+        <div class="spacer"></div>
+        <button class="btn primary" style="height:30px" onclick="toast('→ trang Kết nối dịch vụ')">+ Kết nối dịch vụ</button>
+        <button class="bell" title="Thông báo">🔔<i></i></button>
+      </div>
+      <div class="content" id="page"></div>
+    </div>
+
+    <!-- Drawer chi tiết item -->
+    <aside class="drawer" id="drawer"></aside>
+    <div class="toast-wrap" id="toasts"></div>
+  </div>
+
+  <!-- ═══════════ SPEC CHO DEV ═══════════ -->
+  <section class="spec">
+    <h2>Spec cơ chế — hợp đồng để code</h2>
+    <p class="lead">Mô hình: <b>Thư mục = ngữ cảnh (context)</b>, không phải bộ lọc. Một context có 2 <b>view</b>: Danh sách và Bảng. Bộ lọc (trạng thái / loại / quan trọng / tìm kiếm) áp <em>bên trong</em> context hiện tại.</p>
+
+    <div class="spec-grid">
+      <div class="spec-card">
+        <h3><span class="no">1</span>Routing</h3>
+        <ul>
+          <li>View Danh sách: <code>/</code> · View Bảng: <code>/kanban</code></li>
+          <li>Context qua query: <code>?folder={folderId}</code>. Không có <code>folder</code> = context <b>Tất cả mục</b>.</li>
+          <li>Filter (status/type/search) là <b>state trong page</b>, không nằm trên URL.</li>
+        </ul>
+      </div>
+      <div class="spec-card">
+        <h3><span class="no">2</span>Bất biến điều hướng</h3>
+        <ul>
+          <li><b>Đổi view giữ context:</b> toggle Danh sách ⇄ Bảng phải mang theo <code>?folder=</code>.</li>
+          <li><b>Đổi context giữ view:</b> click thư mục ở sidebar giữ nguyên đang ở <code>/</code> hay <code>/kanban</code>.</li>
+          <li>Từ trang khác (Gửi email…) click thư mục → về view Danh sách <code>/?folder=</code>.</li>
+          <li>Xoá thư mục đang xem → tự về <b>Tất cả mục</b> (giữ view).</li>
+        </ul>
+      </div>
+      <div class="spec-card">
+        <h3><span class="no">3</span>Sidebar — active duy nhất</h3>
+        <ul>
+          <li>Tại mọi thời điểm chỉ <b>một</b> mục sáng: hoặc <b>Tất cả mục</b>, hoặc đúng 1 thư mục.</li>
+          <li><b>Tất cả mục</b> sáng ⟺ đang ở <code>/</code> hoặc <code>/kanban</code> và không có <code>?folder=</code>.</li>
+          <li>Mỗi thư mục hiện <b>itemCount</b> (ẩn khi hover để nhường nút menu ⋯).</li>
+          <li>Kéo item/row thả vào thư mục = gán vào thư mục (highlight khi kéo qua).</li>
+        </ul>
+      </div>
+      <div class="spec-card">
+        <h3><span class="no">4</span>Header trang = context</h3>
+        <ul>
+          <li>Tiêu đề: <b>Tất cả mục</b> hoặc <b>chấm màu + tên thư mục</b>.</li>
+          <li>Subtitle: <code>Thư mục · N mục</code> / <code>N mục</code>; Bảng thêm «kéo-thả thẻ để đổi trạng thái».</li>
+          <li>Thư mục <b>không</b> xuất hiện trong dải chip «Đang lọc» (nó không phải filter).</li>
+          <li>Chip thư mục trên từng item: <b>ẩn</b> chip của thư mục đang đứng trong (giảm nhiễu).</li>
+        </ul>
+      </div>
+      <div class="spec-card">
+        <h3><span class="no">5</span>Từ ngữ thống nhất</h3>
+        <ul>
+          <li>Không dùng chữ «Inbox» trong UI (đụng tên status). Context mặc định = <b>Tất cả mục</b>.</li>
+          <li>Status: <code>Inbox→Cần xem</code> · <code>Doing→Đang xử lý</code> · <code>Done→Hoàn thành</code>.</li>
+          <li>Chip «mọi…» thay «Tất cả» lặp lại: <b>Mọi trạng thái</b> / <b>Mọi loại</b>.</li>
+          <li>Email đã đọc ở trạng thái Cần xem hiển thị «Đã xem».</li>
+        </ul>
+      </div>
+      <div class="spec-card">
+        <h3><span class="no">6</span>Empty states (3 loại)</h3>
+        <ul>
+          <li><b>Có filter:</b> «Không có mục nào khớp bộ lọc» + nút Xoá bộ lọc.</li>
+          <li><b>Thư mục trống:</b> hướng dẫn kéo-thả từ Tất cả mục (xem thư mục «Khách hàng B» trong demo).</li>
+          <li><b>Chưa có dữ liệu:</b> hướng kết nối dịch vụ + Đồng bộ.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="spec-card" style="margin-top:14px">
+      <h3><span class="no">7</span>Hành vi Bảng Kanban</h3>
+      <div class="overflow">
+      <table class="spec-table">
+        <tr><th>Hành động</th><th>API</th><th>Ghi chú</th></tr>
+        <tr><td>Kéo thẻ sang cột khác</td><td><code>PATCH /api/items/{id}/status</code></td><td>Optimistic update, rollback khi lỗi. Ticket (Jira) dùng <code>statusTransition</code> qua <code>PATCH /api/items/{id}</code>.</td></tr>
+        <tr><td>Kéo row/thẻ vào thư mục sidebar</td><td><code>POST /api/folders/{folderId}/items</code></td><td>Multi-select → bulk. 409 nếu đã thuộc thư mục → toast nhẹ, không phải lỗi đỏ.</td></tr>
+        <tr><td>Tạo ghi chú trong context thư mục</td><td><code>POST /api/items/note</code></td><td>Tự gán <code>folderId</code> hiện tại — modal ghi rõ «→ thư mục X».</td></tr>
+        <tr><td>Đổi trạng thái khi lệch ETag</td><td>—</td><td>409 → toast «Dữ liệu đã đổi trên provider» + reload item, không ghi đè.</td></tr>
+      </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ═══════════ Data mẫu (nội dung thật của project) ═══════════ */
+const FOLDERS = [
+  {id:'f1', name:'Đồ án PRN232',   color:'#4f46e5'},
+  {id:'f2', name:'Khách hàng ACME',color:'#059669'},
+  {id:'f3', name:'Khách hàng B',   color:'#d97706'},
+];
+const TYPE = {
+  Email:{ic:'✉',  label:'Email'},   Event:{ic:'🗓', label:'Sự kiện'},
+  File:{ic:'📄',  label:'Tệp'},     Note:{ic:'📝', label:'Ghi chú'},
+  Ticket:{ic:'🎫',label:'Ticket'},
+};
+const STATUS = {Inbox:'Cần xem', Doing:'Đang xử lý', Done:'Hoàn thành'};
+let ITEMS = [];
+const SEED = [
+  {id:'i1', type:'Email', title:'Re: Báo giá hệ thống quản lý kho — cần chốt trước thứ 6', snippet:'Chào anh, bên em đã xem lại bảng báo giá, phần triển khai muốn tách làm 2 giai đoạn…', time:'14 phút', status:'Inbox', unread:true,  imp:true,  folders:['f2']},
+  {id:'i2', type:'Ticket',title:'SCRUM-72: Cron sync connection định kỳ + FE auto-refresh',   snippet:'Bổ sung sync định kỳ ngoài on-demand. Endpoint /api/internal/process-sync, X-Cron-Secret…', time:'40 phút', status:'Doing', unread:false, imp:true,  folders:['f1']},
+  {id:'i3', type:'Event', title:'Demo Sprint 4 với thầy — phòng B302',                        snippet:'Thứ 5 · 14:00–15:30 · 6 người tham dự · Google Meet dự phòng', time:'1 giờ',  status:'Inbox', unread:false, imp:false, folders:['f1']},
+  {id:'i4', type:'Email', title:'Google Cloud: OAuth consent screen đã được duyệt',           snippet:'Your OAuth verification request has been approved. Scope gmail.modify, calendar…', time:'2 giờ',  status:'Done',  unread:false, imp:false, folders:['f1']},
+  {id:'i5', type:'File',  title:'ERD-workspace-hub-final.drawio',                             snippet:'Drive · 248 KB · sửa lần cuối bởi Lộc Hoàng', time:'3 giờ',  status:'Done',  unread:false, imp:false, folders:['f1']},
+  {id:'i6', type:'Note',  title:'Checklist nghiệm thu: Swagger + E2E smoke prod',             snippet:'1. Swagger đủ endpoint 2. Auth flow 3. Connect → sync → write-back 4. Scheduled…', time:'5 giờ',  status:'Doing', unread:false, imp:false, folders:['f1']},
+  {id:'i7', type:'Email', title:'ACME Corp — biên bản nghiệm thu giai đoạn 1',                snippet:'Đính kèm biên bản đã ký. Anh xác nhận lịch kick-off giai đoạn 2 giúp em nhé.', time:'1 ngày', status:'Doing', unread:true,  imp:false, folders:['f2']},
+  {id:'i8', type:'Ticket',title:'SCRUM-29: Unit test cho service chính',                      snippet:'xUnit + Moq, cover AuthService / ItemsService / ScheduledEmailService…', time:'1 ngày', status:'Doing', unread:false, imp:false, folders:['f1']},
+  {id:'i9', type:'Event', title:'Họp nhóm tuần — phân task defense',                          snippet:'Chủ nhật · 20:00 · Discord · mỗi người demo phần mình phụ trách', time:'2 ngày', status:'Inbox', unread:false, imp:false, folders:[]},
+  {id:'i10',type:'File',  title:'slide-defense-draft-v1.pptx',                                snippet:'Drive · 4.2 MB · Lộc đang biên soạn, góp ý trực tiếp trên file', time:'2 ngày', status:'Inbox', unread:false, imp:false, folders:[]},
+  {id:'i11',type:'Email', title:'Lightsail billing alert: đã dùng $38/$100 credit',           snippet:'Your estimated month-to-date spend crossed the configured threshold…', time:'3 ngày', status:'Done',  unread:false, imp:false, folders:[]},
+  {id:'i12',type:'Note',  title:'Ý tưởng cải tiến: highlight email chưa đọc (SCRUM-67)',      snippet:'Không thêm cột DB — suy từ metadataJson.labels UNREAD, đồng bộ 2 chiều…', time:'4 ngày', status:'Inbox', unread:false, imp:false, folders:[]},
+];
+
+/* ═══════════ State ═══════════ */
+let S; // {ctx, view, fStatus, fType, fImp, open}
+function resetState(){ S = {ctx:null, view:'list', fStatus:null, fType:null, fImp:false, open:null}; ITEMS = SEED.map(x=>({...x, folders:[...x.folders]})); }
+resetState();
+
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ═══════════ Render ═══════════ */
+function folderOf(id){ return FOLDERS.find(f=>f.id===id); }
+function countIn(fid){ return ITEMS.filter(i=>i.folders.includes(fid)).length; }
+function visibleItems(){
+  return ITEMS.filter(i =>
+    (!S.ctx || i.folders.includes(S.ctx)) &&
+    (!S.fStatus || i.status===S.fStatus) &&
+    (!S.fType || i.type===S.fType) &&
+    (!S.fImp || i.imp));
+}
+
+function renderURL(){
+  const path = S.view==='board' ? '/kanban' : '/';
+  const q = S.ctx ? `?folder=${S.ctx}` : '';
+  $('#urlbar').innerHTML = `app.workspace-hub.space<b>${path}${q}</b>`;
+}
+
+function renderSidebar(){
+  $('#navMain').innerHTML = `
+    <button class="sb-item ${!S.ctx?'active':''}" onclick="setCtx(null)">
+      <span class="ic">▤</span><span class="grow">Tất cả mục</span>
+    </button>
+    <button class="sb-item" onclick="toast('→ trang Kết nối dịch vụ')"><span class="ic">🔌</span><span class="grow">Kết nối dịch vụ</span></button>
+    <button class="sb-item" onclick="toast('→ trang Gửi email')"><span class="ic">✈</span><span class="grow">Gửi email</span></button>
+    <button class="sb-item" onclick="toast('→ trang Email hẹn giờ')"><span class="ic">⏱</span><span class="grow">Email hẹn giờ</span></button>
+    <button class="sb-item" onclick="toast('→ trang Quản trị')"><span class="ic">▦</span><span class="grow">Quản trị</span></button>`;
+  $('#navFolders').innerHTML = FOLDERS.map(f=>`
+    <button class="sb-item ${S.ctx===f.id?'active':''}" data-folder="${f.id}"
+      onclick="setCtx('${f.id}')"
+      ondragover="event.preventDefault();this.classList.add('droptarget')"
+      ondragleave="this.classList.remove('droptarget')"
+      ondrop="dropToFolder(event,'${f.id}')">
+      <span class="dot" style="background:${f.color}"></span>
+      <span class="grow">${esc(f.name)}</span>
+      <span class="count">${countIn(f.id)}</span>
+    </button>`).join('');
+}
+
+function ctxHeader(){
+  const f = S.ctx ? folderOf(S.ctx) : null;
+  const n = visibleItems().length;
+  const sub = (f?'Thư mục · ':'') + (S.view==='board' ? 'Bảng Kanban · kéo-thả thẻ để đổi trạng thái' : `${n} mục`);
+  return `
+  <div class="ctx-head">
+    <div>
+      <div class="t">${f?`<span class="dot" style="background:${f.color}"></span>`:''}<h2>${f?esc(f.name):'Tất cả mục'}</h2></div>
+      <div class="meta">${sub}</div>
+    </div>
+    <div class="ctx-actions">
+      <button class="btn" onclick="toast('Đồng bộ tất cả connection Active…')">⟳ Đồng bộ</button>
+      <div class="seg">
+        <button class="${S.view==='list'?'on':''}" onclick="setView('list')">☰ Danh sách</button>
+        <button class="${S.view==='board'?'on':''}" onclick="setView('board')">▦ Bảng</button>
+      </div>
+      ${S.view==='board'?`<button class="btn" onclick="toast('Modal tạo ghi chú'+(S.ctx?' → thư mục &quot;'+folderOf(S.ctx).name+'&quot;':''))">+ Ghi chú</button>`:''}
+    </div>
+  </div>`;
+}
+
+function chipsBar(){
+  const sChips = [['Mọi trạng thái',null],['Cần xem','Inbox'],['Đang xử lý','Doing'],['Hoàn thành','Done']]
+    .map(([l,v])=>`<button class="chip ${S.fStatus===v?'on':''}" onclick="S.fStatus=${v?`'${v}'`:null};render()">${l}</button>`).join('');
+  const tChips = [['Mọi loại',null],...Object.entries(TYPE).map(([k,t])=>[t.label,k])]
+    .map(([l,v])=>`<button class="chip ${S.fType===v?'on':''}" onclick="S.fType=${v?`'${v}'`:null};render()">${v?TYPE[v].ic+' ':''}${l}</button>`).join('');
+  return `<div class="chips">${sChips}<span class="sep"></span>${tChips}<span class="sep"></span>
+    <button class="chip ${S.fImp?'on':''}" onclick="S.fImp=!S.fImp;render()">★ Quan trọng</button></div>`;
+}
+
+function fchipsHTML(it){
+  return it.folders.filter(fid=>fid!==S.ctx).map(fid=>{
+    const f=folderOf(fid); if(!f) return '';
+    return `<span class="fchip" style="background:${f.color}18;color:${f.color}">${esc(f.name)}</span>`;
+  }).join('');
+}
+
+function emptyHTML(){
+  const hasFilter = S.fStatus||S.fType||S.fImp;
+  if(hasFilter) return `<div class="empty"><div class="glyph">⌀</div><h3>Không có mục nào khớp bộ lọc</h3>
+    <p><button class="chip" onclick="S.fStatus=null;S.fType=null;S.fImp=false;render()">Xoá bộ lọc</button></p></div>`;
+  if(S.ctx) return `<div class="empty"><div class="glyph">📁</div><h3>Thư mục này chưa có mục nào</h3>
+    <p>Mở <b>Tất cả mục</b> rồi <b>kéo-thả</b> item vào thư mục ở sidebar, hoặc dùng nút gán thư mục trên từng item.</p></div>`;
+  return `<div class="empty"><div class="glyph">⚡</div><h3>Chưa có mục nào</h3>
+    <p>Kết nối Gmail / Calendar / Drive / Jira rồi bấm <b>Đồng bộ</b> để kéo dữ liệu về.</p></div>`;
+}
+
+function listHTML(items){
+  if(!items.length) return `<div class="list">${emptyHTML()}</div>`;
+  return `<div class="list">`+items.map(it=>`
+    <div class="row ${it.unread?'unread':''}" draggable="true"
+      ondragstart="dragItem(event,'${it.id}')" onclick="openDrawer('${it.id}')">
+      <div class="tile t-${it.type}">${TYPE[it.type].ic}</div>
+      <div class="body">
+        <div class="title">${esc(it.title)}</div>
+        <div class="snip">${esc(it.snippet)}</div>
+        ${fchipsHTML(it)?`<div class="fchips">${fchipsHTML(it)}</div>`:''}
+      </div>
+      <div class="side">
+        <span class="time">${it.time} trước</span>
+        <span class="pill p-${it.status}"><i></i>${it.status==='Inbox'&&it.type==='Email'&&!it.unread?'Đã xem':STATUS[it.status]}</span>
+      </div>
+      <button class="star ${it.imp?'on':''}" title="Quan trọng" onclick="event.stopPropagation();toggleImp('${it.id}')">${it.imp?'★':'☆'}</button>
+    </div>`).join('')+`</div>`;
+}
+
+function boardHTML(items){
+  const cols=[['Inbox','var(--faint)'],['Doing','var(--info)'],['Done','var(--ok)']];
+  return `<div class="board">`+cols.map(([st,c])=>{
+    const list=items.filter(i=>i.status===st);
+    return `<div class="col">
+      <div class="col-h"><i style="background:${c}"></i>${STATUS[st]}<span class="n">${list.length}</span></div>
+      <div class="col-body" data-col="${st}"
+        ondragover="event.preventDefault();this.classList.add('over')"
+        ondragleave="this.classList.remove('over')"
+        ondrop="dropToCol(event,'${st}')">
+        ${list.map(it=>`
+        <div class="card ${it.unread?'unread':''}" draggable="true"
+          ondragstart="dragItem(event,'${it.id}')" ondragend="this.classList.remove('dragging')"
+          onclick="openDrawer('${it.id}')">
+          <div class="top">
+            <span class="badge t-${it.type}">${TYPE[it.type].ic} ${TYPE[it.type].label}</span>
+            ${fchipsHTML(it)}
+          </div>
+          <h4>${esc(it.title)}</h4>
+          <div class="foot">${it.imp?'<span style="color:var(--warn)">★</span>':''}${it.time} trước</div>
+        </div>`).join('')}
+        ${!list.length?`<div class="col-empty">Kéo thẻ vào đây</div>`:''}
+      </div>
+    </div>`;
+  }).join('')+`</div>`;
+}
+
+function render(){
+  renderURL(); renderSidebar();
+  const items=visibleItems();
+  $('#page').innerHTML = ctxHeader() + chipsBar() + (S.view==='list'?listHTML(items):boardHTML(items));
+}
+
+/* ═══════════ Hành vi (đúng spec) ═══════════ */
+function setCtx(id){ S.ctx=id; S.open=null; closeDrawer(); render(); }          // đổi context GIỮ view
+function setView(v){ S.view=v; render(); }                                      // đổi view GIỮ context
+function toggleImp(id){ const it=ITEMS.find(i=>i.id===id); it.imp=!it.imp; render(); }
+
+let dragId=null;
+function dragItem(e,id){ dragId=id; e.dataTransfer.setData('text/plain',id); e.target.classList.add('dragging'); }
+function dropToCol(e,st){
+  e.preventDefault(); e.currentTarget.classList.remove('over');
+  const it=ITEMS.find(i=>i.id===dragId); if(!it) return;
+  if(it.status!==st){ it.status=st; toast(`Đã chuyển «${it.title.slice(0,32)}…» → ${STATUS[st]}`); }
+  render();
+}
+function dropToFolder(e,fid){
+  e.preventDefault(); e.currentTarget.classList.remove('droptarget');
+  const it=ITEMS.find(i=>i.id===dragId); if(!it) return;
+  if(it.folders.includes(fid)){ toast('Mục đã thuộc thư mục này'); return; }    // 409 → toast nhẹ
+  it.folders.push(fid); toast(`Đã gán vào «${folderOf(fid).name}»`); render();
+}
+
+function openDrawer(id){
+  const it=ITEMS.find(i=>i.id===id); if(!it) return;
+  S.open=id;
+  const fl=it.folders.map(f=>folderOf(f)?.name).filter(Boolean).join(', ')||'—';
+  $('#drawer').innerHTML=`
+    <div class="drawer-h"><b>${TYPE[it.type].ic} ${TYPE[it.type].label}</b><button onclick="closeDrawer()" title="Đóng">×</button></div>
+    <div class="drawer-body">
+      <h3 style="margin:0;font-size:15px;line-height:1.45">${esc(it.title)}</h3>
+      <p style="margin:0;color:var(--muted)">${esc(it.snippet)}</p>
+      <dl class="kv">
+        <dt>Trạng thái</dt><dd><span class="pill p-${it.status}"><i></i>${STATUS[it.status]}</span></dd>
+        <dt>Thư mục</dt><dd>${esc(fl)}</dd>
+        <dt>Thời gian</dt><dd>${it.time} trước</dd>
+        <dt>Nguồn</dt><dd>${it.type==='Ticket'?'Jira (Atlassian)':it.type==='Note'?'Nội bộ':'Google'}</dd>
+      </dl>
+      <div class="drawer-acts">
+        <button class="btn" onclick="toast('Write-back lên provider (PATCH /api/items/{id})')">Sửa / Write-back</button>
+        <button class="btn" onclick="toast('Gán thư mục (POST /api/folders/{id}/items)')">Gán thư mục</button>
+      </div>
+    </div>`;
+  $('#drawer').classList.add('open');
+}
+function closeDrawer(){ $('#drawer').classList.remove('open'); }
+
+function toast(msg){
+  const el=document.createElement('div'); el.className='toast'; el.textContent=msg;
+  $('#toasts').appendChild(el); setTimeout(()=>el.remove(),2200);
+}
+
+/* Theme + reset */
+$('#themeBtn').onclick=()=>{
+  const r=document.documentElement;
+  const dark=r.getAttribute('data-theme')==='dark' || (!r.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+  r.setAttribute('data-theme', dark?'light':'dark');
+  $('#themeBtn').setAttribute('aria-pressed', String(!dark));
+};
+$('#resetBtn').onclick=()=>{ resetState(); closeDrawer(); render(); toast('Đã reset demo'); };
+
+render();
+</script>
+</body>
+</html>
