@@ -115,6 +115,9 @@ export const KanbanBoard = () => {
   const colTotalOf = (q: typeof inboxQ): number => q.data?.pages.at(-1)?.total ?? 0;
 
   const items: ItemResponse[] = COLUMNS.flatMap(c => colItemsOf(colQueries[c.status]));
+  const isColLoading = inboxQ.isLoading || doingQ.isLoading || doneQ.isLoading;
+  const isBackgroundFetching =
+    (inboxQ.isFetching || doingQ.isFetching || doneQ.isFetching) && !isColLoading;
   const isError = inboxQ.isError || doingQ.isError || doneQ.isError;
   const refetchAll = () => { inboxQ.refetch(); doingQ.refetch(); doneQ.refetch(); };
 
@@ -253,6 +256,7 @@ export const KanbanBoard = () => {
           folder={currentFolder}
           folderId={selectedFolderId}
           subtitle={t('kanban.subtitle')}
+          isBackgroundFetching={isBackgroundFetching}
           statusFilter={statusFilter}
           onStatusFilter={setStatusFilter}
           typeFilter={typeFilter}
