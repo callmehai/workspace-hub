@@ -44,22 +44,31 @@ function typeTileClass(t: ItemType): string {
   return map[t] ?? 'bg-slate-100 text-slate-500';
 }
 
-function statusChipClass(s: ItemStatus): string {
-  const map: Record<ItemStatus, string> = {
-    Inbox: 'bg-slate-100 text-slate-600',
+// "Đã xem" = Inbox + Email đã đọc → xám (đã lướt mắt). Các Inbox khác = "Chưa xem" → cam (cần chú ý).
+function isSeen(item: ItemResponse): boolean {
+  return item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item);
+}
+
+function statusChipClass(item: ItemResponse): string {
+  if (item.status === 'Inbox') {
+    return isSeen(item) ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700';
+  }
+  const map: Record<string, string> = {
     Doing: 'bg-blue-50 text-blue-700',
     Done: 'bg-emerald-50 text-emerald-700',
   };
-  return map[s] ?? 'bg-slate-100 text-slate-500';
+  return map[item.status] ?? 'bg-slate-100 text-slate-500';
 }
 
-function statusDotClass(s: ItemStatus): string {
-  const map: Record<ItemStatus, string> = {
-    Inbox: 'bg-slate-400',
+function statusDotClass(item: ItemResponse): string {
+  if (item.status === 'Inbox') {
+    return isSeen(item) ? 'bg-slate-300' : 'bg-amber-500';
+  }
+  const map: Record<string, string> = {
     Doing: 'bg-blue-500',
     Done: 'bg-emerald-500',
   };
-  return map[s] ?? 'bg-slate-400';
+  return map[item.status] ?? 'bg-slate-400';
 }
 
 function statusLabel(s: ItemStatus): string {
@@ -414,8 +423,8 @@ export const Inbox = () => {
 
               <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                 <span className={`text-[11.5px] ${v.time}`}>{formatTime(item.occurredAt)}</span>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item.status)}`} />
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item)}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item)}`} />
                   {getItemStatusLabel(item)}
                 </span>
               </div>

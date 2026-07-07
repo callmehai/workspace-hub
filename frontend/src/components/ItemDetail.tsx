@@ -230,11 +230,17 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   }
 
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
-  const statusLabel = (item.status === 'Inbox' && item.type === 'Email' && !isUnread)
+  const isSeen = item.status === 'Inbox' && item.type === 'Email' && !isUnread;
+  const statusLabel = isSeen
     ? 'Đã xem'
     : (STATUS_LABEL[item.status] ?? item.status);
-  const statusColor = STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500';
-  const statusDot = STATUS_DOT[item.status] ?? 'bg-slate-400';
+  // Inbox chưa xem = cam (cần chú ý); đã xem = xám. Doing/Done giữ nguyên.
+  const statusColor = item.status === 'Inbox'
+    ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200')
+    : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500');
+  const statusDot = item.status === 'Inbox'
+    ? (isSeen ? 'bg-slate-300' : 'bg-amber-500')
+    : (STATUS_DOT[item.status] ?? 'bg-slate-400');
 
   const typeChip = `inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${tInfo.bg}`;
 
