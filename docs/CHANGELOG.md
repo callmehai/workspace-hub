@@ -7,8 +7,7 @@
 > **Mở rộng SCRUM-16:** bổ sung sync **định kỳ** ngoài on-demand; webhook/push realtime vẫn ngoài scope.
 
 - **BE cron batch sync:** `ProcessConnectionsSyncService` quét mọi Connection Active + Integration enabled → sync qua `IConnectionSyncDispatcher` (đủ Gmail/GCal/Drive/Jira). Mỗi connection lỗi không chặn batch.
-- **HTTP cron (prod):** `POST /api/internal/process-sync` + `X-Cron-Secret` (dùng chung `Cron:Secret` với SCRUM-31). Khuyến nghị 5 phút/lần.
-- **BackgroundService (dev):** `Cron:SyncAutoRun` + `Cron:SyncIntervalSeconds` — tách key riêng với cron email (`AutoRun` / `IntervalSeconds`). Prod mặc định `SyncAutoRun=false`.
+- **BackgroundService (prod + dev):** `Cron:SyncAutoRun` + `Cron:SyncIntervalSeconds` — tách key riêng với cron email (`AutoRun` / `IntervalSeconds`). **Prod:** `docker-compose.prod.yml` bật `Cron__SyncAutoRun=true` (60s), cùng pattern scheduled email — **không** cần cron-job.org cho sync. Endpoint HTTP vẫn có cho test/thay thế khi tắt `SyncAutoRun`.
 - **On-demand nhất quán:** `ConnectionHealthChecker` chuyển sang dispatcher (không chỉ Gmail) — align với cron.
 - **FE polling (TanStack Query):** Inbox/Kanban `items` 45s; Integrations `connections` 60s; `refetchIntervalInBackground` (poll cả tab nền); invalidate cross-tab/lọc khi `total` đổi (Inbox). Manual sync trên Integrations invalidate cả `items`.
 - **Không làm:** WebSocket/SSE, Gmail push notification — UI cập nhật qua poll sau khi cron ghi DB.

@@ -52,6 +52,7 @@ Secret prod nằm ở **`.env` trên server** (gitignored, KHÔNG commit) — xe
 Env quan trọng (set trong compose, đọc từ `.env`):
 - `Db__AutoMigrate=true` — api tự áp migration lúc khởi động (single-instance).
 - `Cron__AutoRun=true` — BackgroundService tự quét & gửi scheduled email mỗi `Cron__IntervalSeconds` (60s).
+- `Cron__SyncAutoRun=true` + `Cron__SyncIntervalSeconds=60` — BackgroundService sync connections (Gmail/GCal/Drive/Jira) mỗi 60s. **Không** cần cron-job.org cho sync; **không** bật đồng thời với job HTTP `POST /api/internal/process-sync`.
 - `Auth__CrossSiteCookies=false` — same-origin ⇒ cookie SameSite=Lax.
 - Twilio để trống ⇒ OTP đăng ký **log ra console** thay vì gửi SMS: `docker compose -f docker-compose.prod.yml logs api | grep -i otp`.
 
