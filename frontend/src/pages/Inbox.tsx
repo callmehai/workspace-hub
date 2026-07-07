@@ -3,18 +3,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
+import { isEmailUnread } from '../lib/itemMeta';
 import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
-  Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, AlertCircle, Inbox as InboxIcon,
-  ChevronLeft, ChevronRight, Search, LayoutGrid, List, RefreshCw
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
+import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
+import { typeIcon } from '../lib/itemVisuals';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { connectionsApi } from '../lib/connectionsApi';
-import toast from 'react-hot-toast';
 
 const LIMIT = 20;
 
@@ -32,17 +32,6 @@ function typeLabel(t: ItemType): string {
     Email: 'Email', Event: 'Sự kiện', File: 'Tệp', Note: 'Ghi chú', Ticket: 'Ticket',
   };
   return map[t] ?? t;
-}
-
-function typeIcon(t: ItemType) {
-  const cls = 'w-4 h-4';
-  switch (t) {
-    case 'Email': return <Mail className={cls} />;
-    case 'Event': return <Calendar className={cls} />;
-    case 'File': return <FileText className={cls} />;
-    case 'Note': return <StickyNote className={cls} />;
-    case 'Ticket': return <Briefcase className={cls} />;
-  }
 }
 
 function typeTileClass(t: ItemType): string {
@@ -81,21 +70,39 @@ function statusLabel(s: ItemStatus): string {
   return map[s] ?? s;
 }
 
-function isEmailUnread(item: ItemResponse): boolean {
-  if (item.type !== 'Email' || !item.metadataJson) return false;
-  try {
-    const meta = JSON.parse(item.metadataJson);
-    return meta.isUnread === true || meta.IsUnread === true;
-  } catch {
-    return false;
-  }
-}
-
 function getItemStatusLabel(item: ItemResponse): string {
   if (item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item)) {
     return 'Đã xem';
   }
   return statusLabel(item.status);
+}
+
+/*
+ * Style đã đọc / chưa đọc kiểu Gmail — CHỈ áp cho Email:
+ *  - Chưa đọc: nền TRẮNG + tiêu đề đậm + chấm xanh + thời gian xanh đậm.
+ *  - Đã đọc:  nền xám nhạt + chữ thường, màu dịu.
+ *  - Loại khác (Event/File/Note/Ticket): trung tính như chưa đọc nhưng không chấm xanh.
+ */
+function rowVisual(item: ItemResponse, selected: boolean, checked: boolean) {
+  const unread = isEmailUnread(item);
+  const readEmail = item.type === 'Email' && !unread;
+  return {
+    unread,
+    row: selected
+      ? 'bg-indigo-50/60'
+      : checked
+        ? 'bg-indigo-50/40'
+        : readEmail
+          ? 'bg-slate-100/70 hover:bg-slate-100'
+          : 'bg-white hover:bg-slate-50',
+    title: unread
+      ? 'font-bold text-slate-900'
+      : readEmail
+        ? 'font-medium text-slate-600'
+        : 'font-semibold text-slate-800',
+    snippet: unread ? 'text-slate-600' : readEmail ? 'text-slate-400' : 'text-slate-500',
+    time: unread ? 'text-blue-600 font-semibold' : 'text-slate-400',
+  };
 }
 
 // ─── skeleton row ────────────────────────────────────────────────────────────
@@ -112,27 +119,6 @@ function SkeletonRow() {
         <div className="h-5 bg-slate-100 rounded-full w-20" />
       </div>
     </div>
-  );
-}
-
-// ─── filter chip ─────────────────────────────────────────────────────────────
-interface ChipProps {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}
-function Chip({ active, onClick, children }: ChipProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors whitespace-nowrap
-        ${active
-          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-        }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -159,33 +145,6 @@ export const Inbox = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleSyncAll = async () => {
-    try {
-      setIsSyncing(true);
-      const connections = await connectionsApi.getConnections();
-      const activeConns = connections.filter(c => c.status === 'Active');
-      if (activeConns.length === 0) {
-        toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
-        return;
-      }
-      
-      const toastId = toast.loading('Đang đồng bộ dữ liệu...');
-      try {
-        await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
-        toast.success('Đồng bộ thành công!', { id: toastId });
-        queryClient.invalidateQueries({ queryKey: ['items'] });
-      } catch (err) {
-        toast.error('Lỗi đồng bộ dữ liệu', { id: toastId });
-        handleApiError(err, 'Lỗi đồng bộ dữ liệu', { navigate });
-      }
-    } catch (err) {
-      handleApiError(err, 'Lỗi lấy danh sách kết nối', { navigate });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -319,111 +278,27 @@ export const Inbox = () => {
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
 
-  const STATUS_FILTERS: { label: string; value: ItemStatus | null }[] = [
-    { label: 'Mọi trạng thái', value: null },
-    { label: 'Cần xem', value: 'Inbox' },
-    { label: 'Đang xử lý', value: 'Doing' },
-    { label: 'Hoàn thành', value: 'Done' },
-  ];
-  const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
-    { label: 'Mọi loại', value: null },
-    { label: 'Email', value: 'Email' },
-    { label: 'Sự kiện', value: 'Event' },
-    { label: 'Tệp', value: 'File' },
-    { label: 'Ghi chú', value: 'Note' },
-    { label: 'Ticket', value: 'Ticket' },
-  ];
-
   const pageNumbers = buildPageNumbers(page, totalPages);
 
   return (
     <div className="flex-1 min-h-0 bg-slate-50 overflow-y-auto">
-      <div className="max-w-[1120px] mx-auto px-6 py-5">
+      <div className="max-w-[1400px] mx-auto px-6 py-5">
 
-        {/* ── Page header: hiển thị CONTEXT (Tất cả mục / tên thư mục) ── */}
-        <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2.5">
-              {currentFolder && (
-                <span
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ backgroundColor: currentFolder.color || '#94a3b8' }}
-                />
-              )}
-              <h1 className="text-[22px] font-semibold text-slate-900 leading-tight m-0">
-                {selectedFolderId ? (currentFolder?.name ?? 'Thư mục') : 'Tất cả mục'}
-              </h1>
-            </div>
-            <p className="text-[13px] text-slate-500 mt-0.5">
-              {selectedFolderId ? 'Thư mục · ' : ''}{isLoading ? 'Đang tải…' : `${total} mục`}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSyncAll}
-              disabled={isSyncing}
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>Đồng bộ</span>
-            </button>
-
-            {/* View switcher */}
-            <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px]">
-              <button className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] bg-indigo-50 text-indigo-700 text-[13px] font-semibold">
-                <List className="w-4 h-4" />
-                <span>Danh sách</span>
-              </button>
-              <button
-                onClick={() => navigate(selectedFolderId ? `/kanban?folder=${selectedFolderId}` : '/kanban')}
-                className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
-              >
-                <LayoutGrid className="w-4 h-4" />
-                <span>Bảng</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Filter bar ── */}
-        <div className="flex flex-wrap gap-2 items-center mb-4">
-          {STATUS_FILTERS.map(f => (
-            <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => { setStatusFilter(f.value); setPage(1); }}>
-              {f.label}
-            </Chip>
-          ))}
-
-          <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
-
-          {TYPE_FILTERS.map(f => (
-            <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => { setTypeFilter(f.value); setPage(1); }}>
-              {f.value ? (
-                <span className={`inline-flex items-center gap-1 ${typeTileClass(f.value)} px-0 bg-transparent`}>
-                  {typeIcon(f.value)}{f.label}
-                </span>
-              ) : f.label}
-            </Chip>
-          ))}
-
-          <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
-
-          <Chip active={importantOnly} onClick={() => { setImportantOnly(v => !v); setPage(1); }}>
-            <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
-            Quan trọng
-          </Chip>
-        </div>
-
-        {/* ── Search ── */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={e => handleSearchChange(e.target.value)}
-            placeholder="Tìm kiếm tiêu đề, nội dung…"
-            className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13.5px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
-          />
-        </div>
+        {/* ── Toolbar dùng chung với view Bảng — layout GIỐNG HỆT khi đổi view ── */}
+        <WorkspaceToolbar
+          view="list"
+          folder={currentFolder}
+          folderId={selectedFolderId}
+          subtitle={isLoading ? 'Đang tải…' : `${total} mục`}
+          statusFilter={statusFilter}
+          onStatusFilter={(s) => { setStatusFilter(s); setPage(1); }}
+          typeFilter={typeFilter}
+          onTypeFilter={(t) => { setTypeFilter(t); setPage(1); }}
+          importantOnly={importantOnly}
+          onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
+          searchInput={searchInput}
+          onSearchChange={handleSearchChange}
+        />
 
         {/* ── Active filter summary (KHÔNG gồm folder — folder là context, hiển thị ở header) ── */}
         {hasActiveFilters && (
@@ -478,8 +353,8 @@ export const Inbox = () => {
 
           {showList && (
             <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-slate-50">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={items.length > 0 && selectedItemIds.size === items.length}
                 onChange={toggleAllSelection}
                 className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
@@ -490,33 +365,37 @@ export const Inbox = () => {
             </div>
           )}
 
-          {showList && items.map((item: ItemResponse) => (
+          {showList && items.map((item: ItemResponse) => {
+            const v = rowVisual(item, selectedId === item.id, selectedItemIds.has(item.id));
+            return (
             <div
               key={item.id}
               draggable
               onDragStart={(e) => handleDragStart(e, item.id)}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 relative ${selectedId === item.id ? 'bg-indigo-50/50' : (isEmailUnread(item) ? 'bg-white' : 'bg-slate-50/50')} ${selectedItemIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
             >
-              {isEmailUnread(item) && (
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-md" />
-              )}
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={selectedItemIds.has(item.id)}
                 onClick={(e) => toggleSelection(item.id, e)}
                 onChange={() => {}} // handled by onClick
-                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1 z-10"
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1"
               />
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 z-10 ${typeTileClass(item.type)}`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
                 {typeIcon(item.type)}
               </div>
 
-              <div className="flex-1 min-w-0 z-10">
-                <div className={`text-[13.5px] truncate leading-snug ${isEmailUnread(item) ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
-                  {item.title}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {v.unread && (
+                    <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" aria-label="Chưa đọc" />
+                  )}
+                  <div className={`text-[13.5px] truncate leading-snug ${v.title}`}>
+                    {item.title}
+                  </div>
                 </div>
-                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${isEmailUnread(item) ? 'font-medium text-slate-700' : 'text-slate-500'}`}>
+                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${v.snippet}`}>
                   {item.snippet}
                 </div>
                 {item.folderIds && item.folderIds.length > 0 && (
@@ -535,7 +414,7 @@ export const Inbox = () => {
               </div>
 
               <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                <span className="text-[11.5px] text-slate-400">{formatTime(item.occurredAt)}</span>
+                <span className={`text-[11.5px] ${v.time}`}>{formatTime(item.occurredAt)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item.status)}`} />
                   {getItemStatusLabel(item)}
@@ -553,7 +432,8 @@ export const Inbox = () => {
                 <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── Pagination ── */}
@@ -614,7 +494,7 @@ export const Inbox = () => {
       )}
 
       {/* ── Bulk Action Bar ── */}
-      <BulkActionBar 
+      <BulkActionBar
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
       />

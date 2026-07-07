@@ -140,7 +140,13 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 .row{position:relative;display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .1s}
 .row:last-child{border-bottom:none}
 .row:hover{background:var(--surface-2)}
-.row.unread::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--info)}
+/* Đã đọc / chưa đọc kiểu GMAIL: chưa đọc = nền trắng + đậm + chấm xanh + giờ xanh; đã đọc = nền xám + chữ dịu */
+.row.read{background:var(--surface-2)}
+.row.read:hover{background:var(--border-soft)}
+.row.read .title{font-weight:500;color:var(--muted)}
+.row.read .snip{color:var(--faint)}
+.row.unread .time{color:var(--info);font-weight:600}
+.udot{width:8px;height:8px;border-radius:50%;background:var(--info);flex-shrink:0}
 .tile{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:15px;flex-shrink:0}
 .t-Email{background:var(--info-soft);color:var(--info)} .t-Event{background:var(--warn-soft);color:var(--warn)}
 .t-File{background:var(--ok-soft);color:var(--ok)} .t-Note{background:var(--surface-2);color:var(--muted)}
@@ -173,7 +179,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 .card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:11px 12px;cursor:grab;box-shadow:0 1px 1px rgba(15,23,42,.04);overflow:hidden;transition:box-shadow .12s}
 .card:hover{box-shadow:var(--shadow)}
 .card.dragging{opacity:.35}
-.card.unread::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--info)}
+.card.read{background:var(--surface-2)}
+.card.read h4{font-weight:500;color:var(--muted)}
+.ubadge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--info)}
 .card .top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
 .badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2.5px 8px;border-radius:6px}
 .card h4{margin:0;font-size:13px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -310,6 +318,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
           <li>Subtitle: <code>Thư mục · N mục</code> / <code>N mục</code>; Bảng thêm «kéo-thả thẻ để đổi trạng thái».</li>
           <li>Thư mục <b>không</b> xuất hiện trong dải chip «Đang lọc» (nó không phải filter).</li>
           <li>Chip thư mục trên từng item: <b>ẩn</b> chip của thư mục đang đứng trong (giảm nhiễu).</li>
+          <li><b>Toolbar đồng nhất 2 view</b> (component <code>WorkspaceToolbar</code>): Đồng bộ · switcher · +Ghi chú · +Sự kiện · chips · search cùng vị trí — đổi view KHÔNG nhảy layout. Khác biệt duy nhất: chip Trạng thái chỉ ở Danh sách (Bảng đã có 3 cột).</li>
         </ul>
       </div>
       <div class="spec-card">
@@ -319,6 +328,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
           <li>Status: <code>Inbox→Cần xem</code> · <code>Doing→Đang xử lý</code> · <code>Done→Hoàn thành</code>.</li>
           <li>Chip «mọi…» thay «Tất cả» lặp lại: <b>Mọi trạng thái</b> / <b>Mọi loại</b>.</li>
           <li>Email đã đọc ở trạng thái Cần xem hiển thị «Đã xem».</li>
+          <li><b>Đã đọc/chưa đọc kiểu Gmail</b> (chỉ Email): chưa đọc = nền trắng + tiêu đề đậm + chấm xanh + giờ xanh; đã đọc = nền xám nhạt + chữ dịu. KHÔNG dùng kẻ dọc. Loại khác trung tính.</li>
         </ul>
       </div>
       <div class="spec-card">
@@ -437,7 +447,8 @@ function ctxHeader(){
         <button class="${S.view==='list'?'on':''}" onclick="setView('list')">☰ Danh sách</button>
         <button class="${S.view==='board'?'on':''}" onclick="setView('board')">▦ Bảng</button>
       </div>
-      ${S.view==='board'?`<button class="btn" onclick="toast('Modal tạo ghi chú'+(S.ctx?' → thư mục &quot;'+folderOf(S.ctx).name+'&quot;':''))">+ Ghi chú</button>`:''}
+      <button class="btn" onclick="toast('Modal tạo ghi chú'+(S.ctx?' → thư mục &quot;'+folderOf(S.ctx).name+'&quot;':''))">+ Ghi chú</button>
+      <button class="btn" onclick="toast('Modal tạo sự kiện Calendar')">+ Sự kiện</button>
     </div>
   </div>`;
 }
@@ -471,11 +482,11 @@ function emptyHTML(){
 function listHTML(items){
   if(!items.length) return `<div class="list">${emptyHTML()}</div>`;
   return `<div class="list">`+items.map(it=>`
-    <div class="row ${it.unread?'unread':''}" draggable="true"
+    <div class="row ${it.unread?'unread':(it.type==='Email'?'read':'')}" draggable="true"
       ondragstart="dragItem(event,'${it.id}')" onclick="openDrawer('${it.id}')">
       <div class="tile t-${it.type}">${TYPE[it.type].ic}</div>
       <div class="body">
-        <div class="title">${esc(it.title)}</div>
+        <div class="title" style="display:flex;align-items:center;gap:6px">${it.unread?'<span class="udot"></span>':''}<span style="overflow:hidden;text-overflow:ellipsis">${esc(it.title)}</span></div>
         <div class="snip">${esc(it.snippet)}</div>
         ${fchipsHTML(it)?`<div class="fchips">${fchipsHTML(it)}</div>`:''}
       </div>
@@ -498,11 +509,12 @@ function boardHTML(items){
         ondragleave="this.classList.remove('over')"
         ondrop="dropToCol(event,'${st}')">
         ${list.map(it=>`
-        <div class="card ${it.unread?'unread':''}" draggable="true"
+        <div class="card ${it.unread?'unread':(it.type==='Email'?'read':'')}" draggable="true"
           ondragstart="dragItem(event,'${it.id}')" ondragend="this.classList.remove('dragging')"
           onclick="openDrawer('${it.id}')">
           <div class="top">
             <span class="badge t-${it.type}">${TYPE[it.type].ic} ${TYPE[it.type].label}</span>
+            ${it.unread?'<span class="ubadge"><span class="udot"></span>Chưa đọc</span>':''}
             ${fchipsHTML(it)}
           </div>
           <h4>${esc(it.title)}</h4>
