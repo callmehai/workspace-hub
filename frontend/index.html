@@ -4,14 +4,10 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Inter (variable 400..700, kèm subset vietnamese) — load qua <link> thay vì @import trong CSS:
-         @import chặn render + fail lặng lẽ khiến chữ có dấu rơi về font fallback (cao lệch, ì/ị bất thường) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Inter từ CDN CHÍNH CHỦ rsms.me (bản Google Fonts bị LƯỢC OpenType features
+         → không bật được ss02/cv05/cv08 phân biệt I/l). Bản này đầy đủ features + subset vietnamese. -->
+    <link rel="preconnect" href="https://rsms.me/" crossorigin />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <title>Workspace Hub</title>
   </head>
   <body>

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
 import { isEmailUnread } from '../lib/itemMeta';
@@ -143,7 +143,7 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
 export const Inbox = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -154,19 +154,18 @@ export const Inbox = () => {
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Folder = CONTEXT của trang (từ ?folder=), KHÔNG phải filter — filter (status/type/…) áp bên trong context.
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
+  // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
+  const selectedFolderId = searchParams.get('folder');
 
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
+  // Đổi context → về trang 1
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const folder = params.get('folder');
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSelectedFolderId(folder || null);
     setPage(1);
-  }, [location.search]);
+  }, [selectedFolderId]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

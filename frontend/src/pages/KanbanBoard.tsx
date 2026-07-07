@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
@@ -51,10 +51,10 @@ const COL_PAGE_SIZE = 30;
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
-  // Folder = CONTEXT của trang (từ ?folder=), đồng bộ hành vi với view Danh sách (Inbox.tsx)
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect, hết nháy header khi đổi view)
+  const selectedFolderId = searchParams.get('folder');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
@@ -78,14 +78,6 @@ export const KanbanBoard = () => {
       setSearch(val.trim());
     }, 350);
   }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const folder = params.get('folder');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (folder) setSelectedFolderId(folder);
-    else setSelectedFolderId(null);
-  }, [location.search]);
 
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
