@@ -1,22 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { handleApiError } from '../lib/errorUtils';
+import { isEmailUnread, getStatusLabel } from '../lib/itemMeta';
 import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
-  Mail, Calendar, FileText, StickyNote, Briefcase,
   Star, AlertCircle, Inbox as InboxIcon,
-  ChevronLeft, ChevronRight, Search, LayoutGrid, List, RefreshCw
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
+import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
+import { typeIcon } from '../lib/itemVisuals';
+import { PageSizeSelect } from '../components/PageSizeSelect';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { connectionsApi } from '../lib/connectionsApi';
-import toast from 'react-hot-toast';
-
-const LIMIT = 20;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -34,17 +33,6 @@ function typeLabel(t: ItemType): string {
   return map[t] ?? t;
 }
 
-function typeIcon(t: ItemType) {
-  const cls = 'w-4 h-4';
-  switch (t) {
-    case 'Email': return <Mail className={cls} />;
-    case 'Event': return <Calendar className={cls} />;
-    case 'File': return <FileText className={cls} />;
-    case 'Note': return <StickyNote className={cls} />;
-    case 'Ticket': return <Briefcase className={cls} />;
-  }
-}
-
 function typeTileClass(t: ItemType): string {
   const map: Record<ItemType, string> = {
     Email: 'bg-blue-50 text-blue-600',
@@ -56,46 +44,70 @@ function typeTileClass(t: ItemType): string {
   return map[t] ?? 'bg-slate-100 text-slate-500';
 }
 
-function statusChipClass(s: ItemStatus): string {
-  const map: Record<ItemStatus, string> = {
-    Inbox: 'bg-slate-100 text-slate-600',
-    Doing: 'bg-blue-50 text-blue-700',
-    Done: 'bg-emerald-50 text-emerald-700',
-  };
-  return map[s] ?? 'bg-slate-100 text-slate-500';
+// "Đã xem" = Inbox + Email đã đọc → xám (đã lướt mắt). Các Inbox khác = "Chưa xem" → cam (cần chú ý).
+function isSeen(item: ItemResponse): boolean {
+  return item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item);
 }
 
-function statusDotClass(s: ItemStatus): string {
-  const map: Record<ItemStatus, string> = {
-    Inbox: 'bg-slate-400',
-    Doing: 'bg-blue-500',
-    Done: 'bg-emerald-500',
-  };
-  return map[s] ?? 'bg-slate-400';
+// Màu theo category Kanban (dùng cho Ticket & các loại khác ở Doing/Done): xám / xanh dương / xanh lá.
+const CHIP_BY_STATUS: Record<string, string> = {
+  Inbox: 'bg-slate-100 text-slate-600',
+  Doing: 'bg-blue-50 text-blue-700',
+  Done: 'bg-emerald-50 text-emerald-700',
+};
+const DOT_BY_STATUS: Record<string, string> = {
+  Inbox: 'bg-slate-400',
+  Doing: 'bg-blue-500',
+  Done: 'bg-emerald-500',
+};
+
+function statusChipClass(item: ItemResponse): string {
+  // Ticket (Jira): trung tính theo category — KHÔNG dùng cam "chưa xem" (status Jira tuỳ biến).
+  if (item.type === 'Ticket') return CHIP_BY_STATUS[item.status] ?? 'bg-slate-100 text-slate-600';
+  // Email/khác ở Inbox: chưa xử lý = cam, đã xem = xám.
+  if (item.status === 'Inbox') return isSeen(item) ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700';
+  return CHIP_BY_STATUS[item.status] ?? 'bg-slate-100 text-slate-500';
+}
+
+function statusDotClass(item: ItemResponse): string {
+  if (item.type === 'Ticket') return DOT_BY_STATUS[item.status] ?? 'bg-slate-400';
+  if (item.status === 'Inbox') return isSeen(item) ? 'bg-slate-300' : 'bg-amber-500';
+  return DOT_BY_STATUS[item.status] ?? 'bg-slate-400';
 }
 
 function statusLabel(s: ItemStatus): string {
   const map: Record<ItemStatus, string> = {
-    Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Done',
+    Inbox: 'Chưa xem', Doing: 'Đang xử lý', Done: 'Hoàn thành',
   };
   return map[s] ?? s;
 }
 
-function isEmailUnread(item: ItemResponse): boolean {
-  if (item.type !== 'Email' || !item.metadataJson) return false;
-  try {
-    const meta = JSON.parse(item.metadataJson);
-    return meta.isUnread === true || meta.IsUnread === true;
-  } catch {
-    return false;
-  }
-}
-
-function getItemStatusLabel(item: ItemResponse): string {
-  if (item.status === 'Inbox' && item.type === 'Email' && !isEmailUnread(item)) {
-    return 'Đã xem';
-  }
-  return statusLabel(item.status);
+/*
+ * Style đã đọc / chưa đọc kiểu Gmail — CHỈ áp cho Email:
+ *  - Chưa đọc: nền TRẮNG + tiêu đề đậm + chấm xanh + thời gian xanh đậm.
+ *  - Đã đọc:  nền xám nhạt + chữ thường, màu dịu.
+ *  - Loại khác (Event/File/Note/Ticket): trung tính như chưa đọc nhưng không chấm xanh.
+ */
+function rowVisual(item: ItemResponse, selected: boolean, checked: boolean) {
+  const unread = isEmailUnread(item);
+  const readEmail = item.type === 'Email' && !unread;
+  return {
+    unread,
+    row: selected
+      ? 'bg-indigo-50/60'
+      : checked
+        ? 'bg-indigo-50/40'
+        : readEmail
+          ? 'bg-slate-100/70 hover:bg-slate-100'
+          : 'bg-white hover:bg-slate-50',
+    title: unread
+      ? 'font-bold text-slate-900'
+      : readEmail
+        ? 'font-medium text-slate-600'
+        : 'font-semibold text-slate-800',
+    snippet: unread ? 'text-slate-600' : readEmail ? 'text-slate-400' : 'text-slate-500',
+    time: unread ? 'text-blue-600 font-semibold' : 'text-slate-400',
+  };
 }
 
 // ─── skeleton row ────────────────────────────────────────────────────────────
@@ -112,27 +124,6 @@ function SkeletonRow() {
         <div className="h-5 bg-slate-100 rounded-full w-20" />
       </div>
     </div>
-  );
-}
-
-// ─── filter chip ─────────────────────────────────────────────────────────────
-interface ChipProps {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}
-function Chip({ active, onClick, children }: ChipProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors whitespace-nowrap
-        ${active
-          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-        }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -158,72 +149,29 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
 export const Inbox = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleSyncAll = async () => {
-    try {
-      setIsSyncing(true);
-      const connections = await connectionsApi.getConnections();
-      const activeConns = connections.filter(c => c.status === 'Active');
-      if (activeConns.length === 0) {
-        toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
-        return;
-      }
-      
-      const toastId = toast.loading('Đang đồng bộ dữ liệu...');
-      try {
-        await Promise.all(activeConns.map(c => connectionsApi.syncConnection(c.id)));
-        toast.success('Đồng bộ thành công!', { id: toastId });
-        queryClient.invalidateQueries({ queryKey: ['items'] });
-      } catch (err) {
-        toast.error('Lỗi đồng bộ dữ liệu', { id: toastId });
-        handleApiError(err, 'Lỗi đồng bộ dữ liệu', { navigate });
-      }
-    } catch (err) {
-      handleApiError(err, 'Lỗi lấy danh sách kết nối', { navigate });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const getInitialType = (): ItemType | null => {
-    if (location.pathname === '/files') return 'File';
-    if (location.pathname === '/calendar') return 'Event';
-    if (location.pathname === '/tasks') return 'Ticket';
-    return null;
-  };
+  const [searchParams] = useSearchParams();
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>(getInitialType);
+  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  
+  // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
+  // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
+  const selectedFolderId = searchParams.get('folder');
+
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
+  // Đổi context → về trang 1
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const folder = params.get('folder');
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSelectedFolderId(folder || null);
-
-    if (location.pathname === '/files') {
-      setTypeFilter('File');
-    } else if (location.pathname === '/calendar') {
-      setTypeFilter('Event');
-    } else if (location.pathname === '/tasks') {
-      setTypeFilter('Ticket');
-    } else {
-      setTypeFilter(null);
-    }
     setPage(1);
-  }, [location.pathname, location.search]);
+  }, [selectedFolderId]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -248,10 +196,10 @@ export const Inbox = () => {
     search: search || undefined,
     folderId: selectedFolderId || undefined,
     page,
-    limit: LIMIT,
+    limit,
   };
 
-  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit: LIMIT }];
+  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit }];
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey,
@@ -280,15 +228,15 @@ export const Inbox = () => {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const rangeStart = total === 0 ? 0 : (page - 1) * LIMIT + 1;
-  const rangeEnd = Math.min(page * LIMIT, total);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const rangeStart = total === 0 ? 0 : (page - 1) * limit + 1;
+  const rangeEnd = Math.min(page * limit, total);
 
   // Clear selection when page or filters change
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
-  }, [page, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
+  }, [page, limit, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -327,121 +275,40 @@ export const Inbox = () => {
     setPage(1);
   };
 
-  const handleRemoveFolderFilter = () => {
-    const params = new URLSearchParams(location.search);
-    params.delete('folder');
-    navigate(`${location.pathname}?${params.toString()}`);
-  };
+  const currentFolder = selectedFolderId
+    ? folders.find(f => f.id === selectedFolderId) ?? null
+    : null;
+  const hasActiveFilters = Boolean(statusFilter || typeFilter || importantOnly || search);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
-
-  const STATUS_FILTERS: { label: string; value: ItemStatus | null }[] = [
-    { label: 'Tất cả', value: null },
-    { label: 'Cần xem', value: 'Inbox' },
-    { label: 'Đang xử lý', value: 'Doing' },
-    { label: 'Done', value: 'Done' },
-  ];
-  const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
-    { label: 'Tất cả', value: null },
-    { label: 'Email', value: 'Email' },
-    { label: 'Sự kiện', value: 'Event' },
-    { label: 'Tệp', value: 'File' },
-    { label: 'Ghi chú', value: 'Note' },
-    { label: 'Ticket', value: 'Ticket' },
-  ];
 
   const pageNumbers = buildPageNumbers(page, totalPages);
 
   return (
     <div className="flex-1 min-h-0 bg-slate-50 overflow-y-auto">
-      <div className="max-w-[1120px] mx-auto px-6 py-5">
+      <div className="max-w-[1400px] mx-auto px-6 py-5">
 
-        {/* ── Page header ── */}
-        <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
-          <div>
-            <h1 className="text-[22px] font-semibold text-slate-900 leading-tight m-0">Inbox</h1>
-            <p className="text-[13px] text-slate-500 mt-0.5">
-              {isLoading ? 'Đang tải…' : `${total} mục`}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSyncAll}
-              disabled={isSyncing}
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>Đồng bộ</span>
-            </button>
+        {/* ── Toolbar dùng chung với view Bảng — layout GIỐNG HỆT khi đổi view ── */}
+        <WorkspaceToolbar
+          view="list"
+          folder={currentFolder}
+          folderId={selectedFolderId}
+          subtitle={isLoading ? 'Đang tải…' : `${total} mục`}
+          statusFilter={statusFilter}
+          onStatusFilter={(s) => { setStatusFilter(s); setPage(1); }}
+          typeFilter={typeFilter}
+          onTypeFilter={(t) => { setTypeFilter(t); setPage(1); }}
+          importantOnly={importantOnly}
+          onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
+          searchInput={searchInput}
+          onSearchChange={handleSearchChange}
+        />
 
-            {/* View switcher */}
-            <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px]">
-              <button className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] bg-indigo-50 text-indigo-700 text-[13px] font-semibold">
-                <List className="w-4 h-4" />
-                <span>Danh sách</span>
-              </button>
-              <button 
-                onClick={() => navigate('/kanban')}
-                className="flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-slate-500 text-[13px] font-medium hover:bg-slate-50"
-              >
-                <LayoutGrid className="w-4 h-4" />
-                <span>Bảng</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Filter bar ── */}
-        <div className="flex flex-wrap gap-2 items-center mb-4">
-          {STATUS_FILTERS.map(f => (
-            <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => { setStatusFilter(f.value); setPage(1); }}>
-              {f.label}
-            </Chip>
-          ))}
-
-          <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
-
-          {TYPE_FILTERS.map(f => (
-            <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => { setTypeFilter(f.value); setPage(1); }}>
-              {f.value ? (
-                <span className={`inline-flex items-center gap-1 ${typeTileClass(f.value)} px-0 bg-transparent`}>
-                  {typeIcon(f.value)}{f.label}
-                </span>
-              ) : f.label}
-            </Chip>
-          ))}
-
-          <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
-
-          <Chip active={importantOnly} onClick={() => { setImportantOnly(v => !v); setPage(1); }}>
-            <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
-            Quan trọng
-          </Chip>
-        </div>
-
-        {/* ── Search ── */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={e => handleSearchChange(e.target.value)}
-            placeholder="Tìm kiếm tiêu đề, nội dung…"
-            className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13.5px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
-          />
-        </div>
-
-        {/* ── Active filter summary ── */}
-        {(statusFilter || typeFilter || importantOnly || search || selectedFolderId) && (
+        {/* ── Active filter summary (KHÔNG gồm folder — folder là context, hiển thị ở header) ── */}
+        {hasActiveFilters && (
           <div className="flex items-center gap-2 mb-3 text-[12.5px] text-slate-500 flex-wrap">
             <span>Đang lọc:</span>
-            {selectedFolderId && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                Thư mục: {folders.find(f => f.id === selectedFolderId)?.name || 'Ẩn'}
-                <button onClick={handleRemoveFolderFilter} className="hover:text-indigo-900 font-bold ml-1">×</button>
-              </span>
-            )}
             {statusFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{statusLabel(statusFilter)}</span>}
             {typeFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100">{typeLabel(typeFilter)}</span>}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">⭐ Quan trọng</span>}
@@ -464,19 +331,35 @@ export const Inbox = () => {
           )}
 
           {isEmpty && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 px-6 text-center">
               <InboxIcon className="w-10 h-10 text-slate-300" />
-              <p className="text-[13.5px] text-slate-400">Không có mục nào.</p>
-              {(statusFilter || typeFilter || importantOnly || search) && (
-                <button onClick={clearFilters} className="text-[13px] text-indigo-600 hover:underline">Xoá bộ lọc</button>
+              {hasActiveFilters ? (
+                <>
+                  <p className="text-[13.5px] text-slate-400">Không có mục nào khớp bộ lọc.</p>
+                  <button onClick={clearFilters} className="text-[13px] text-indigo-600 hover:underline">Xoá bộ lọc</button>
+                </>
+              ) : selectedFolderId ? (
+                <>
+                  <p className="text-[13.5px] text-slate-500 font-medium">Thư mục này chưa có mục nào.</p>
+                  <p className="text-[12.5px] text-slate-400 max-w-[360px]">
+                    Mở <span className="font-medium text-slate-500">Tất cả mục</span> rồi kéo-thả item vào thư mục ở sidebar, hoặc dùng nút gán thư mục trên từng item.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13.5px] text-slate-500 font-medium">Chưa có mục nào.</p>
+                  <p className="text-[12.5px] text-slate-400 max-w-[360px]">
+                    Kết nối Gmail / Calendar / Drive / Jira rồi bấm <span className="font-medium text-slate-500">Đồng bộ</span> để kéo dữ liệu về.
+                  </p>
+                </>
               )}
             </div>
           )}
 
           {showList && (
             <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-slate-50">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={items.length > 0 && selectedItemIds.size === items.length}
                 onChange={toggleAllSelection}
                 className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
@@ -487,38 +370,42 @@ export const Inbox = () => {
             </div>
           )}
 
-          {showList && items.map((item: ItemResponse) => (
+          {showList && items.map((item: ItemResponse) => {
+            const v = rowVisual(item, selectedId === item.id, selectedItemIds.has(item.id));
+            return (
             <div
               key={item.id}
               draggable
               onDragStart={(e) => handleDragStart(e, item.id)}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 relative ${selectedId === item.id ? 'bg-indigo-50/50' : (isEmailUnread(item) ? 'bg-white' : 'bg-slate-50/50')} ${selectedItemIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}
+              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
             >
-              {isEmailUnread(item) && (
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-md" />
-              )}
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={selectedItemIds.has(item.id)}
                 onClick={(e) => toggleSelection(item.id, e)}
                 onChange={() => {}} // handled by onClick
-                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1 z-10"
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 mr-1"
               />
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 z-10 ${typeTileClass(item.type)}`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
                 {typeIcon(item.type)}
               </div>
 
-              <div className="flex-1 min-w-0 z-10">
-                <div className={`text-[13.5px] truncate leading-snug ${isEmailUnread(item) ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
-                  {item.title}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {v.unread && (
+                    <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" aria-label="Chưa đọc" />
+                  )}
+                  <div className={`text-[13.5px] truncate leading-snug ${v.title}`}>
+                    {item.title}
+                  </div>
                 </div>
-                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${isEmailUnread(item) ? 'font-medium text-slate-700' : 'text-slate-500'}`}>
+                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${v.snippet}`}>
                   {item.snippet}
                 </div>
                 {item.folderIds && item.folderIds.length > 0 && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    {item.folderIds.map((fId: string) => {
+                    {item.folderIds.filter(fId => fId !== selectedFolderId).map((fId: string) => {
                       const f = folders.find(fol => fol.id === fId);
                       if (!f) return null;
                       return (
@@ -532,10 +419,10 @@ export const Inbox = () => {
               </div>
 
               <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                <span className="text-[11.5px] text-slate-400">{formatTime(item.occurredAt)}</span>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item.status)}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item.status)}`} />
-                  {getItemStatusLabel(item)}
+                <span className={`text-[11.5px] ${v.time}`}>{formatTime(item.occurredAt)}</span>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item)}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item)}`} />
+                  {getStatusLabel(item)}
                 </span>
               </div>
 
@@ -550,16 +437,21 @@ export const Inbox = () => {
                 <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── Pagination ── */}
-        {showList && totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <span className="text-[12.5px] text-slate-400">
-              Hiển thị {rangeStart}–{rangeEnd} trong {total} mục
-            </span>
+        {showList && (
+          <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <PageSizeSelect value={limit} onChange={(n) => { setLimit(n); setPage(1); }} />
+              <span className="text-[12.5px] text-slate-400">
+                {rangeStart}–{rangeEnd} trong {total} mục
+              </span>
+            </div>
 
+            {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -597,6 +489,7 @@ export const Inbox = () => {
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+            )}
           </div>
         )}
       </div>
@@ -611,7 +504,7 @@ export const Inbox = () => {
       )}
 
       {/* ── Bulk Action Bar ── */}
-      <BulkActionBar 
+      <BulkActionBar
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
       />

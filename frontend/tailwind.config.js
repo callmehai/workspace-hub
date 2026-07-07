@@ -13,7 +13,20 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        // Fallback stack ĐẦY ĐỦ theo system font — nếu Inter chưa kịp load / fail,
+        // chữ vẫn render bằng font hệ thống metric gần tương đương (không lệch chiều cao ký tự).
+        sans: [
+          'InterVariable',
+          'Inter',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI"',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          '"Noto Sans"',
+          'sans-serif',
+        ],
       },
     },
   },

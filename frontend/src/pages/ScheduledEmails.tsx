@@ -12,6 +12,7 @@ import { EmailChipsInput } from '../components/EmailChipsInput';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { EMAIL_TEMPLATES } from '../lib/emailTemplates';
 import { sendEmailApi } from '../lib/sendEmailApi';
+import { PageSizeSelect } from '../components/PageSizeSelect';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getStatusConfig(status?: string) {
@@ -164,7 +165,7 @@ const DetailModal = ({ email, connectionName, onClose, onCancel, isCancelling }:
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export const ScheduledEmails = () => {
   const queryClient = useQueryClient();
-  const limit = 10;
+  const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('All');
 
@@ -298,7 +299,10 @@ export const ScheduledEmails = () => {
     const endItem = Math.min(skip + limit, totalItems);
     return (
       <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
-        <span className="text-sm text-gray-500">{startItem}–{endItem} trên {totalItems} mục</span>
+        <div className="flex items-center gap-3">
+          <PageSizeSelect value={limit} onChange={(n) => { setLimit(n); setPage(1); }} />
+          <span className="text-sm text-gray-500">{startItem}–{endItem} trên {totalItems} mục</span>
+        </div>
         <div className="flex items-center space-x-1">
           <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <ChevronLeft className="w-4 h-4" />

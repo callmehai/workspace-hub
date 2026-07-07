@@ -8,8 +8,9 @@ import {
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi } from '../lib/connectionsApi';
-import { type PatchItemRequest, type FolderResponse } from '../types/items';
+import { type PatchItemRequest, type FolderResponse, type ItemResponse } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
+import { getStatusLabel } from '../lib/itemMeta';
 import toast from 'react-hot-toast';
 
 interface ItemDetailProps {
@@ -18,7 +19,6 @@ interface ItemDetailProps {
   onDeleted?: () => void;
 }
 
-const STATUS_LABEL: Record<string, string> = { Inbox: 'Cần xem', Doing: 'Đang xử lý', Done: 'Done' };
 const STATUS_COLOR: Record<string, string> = {
   Inbox: 'bg-slate-100 text-slate-600 border border-slate-200',
   Doing: 'bg-blue-50 text-blue-700 border border-blue-100',
@@ -56,11 +56,26 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [fileName, setFileName] = useState('');
   const [isRenamingFile, setIsRenamingFile] = useState(false);
 
-  // Fetch item by ID
+  // Fetch item by ID.
+  // placeholderData: mồi từ cache list/board đang có → drawer mở TỨC THÌ với data sẵn,
+  // fetch chi tiết chạy nền — không còn màn spinner nháy trước khi hiện nội dung.
   const { data: item, isLoading, isError, refetch } = useQuery({
     queryKey: ['item', itemId],
     queryFn: () => itemsApi.getItemById(itemId),
     enabled: !!itemId,
+    placeholderData: () => {
+      for (const [, data] of queryClient.getQueriesData<unknown>({ queryKey: ['items'] })) {
+        if (!data) continue;
+        const asInfinite = data as { pages?: { items?: ItemResponse[] }[] };
+        const asPaged = data as { items?: ItemResponse[] };
+        const arr: ItemResponse[] = Array.isArray(asInfinite.pages)
+          ? asInfinite.pages.flatMap(pg => pg.items ?? [])
+          : (asPaged.items ?? []);
+        const found = arr.find(i => i.id === itemId);
+        if (found) return found;
+      }
+      return undefined;
+    },
   });
 
   const { data: folders = [] } = useQuery({
@@ -185,7 +200,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
         <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
-        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex items-center justify-center">
+        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex items-center justify-center" style={{ animation: 'wh-slide-in .25s ease' }}>
           <div className="flex flex-col items-center space-y-3">
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
             <span className="text-sm font-medium text-slate-500">Đang tải chi tiết...</span>
@@ -199,7 +214,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
         <div onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
-        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500">
+        <div className="relative w-full max-w-[462px] bg-white border-l border-slate-200 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500" style={{ animation: 'wh-slide-in .25s ease' }}>
           <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
           <h3 className="text-base font-semibold text-slate-850 mb-1">Không thể tải thông tin chi tiết</h3>
           <p className="text-xs text-slate-450 text-center max-w-xs mb-4">Vui lòng thử lại sau hoặc tải lại trang.</p>
@@ -215,11 +230,21 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   }
 
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
-  const statusLabel = (item.status === 'Inbox' && item.type === 'Email' && !isUnread)
-    ? 'Đã xem'
-    : (STATUS_LABEL[item.status] ?? item.status);
-  const statusColor = STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500';
-  const statusDot = STATUS_DOT[item.status] ?? 'bg-slate-400';
+  const isTicket = item.type === 'Ticket';
+  const isSeen = item.status === 'Inbox' && item.type === 'Email' && !isUnread;
+  // Nhãn: Ticket = status thô từ Jira (giữ nguyên); Email = Chưa xem/Đã xem; còn lại = triage chung.
+  const statusLabel = getStatusLabel(item);
+  // Màu: Ticket trung tính theo category (xám/xanh dương/xanh lá). Email/khác: Inbox chưa xử lý = cam, đã xem = xám.
+  const statusColor = isTicket
+    ? (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200')
+    : item.status === 'Inbox'
+      ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200')
+      : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500');
+  const statusDot = isTicket
+    ? (STATUS_DOT[item.status] ?? 'bg-slate-400')
+    : item.status === 'Inbox'
+      ? (isSeen ? 'bg-slate-300' : 'bg-amber-500')
+      : (STATUS_DOT[item.status] ?? 'bg-slate-400');
 
   const typeChip = `inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${tInfo.bg}`;
 

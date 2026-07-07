@@ -4,7 +4,6 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Login } from './pages/Login';
 import { RegisterPage } from './pages/RegisterPage';
 import { Inbox } from './pages/Inbox';
-import { Projects } from './pages/Projects';
 import { KanbanBoard } from './pages/KanbanBoard';
 import { Integrations } from './pages/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
@@ -46,22 +45,6 @@ export const router = createBrowserRouter([
           {
             index: true,
             element: <Inbox />,
-          },
-          {
-            path: 'tasks',
-            element: <Inbox />,
-          },
-          {
-            path: 'files',
-            element: <Inbox />,
-          },
-          {
-            path: 'calendar',
-            element: <Inbox />,
-          },
-          {
-            path: 'projects',
-            element: <Projects />,
           },
           {
             path: 'kanban',
