@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Loader2, Lock, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { usePollingInterval } from '../hooks/usePollingInterval';
 
 const SERVICES = [
   {
@@ -47,11 +48,13 @@ const SERVICES = [
 
 export const Integrations = () => {
   const queryClient = useQueryClient();
-
+  const pollMs = usePollingInterval(60_000);
   const { data: connections = [], isLoading: loading, isError, refetch, isFetching } = useQuery({
     queryKey: ['connections'],
     queryFn: connectionsApi.getConnections,
     retry: false,
+    refetchInterval: pollMs,
+    refetchOnWindowFocus: true,
   });
 
   const disconnectMutation = useMutation({
@@ -77,6 +80,7 @@ export const Integrations = () => {
     onSuccess: () => {
       toast.success('Đã gửi yêu cầu đồng bộ');
       queryClient.invalidateQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     },
     onError: (err) => handleApiError(err, 'Đồng bộ thất bại'),
   });
