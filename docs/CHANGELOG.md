@@ -2,6 +2,17 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-07] Cron sync connections + FE auto-refresh (SCRUM-72)
+
+> **Mở rộng SCRUM-16:** bổ sung sync **định kỳ** ngoài on-demand; webhook/push realtime vẫn ngoài scope.
+
+- **BE cron batch sync:** `ProcessConnectionsSyncService` quét mọi Connection Active + Integration enabled → sync qua `IConnectionSyncDispatcher` (đủ Gmail/GCal/Drive/Jira). Mỗi connection lỗi không chặn batch.
+- **HTTP cron (prod):** `POST /api/internal/process-sync` + `X-Cron-Secret` (dùng chung `Cron:Secret` với SCRUM-31). Khuyến nghị 5 phút/lần.
+- **BackgroundService (dev):** `Cron:SyncAutoRun` + `Cron:SyncIntervalSeconds` — tách key riêng với cron email (`AutoRun` / `IntervalSeconds`). Prod mặc định `SyncAutoRun=false`.
+- **On-demand nhất quán:** `ConnectionHealthChecker` chuyển sang dispatcher (không chỉ Gmail) — align với cron.
+- **FE polling (TanStack Query):** Inbox/Kanban `items` 45s; Integrations `connections` 60s; chỉ poll khi tab visible (`usePollingInterval`). Manual sync trên Integrations invalidate cả `items`.
+- **Không làm:** WebSocket/SSE, Gmail push notification — UI cập nhật qua poll sau khi cron ghi DB.
+
 ## [2026-07-04] Tag management BE (SCRUM-70) + tạo ticket FE (SCRUM-71)
 
 > Entity `Tag`/`TagAssignment` đã tồn tại trong schema từ đầu (migration `InitialCreate`) nhưng **chưa có ticket, chưa có API** — chỉ nằm trong DB. Bổ sung lớp BE để dùng được, đồng thời tạo ticket FE (làm sau).
