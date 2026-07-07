@@ -14,10 +14,10 @@ import { CreateEventModal } from './CreateEventModal';
 
 /*
  * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
- * MỤC TIÊU: đổi view KHÔNG được thay đổi layout — header, nút, chips, search
- * giữ nguyên vị trí; chỉ phần nội dung bên dưới (list ⇄ columns) thay đổi.
- * Khác biệt duy nhất: dải chip Trạng thái chỉ có ở Danh sách (Bảng đã thể hiện
- * trạng thái bằng 3 cột).
+ * MỤC TIÊU: đổi view KHÔNG thay đổi layout — mọi hàng GIỐNG HỆT nhau ở 2 view:
+ *   Hàng 1: context + actions · Hàng 2: chips (trạng thái + loại + quan trọng)
+ *   Hàng 3: search full-width.
+ * Ở Bảng, chip Trạng thái = lọc CỘT hiển thị (chọn "Đang xử lý" → chỉ hiện cột đó).
  */
 
 interface ChipProps {
@@ -47,8 +47,8 @@ interface WorkspaceToolbarProps {
   folderId: string | null;
   subtitle: string;
 
-  statusFilter?: ItemStatus | null;
-  onStatusFilter?: (s: ItemStatus | null) => void;
+  statusFilter: ItemStatus | null;
+  onStatusFilter: (s: ItemStatus | null) => void;
   typeFilter: ItemType | null;
   onTypeFilter: (t: ItemType | null) => void;
   importantOnly: boolean;
@@ -171,18 +171,15 @@ export const WorkspaceToolbar = ({
         </div>
       </div>
 
-      {/* ── Hàng 2: filter chips + search (cùng vị trí ở cả 2 view) ── */}
-      <div className="flex flex-wrap gap-2 items-center mb-4">
-        {view === 'list' && onStatusFilter && (
-          <>
-            {STATUS_FILTERS.map(f => (
-              <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => onStatusFilter(f.value)}>
-                {f.label}
-              </Chip>
-            ))}
-            <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
-          </>
-        )}
+      {/* ── Hàng 2: filter chips — GIỐNG HỆT 2 view (Bảng: chip trạng thái lọc cột hiển thị) ── */}
+      <div className="flex flex-wrap gap-2 items-center mb-3">
+        {STATUS_FILTERS.map(f => (
+          <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => onStatusFilter(f.value)}>
+            {f.label}
+          </Chip>
+        ))}
+
+        <div className="w-px h-[22px] bg-slate-200 mx-0.5" />
 
         {TYPE_FILTERS.map(f => (
           <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => onTypeFilter(f.value)}>
@@ -200,17 +197,18 @@ export const WorkspaceToolbar = ({
           <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
           Quan trọng
         </Chip>
+      </div>
 
-        <div className="relative ml-auto min-w-[220px] flex-1 max-w-[320px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={e => onSearchChange(e.target.value)}
-            placeholder="Tìm kiếm tiêu đề, nội dung…"
-            className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
-          />
-        </div>
+      {/* ── Hàng 3: search full-width — vị trí + kích thước GIỐNG HỆT 2 view ── */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          value={searchInput}
+          onChange={e => onSearchChange(e.target.value)}
+          placeholder="Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)"
+          className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
+        />
       </div>
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />

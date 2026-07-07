@@ -60,6 +60,8 @@ export const KanbanBoard = () => {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
+  // Ở Bảng, statusFilter = lọc CỘT hiển thị (chọn 1 trạng thái → chỉ hiện cột đó)
+  const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -264,6 +266,8 @@ export const KanbanBoard = () => {
           folder={currentFolder}
           folderId={selectedFolderId}
           subtitle="Bảng Kanban · kéo-thả thẻ để đổi trạng thái"
+          statusFilter={statusFilter}
+          onStatusFilter={setStatusFilter}
           typeFilter={typeFilter}
           onTypeFilter={setTypeFilter}
           importantOnly={importantOnly}
@@ -286,8 +290,8 @@ export const KanbanBoard = () => {
               </button>
             </div>
           ) : (
-            <div className="flex h-full gap-5 min-w-[900px]">
-              {COLUMNS.map(col => {
+            <div className={`flex h-full gap-5 ${statusFilter ? '' : 'min-w-[900px]'}`}>
+              {COLUMNS.filter(col => !statusFilter || col.status === statusFilter).map(col => {
                 const q = colQueries[col.status];
                 const colItems = colItemsOf(q);
                 const colTotal = colTotalOf(q);
@@ -463,17 +467,14 @@ export const KanbanBoard = () => {
         </div>
       </div>
 
-      {/* Item Detail */}
+      {/* Item Detail — render TRỰC TIẾP như Inbox (ItemDetail tự có overlay fixed);
+          bọc thêm wrapper trắng 600px sẽ tạo panel trắng thừa sau drawer */}
       {selectedItemId && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-end z-50">
-          <div className="bg-white w-full max-w-[600px] h-full shadow-2xl flex flex-col relative animate-in slide-in-from-right duration-200">
-            <ItemDetail
-              itemId={selectedItemId}
-              onClose={() => setSelectedItemId(null)}
-              onDeleted={() => setSelectedItemId(null)}
-            />
-          </div>
-        </div>
+        <ItemDetail
+          itemId={selectedItemId}
+          onClose={() => setSelectedItemId(null)}
+          onDeleted={() => setSelectedItemId(null)}
+        />
       )}
 
       {/* ── Bulk Action Bar ── */}
