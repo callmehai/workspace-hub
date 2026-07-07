@@ -188,9 +188,22 @@ export const Inbox = () => {
     queryKey,
     queryFn: () => itemsApi.getItems(params),
     placeholderData: (prev) => prev,
+    // Ghi đè staleTime global 5 phút — mỗi bộ lọc (Tất cả / Email / …) là queryKey riêng;
+    // nếu không, quay lại "Tất cả" sẽ hiện cache cũ trong khi tab lọc Email vẫn poll được mail mới.
+    staleTime: 0,
     refetchInterval: pollMs,
     refetchOnWindowFocus: true,
   });
+
+  // Khi poll phát hiện total đổi (mail mới từ cron sync) → refresh mọi query items (tab/bộ lọc khác).
+  const prevTotalRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (data?.total == null) return;
+    if (prevTotalRef.current !== null && prevTotalRef.current !== data.total) {
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    }
+    prevTotalRef.current = data.total;
+  }, [data?.total, queryClient]);
 
   const { mutate: toggleImportant } = useMutation({
     mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
