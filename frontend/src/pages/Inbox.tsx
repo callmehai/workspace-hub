@@ -19,6 +19,7 @@ import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
 import { timeAgo } from '../lib/datetime';
+import { usePollingInterval } from '../hooks/usePollingInterval';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ export const Inbox = () => {
   const { t } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
+  const pollMs = usePollingInterval(45_000);
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -194,10 +196,12 @@ export const Inbox = () => {
 
   const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, page, limit }];
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey,
     queryFn: () => itemsApi.getItems(params),
     placeholderData: (prev) => prev,
+    refetchInterval: pollMs,
+    refetchOnWindowFocus: true,
   });
 
   const { mutate: toggleImportant } = useMutation({
@@ -279,6 +283,7 @@ export const Inbox = () => {
           folder={currentFolder}
           folderId={selectedFolderId}
           subtitle={isLoading ? t('common.loading') : t('inbox.count', { n: total })}
+          isBackgroundFetching={isFetching && !isLoading}
           statusFilter={statusFilter}
           onToggleStatusFilter={toggleStatusFilter}
           typeFilter={typeFilter}

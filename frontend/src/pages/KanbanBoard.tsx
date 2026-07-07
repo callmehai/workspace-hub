@@ -16,6 +16,7 @@ import { handleApiError } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
 import type { TranslationKey } from '../i18n/translations';
 import { timeAgo } from '../lib/datetime';
+import { usePollingInterval } from '../hooks/usePollingInterval';
 
 
 function typeTileClass(t: ItemType): string {
@@ -44,6 +45,7 @@ export const KanbanBoard = () => {
   const { t } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
+  const pollMs = usePollingInterval(45_000);
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect, hết nháy header khi đổi view)
   const selectedFolderId = searchParams.get('folder');
@@ -109,6 +111,8 @@ export const KanbanBoard = () => {
       const loaded = allPages.reduce((n, p) => n + p.items.length, 0);
       return loaded < lastPage.total ? allPages.length + 1 : undefined;
     },
+    refetchInterval: pollMs,
+    refetchOnWindowFocus: true,
   });
 
   // 3 cột cố định → gọi hook tường minh (không được gọi hook trong vòng lặp)
@@ -121,6 +125,9 @@ export const KanbanBoard = () => {
   const colTotalOf = (q: typeof inboxQ): number => q.data?.pages.at(-1)?.total ?? 0;
 
   const items: ItemResponse[] = COLUMNS.flatMap(c => colItemsOf(colQueries[c.status]));
+  const isColLoading = inboxQ.isLoading || doingQ.isLoading || doneQ.isLoading;
+  const isBackgroundFetching =
+    (inboxQ.isFetching || doingQ.isFetching || doneQ.isFetching) && !isColLoading;
   const isError = inboxQ.isError || doingQ.isError || doneQ.isError;
   const refetchAll = () => { inboxQ.refetch(); doingQ.refetch(); doneQ.refetch(); };
 
@@ -259,6 +266,7 @@ export const KanbanBoard = () => {
           folder={currentFolder}
           folderId={selectedFolderId}
           subtitle={t('kanban.subtitle')}
+          isBackgroundFetching={isBackgroundFetching}
           statusFilter={statusFilter}
           onToggleStatusFilter={toggleStatusFilter}
           typeFilter={typeFilter}

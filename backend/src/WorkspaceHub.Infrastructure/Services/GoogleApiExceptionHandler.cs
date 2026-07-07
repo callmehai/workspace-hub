@@ -37,7 +37,7 @@ internal static class GoogleApiExceptionHandler
         if (IsInsufficientPermissions(ex))
             return new ForbiddenException(forbiddenMessage);
 
-        return new ProviderException($"{apiName} API error: {ex.Message}", ex);
+        return new ProviderException($"{apiName} API error: {ex.Message}", ex.HttpStatusCode, ex);
     }
 
     private static bool IsInsufficientPermissions(GoogleApiException ex)

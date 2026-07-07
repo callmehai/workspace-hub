@@ -72,7 +72,9 @@ dotnet run --project src/WorkspaceHub.Api --launch-profile https
 | `OAuth:atlassian:ClientId` / `OAuth:atlassian:ClientSecret` | OAuth Jira (tương tự) |
 | `Google:RedirectUri` | callback URL connect-để-sync (`/oauth/callback`) |
 | `Google:SignInRedirectUri` | callback URL Google Sign-In (`/auth/google/callback`) — tách khỏi connect flow |
-| `Cron:Secret` | bảo vệ /api/internal/process-scheduled (X-Cron-Secret) |
+| `Cron:Secret` | bảo vệ `/api/internal/process-scheduled` và `/api/internal/process-sync` (header `X-Cron-Secret`) |
+| `Cron:SyncAutoRun` | `true` = BE tự chạy `ConnectionSyncProcessorService` (dev). Prod mặc định `false` |
+| `Cron:SyncIntervalSeconds` | Chu kỳ auto-sync connections khi `SyncAutoRun=true` (dev: 60, prod default: 300) |
 | `ConnectionStrings:Redis` | Redis cho refresh token + OTP + OAuth state (SCRUM-63, vd `localhost:6379`) |
 | `Sms:Twilio:AccountSid` / `Sms:Twilio:AuthToken` / `Sms:Twilio:FromNumber` | Twilio SMS gửi OTP (SCRUM-64). Cần **đủ cả 3** mới gọi Twilio thật; thiếu bất kỳ cái nào (vd `FromNumber` trống) → fallback `LogSmsSender` ghi OTP ra console |
 | `Cors:AllowedOrigins` | (prod) origin FE cho cookie auth cross-site, vd `https://app.example.com` |
@@ -128,6 +130,44 @@ Dùng cron ngoài (vd cron-job.org) gọi mỗi 5 phút:
 POST https://<domain>/api/internal/process-scheduled
 Header: X-Cron-Secret: <cron-secret>
 ```
+
+Tuỳ chọn dev: `Cron:AutoRun=true` → BE tự chạy `ScheduledEmailProcessorService` mỗi `Cron:IntervalSeconds` (xem `appsettings.Development.json.example`).
+
+## Cron cho connection sync (SCRUM-72)
+
+Đồng bộ định kỳ mọi Connection Active (Gmail / GCal / Drive / Jira) về DB — **bổ sung** on-demand sync (SCRUM-16), không thay webhook.
+
+**Dev (auto-run, khuyến nghị khi test local):** trong `appsettings.Development.json` (gitignored):
+
+```json
+"Cron": {
+  "Secret": "dev-cron-secret-change-me",
+  "SyncAutoRun": true,
+  "SyncIntervalSeconds": 60
+}
+```
+
+Restart BE → log `ConnectionSyncProcessor started — quét mỗi 60s.`
+
+**Prod (cron ngoài, khuyến nghị mỗi 5 phút):** giữ `Cron:SyncAutoRun=false`, dùng cron-job.org (hoặc tương đương):
+
+```
+POST https://<domain>/api/internal/process-sync
+Header: X-Cron-Secret: <Cron:Secret>
+```
+
+Trả `200` + `ProcessSyncResult` (`totalConnections`, `successCount`, `skippedCount`, `errorCount`, `details?`).
+
+**FE auto-refresh:** Inbox/Kanban poll `items` mỗi 45s; Integrations poll `connections` mỗi 60s (chỉ khi tab visible) — không cần F5 sau cron.
+
+**Test thủ công (không đợi timer):**
+
+```bash
+curl -k -X POST https://localhost:7010/api/internal/process-sync \
+  -H "X-Cron-Secret: dev-cron-secret-change-me"
+```
+
+> `Cron:Secret` dùng **chung** cho cả `process-scheduled` và `process-sync`. Không commit secret thật vào git.
 
 ## Frontend (Vite + React + TypeScript)
 
