@@ -19,8 +19,8 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     public async Task<(IReadOnlyList<Item> Items, int TotalCount)> GetPagedAsync(
         Guid userId,
         Guid? folderId = null,
-        ItemStatus? status = null,
-        ItemType? type = null,
+        IReadOnlyList<ItemStatus>? statuses = null,
+        IReadOnlyList<ItemType>? types = null,
         bool? isImportant = null,
         string? search = null,
         Guid? tagId = null,
@@ -51,16 +51,16 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 i.TagAssignments.Any(ta => ta.TagId == tagId.Value));
         }
 
-        // Status: Kanban column filter (Inbox/Doing/Done)
-        if (status.HasValue)
+        // Status: Kanban column filter (Inbox/Doing/Done) — đa chọn
+        if (statuses is { Count: > 0 })
         {
-            query = query.Where(i => i.Status == status.Value);
+            query = query.Where(i => statuses.Contains(i.Status));
         }
 
-        // Type: Email/Event/File/Note
-        if (type.HasValue)
+        // Type: Email/Event/File/Note — đa chọn
+        if (types is { Count: > 0 })
         {
-            query = query.Where(i => i.Type == type.Value);
+            query = query.Where(i => types.Contains(i.Type));
         }
 
         // IsImportant flag

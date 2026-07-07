@@ -10,8 +10,8 @@ namespace WorkspaceHub.Application.DTOs;
 /// </summary>
 public record GetItemsRequest(
     Guid? FolderId = null,
-    ItemStatus? Status = null,
-    ItemType? Type = null,
+    IReadOnlyList<ItemStatus>? Statuses = null,
+    IReadOnlyList<ItemType>? Types = null,
     bool? IsImportant = null,
     string? Search = null,
     Guid? TagId = null,

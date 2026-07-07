@@ -146,6 +146,21 @@ public class ItemWriteBackService : IItemWriteBackService
                 var metaDictEmail = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
                 if (isUnreadChanged) metaDictEmail["isUnread"] = payload.IsUnread!.Value;
                 if (isStarredChanged) metaDictEmail["isStarred"] = payload.IsStarred!.Value;
+
+                // Đồng bộ luôn mảng `labels` trong metadata với thay đổi vừa ghi lên Gmail.
+                // Nếu chỉ set field isUnread/isStarred mà không sửa labels → refetch từ DB sẽ
+                // "hồi sinh" nhãn cũ (vd UNREAD) làm UI hiện lại sai sau khi đã đọc (bug desync).
+                if (addLabels.Any() || removeLabels.Any())
+                {
+                    var labels = new List<string>();
+                    if (metaDictEmail.TryGetValue("labels", out var lv) && lv is JsonElement je && je.ValueKind == JsonValueKind.Array)
+                        labels = je.EnumerateArray().Select(e => e.GetString() ?? string.Empty).Where(s => s.Length > 0).ToList();
+                    labels.RemoveAll(l => removeLabels.Contains(l));
+                    foreach (var al in addLabels)
+                        if (!labels.Contains(al)) labels.Add(al);
+                    metaDictEmail["labels"] = labels;
+                }
+
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEmail);
 
                 break;

@@ -129,8 +129,8 @@ public class GetItemsRequestValidatorTests
     {
         var request = new GetItemsRequest(
             FolderId: Guid.NewGuid(),
-            Status: ItemStatus.Inbox,
-            Type: ItemType.Email,
+            Statuses: new[] { ItemStatus.Inbox },
+            Types: new[] { ItemType.Email },
             IsImportant: true,
             Search: "meeting notes",
             Page: 3,

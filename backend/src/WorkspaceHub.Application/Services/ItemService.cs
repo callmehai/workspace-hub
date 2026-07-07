@@ -65,8 +65,8 @@ public class ItemService : IItemService
         var (items, totalCount) = await _itemRepo.GetPagedAsync(
             userId,
             request.FolderId,
-            request.Status,
-            request.Type,
+            request.Statuses,
+            request.Types,
             request.IsImportant,
             request.Search?.Trim(),
             request.TagId,

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
-import { TagChip } from './tags/TagChip';
+import { TagChip, FolderChip } from './tags/TagChip';
 import { TagManagerModal } from './tags/TagManagerModal';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
@@ -551,17 +551,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               const f = folders.find((fol: FolderResponse) => fol.id === fId);
               if (!f) return null;
               return (
-                <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 pl-[11px] pr-1 py-1 rounded-full group">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
-                  <span className="mr-0.5">{f.name}</span>
-                  <button
-                    onClick={() => removeFromFolderMutation.mutate(f.id)}
-                    disabled={removeFromFolderMutation.isPending}
-                    className="p-0.5 rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-rose-500 dark:hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+                <FolderChip
+                  key={f.id}
+                  name={f.name}
+                  color={f.color || '#94a3b8'}
+                  onRemove={() => removeFromFolderMutation.mutate(f.id)}
+                />
               );
             })}
             

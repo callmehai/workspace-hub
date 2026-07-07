@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Moq;
+using System.Linq;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -183,14 +184,16 @@ public class ItemServiceTests
 
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, folderId, ItemStatus.Doing, ItemType.Email, true,
-                "report", null, 2, 10, It.IsAny<CancellationToken>()))
+                _userId, folderId,
+                It.Is<IReadOnlyList<ItemStatus>>(s => s.SequenceEqual(new[] { ItemStatus.Doing })),
+                It.Is<IReadOnlyList<ItemType>>(ty => ty.SequenceEqual(new[] { ItemType.Email })),
+                true, "report", null, 2, 10, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0));
 
         var request = new GetItemsRequest(
             FolderId: folderId,
-            Status: ItemStatus.Doing,
-            Type: ItemType.Email,
+            Statuses: new[] { ItemStatus.Doing },
+            Types: new[] { ItemType.Email },
             IsImportant: true,
             Search: "report",
             Page: 2,
@@ -201,8 +204,10 @@ public class ItemServiceTests
 
         // Assert — verify tất cả params đều được truyền đúng xuống repository
         _repoMock.Verify(r => r.GetPagedAsync(
-            _userId, folderId, ItemStatus.Doing, ItemType.Email, true,
-            "report", null, 2, 10, It.IsAny<CancellationToken>()), Times.Once);
+            _userId, folderId,
+            It.Is<IReadOnlyList<ItemStatus>>(s => s.SequenceEqual(new[] { ItemStatus.Doing })),
+            It.Is<IReadOnlyList<ItemType>>(ty => ty.SequenceEqual(new[] { ItemType.Email })),
+            true, "report", null, 2, 10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -274,8 +279,8 @@ public class ItemServiceTests
         Assert.Empty(result.Items);
         Assert.Equal(0, result.Total);
         _repoMock.Verify(r => r.GetPagedAsync(
-            It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<ItemStatus?>(),
-            It.IsAny<ItemType?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
+            It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<IReadOnlyList<ItemStatus>?>(),
+            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -298,8 +303,8 @@ public class ItemServiceTests
         Assert.Empty(result.Items);
         Assert.Equal(0, result.Total);
         _repoMock.Verify(r => r.GetPagedAsync(
-            It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<ItemStatus?>(),
-            It.IsAny<ItemType?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
+            It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<IReadOnlyList<ItemStatus>?>(),
+            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

@@ -17,7 +17,7 @@ import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
-import { TagChip } from '../components/tags/TagChip';
+import { TagChip, FolderChip } from '../components/tags/TagChip';
 import { timeAgo } from '../lib/datetime';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -135,8 +135,8 @@ export const Inbox = () => {
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
+  const [typeFilter, setTypeFilter] = useState<ItemType[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -156,6 +156,15 @@ export const Inbox = () => {
     setPage(1);
   }, [selectedFolderId]);
 
+  const toggleStatusFilter = (s: ItemStatus) => {
+    setStatusFilter(prev => prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]);
+    setPage(1);
+  };
+  const toggleTypeFilter = (ty: ItemType) => {
+    setTypeFilter(prev => prev.includes(ty) ? prev.filter(v => v !== ty) : [...prev, ty]);
+    setPage(1);
+  };
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = useCallback((val: string) => {
@@ -173,8 +182,8 @@ export const Inbox = () => {
   });
 
   const params = {
-    status: statusFilter ?? undefined,
-    type: typeFilter ?? undefined,
+    statuses: statusFilter.length > 0 ? statusFilter : undefined,
+    types: typeFilter.length > 0 ? typeFilter : undefined,
     isImportant: importantOnly || undefined,
     search: search || undefined,
     folderId: selectedFolderId || undefined,
@@ -183,7 +192,7 @@ export const Inbox = () => {
     limit,
   };
 
-  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, page, limit }];
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey,
@@ -242,8 +251,8 @@ export const Inbox = () => {
   };
 
   const clearFilters = () => {
-    setStatusFilter(null);
-    setTypeFilter(null);
+    setStatusFilter([]);
+    setTypeFilter([]);
     setImportantOnly(false);
     setSearchInput('');
     setSearch('');
@@ -253,7 +262,7 @@ export const Inbox = () => {
   const currentFolder = selectedFolderId
     ? folders.find(f => f.id === selectedFolderId) ?? null
     : null;
-  const hasActiveFilters = Boolean(statusFilter || typeFilter || importantOnly || tagFilter || search);
+  const hasActiveFilters = Boolean(statusFilter.length > 0 || typeFilter.length > 0 || importantOnly || tagFilter || search);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
@@ -271,9 +280,9 @@ export const Inbox = () => {
           folderId={selectedFolderId}
           subtitle={isLoading ? t('common.loading') : t('inbox.count', { n: total })}
           statusFilter={statusFilter}
-          onStatusFilter={(s) => { setStatusFilter(s); setPage(1); }}
+          onToggleStatusFilter={toggleStatusFilter}
           typeFilter={typeFilter}
-          onTypeFilter={(t) => { setTypeFilter(t); setPage(1); }}
+          onToggleTypeFilter={toggleTypeFilter}
           importantOnly={importantOnly}
           onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
           tagFilter={tagFilter}
@@ -286,8 +295,12 @@ export const Inbox = () => {
         {hasActiveFilters && (
           <div className="flex items-center gap-2 mb-3 text-[12.5px] text-slate-500 dark:text-slate-400 flex-wrap">
             <span>{t('inbox.filtering')}</span>
-            {statusFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(STATUS_LABEL_KEY[statusFilter])}</span>}
-            {typeFilter && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(typeLabelKey(typeFilter))}</span>}
+            {statusFilter.map(s => (
+              <span key={s} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(STATUS_LABEL_KEY[s])}</span>
+            ))}
+            {typeFilter.map(ty => (
+              <span key={ty} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(typeLabelKey(ty))}</span>
+            ))}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">⭐ {t('toolbar.important')}</span>}
             {search && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">"{search}"</span>}
             <button onClick={clearFilters} className="text-brand-600 dark:text-brand-400 hover:underline ml-1">{t('inbox.clearFilters')}</button>
@@ -381,14 +394,10 @@ export const Inbox = () => {
                 </div>
                 {((item.folderIds && item.folderIds.length > 0) || (item.tags && item.tags.length > 0)) && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    {item.folderIds.filter(fId => fId !== selectedFolderId).map((fId: string) => {
+                    {item.folderIds.map((fId: string) => {
                       const f = folders.find(fol => fol.id === fId);
                       if (!f) return null;
-                      return (
-                        <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100 dark:border-slate-700" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
-                          {f.name}
-                        </span>
-                      );
+                      return <FolderChip key={f.id} name={f.name} color={f.color || '#94a3b8'} size="sm" />;
                     })}
                     {item.tags?.map((tg) => (
                       <TagChip key={tg.id} name={tg.name} color={tg.color} size="sm" />

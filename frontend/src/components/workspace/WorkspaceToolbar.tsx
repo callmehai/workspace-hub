@@ -50,10 +50,10 @@ interface WorkspaceToolbarProps {
   folderId: string | null;
   subtitle: string;
 
-  statusFilter: ItemStatus | null;
-  onStatusFilter: (s: ItemStatus | null) => void;
-  typeFilter: ItemType | null;
-  onTypeFilter: (t: ItemType | null) => void;
+  statusFilter: ItemStatus[];
+  onToggleStatusFilter: (s: ItemStatus) => void;
+  typeFilter: ItemType[];
+  onToggleTypeFilter: (t: ItemType) => void;
   importantOnly: boolean;
   onImportantToggle: () => void;
   tagFilter: string | null;
@@ -64,8 +64,8 @@ interface WorkspaceToolbarProps {
 
 export const WorkspaceToolbar = ({
   view, folder, folderId, subtitle,
-  statusFilter, onStatusFilter,
-  typeFilter, onTypeFilter,
+  statusFilter, onToggleStatusFilter,
+  typeFilter, onToggleTypeFilter,
   importantOnly, onImportantToggle,
   tagFilter, onTagFilter,
   searchInput, onSearchChange,
@@ -184,7 +184,7 @@ export const WorkspaceToolbar = ({
       {/* ── Hàng 2: filter chips — GIỐNG HỆT 2 view (Bảng: chip trạng thái lọc cột hiển thị) ── */}
       <div className="flex flex-wrap gap-2 items-center mb-3">
         {STATUS_FILTERS.map(f => (
-          <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => onStatusFilter(f.value)}>
+          <Chip key={f.value} active={statusFilter.includes(f.value)} onClick={() => onToggleStatusFilter(f.value)}>
             {t(f.labelKey)}
           </Chip>
         ))}
@@ -192,12 +192,10 @@ export const WorkspaceToolbar = ({
         <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
         {TYPE_FILTERS.map(f => (
-          <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => onTypeFilter(f.value)}>
-            {f.value ? (
-              <span className="inline-flex items-center gap-1">
-                {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
-              </span>
-            ) : t(f.labelKey)}
+          <Chip key={f.value} active={typeFilter.includes(f.value)} onClick={() => onToggleTypeFilter(f.value)}>
+            <span className="inline-flex items-center gap-1">
+              {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
+            </span>
           </Chip>
         ))}
 

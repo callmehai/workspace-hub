@@ -7,8 +7,8 @@ import type {
 
 export interface GetItemsParams {
   folderId?: string;
-  status?: ItemStatus;
-  type?: ItemType;
+  statuses?: ItemStatus[];
+  types?: ItemType[];
   isImportant?: boolean;
   search?: string;
   tagId?: string;
@@ -20,7 +20,9 @@ export interface GetItemsParams {
 
 export const itemsApi = {
   getItems: async (params?: GetItemsParams): Promise<PagedResult<ItemResponse>> => {
-    const response = await api.get('/items', { params });
+    // indexes: null → serialize mảng thành "statuses=A&statuses=B" (không bracket),
+    // đúng format ASP.NET Core [FromQuery] cần để bind IReadOnlyList<T>.
+    const response = await api.get('/items', { params, paramsSerializer: { indexes: null } });
     return response.data;
   },
   

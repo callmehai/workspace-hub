@@ -429,6 +429,8 @@ export const vi = {
   'bulk.addedN': 'Đã thêm {n} thẻ vào thư mục',
   'bulk.removedN': 'Đã gỡ {n} thẻ khỏi thư mục',
   'bulk.removeFail': 'Lỗi gỡ khỏi thư mục',
+  'bulk.tag': 'Gắn tag...',
+  'bulk.taggedN': 'Đã gắn tag cho {n} mục',
 
   // ── workspace toolbar ──
   'toolbar.folder': 'Thư mục',
@@ -453,8 +455,6 @@ export const vi = {
   'status.seen': 'Đã xem',
   'status.unread': 'Chưa xem',
   'status.todo': 'Cần xử lý',
-  'filter.allStatus': 'Mọi trạng thái',
-  'filter.allType': 'Mọi loại',
   'type.email': 'Email',
   'type.event': 'Sự kiện',
   'type.file': 'Tệp',
@@ -890,6 +890,8 @@ export const en: Record<TranslationKey, string> = {
   'bulk.addedN': 'Added {n} items to folder',
   'bulk.removedN': 'Removed {n} items from folder',
   'bulk.removeFail': 'Failed to remove from folder',
+  'bulk.tag': 'Tag...',
+  'bulk.taggedN': 'Tagged {n} items',
 
   // ── workspace toolbar ──
   'toolbar.folder': 'Folder',
@@ -914,8 +916,6 @@ export const en: Record<TranslationKey, string> = {
   'status.seen': 'Seen',
   'status.unread': 'Unread',
   'status.todo': 'To do',
-  'filter.allStatus': 'All statuses',
-  'filter.allType': 'All types',
   'type.email': 'Email',
   'type.event': 'Event',
   'type.file': 'File',
