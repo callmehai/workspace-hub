@@ -79,7 +79,7 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 
 ## Nguyên tắc khi code
 
-1. Bám đúng phase hiện tại ở trên. Phase sau (webhook/Jira) → hỏi trước.
+1. Bám đúng phase hiện tại ở trên. Việc ngoài scope (webhook realtime) → hỏi trước. Mở rộng Jira thì OK (đã có nền tảng BE+FE) — đối chiếu code hiện có.
 2. Tuân thủ quy ước nền tảng (ID/timestamp/enum/cascade).
 3. Theo layered architecture, dùng DTO.
 4. Validate input; trả status code đúng (xem `docs/API.md`). Write-back: 403 thiếu scope, 409 conflict ETag, 502 provider lỗi.

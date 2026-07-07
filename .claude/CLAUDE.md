@@ -116,7 +116,7 @@ npm run build && npm run lint
 
 ## Khi user yêu cầu code
 
-- Bám phase hiện tại (CLAUDE.md root). Webhook/Jira → hỏi trước.
+- Bám phase hiện tại (CLAUDE.md root). Webhook realtime (ngoài scope) → hỏi trước; Jira đã có nền tảng, mở rộng thì đối chiếu code.
 - Đối chiếu `docs/DATABASE.md` + `docs/API.md` trước khi tạo entity/endpoint.
 - BE: Controller → Service → Repository. FE: page → component → hook → axios.
 - Test build sau mỗi nhóm thay đổi lớn (`dotnet build` + `dotnet test` BE, `npm run build` FE).
