@@ -13,10 +13,9 @@ import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon } from '../lib/itemVisuals';
+import { PageSizeSelect } from '../components/PageSizeSelect';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
-
-const LIMIT = 20;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -152,6 +151,7 @@ export const Inbox = () => {
   const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Folder = CONTEXT của trang (từ ?folder=), KHÔNG phải filter — filter (status/type/…) áp bên trong context.
@@ -191,10 +191,10 @@ export const Inbox = () => {
     search: search || undefined,
     folderId: selectedFolderId || undefined,
     page,
-    limit: LIMIT,
+    limit,
   };
 
-  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit: LIMIT }];
+  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit }];
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey,
@@ -223,15 +223,15 @@ export const Inbox = () => {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const rangeStart = total === 0 ? 0 : (page - 1) * LIMIT + 1;
-  const rangeEnd = Math.min(page * LIMIT, total);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const rangeStart = total === 0 ? 0 : (page - 1) * limit + 1;
+  const rangeEnd = Math.min(page * limit, total);
 
   // Clear selection when page or filters change
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
-  }, [page, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
+  }, [page, limit, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -437,12 +437,16 @@ export const Inbox = () => {
         </div>
 
         {/* ── Pagination ── */}
-        {showList && totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <span className="text-[12.5px] text-slate-400">
-              Hiển thị {rangeStart}–{rangeEnd} trong {total} mục
-            </span>
+        {showList && (
+          <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <PageSizeSelect value={limit} onChange={(n) => { setLimit(n); setPage(1); }} />
+              <span className="text-[12.5px] text-slate-400">
+                {rangeStart}–{rangeEnd} trong {total} mục
+              </span>
+            </div>
 
+            {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -480,6 +484,7 @@ export const Inbox = () => {
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+            )}
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { ItemDetail } from '../components/ItemDetail';
@@ -45,6 +45,9 @@ const COLUMNS: { title: string, status: ItemStatus, dotColor: string }[] = [
   { title: 'Hoàn thành', status: 'Done', dotColor: 'bg-emerald-500' },
 ];
 
+/** Số thẻ load mỗi lần cho 1 cột — bấm "Tải thêm" ở đáy cột để lấy tiếp (không còn cap 100). */
+const COL_PAGE_SIZE = 30;
+
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -87,19 +90,46 @@ export const KanbanBoard = () => {
     queryFn: () => foldersApi.getFolders()
   });
 
-  const queryKey = ['items', { folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, search }];
-  const { data: pagedItems, isLoading, isError, refetch } = useQuery({
-    queryKey,
-    queryFn: () => itemsApi.getItems({
+  /*
+   * Bỏ giới hạn "100 item đầu tiên": mỗi cột là MỘT infinite query riêng theo status
+   * (kiểu Jira/Trello) — load COL_PAGE_SIZE thẻ đầu, bấm "Tải thêm" ở đáy cột để lấy tiếp.
+   * Số trên header cột = TỔNG THẬT từ server (total của envelope), không phải số đã load.
+   */
+  const boardKey = (status: ItemStatus) =>
+    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, search }];
+
+  const makeColQuery = (status: ItemStatus) => ({
+    queryKey: boardKey(status),
+    queryFn: ({ pageParam }: { pageParam: number }) => itemsApi.getItems({
+      status,
       folderId: selectedFolderId || undefined,
       type: typeFilter || undefined,
       isImportant: importantOnly || undefined,
       search: search || undefined,
-      limit: 100
-    })
+      page: pageParam,
+      limit: COL_PAGE_SIZE,
+    }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: PagedResult<ItemResponse>, allPages: PagedResult<ItemResponse>[]) => {
+      const loaded = allPages.reduce((n, p) => n + p.items.length, 0);
+      return loaded < lastPage.total ? allPages.length + 1 : undefined;
+    },
   });
 
-  const items = pagedItems?.items || [];
+  // 3 cột cố định → gọi hook tường minh (không được gọi hook trong vòng lặp)
+  const inboxQ = useInfiniteQuery(makeColQuery('Inbox'));
+  const doingQ = useInfiniteQuery(makeColQuery('Doing'));
+  const doneQ = useInfiniteQuery(makeColQuery('Done'));
+  const colQueries: Record<ItemStatus, typeof inboxQ> = { Inbox: inboxQ, Doing: doingQ, Done: doneQ };
+
+  const colItemsOf = (q: typeof inboxQ): ItemResponse[] => q.data?.pages.flatMap(p => p.items) ?? [];
+  const colTotalOf = (q: typeof inboxQ): number => q.data?.pages.at(-1)?.total ?? 0;
+
+  const items: ItemResponse[] = COLUMNS.flatMap(c => colItemsOf(colQueries[c.status]));
+  const isError = inboxQ.isError || doingQ.isError || doneQ.isError;
+  const refetchAll = () => { inboxQ.refetch(); doingQ.refetch(); doneQ.refetch(); };
+
+  type BoardCache = InfiniteData<PagedResult<ItemResponse>>;
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status, type }: { id: string, status: ItemStatus, type: ItemType }) => {
@@ -113,20 +143,52 @@ export const KanbanBoard = () => {
       }
       return itemsApi.updateItemStatus(id, { status });
     },
-    onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<PagedResult<ItemResponse>>(queryKey);
-      queryClient.setQueryData(queryKey, (old: PagedResult<ItemResponse> | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          items: old.items.map((it: ItemResponse) => it.id === id ? { ...it, status } : it)
-        };
-      });
-      return { previous };
+    // Optimistic move giữa 2 cache cột: gỡ khỏi cột nguồn, chèn đầu cột đích; lỗi → khôi phục snapshot
+    onMutate: async ({ id, status: toStatus }) => {
+      const statuses: ItemStatus[] = ['Inbox', 'Doing', 'Done'];
+      await Promise.all(statuses.map(st => queryClient.cancelQueries({ queryKey: boardKey(st) })));
+
+      const snapshots = new Map<ItemStatus, BoardCache | undefined>();
+      let moved: ItemResponse | undefined;
+
+      for (const st of statuses) {
+        const data = queryClient.getQueryData<BoardCache>(boardKey(st));
+        snapshots.set(st, data);
+        if (!data || st === toStatus) continue;
+        const found = data.pages.flatMap(p => p.items).find(it => it.id === id);
+        if (found) {
+          moved = found;
+          queryClient.setQueryData<BoardCache>(boardKey(st), {
+            ...data,
+            pages: data.pages.map(p => ({
+              ...p,
+              total: Math.max(0, p.total - 1),
+              items: p.items.filter(it => it.id !== id),
+            })),
+          });
+        }
+      }
+
+      if (moved) {
+        const target = queryClient.getQueryData<BoardCache>(boardKey(toStatus));
+        if (target && target.pages.length > 0) {
+          queryClient.setQueryData<BoardCache>(boardKey(toStatus), {
+            ...target,
+            pages: target.pages.map((p, i) => ({
+              ...p,
+              total: p.total + 1,
+              items: i === 0 ? [{ ...moved!, status: toStatus }, ...p.items] : p.items,
+            })),
+          });
+        }
+      }
+
+      return { snapshots };
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
+      ctx?.snapshots.forEach((data, st) => {
+        if (data) queryClient.setQueryData(boardKey(st), data);
+      });
       handleApiError(err, 'Lỗi cập nhật trạng thái', { navigate });
     },
     onSettled: () => {
@@ -210,13 +272,6 @@ export const KanbanBoard = () => {
           onSearchChange={handleSearchChange}
         />
 
-        {pagedItems && pagedItems.total > 100 && (
-          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-800 text-[13px] font-medium shrink-0 animate-in fade-in duration-200">
-            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>Chỉ hiển thị tối đa 100 mục đầu tiên trên bảng Kanban. Thư mục hiện tại có {pagedItems.total} mục.</span>
-          </div>
-        )}
-
         {/* Board content */}
         <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
           {isError ? (
@@ -226,14 +281,17 @@ export const KanbanBoard = () => {
               </div>
               <span className="text-slate-900 text-sm font-semibold mb-1">Không tải được bảng</span>
               <p className="text-[13px] text-slate-500 mb-4">Mất kết nối tới máy chủ. Vui lòng thử lại.</p>
-              <button onClick={() => refetch()} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg">
+              <button onClick={refetchAll} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg">
                 Thử lại
               </button>
             </div>
           ) : (
             <div className="flex h-full gap-5 min-w-[900px]">
               {COLUMNS.map(col => {
-                const colItems = items.filter(i => i.status === col.status);
+                const q = colQueries[col.status];
+                const colItems = colItemsOf(q);
+                const colTotal = colTotalOf(q);
+                const isColLoading = q.isLoading;
                 const isOver = dragOverCol === col.status;
                 return (
                   <div key={col.status} className="flex-1 w-80 flex flex-col min-h-0">
@@ -241,7 +299,7 @@ export const KanbanBoard = () => {
                       <span className={`w-2 h-2 rounded-full ${col.dotColor}`}></span>
                       <span className="text-[14px] font-semibold text-slate-900">{col.title}</span>
                       <span className="text-[12px] font-semibold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">
-                        {colItems.length}
+                        {isColLoading ? '…' : colTotal}
                       </span>
                     </div>
 
@@ -253,7 +311,7 @@ export const KanbanBoard = () => {
                         isOver ? 'bg-indigo-50 border-indigo-400 border-dashed' : 'bg-slate-100/80 border-transparent'
                       }`}
                     >
-                      {isLoading ? (
+                      {isColLoading ? (
                         Array.from({ length: 3 }).map((_, i) => (
                           <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 animate-pulse">
                             <div className="h-4 bg-slate-200 rounded w-1/4 mb-3"></div>
@@ -378,10 +436,23 @@ export const KanbanBoard = () => {
                         })
                       )}
 
-                      {!isLoading && colItems.length === 0 && (
+                      {!isColLoading && colItems.length === 0 && (
                         <div className="flex items-center justify-center p-4 border-[1.5px] border-dashed border-slate-300 rounded-xl text-[12.5px] text-slate-400 text-center h-20">
                           Kéo thẻ vào đây
                         </div>
+                      )}
+
+                      {/* Tải thêm — thay cho cap 100 item cũ */}
+                      {q.hasNextPage && (
+                        <button
+                          onClick={() => q.fetchNextPage()}
+                          disabled={q.isFetchingNextPage}
+                          className="shrink-0 w-full py-2 rounded-lg border border-slate-200 bg-white text-[12.5px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors disabled:opacity-50"
+                        >
+                          {q.isFetchingNextPage
+                            ? 'Đang tải…'
+                            : `Tải thêm (${colItems.length}/${colTotal})`}
+                        </button>
                       )}
                     </div>
                   </div>

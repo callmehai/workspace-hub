@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { itemsApi } from '../../lib/itemsApi';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { handleApiError } from '../../lib/errorUtils';
+import { Select } from '../Select';
 
 interface Props {
   isOpen: boolean;
@@ -90,16 +91,13 @@ export const CreateEventModal = ({ isOpen, onClose }: Props) => {
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
             <label className="block text-[13px] font-medium text-slate-700 mb-1.5">Tài khoản Google Calendar</label>
-            <select
+            <Select
               value={form.connectionId}
-              onChange={e => setForm({ ...form, connectionId: e.target.value })}
-              className={inputCls}
-            >
-              <option value="">-- Chọn tài khoản --</option>
-              {gcalConnections.map(c => (
-                <option key={c.id} value={c.id}>{c.providerAccountId} ({c.provider})</option>
-              ))}
-            </select>
+              onChange={(v) => setForm({ ...form, connectionId: v })}
+              options={gcalConnections.map(c => ({ value: c.id, label: `${c.providerAccountId} (${c.provider})` }))}
+              placeholder="-- Chọn tài khoản --"
+              className="h-9"
+            />
             {gcalConnections.length === 0 && (
               <p className="text-[12px] text-amber-600 mt-1.5">Chưa có kết nối Google Calendar hợp lệ.</p>
             )}
