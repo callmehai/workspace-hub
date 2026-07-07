@@ -199,11 +199,12 @@ export const Inbox = () => {
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
   const filterKey = JSON.stringify({
-    status: params.status,
-    type: params.type,
+    statuses: params.statuses,
+    types: params.types,
     isImportant: params.isImportant,
     search: params.search,
     folderId: params.folderId,
+    tagId: params.tagId,
   });
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
