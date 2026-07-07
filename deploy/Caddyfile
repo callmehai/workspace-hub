@@ -1,0 +1,19 @@
+# Caddy: TLS tự động (Let's Encrypt) + serve SPA + reverse-proxy /api → backend.
+# SITE_ADDRESS truyền qua biến môi trường (docker-compose.prod.yml).
+# Không set global email (tuỳ chọn của Let's Encrypt) — để trống sẽ gây lỗi cú pháp
+# `email` rỗng làm Caddy crash; bỏ hẳn cho chắc, cert vẫn xin bình thường.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Mọi request /api/* → container backend (same-origin ⇒ cookie auth + CSRF hoạt động).
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Phần còn lại: file tĩnh của SPA, fallback index.html cho client-side routing (React Router).
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

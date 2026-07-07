@@ -7,6 +7,7 @@ Bản prototype clickable export từ **claude.ai/design** (project "Workspace h
 
 | File | Là gì |
 |------|-------|
+| `workspace-v2.html` | **Prototype v2 (2026-07-07) — chuẩn hiện hành**: self-contained, mở thẳng bằng browser. Cơ chế Folder = context + 2 view Danh sách/Bảng, drag-drop, drawer, dark mode, URL contract + 7 nhóm spec cho dev. **FE code/fix theo file này**; các file dc.html cũ chỉ còn giá trị tham khảo màn phụ. |
 | `Workspace Hub.dc.html` | Prototype chính, cú pháp `<x-dc>` của Claude Design (8 màn: Auth, Inbox, Kanban, Item detail slide-over, Connections, Scheduled, Folders+Share, Admin). |
 | `support.js` | Runtime của Claude Design (render `<x-dc>` template). Generated — không sửa tay. |
 | `wh-data.js` | Mock data (folders, items 5 loại, connections, scheduled, users, admin stats). Tham chiếu khi code FE. |

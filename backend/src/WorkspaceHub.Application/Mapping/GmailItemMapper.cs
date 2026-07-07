@@ -33,7 +33,8 @@ public class GmailItemMapper : IGmailItemMapper
             threadId = message.ThreadId,
             labels = message.LabelIds,
             hasAttachment = message.HasAttachment,
-            webUrl = $"https://mail.google.com/mail/u/0/#all/{message.Id}"
+            webUrl = $"https://mail.google.com/mail/u/0/#all/{message.Id}",
+            isUnread = message.LabelIds != null && message.LabelIds.Contains("UNREAD")
         };
 
         return new Item
@@ -49,7 +50,7 @@ public class GmailItemMapper : IGmailItemMapper
             OccurredAt = message.OccurredAt?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = isImportant,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata),
+            MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
             ETag = message.ETag
         };
     }

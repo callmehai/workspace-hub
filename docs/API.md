@@ -112,7 +112,16 @@ Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B. Sync issue
 - `POST /api/connections/oauth/callback` — `{code, state}` → đổi token, gọi `/oauth/token/accessible-resources` lấy **cloudId**, lưu `ProviderAccountId = cloudId`, tạo 1 Connection ServiceType=Jira. (400 CSRF/scope thiếu, 409 trùng cloudId)
 
 ## Folders / Folder Shares / Tags / Important Contacts / Notifications
-Không đổi. Xem bản trước. List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (target — $filter/$orderby trên IQueryable, scope theo CurrentUserId trước).
+Không đổi (trừ Tags — xem dưới). Xem bản trước. List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (target — $filter/$orderby trên IQueryable, scope theo CurrentUserId trước).
+
+### Tags — ✅ SCRUM-70 (BE, CRUD + assign)
+Label private của user (không share), gắn cho Item qua junction `TagAssignment` (m-n). Tên tag **không** unique toàn hệ thống nhưng **unique trong 1 user**. Mọi endpoint owner-scoped theo `CurrentUserId`.
+- `GET /api/tags` — list tag của user, kèm `itemCount` (số item đang gắn). OData ⊕.
+- `POST /api/tags` — `{name, color}` → 201. `color` = hex (`#RGB`/`#RRGGBB`). (400 validation, 409 trùng tên trong user)
+- `PUT /api/tags/{id}` — `{name, color}` → 200. (400 validation, 404 không phải của mình, 409 trùng tên)
+- `DELETE /api/tags/{id}` — 204. Hard delete; DB cascade gỡ mọi `TagAssignment`, **Item giữ nguyên**. (404 không phải của mình)
+- `POST /api/tags/{id}/items` — `{itemId}` → 201 `{tagId, itemId, assignedAt}`. Gắn tag vào item. (404 tag/item không thuộc user, 409 đã gắn)
+- `DELETE /api/tags/{id}/items/{itemId}` — 204. Gỡ tag khỏi item. (404 tag không thuộc user / chưa gắn)
 
 ### Important Contacts — ✅ SCRUM-60 (CRUD)
 Đánh dấu Email/JiraAccount là liên hệ quan trọng (Item sync về từ contact này tự set IsImportant).

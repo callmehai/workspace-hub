@@ -2,6 +2,40 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-07] UI polish + Theme Sáng/Tối + Song ngữ VI/EN + Trang Profile
+
+> Review UI phát hiện **lệch tông màu**: Login/Header dùng `brand`=blue-600 (#2563eb) trong khi Sidebar/Inbox/toolbar dùng indigo-600 (#4f46e5) — logo "W" + nút primary hai màu xanh khác nhau; Header nền `gray-50` lệch app nền `slate-50`; avatar Header (gradient) khác avatar Sidebar. Cùng lúc bổ sung theme + i18n + profile (chuẩn bị avatar/R2).
+
+- **Thống nhất palette:** `brand` (tailwind.config) đổi blue → **indigo** (SSOT màu thương hiệu) + thêm shade 200/300/400/800/900. Mọi bề mặt `brand-*` (Login/Header/nút/focus ring) nay đồng tông với indigo của sidebar/inbox. Header đổi `gray-50`→`bg-white` (khớp chrome sidebar), avatar Header đồng bộ `brand-50/brand-600`.
+- **Theme Sáng/Tối:** `darkMode:'class'`; `ThemeProvider` toggle class `.dark` trên `<html>` + persist `localStorage['wh-theme']`; inline script `index.html` set class **trước paint** (chống FOUC). **Đổi theme = thao tác DOM thuần → KHÔNG remount** cây React (giữ state/scroll/query cache). Style dark phủ **toàn app**: shell + auth (Login/Register/VerifyOtp/callbacks) + Profile + Inbox/Kanban/Integrations + AdminDashboard + ScheduledEmails/SendEmail + ItemDetail drawer + mọi modal (CreateNote/CreateEvent/Folder) + RichTextEditor (+css `.dark .wh-rte`)/BulkActionBar/DateTimePicker/EmailChipsInput/Select/PageSizeSelect/WorkspaceToolbar/Toaster. Badge tint (`bg-*-50/100`) → `dark:bg-*-500/15 dark:text-*-300` để hết loá trên nền tối.
+- **Song ngữ VI/EN:** i18n **tự viết, không thêm lib** (`src/i18n/` — `translations.ts` từ điển phẳng VI/EN + `I18nProvider` + `useI18n().t()`, nội suy `{var}`), persist `localStorage['wh-lang']`. Đổi ngôn ngữ = đổi context value → **re-render, KHÔNG remount** (không mất state form, không refetch query). VI mặc định. Dịch đủ shell/auth/profile/toolbar + nhãn chính core; page phụ mở rộng dần bằng cách thêm key.
+- **Trang Profile:** route `/profile`, vào từ avatar Header + block user Sidebar; hiển thị tài khoản + tuỳ chọn theme/ngôn ngữ; vùng avatar đặt sẵn nút "Đổi ảnh đại diện" (disabled) — **chừa chỗ cho task avatar upload + Cloudflare R2** (kế tiếp).
+- **Tickets (chưa có trên Jira):** draft ở `docs/tickets-ui-i18n-theme-profile.md` (SCRUM-73 i18n, 74 Profile, 75 Avatar/R2, 76 Theme + CSV import). Dark mode vốn nằm trong SCRUM-50 (gộp responsive+dashboard) — tách 76 hoặc đánh dấu tiến độ ở 50.
+- **Files:** `tailwind.config.js`, `index.html`, `src/index.css`, `src/App.tsx`, `src/context/{theme-context.ts,ThemeProvider.tsx}`, `src/i18n/*`, `src/hooks/{useTheme,useI18n}.ts`, `src/components/ThemeLangControls.tsx`, `src/pages/ProfilePage.tsx`, `src/router.tsx`, shell + Login/Register/Inbox/KanbanBoard/Integrations + Select/PageSizeSelect/WorkspaceToolbar/GoogleSignInButton.
+
+## [2026-07-07] UX overhaul: Folder = context (không phải filter) + prototype v2
+
+> Cơ chế folder/Inbox/Kanban cũ bị lai: sidebar coi folder như trang, Inbox coi folder như filter chip, nav Inbox/Kanban làm rớt `?folder=` khi click, tiêu đề trang luôn "Inbox" (đụng tên status `Inbox`). Chốt lại mô hình **Folder = context, view = cách hiển thị context**.
+
+- **Mô hình:** một context (Tất cả mục / 1 thư mục) có 2 view — Danh sách (`/`) và Bảng (`/kanban`), context qua `?folder={id}`. **Bất biến:** đổi view giữ context, đổi context giữ view; xoá folder đang xem → về Tất cả mục (giữ view).
+- **Sidebar:** bỏ nav "Inbox"/"Bảng Kanban" (view toggle nằm trong page); nav chính có **"Tất cả mục"**; section THƯ MỤC chỉ chứa folder thật + itemCount badge. Active duy nhất 1 mục tại mọi thời điểm.
+- **Header trang = context:** chấm màu + tên thư mục (hoặc "Tất cả mục") + subtitle đếm; folder **không** còn trong dải chip "Đang lọc"; chip folder trên item ẩn folder đang đứng trong.
+- **Từ ngữ:** không dùng "Inbox" trong UI; status label `Done`→"Hoàn thành"; chip "Tất cả" lặp → "Mọi trạng thái"/"Mọi loại". 3 empty state riêng (filter / folder trống / chưa có dữ liệu).
+- **Dọn:** bỏ dead routes `/tasks` `/files` `/calendar` + trang `Projects` placeholder.
+- **Prototype v2:** `docs/prototype/workspace-v2.html` — prototype tương tác self-contained (đổi context/view, drag-drop cột + gán folder, drawer, dark mode, URL contract sống) + 7 nhóm spec viết. FE code/fix theo file này.
+- Files: `Sidebar.tsx`, `Inbox.tsx`, `KanbanBoard.tsx`, `router.tsx` (xoá `Projects.tsx`).
+
+## [2026-07-04] Tag management BE (SCRUM-70) + tạo ticket FE (SCRUM-71)
+
+> Entity `Tag`/`TagAssignment` đã tồn tại trong schema từ đầu (migration `InitialCreate`) nhưng **chưa có ticket, chưa có API** — chỉ nằm trong DB. Bổ sung lớp BE để dùng được, đồng thời tạo ticket FE (làm sau).
+
+- **Bảng đã có sẵn:** `Tags`/`TagAssignments` từ `InitialCreate` (composite PK, cascade User→Tag→TagAssignment, Item→TagAssignment NoAction để tránh 2 đường cascade). Chỉ thêm Controller/Service/Repository/DTO/Validator theo layered convention.
+- **Unique tên tag = trong phạm vi 1 user, enforce ở DB** qua unique index `IX_Tags_UserId_Name` (migration `AddTagUserNameUniqueIndex`). `Tag.Name` cố ý *không* unique toàn hệ thống (mỗi user có "namespace" tag riêng). Service vẫn check `NameExistsAsync` trước → 409 sớm với thông báo đẹp; unique index là backstop cho **TOCTOU race** (2 request POST cùng tên đồng thời cùng vượt check) → `DbUpdateException` map về 409 trong `SaveOrThrowConflictAsync`.
+  - ⚠️ **Đảo quyết định ban đầu:** bản đầu chốt "enforce ở service layer, KHÔNG index DB, không migration". Sau **code-review PR #70** chỉ ra race window → owner đồng ý thêm unique index + migration `AddTagUserNameUniqueIndex` (đã apply DB dev). Index thay `IX_Tags_UserId` (UserId cột đầu vẫn cover FK).
+- **Assign/unassign qua junction `TagAssignment`** giống pattern `ItemFolder` của Folder (SCRUM-65): `POST /api/tags/{id}/items` + `DELETE /api/tags/{id}/items/{itemId}`. Cả tag lẫn item phải thuộc `CurrentUserId` (404 nếu không), trùng gắn → 409.
+- **Xoá tag = hard delete**, cascade dọn `TagAssignment`, **Item giữ nguyên** (đúng nguyên tắc "không soft delete"; tag chỉ là label, gỡ label không xoá nội dung).
+- **FE tách riêng SCRUM-71** (quản lý tag + chip + gắn/gỡ + filter theo tag) — chưa làm, chờ đợt sau.
+
 ## [2026-06-30 — kế hoạch, ĐANG TRIỂN KHAI theo nhánh] Đại tu Auth: HttpOnly cookie + refresh token (Redis) + OTP đăng ký (Twilio)
 
 > ⚠️ **VƯỢT SCOPE SCRUM-42 và thay đổi NỀN TẢNG AUTH chung** (Lộc/Khánh/Vũ phụ thuộc). Yêu cầu phát sinh từ owner (ngoài board lúc ghi). Đã tách thành **3 ticket mới SCRUM-62/63/64** (xem SPRINTS.md) + làm theo **3 nhánh riêng** để dễ review, không dồn vào PR SCRUM-42. Ghi lại đây để cả nhóm nắm "tại sao" vì nó **đảo nhiều quyết định cũ** ở CLAUDE.md.
@@ -133,7 +167,7 @@
 - **Trước:** chỉ đọc, một chiều.
 - **Sau:** thao tác trên app đẩy ngược lên Google. Scope đổi readonly → read-write (gmail.modify+send, calendar, drive.file).
 - **Giới hạn:** email KHÔNG sửa nội dung (Gmail immutable) — chỉ label/read/star/trash + gửi mới. Event/File CRUD đầy đủ hơn.
-- **Conflict:** thêm Items.ETag, so trước khi ghi, lệch → 409.
+- **Conflict:** thêm Items.ETag, so trước khi ghi, lệch → 409. Bỏ qua kiểm tra conflict ETag cho riêng Email do `HistoryId` của Gmail thay đổi liên tục từ các tác vụ bên ngoài, dễ gây ra false-positive 409 khi người dùng cập nhật trạng thái đọc/chưa đọc/sao trên app.
 - **Cách đọc:** **on-demand/lazy** (không polling định kỳ, không webhook); ghi = synchronous khi user thao tác. Webhook ngoài scope.
 
 ### Google Sign-In (đăng nhập bằng Google)

@@ -1,0 +1,103 @@
+# ===== Production stack — 1 EC2, tất cả trong Docker Compose =====
+# Chạy trên EC2:
+#   cp deploy/.env.prod.example .env   # rồi điền secret
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Biến bí mật đọc từ file .env cùng thư mục (gitignored). KHÔNG hardcode secret ở đây.
+name: workspace-hub
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      # Giới hạn "max server memory" của SQL Server để nó không ăn hết RAM trên máy 2GB.
+      MSSQL_MEMORY_LIMIT_MB: "${MSSQL_MEMORY_LIMIT_MB:-1024}"
+    # Hard cap ở tầng container (chừa headroom cho API/Redis/Caddy/OS). Bỏ dòng này nếu máy ≥4GB.
+    mem_limit: ${MSSQL_MEM_LIMIT:-1400m}
+    volumes:
+      - mssql-data:/var/opt/mssql
+    ports:
+      # CHỈ bind loopback của server (KHÔNG ra internet) → truy cập bằng GUI (DBeaver) qua SSH tunnel.
+      - "127.0.0.1:1433:1433"
+    restart: unless-stopped
+    healthcheck:
+      # $$ để shell trong container tự expand (không phải compose interpolate).
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    # Không publish 1433 ra host — chỉ các service trong network truy cập.
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      mssql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Server=mssql,1433;Database=WorkspaceHub;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      ConnectionStrings__Redis: "redis:6379"
+      # Tự áp migration lúc khởi động (single-instance).
+      Db__AutoMigrate: "true"
+      Jwt__Secret: ${JWT_SECRET}
+      # Same-origin (Caddy phục vụ cả FE + /api) ⇒ cookie SameSite=Lax, không cần CORS.
+      Auth__CrossSiteCookies: "false"
+      # BackgroundService tự quét & gửi scheduled email mỗi IntervalSeconds.
+      Cron__AutoRun: "true"
+      Cron__Secret: ${CRON_SECRET}
+      Cron__IntervalSeconds: "60"
+      OAuth__google__ClientId: ${GOOGLE_CLIENT_ID}
+      OAuth__google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      # Jira/Atlassian OAuth — code đọc theo integration Key = "atlassian" (KHÔNG phải "jira").
+      # Để trống ⇒ connect Jira báo "Chưa cấu hình ClientId cho 'atlassian'". Redirect Jira do FE gửi (/oauth/callback).
+      OAuth__atlassian__ClientId: ${ATLASSIAN_CLIENT_ID:-}
+      OAuth__atlassian__ClientSecret: ${ATLASSIAN_CLIENT_SECRET:-}
+      # Redirect URI trỏ tới route FE (Caddy serve) — phải khớp Google Cloud Console.
+      Google__RedirectUri: "https://${SITE_ADDRESS}/oauth/callback"
+      Google__SignInRedirectUri: "https://${SITE_ADDRESS}/auth/google/callback"
+      # Twilio tuỳ chọn — để trống ⇒ OTP log ra console (docker compose logs api).
+      Sms__Twilio__AccountSid: ${TWILIO_SID:-}
+      Sms__Twilio__AuthToken: ${TWILIO_TOKEN:-}
+      Sms__Twilio__FromNumber: ${TWILIO_FROM:-}
+    volumes:
+      # Persist Data Protection keys — nếu mất, mọi token OAuth đã mã hoá trong DB không giải mã được.
+      - dp-keys:/app/dp-keys
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # chứng chỉ Let's Encrypt — persist để không xin lại mỗi lần restart.
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  mssql-data:
+  redis-data:
+  dp-keys:
+  caddy-data:
+  caddy-config:

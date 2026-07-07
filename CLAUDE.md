@@ -10,25 +10,31 @@ Web app gom email / sự kiện / file / note (và ticket ở phase Jira) từ *
 
 ## Scope & Phase — ĐỌC KỸ
 
-App hướng tới **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Triển khai **theo phase**, đừng làm hết một lúc:
+App gom + **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Hầu hết đã xong; vài ticket còn "In Review" nhưng code đã merge. Status từng ticket: `docs/SPRINTS.md` (⚠️ SPRINTS.md dòng "Phase Jira chưa code" đã stale — Jira đã code, xem dưới).
 
-### Phase hiện tại (Sprint 4) — Mô hình B + Write-back Google + Google Sign-In
-- **Mô hình connection B:** mỗi service (Gmail/GCal/Drive) = 1 row `Connections` riêng, token riêng. User authorize riêng từng service. ✅ DB đã migrate (SCRUM-34).
-- **Google Sign-In:** đăng nhập app bằng Google, tách biệt connect-để-sync. ✅ Done (SCRUM-32/33).
-- **OAuth per-service (mô hình B):** start + callback theo từng service, scope read-write. ✅ Done (SCRUM-35/36).
-- **2 chiều bằng polling + write-back:** cron đọc như cũ (1 chiều pull); thao tác trên app ghi ngược lên Google ngay (synchronous). ⏳ SCRUM-37 (write-back, Vũ) + SCRUM-38 (conflict ETag, Lộc).
-  - Ghi được: Email (label/read/star/trash + gửi mới — **KHÔNG sửa nội dung**, Gmail immutable), Event (CRUD đầy đủ), File (rename/trash).
-  - Conflict qua `Items.ETag` → 409.
-- Kế tiếp: SCRUM-37 + 38 (song song), rồi 30/31 (scheduled email). **Phase hiện tại dừng ở SCRUM-38.** Status chi tiết: `docs/SPRINTS.md`.
+### Sprint hiện hành: **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Status chi tiết từng ticket: `docs/SPRINTS.md` (nguồn = Jira export mới nhất).
 
-### Phase Jira — đã lên kế hoạch, CHƯA bắt đầu code (SCRUM-54→60)
-Tích hợp **Jira / Atlassian** (CRUD đầy đủ) đã có ticket trên board (SCRUM-54→60, To Do, backlog) nhưng **chưa code** — current phase vẫn dừng ở SCRUM-38. Làm theo mô hình B: Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). Gồm: OAuth 3LO + cloudId (54), client + sync issue → Item(Ticket) (55), tạo issue (56), write-back update qua `IWriteBackGuard` (57), xoá issue (58), metadata helpers (59), ImportantContacts JiraAccount + Notification (60). Chi tiết + dependency: `docs/SPRINTS.md` (bảng "Phase Jira"); quyết định kỹ thuật (ADF, version-token thay ETag): `docs/CHANGELOG.md`. **Đừng bắt đầu khi chưa chốt xong Sprint 3 — hỏi trước.**
+**✅ ĐÃ XONG (nền tảng 2 chiều + Jira + auth overhaul):**
+- **Mô hình B + OAuth per-service + Google Sign-In:** SCRUM-34/35/36 + 32/33. Bật service = full scope read-write.
+- **Write-back Google (2 chiều, synchronous):** `PATCH/POST/DELETE /api/items` — Email (label/read/star/trash + gửi mới, **KHÔNG sửa nội dung** Gmail immutable), Event (CRUD), File (rename/trash). Conflict qua `Items.ETag` → 409 (`IWriteBackGuard`). ✅ SCRUM-37/38.
+- **Scheduled email + cron gửi:** `/api/internal/process-scheduled` (X-Cron-Secret). ✅ SCRUM-30/31.
+- **Phase Jira/Atlassian (CRUD đầy đủ) — ĐÃ CODE XONG:** Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). OAuth 3LO+cloudId (54), sync issue→Item(Ticket) (55), tạo (56), write-back update qua cùng `IWriteBackGuard` — `fields.updated` làm version-token thay ETag (57), xoá (58), metadata helpers (59), ImportantContacts JiraAccount (60). Description = ADF 2 chiều. Migration `EnableJiraIntegration` đã bật `atlassian` IsEnabled=true trên develop.
+- **Auth overhaul:** access token → **HttpOnly cookie + CSRF** (62 ✅), refresh token + Redis rotation (63 ✅ trên nhánh). OAuth key Jira = `atlassian` (đọc `OAuth:atlassian:ClientId/Secret`).
+- **Tag BE:** CRUD + assign/unassign (70 ✅).
 
-### NGOÀI scope (đừng code, chỉ tham khảo roadmap)
-- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) → phase sau, **chưa có ticket**.
+**🔄 Đang làm / ⏳ còn lại (Sprint 4):**
+- 🔄 OTP đăng ký Twilio (64, Lộc) · FE Admin dashboard (49, Huy) · FE Admin toggle integration (61, Khánh) · Notifications in-app (68, Khánh).
+- ⏳ FE: Tag UI (71) · Highlight email chưa đọc (67) · People API gợi ý contact (69) · responsive/dark mode (50).
+- ⏳ **Cron sync connection định kỳ + FE auto-refresh (72, Dũng)** — **THÊM** sync định kỳ ngoài on-demand (xem lưu ý sync bên dưới).
+- ⏳ Unit test service (29, Hải) · deploy prod config (51) · finalize Swagger+E2E (52) · defense (53).
+
+> **Lưu ý mô hình sync:** hiện đọc = **on-demand** (không background pull, không webhook). SCRUM-72 sẽ **bổ sung** cron sync định kỳ (`/api/internal/process-sync`) + FE polling — vẫn KHÔNG phải webhook. Webhook/push realtime vẫn **ngoài scope, chưa có ticket**.
+
+### NGOÀI scope (đừng code, chưa có ticket)
+- Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch).
 - Social / friend system, AI workflow → future.
 
-Nếu một task có vẻ cần webhook, **dừng lại và hỏi** — nhiều khả năng đang vượt phase. Jira đã có ticket (54→60) nhưng vẫn chưa tới lượt — cũng hỏi trước khi code.
+Nếu một task có vẻ cần **webhook**, dừng lại và hỏi. Jira/write-back/auth-cookie **đã code xong** — sửa/mở rộng bình thường theo ticket, không cần hỏi "có thuộc phase không" nữa.
 
 ## Tech Stack
 
@@ -37,7 +43,7 @@ Nếu một task có vẻ cần webhook, **dừng lại và hỏi** — nhiều 
 - **Frontend:** Vite + React + TypeScript + Tailwind + React Router + TanStack Query + axios + react-hot-toast (SPA gọi REST).
 - **Auth:** JWT Bearer + Google Sign-In (đăng nhập bằng Google, tách khỏi connect-để-sync)
 - **Token encryption:** ASP.NET Data Protection (`IDataProtectionProvider`) — KHÔNG tự viết AES, KHÔNG lưu key trong DB
-- **Deploy:** <!-- CHỐT: Render / Vercel / Azure? -->
+- **Deploy:** AWS Lightsail (1 máy, Docker Compose) — app live tại `https://app.workspace-hub.space`. CI/CD: merge `develop` → auto-deploy. Chi tiết hạ tầng/vận hành/CI-CD/DB access/billing: **`docs/DEPLOY.md`**.
 
 ## Kiến trúc
 
@@ -71,11 +77,12 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 - `docs/SPRINTS.md` — ticket + assignee + dependency + **status** (đồng bộ Jira)
 - `docs/CONVENTIONS.md` — coding style, naming, git
 - `docs/SETUP.md` — cách chạy local, env, migration
+- `docs/DEPLOY.md` — hạ tầng production (AWS Lightsail), CI/CD, vận hành, truy cập DB, billing
 - `docs/CHANGELOG.md` — lịch sử quyết định thiết kế
 
 ## Nguyên tắc khi code
 
-1. Bám đúng phase hiện tại ở trên. Phase sau (webhook/Jira) → hỏi trước.
+1. Bám đúng phase hiện tại ở trên. Việc ngoài scope (webhook realtime) → hỏi trước. Mở rộng Jira thì OK (đã có nền tảng BE+FE) — đối chiếu code hiện có.
 2. Tuân thủ quy ước nền tảng (ID/timestamp/enum/cascade).
 3. Theo layered architecture, dùng DTO.
 4. Validate input; trả status code đúng (xem `docs/API.md`). Write-back: 403 thiếu scope, 409 conflict ETag, 502 provider lỗi.
