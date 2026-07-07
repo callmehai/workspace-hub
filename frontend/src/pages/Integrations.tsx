@@ -62,6 +62,7 @@ export const Integrations = () => {
     queryFn: connectionsApi.getConnections,
     retry: false,
     refetchInterval: pollMs,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 

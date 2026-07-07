@@ -73,8 +73,8 @@ dotnet run --project src/WorkspaceHub.Api --launch-profile https
 | `Google:RedirectUri` | callback URL connect-để-sync (`/oauth/callback`) |
 | `Google:SignInRedirectUri` | callback URL Google Sign-In (`/auth/google/callback`) — tách khỏi connect flow |
 | `Cron:Secret` | bảo vệ `/api/internal/process-scheduled` và `/api/internal/process-sync` (header `X-Cron-Secret`) |
-| `Cron:SyncAutoRun` | `true` = BE tự chạy `ConnectionSyncProcessorService` (dev). Prod mặc định `false` |
-| `Cron:SyncIntervalSeconds` | Chu kỳ auto-sync connections khi `SyncAutoRun=true` (dev: 60, prod default: 300) |
+| `Cron:SyncAutoRun` | `true` = BE tự chạy `ConnectionSyncProcessorService`. **Prod:** bật trong `docker-compose.prod.yml` (cùng pattern cron email). Dev: `appsettings.Development.json` |
+| `Cron:SyncIntervalSeconds` | Chu kỳ auto-sync khi `SyncAutoRun=true` (prod compose: 60s; default appsettings: 300s) |
 | `ConnectionStrings:Redis` | Redis cho refresh token + OTP + OAuth state (SCRUM-63, vd `localhost:6379`) |
 | `Sms:Twilio:AccountSid` / `Sms:Twilio:AuthToken` / `Sms:Twilio:FromNumber` | Twilio SMS gửi OTP (SCRUM-64). Cần **đủ cả 3** mới gọi Twilio thật; thiếu bất kỳ cái nào (vd `FromNumber` trống) → fallback `LogSmsSender` ghi OTP ra console |
 | `Cors:AllowedOrigins` | (prod) origin FE cho cookie auth cross-site, vd `https://app.example.com` |
@@ -149,7 +149,16 @@ Tuỳ chọn dev: `Cron:AutoRun=true` → BE tự chạy `ScheduledEmailProcesso
 
 Restart BE → log `ConnectionSyncProcessor started — quét mỗi 60s.`
 
-**Prod (cron ngoài, khuyến nghị mỗi 5 phút):** giữ `Cron:SyncAutoRun=false`, dùng cron-job.org (hoặc tương đương):
+**Prod (mặc định — BackgroundService trong container, giống cron gửi email hẹn giờ):** `docker-compose.prod.yml` đã bật:
+
+```yaml
+Cron__SyncAutoRun: "true"
+Cron__SyncIntervalSeconds: "60"
+```
+
+Merge + CD deploy là đủ — **không cần** thêm job cron-job.org cho sync. **Không bật đồng thời** cron ngoài + `SyncAutoRun=true` (trùng lặp, tốn quota API Google/Jira).
+
+**Tuỳ chọn (thay BackgroundService):** tắt `Cron__SyncAutoRun`, dùng cron-job.org gọi mỗi ~5 phút:
 
 ```
 POST https://<domain>/api/internal/process-sync
@@ -158,7 +167,7 @@ Header: X-Cron-Secret: <Cron:Secret>
 
 Trả `200` + `ProcessSyncResult` (`totalConnections`, `successCount`, `skippedCount`, `errorCount`, `details?`).
 
-**FE auto-refresh:** Inbox/Kanban poll `items` mỗi 45s; Integrations poll `connections` mỗi 60s (chỉ khi tab visible) — không cần F5 sau cron.
+**FE auto-refresh:** Inbox/Kanban poll `items` mỗi 45s; Integrations poll `connections` mỗi 60s (`refetchIntervalInBackground` — poll cả tab nền); không cần F5 sau cron.
 
 **Test thủ công (không đợi timer):**
 

@@ -111,7 +111,9 @@ export const KanbanBoard = () => {
       const loaded = allPages.reduce((n, p) => n + p.items.length, 0);
       return loaded < lastPage.total ? allPages.length + 1 : undefined;
     },
+    staleTime: 0,
     refetchInterval: pollMs,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 

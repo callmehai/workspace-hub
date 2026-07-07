@@ -1,16 +1,10 @@
-import { useEffect, useState } from 'react';
-
 const DEFAULT_MS = 45_000;
 
-/** Trả interval ms khi tab visible; false khi tab hidden → tắt TanStack Query poll. */
-export function usePollingInterval(intervalMs = DEFAULT_MS): number | false {
-    const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
-
-    useEffect(() => {
-        const onChange = () => setVisible(document.visibilityState === 'visible');
-        document.addEventListener('visibilitychange', onChange);
-        return () => document.removeEventListener('visibilitychange', onChange);
-    }, []);
-
-    return visible ? intervalMs : false;
+/**
+ * Interval ms cho TanStack Query `refetchInterval`.
+ * Cần kèm `refetchIntervalInBackground: true` trên từng query — RQ v5 vẫn tạm dừng
+ * interval poll khi tab hidden nếu thiếu flag đó.
+ */
+export function usePollingInterval(intervalMs = DEFAULT_MS): number {
+  return intervalMs;
 }
