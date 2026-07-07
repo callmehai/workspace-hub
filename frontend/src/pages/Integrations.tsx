@@ -2,18 +2,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { connectionsApi } from '../lib/connectionsApi';
 import { handleApiError } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
+import type { TranslationKey } from '../i18n/translations';
 import toast from 'react-hot-toast';
 import { Loader2, Lock, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { vi, enUS } from 'date-fns/locale';
 
-const SERVICES = [
+const SERVICES: {
+  integrationKey: string; provider: string; serviceType: string;
+  name: string; descKey: TranslationKey; icon: string; bgColor: string;
+}[] = [
   {
     integrationKey: 'google',
     provider: 'google',
     serviceType: 'Gmail',
     name: 'Google Gmail',
-    description: 'Đồng bộ hộp thư trực tiếp vào không gian làm việc.',
+    descKey: 'integrations.descGmail',
     icon: '/icons/gmail.svg',
     bgColor: 'bg-gray-50',
   },
@@ -22,7 +26,7 @@ const SERVICES = [
     provider: 'google',
     serviceType: 'GCal',
     name: 'Google Calendar',
-    description: 'Quản lý sự kiện và lịch trình một cách liền mạch.',
+    descKey: 'integrations.descGCal',
     icon: '/icons/gcal.svg',
     bgColor: 'bg-gray-50',
   },
@@ -31,7 +35,7 @@ const SERVICES = [
     provider: 'google',
     serviceType: 'Drive',
     name: 'Google Drive',
-    description: 'Truy cập và sắp xếp tệp tin từ Drive.',
+    descKey: 'integrations.descDrive',
     icon: '/icons/drive.svg',
     bgColor: 'bg-gray-50',
   },
@@ -40,7 +44,7 @@ const SERVICES = [
     provider: 'atlassian',
     serviceType: 'Jira',
     name: 'Atlassian Jira',
-    description: 'Nhập ticket, theo dõi sprint và cập nhật tiến độ.',
+    descKey: 'integrations.descJira',
     icon: '/icons/jira.svg',
     bgColor: 'bg-gray-50',
   },
@@ -48,7 +52,8 @@ const SERVICES = [
 
 export const Integrations = () => {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const dfLocale = lang === 'vi' ? vi : enUS;
 
   const { data: connections = [], isLoading: loading, isError, refetch, isFetching } = useQuery({
     queryKey: ['connections'],
@@ -59,10 +64,10 @@ export const Integrations = () => {
   const disconnectMutation = useMutation({
     mutationFn: connectionsApi.disconnect,
     onSuccess: () => {
-      toast.success('Đã ngắt kết nối thành công');
+      toast.success(t('integrations.disconnected'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
-    onError: (err) => handleApiError(err, 'Không thể ngắt kết nối'),
+    onError: (err) => handleApiError(err, t('integrations.disconnectFail')),
   });
 
   const connectMutation = useMutation({
@@ -71,16 +76,16 @@ export const Integrations = () => {
     onSuccess: (res) => {
       window.location.assign(res.authorizationUrl);
     },
-    onError: (err) => handleApiError(err, 'Không thể bắt đầu kết nối'),
+    onError: (err) => handleApiError(err, t('integrations.connectFail')),
   });
 
   const syncMutation = useMutation({
     mutationFn: connectionsApi.syncConnection,
     onSuccess: () => {
-      toast.success('Đã gửi yêu cầu đồng bộ');
+      toast.success(t('integrations.syncRequested'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
-    onError: (err) => handleApiError(err, 'Đồng bộ thất bại'),
+    onError: (err) => handleApiError(err, t('integrations.syncFail')),
   });
 
   const handleConnect = (integrationKey: string, serviceType: string) => {
@@ -143,19 +148,19 @@ export const Integrations = () => {
             let statusBg = 'bg-gray-100 dark:bg-slate-700';
             let statusFg = 'text-gray-600 dark:text-slate-300';
             let statusDot = 'bg-gray-400';
-            let statusLabel = 'Chưa kết nối';
+            let statusLabel = t('integrations.statusDisconnected');
 
             if (isConnected) {
               if (isActive) {
                 statusBg = 'bg-green-100 dark:bg-green-500/15';
                 statusFg = 'text-green-700 dark:text-green-300';
                 statusDot = 'bg-green-500';
-                statusLabel = 'Đang hoạt động';
+                statusLabel = t('integrations.statusActive');
               } else if (isConnectionError) {
                 statusBg = 'bg-red-100 dark:bg-red-500/15';
                 statusFg = 'text-red-700 dark:text-red-300';
                 statusDot = 'bg-red-500';
-                statusLabel = 'Lỗi đồng bộ';
+                statusLabel = t('integrations.statusError');
               } else {
                 statusBg = 'bg-yellow-100 dark:bg-yellow-500/15';
                 statusFg = 'text-yellow-700 dark:text-yellow-300';
@@ -165,8 +170,8 @@ export const Integrations = () => {
             }
 
             const lastSyncedText = connection?.lastSyncedAt
-              ? `Đồng bộ ${formatDistanceToNow(new Date(connection.lastSyncedAt), { addSuffix: true, locale: vi })}`
-              : 'Chưa đồng bộ';
+              ? t('integrations.syncedAgo', { ago: formatDistanceToNow(new Date(connection.lastSyncedAt), { addSuffix: true, locale: dfLocale }) })
+              : t('integrations.neverSynced');
 
             const isLoadingAction =
               (disconnectMutation.isPending && disconnectMutation.variables === connection?.id) ||
@@ -184,7 +189,7 @@ export const Integrations = () => {
                   <div className="flex-1 min-w-0">
                     <div className="text-[15px] font-semibold text-gray-900 dark:text-slate-100">{service.name}</div>
                     <div className="text-[12.5px] text-gray-500 dark:text-slate-400 truncate">
-                      {isConnected && connection.providerAccountId ? connection.providerAccountId : 'Chưa có tài khoản'}
+                      {isConnected && connection.providerAccountId ? connection.providerAccountId : t('integrations.noAccount')}
                     </div>
                   </div>
 
@@ -195,7 +200,7 @@ export const Integrations = () => {
                 </div>
 
                 <div className="text-[13px] text-gray-600 dark:text-slate-400 leading-relaxed mb-4">
-                  {service.description}
+                  {t(service.descKey)}
                 </div>
 
                 <div className="mt-auto pt-2 flex items-center justify-between gap-3">

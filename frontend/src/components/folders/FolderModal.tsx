@@ -5,6 +5,7 @@ import { foldersApi } from '../../lib/itemsApi';
 import { type FolderResponse } from '../../types/items';
 import { handleApiError } from '../../lib/errorUtils';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../hooks/useI18n';
 
 interface FolderModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ const COLORS = [
 export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folder }) => {
   const isEditing = !!folder;
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   const [name, setName] = useState('');
   const [color, setColor] = useState(COLORS[0]);
@@ -51,19 +53,19 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
       }
     },
     onSuccess: () => {
-      toast.success(isEditing ? 'Đã cập nhật thư mục' : 'Đã tạo thư mục');
+      toast.success(isEditing ? t('folder.updated') : t('folder.created'));
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       onClose();
     },
     onError: (err) => {
-      handleApiError(err, isEditing ? 'Lỗi cập nhật thư mục' : 'Lỗi tạo thư mục');
+      handleApiError(err, isEditing ? t('folder.updateFail') : t('folder.createFail'));
     }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error('Vui lòng nhập tên thư mục');
+      toast.error(t('folder.needName'));
       return;
     }
     mutation.mutate({ name: name.trim(), color, icon: folder?.icon || 'folder' });
@@ -78,7 +80,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
       <div className="relative w-full max-w-[400px] bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-[17px] font-semibold text-slate-900 dark:text-slate-100">
-            {isEditing ? 'Sửa thư mục' : 'Thư mục mới'}
+            {isEditing ? t('folder.editTitle') : t('nav.newFolder')}
           </h2>
           <button
             onClick={onClose}
@@ -91,14 +93,14 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
         <form onSubmit={handleSubmit} className="flex flex-col p-5 gap-5">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="folderName" className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              Tên thư mục <span className="text-rose-500">*</span>
+              {t('folder.nameLabel')} <span className="text-rose-500">*</span>
             </label>
             <input
               id="folderName"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nhập tên thư mục..."
+              placeholder={t('folder.namePlaceholder')}
               className="w-full h-[36px] px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
               disabled={mutation.isPending}
               autoFocus
@@ -106,7 +108,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Màu sắc</label>
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('folder.colorLabel')}</label>
             <div className="flex flex-wrap gap-2">
               {COLORS.map((c) => (
                 <button
@@ -129,7 +131,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
               disabled={mutation.isPending}
               className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
-              Hủy
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -137,7 +139,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose, folde
               className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isEditing ? 'Lưu thay đổi' : 'Tạo thư mục'}
+              {isEditing ? t('folder.saveChanges') : t('folder.create')}
             </button>
           </div>
         </form>

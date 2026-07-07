@@ -80,7 +80,7 @@ export const WorkspaceToolbar = ({
       const connections = await connectionsApi.getConnections();
       const activeConns = connections.filter(c => c.status === 'Active');
       if (activeConns.length === 0) {
-        toast.error('Không có kết nối nào đang hoạt động để đồng bộ.');
+        toast.error(t('toolbar.noActiveConn'));
         return;
       }
       const toastId = toast.loading(t('toolbar.syncing'));
@@ -90,11 +90,11 @@ export const WorkspaceToolbar = ({
         queryClient.invalidateQueries({ queryKey: ['items'] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
       } catch (err) {
-        toast.error('Lỗi đồng bộ dữ liệu', { id: toastId });
-        handleApiError(err, 'Lỗi đồng bộ dữ liệu', { navigate });
+        toast.error(t('integrations.syncErrorToast'), { id: toastId });
+        handleApiError(err, t('integrations.syncErrorToast'), { navigate });
       }
     } catch (err) {
-      handleApiError(err, 'Lỗi lấy danh sách kết nối', { navigate });
+      handleApiError(err, t('integrations.connectionsError'), { navigate });
     } finally {
       setIsSyncing(false);
     }
@@ -177,7 +177,7 @@ export const WorkspaceToolbar = ({
       <div className="flex flex-wrap gap-2 items-center mb-3">
         {STATUS_FILTERS.map(f => (
           <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => onStatusFilter(f.value)}>
-            {f.label}
+            {t(f.labelKey)}
           </Chip>
         ))}
 
@@ -187,9 +187,9 @@ export const WorkspaceToolbar = ({
           <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => onTypeFilter(f.value)}>
             {f.value ? (
               <span className="inline-flex items-center gap-1">
-                {typeIcon(f.value, 'w-3.5 h-3.5')}{f.label}
+                {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
               </span>
-            ) : f.label}
+            ) : t(f.labelKey)}
           </Chip>
         ))}
 

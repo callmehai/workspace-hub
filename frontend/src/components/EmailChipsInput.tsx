@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { X, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useI18n } from '../hooks/useI18n';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,13 +13,14 @@ interface EmailChipsInputProps {
 
 /** Nhập nhiều email dạng chip/tag: gõ + Enter/phẩy/dấu cách hoặc nút "+" để thêm, X để xoá. */
 export function EmailChipsInput({ value, onChange, placeholder }: EmailChipsInputProps) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState('');
 
   const addFrom = (raw: string) => {
     const parts = raw.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
     const toAdd: string[] = [];
     for (const p of parts) {
-      if (!EMAIL_RE.test(p)) { toast.error(`"${p}" không phải email hợp lệ`); continue; }
+      if (!EMAIL_RE.test(p)) { toast.error(t('chips.invalidEmail', { email: p })); continue; }
       if (value.includes(p) || toAdd.includes(p)) continue; // bỏ trùng
       toAdd.push(p);
     }
@@ -76,7 +78,7 @@ export function EmailChipsInput({ value, onChange, placeholder }: EmailChipsInpu
           type="button"
           onClick={commit}
           className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10"
-          aria-label="Thêm email"
+          aria-label={t('chips.addEmail')}
         >
           <Plus className="w-4 h-4" />
         </button>

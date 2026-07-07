@@ -5,30 +5,17 @@ import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon } from '../lib/itemVisuals';
-import { isEmailUnread } from '../lib/itemMeta';
+import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
+import { isItemUnread } from '../lib/itemMeta';
+import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
 import { Plus, Star, GripVertical, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
 import type { TranslationKey } from '../i18n/translations';
-import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { timeAgo } from '../lib/datetime';
 
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  return formatDistanceToNow(d, { addSuffix: true, locale: vi });
-}
-
-function typeLabel(t: ItemType): string {
-  const map: Record<ItemType, string> = {
-    Email: 'Email', Event: 'Sự kiện', File: 'Tệp', Note: 'Ghi chú', Ticket: 'Ticket',
-  };
-  return map[t] ?? t;
-}
 
 function typeTileClass(t: ItemType): string {
   const map: Record<ItemType, string> = {
@@ -54,6 +41,7 @@ export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect, hết nháy header khi đổi view)
@@ -196,7 +184,7 @@ export const KanbanBoard = () => {
   const addToFolderMutation = useMutation({
     mutationFn: ({ folderId, itemId }: { folderId: string, itemId: string }) => foldersApi.addItemToFolder(folderId, { itemId }),
     onSuccess: (_, variables) => {
-      toast.success('Đã thêm vào thư mục');
+      toast.success(t('item.addedToFolder'));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item', variables.itemId] });
     },
@@ -320,10 +308,10 @@ export const KanbanBoard = () => {
                         ))
                       ) : (
                         colItems.map(item => {
-                          // Style đã đọc / chưa đọc kiểu Gmail — đồng bộ với view Danh sách:
-                          // chưa đọc = nền trắng + đậm + chấm xanh; đã đọc = nền xám + chữ dịu.
-                          const unread = isEmailUnread(item);
-                          const readEmail = item.type === 'Email' && !unread;
+                          // Đã xem / chưa xem kiểu Gmail — đồng bộ view Danh sách. Email = Gmail;
+                          // Event/File/Note/Ticket = seenStore (mở detail = đã xem).
+                          const unread = isItemUnread(item, seenSet);
+                          const seenDim = !unread;
 
                           return (
                           <div
@@ -337,7 +325,7 @@ export const KanbanBoard = () => {
                             } ${
                               selectedItemIds.has(item.id)
                                 ? 'bg-brand-50/40 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/40'
-                                : readEmail
+                                : seenDim
                                   ? 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700'
                                   : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'
                             }`}
@@ -359,12 +347,12 @@ export const KanbanBoard = () => {
                                 />
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
                                   {typeIcon(item.type, 'w-3.5 h-3.5')}
-                                  {typeLabel(item.type)}
+                                  {t(typeLabelKey(item.type))}
                                 </span>
                                 {unread && (
-                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-blue-600 dark:text-blue-400" aria-label={t('kanban.unread')}>
+                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-blue-600 dark:text-blue-400" aria-label={t('status.unread')}>
                                     <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                    {t('kanban.unread')}
+                                    {t('status.unread')}
                                   </span>
                                 )}
                                 {item.folderIds?.filter(fId => fId !== selectedFolderId).map(fId => {
@@ -384,16 +372,16 @@ export const KanbanBoard = () => {
                                       setAddingFolderItemId(addingFolderItemId === item.id ? null : item.id);
                                     }}
                                     className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors opacity-0 group-hover:opacity-100"
-                                    title="Thêm thư mục"
+                                    title={t('item.addToFolder')}
                                   >
                                     <Plus className="w-2.5 h-2.5" />
-                                    <span>Thêm</span>
+                                    <span>{t('item.add')}</span>
                                   </button>
 
                                   {addingFolderItemId === item.id && (
                                     <div className="absolute top-full left-0 mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md py-1 z-[60] animate-in fade-in zoom-in-95 duration-100">
                                       {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
-                                        <div className="px-3 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 text-center">Không còn thư mục</div>
+                                        <div className="px-3 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 text-center">{t('item.noMoreFolders')}</div>
                                       ) : (
                                         folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
                                           <button
@@ -420,14 +408,14 @@ export const KanbanBoard = () => {
                               </span>
                             </div>
                             <h4 className={`text-[13.5px] leading-snug mb-2 line-clamp-2 ${
-                              unread ? 'font-bold text-slate-900 dark:text-slate-100' : readEmail ? 'font-medium text-slate-600 dark:text-slate-400' : 'font-medium text-slate-900 dark:text-slate-200'
+                              unread ? 'font-bold text-slate-900 dark:text-slate-100' : 'font-medium text-slate-600 dark:text-slate-400'
                             }`}>
                               {item.title}
                             </h4>
                             <div className="flex items-center justify-end gap-2 mt-auto pt-1">
                               <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
-                                {formatTime(item.occurredAt)}
+                                {timeAgo(item.occurredAt)}
                               </span>
                             </div>
                           </div>

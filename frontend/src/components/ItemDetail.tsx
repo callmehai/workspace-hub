@@ -1,22 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
-  Trash2, Edit3, ExternalLink, Tag, Loader2,
+  Trash2, Edit3, ExternalLink, Loader2,
   AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { connectionsApi } from '../lib/connectionsApi';
-import { type PatchItemRequest, type FolderResponse, type ItemResponse } from '../types/items';
+import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
-import { getStatusLabel } from '../lib/itemMeta';
+import { getStatusLabel, isItemUnread } from '../lib/itemMeta';
+import { useSeenSet, markSeen, markUnseen } from '../lib/seenStore';
+import { typeLabelKey } from '../lib/itemVisuals';
+import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
 
 interface ItemDetailProps {
   itemId: string;
   onClose?: () => void;
   onDeleted?: () => void;
+}
+
+/** Cập nhật cờ đọc/chưa đọc trong metadataJson (cho optimistic update — đỡ lag khi mark read). */
+function withUnreadFlag(item: ItemResponse, unread: boolean): ItemResponse {
+  let meta: Record<string, unknown>;
+  try { meta = item.metadataJson ? JSON.parse(item.metadataJson) : {}; } catch { meta = {}; }
+  meta.isUnread = unread;
+  if (Array.isArray(meta.labels)) {
+    const labels = (meta.labels as string[]).filter((l) => l !== 'UNREAD');
+    if (unread) labels.push('UNREAD');
+    meta.labels = labels;
+  }
+  return { ...item, metadataJson: JSON.stringify(meta) };
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -37,11 +53,28 @@ const TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; bg: stri
 export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDeleted }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { t, lang } = useI18n();
+  const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
+  const seenSet = useSeenSet();
 
   const [isEditing, setIsEditing] = useState(false);
-  const [newLabelName, setNewLabelName] = useState('');
-  const [isAddingLabel, setIsAddingLabel] = useState(false);
   const [isAddingToFolder, setIsAddingToFolder] = useState(false);
+  const addFolderRef = useRef<HTMLDivElement>(null);
+
+  // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
+  useEffect(() => {
+    if (!isAddingToFolder) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) setIsAddingToFolder(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsAddingToFolder(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isAddingToFolder]);
 
   // Event form edit state
   const [eventForm, setEventForm] = useState({
@@ -87,19 +120,34 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const patchMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     mutationFn: ({ _isAutoRead, ...payload }: PatchItemRequest & { _isAutoRead?: boolean }) => itemsApi.patchItem(itemId, payload),
+    // Optimistic cho read/unread: cập nhật cache NGAY để UI (row + drawer) đổi tức thì,
+    // không chờ round-trip Gmail (nguồn gây "mark as read khá lag"). Rollback nếu lỗi.
+    onMutate: async (variables) => {
+      if (variables.isUnread === undefined) return;
+      const unread = variables.isUnread;
+      await queryClient.cancelQueries({ queryKey: ['item', itemId] });
+      const prevItem = queryClient.getQueryData<ItemResponse>(['item', itemId]);
+      const prevLists = queryClient.getQueriesData<PagedResult<ItemResponse>>({ queryKey: ['items'] });
+      queryClient.setQueryData<ItemResponse>(['item', itemId], (old) => old ? withUnreadFlag(old, unread) : old);
+      queryClient.setQueriesData<PagedResult<ItemResponse>>({ queryKey: ['items'] }, (old) =>
+        old?.items ? { ...old, items: old.items.map((it) => it.id === itemId ? withUnreadFlag(it, unread) : it) } : old
+      );
+      return { prevItem, prevLists };
+    },
     onSuccess: (_, variables) => {
       if (!variables._isAutoRead) {
-        toast.success('Đã lưu thay đổi thành công');
+        toast.success(t('item.saved'));
       }
       setIsEditing(false);
       setIsRenamingFile(false);
-      setNewLabelName('');
-      setIsAddingLabel(false);
 
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err, variables) => {
+    onError: (err, variables, context) => {
+      // rollback optimistic read/unread
+      if (context?.prevItem !== undefined) queryClient.setQueryData(['item', itemId], context.prevItem);
+      context?.prevLists?.forEach(([key, data]) => queryClient.setQueryData(key, data));
       handleApiError(err, 'Lỗi cập nhật dữ liệu', {
         onConflict: async () => {
           if (item?.connectionId) {
@@ -122,13 +170,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const deleteMutation = useMutation({
     mutationFn: () => itemsApi.deleteItem(itemId),
     onSuccess: () => {
-      toast.success('Đã xóa mục thành công');
+      toast.success(t('item.deleted'));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       if (onDeleted) onDeleted();
       if (onClose) onClose();
     },
     onError: (err) => {
-      handleApiError(err, 'Không thể xóa dữ liệu', {
+      handleApiError(err, t('item.deleteFail'), {
         onConflict: async () => {
           if (item?.connectionId) {
             try {
@@ -145,24 +193,34 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     }
   });
 
-  const addToFolderMutation = useMutation({
-    mutationFn: (folderId: string) => foldersApi.addItemToFolder(folderId, { itemId }),
+  // Đánh dấu quan trọng (isImportant — field nội bộ, áp cho mọi loại item, KHÔNG ghi lên provider).
+  const importantMutation = useMutation({
+    mutationFn: (isImportant: boolean) => itemsApi.updateItemImportant(itemId, isImportant),
     onSuccess: () => {
-      toast.success('Đã thêm vào thư mục');
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
+    onError: (err) => handleApiError(err, t('item.saveFail'), { navigate }),
+  });
+
+  const addToFolderMutation = useMutation({
+    mutationFn: (folderId: string) => foldersApi.addItemToFolder(folderId, { itemId }),
+    onSuccess: () => {
+      toast.success(t('item.addedToFolder'));
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => handleApiError(err, t('item.addFolderFail'), { navigate })
   });
 
   const removeFromFolderMutation = useMutation({
     mutationFn: (folderId: string) => foldersApi.removeItemFromFolder(folderId, itemId),
     onSuccess: () => {
-      toast.success('Đã xóa khỏi thư mục');
+      toast.success(t('item.removedFromFolder'));
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => handleApiError(err, 'Lỗi xóa khỏi thư mục', { navigate })
+    onError: (err) => handleApiError(err, t('item.removeFolderFail'), { navigate })
   });
 
   const metadata = (() => {
@@ -175,10 +233,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       ? metadata.isUnread === true 
       : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'))
   );
-
-  const isStarred = metadata.isStarred !== undefined 
-    ? metadata.isStarred === true 
-    : (Array.isArray(metadata.labels) && metadata.labels.includes('STARRED'));
 
   const autoReadProcessedRef = React.useRef(false);
 
@@ -196,6 +250,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, isUnread]);
 
+  // Event/File/Note/Ticket: provider không có nhãn read → mở detail = đánh dấu "đã xem" (client-side).
+  React.useEffect(() => {
+    if (item && item.type !== 'Email') markSeen(item.id);
+  }, [item]);
+
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
@@ -203,7 +262,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex items-center justify-center" style={{ animation: 'wh-slide-in .25s ease' }}>
           <div className="flex flex-col items-center space-y-3">
             <Loader2 className="w-8 h-8 animate-spin text-brand-600 dark:text-brand-400" />
-            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Đang tải chi tiết...</span>
+            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('item.loadingDetail')}</span>
           </div>
         </div>
       </div>
@@ -216,13 +275,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
         <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500 dark:text-slate-400" style={{ animation: 'wh-slide-in .25s ease' }}>
           <AlertCircle className="w-12 h-12 text-rose-500 dark:text-rose-400 mb-3" />
-          <h3 className="text-base font-semibold text-slate-850 dark:text-slate-100 mb-1">Không thể tải thông tin chi tiết</h3>
-          <p className="text-xs text-slate-450 dark:text-slate-500 text-center max-w-xs mb-4">Vui lòng thử lại sau hoặc tải lại trang.</p>
+          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">{t('item.loadError')}</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-xs mb-4">{t('item.loadErrorHint')}</p>
           <button
             onClick={() => refetch()}
             className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
           >
-            Tải lại
+            {t('item.reload')}
           </button>
         </div>
       </div>
@@ -230,54 +289,49 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   }
 
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
-  const isTicket = item.type === 'Ticket';
-  const isSeen = item.status === 'Inbox' && item.type === 'Email' && !isUnread;
-  // Nhãn: Ticket = status thô từ Jira (giữ nguyên); Email = Chưa xem/Đã xem; còn lại = triage chung.
-  const statusLabel = getStatusLabel(item);
-  // Màu: Ticket trung tính theo category (xám/xanh dương/xanh lá). Email/khác: Inbox chưa xử lý = cam, đã xem = xám.
-  const statusColor = isTicket
-    ? (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700')
-    : item.status === 'Inbox'
-      ? (isSeen ? 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20')
-      : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400');
-  const statusDot = isTicket
-    ? (STATUS_DOT[item.status] ?? 'bg-slate-400')
-    : item.status === 'Inbox'
-      ? (isSeen ? 'bg-slate-300' : 'bg-amber-500')
-      : (STATUS_DOT[item.status] ?? 'bg-slate-400');
+  // "Chưa xem": Email theo Gmail; Event/File/Note theo seenStore (chưa mở trong app). Ticket = false.
+  const unread = isItemUnread(item, seenSet);
+  // Nhãn: Ticket = status thô từ Jira; còn lại Inbox = Chưa xem/Đã xem theo unread.
+  const statusLabel = getStatusLabel(item, t, unread);
+  // Màu chip: cam khi Inbox + chưa xem. Ticket LOẠI TRỪ (chip hiển thị status Jira → giữ màu category).
+  const showUnread = item.type !== 'Ticket' && item.status === 'Inbox' && unread;
+  const statusColor = showUnread
+    ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+    : (STATUS_COLOR[item.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700');
+  const statusDot = showUnread
+    ? 'bg-amber-500'
+    : (STATUS_DOT[item.status] ?? 'bg-slate-400');
 
   const typeChip = `inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${tInfo.bg}`;
 
   // ── metadata rows per type
   const rows: { label: string; value: React.ReactNode }[] = [];
   if (item.type === 'Email') {
-    if (metadata.from) rows.push({ label: 'Từ', value: metadata.from });
+    if (metadata.from) rows.push({ label: t('item.from'), value: metadata.from });
     const to = Array.isArray(metadata.to) ? metadata.to.join(', ') : metadata.to;
-    if (to)            rows.push({ label: 'Đến', value: to });
+    if (to)            rows.push({ label: t('schedEmail.detailTo'), value: to });
     if (metadata.labels && metadata.labels.length > 0) {
       rows.push({
-        label: 'Nhãn',
+        label: t('item.labels'),
         value: (
-          <div className="flex flex-wrap gap-x-1.5 gap-y-1 items-center">
-            {metadata.labels.map((label: string, idx: number) => (
-              <span key={label} className="inline-flex items-center gap-0.5">
+          <div className="flex flex-wrap gap-1 items-center">
+            {metadata.labels.map((label: string) => (
+              <span key={label} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded text-[11px]">
                 {label}
-                <button onClick={() => handleRemoveLabel(label)} className="text-slate-400 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 ml-0.5">&times;</button>
-                {idx < metadata.labels.length - 1 && <span className="text-slate-900 dark:text-slate-100">,</span>}
               </span>
             ))}
           </div>
         )
       });
     }
-    rows.push({ label: 'Thời gian', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
+    rows.push({ label: t('item.time'), value: new Date(item.occurredAt).toLocaleString(dl) });
   } else if (item.type === 'Event') {
-    rows.push({ label: 'Bắt đầu', value: metadata.start ? new Date(metadata.start).toLocaleString('vi-VN') : new Date(item.occurredAt).toLocaleString('vi-VN') });
-    if (metadata.end) rows.push({ label: 'Kết thúc', value: new Date(metadata.end).toLocaleString('vi-VN') });
-    if (metadata.location) rows.push({ label: 'Địa điểm', value: metadata.location });
+    rows.push({ label: t('item.start'), value: metadata.start ? new Date(metadata.start).toLocaleString(dl) : new Date(item.occurredAt).toLocaleString(dl) });
+    if (metadata.end) rows.push({ label: t('item.end'), value: new Date(metadata.end).toLocaleString(dl) });
+    if (metadata.location) rows.push({ label: t('item.location'), value: metadata.location });
     if (Array.isArray(metadata.attendees) && metadata.attendees.length) {
       rows.push({
-        label: 'Người tham gia',
+        label: t('item.attendees'),
         value: (
           <div className="flex flex-wrap gap-1 mt-1">
             {metadata.attendees.map((email: string) => (
@@ -290,28 +344,28 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       });
     }
   } else if (item.type === 'File') {
-    rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
-    if (metadata.mimeType) rows.push({ label: 'Loại tệp', value: metadata.mimeType });
+    rows.push({ label: t('item.created'), value: new Date(item.occurredAt).toLocaleString(dl) });
+    if (metadata.mimeType) rows.push({ label: t('item.fileType'), value: metadata.mimeType });
     if (metadata.size) {
       const kb = Math.round(metadata.size / 1024);
-      rows.push({ label: 'Kích thước', value: kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB` });
+      rows.push({ label: t('item.size'), value: kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB` });
     }
   } else if (item.type === 'Note') {
-    rows.push({ label: 'Được tạo', value: new Date(item.occurredAt).toLocaleString('vi-VN') });
+    rows.push({ label: t('item.created'), value: new Date(item.occurredAt).toLocaleString(dl) });
   } else if (item.type === 'Ticket') {
     if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
-    if (metadata.issueType)  rows.push({ label: 'Loại',       value: metadata.issueType });
-    if (metadata.priority)   rows.push({ label: 'Ưu tiên',    value: metadata.priority });
+    if (metadata.issueType)  rows.push({ label: t('item.issueType'), value: metadata.issueType });
+    if (metadata.priority)   rows.push({ label: t('item.priority'), value: metadata.priority });
     if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });
     if (metadata.reporter)   rows.push({ label: 'Reporter',   value: metadata.reporter });
-    if (metadata.status)     rows.push({ label: 'Trạng thái', value: metadata.status });
+    if (metadata.status)     rows.push({ label: t('item.status'), value: metadata.status });
     if (Array.isArray(metadata.labels) && metadata.labels.length) {
       rows.push({
         label: 'Labels',
         value: (
           <div className="flex flex-wrap gap-1 mt-1">
             {metadata.labels.map((l: string) => (
-              <span key={l} className="px-2 py-0.5 bg-purple-50 dark:bg-purple-500/10 text-purple-750 dark:text-purple-400 border border-purple-100 dark:border-purple-500/20 rounded text-[11px]">
+              <span key={l} className="px-2 py-0.5 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-500/20 rounded text-[11px]">
                 {l}
               </span>
             ))}
@@ -319,7 +373,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         )
       });
     }
-    if (item.dueAt) rows.push({ label: 'Due date', value: new Date(item.dueAt).toLocaleString('vi-VN') });
+    if (item.dueAt) rows.push({ label: 'Due date', value: new Date(item.dueAt).toLocaleString(dl) });
   }
 
   // Event form edits
@@ -341,14 +395,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   const handleSaveEvent = () => {
     if (!eventForm.title || !eventForm.start || !eventForm.end) {
-      toast.error('Vui lòng điền đầy đủ tiêu đề, thời gian bắt đầu và kết thúc');
+      toast.error(t('item.eventNeedFields'));
       return;
     }
     const startIso = new Date(eventForm.start).toISOString();
     const endIso = new Date(eventForm.end).toISOString();
 
     if (new Date(startIso) >= new Date(endIso)) {
-      toast.error('Thời gian bắt đầu phải trước thời gian kết thúc');
+      toast.error(t('item.eventTimeOrder'));
       return;
     }
 
@@ -359,7 +413,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
     const invalidEmails = attendeesArray.filter(email => !emailRegex.test(email));
     if (invalidEmails.length > 0) {
-      toast.error(`Email không hợp lệ: ${invalidEmails.join(', ')}`);
+      toast.error(t('item.invalidEmails', { emails: invalidEmails.join(', ') }));
       return;
     }
 
@@ -380,7 +434,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   const handleRenameFile = () => {
     if (!fileName.trim()) {
-      toast.error('Tên tệp không được để trống');
+      toast.error(t('item.fileNameEmpty'));
       return;
     }
     if (fileName === item.title) {
@@ -393,19 +447,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   };
 
   // Gmail labels
-  const handleAddLabel = () => {
-    if (!newLabelName.trim()) return;
-    patchMutation.mutate({
-      addLabels: [newLabelName.trim().toUpperCase()]
-    });
-  };
-
-  const handleRemoveLabel = (labelName: string) => {
-    patchMutation.mutate({
-      removeLabels: [labelName]
-    });
-  };
-
   const bodyText: string =
     metadata.body ?? metadata.description ?? metadata.contentMarkdown ?? item.snippet ?? '';
 
@@ -425,7 +466,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 {tInfo.icon}
               </div>
               <div className="flex flex-wrap gap-[6px]">
-                <span className={typeChip}>{tInfo.label}</span>
+                <span className={typeChip}>{t(typeLabelKey(item.type))}</span>
                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${statusColor}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
                   {statusLabel}
@@ -485,20 +526,20 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             })}
             
             {/* Add to folder button & dropdown */}
-            <div className="relative">
-              <button 
+            <div className="relative" ref={addFolderRef}>
+              <button
                 onClick={() => setIsAddingToFolder(!isAddingToFolder)}
                 className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-[12px] font-medium"
-                title="Thêm vào thư mục"
+                title={t('item.addToFolder')}
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Thêm</span>
+                <span>{t('item.addToFolder')}</span>
               </button>
               
               {isAddingToFolder && (
                 <div className="absolute top-full left-0 mt-1.5 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
                   {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">Không còn thư mục nào</div>
+                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('item.noMoreFolders')}</div>
                   ) : (
                     folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
                       <button
@@ -523,9 +564,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           {/* Form edit for Event */}
           {isEditing && item.type === 'Event' ? (
             <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] p-4 bg-slate-50/50 dark:bg-slate-800/50 space-y-4 mb-[18px]">
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Chỉnh sửa sự kiện</h3>
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('item.editEvent')}</h3>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Tiêu đề sự kiện</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.eventTitle')}</label>
                 <input
                   type="text"
                   value={eventForm.title}
@@ -535,7 +576,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Bắt đầu (Local)</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.startLocal')}</label>
                   <input
                     type="datetime-local"
                     value={eventForm.start}
@@ -544,7 +585,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Kết thúc (Local)</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.endLocal')}</label>
                   <input
                     type="datetime-local"
                     value={eventForm.end}
@@ -554,7 +595,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Địa điểm</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.location')}</label>
                 <input
                   type="text"
                   value={eventForm.location}
@@ -563,7 +604,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Người tham gia (Ngăn cách bởi dấu phẩy)</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.attendeesComma')}</label>
                 <input
                   type="text"
                   value={eventForm.attendees}
@@ -575,17 +616,17 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-650 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className="px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 >
-                  Hủy
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleSaveEvent}
                   disabled={patchMutation.isPending}
-                  className="px-3.5 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-750 transition-colors flex items-center gap-1.5"
+                  className="px-3.5 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700 transition-colors flex items-center gap-1.5"
                 >
                   {patchMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Lưu</span>
+                  <span>{t('common.save')}</span>
                 </button>
               </div>
             </div>
@@ -603,68 +644,59 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             )
           )}
 
-          {item.type === 'Email' && isAddingLabel && (
-            <div className="mb-4 flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
-              <span className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">Thêm nhãn:</span>
-              <input
-                type="text"
-                value={newLabelName}
-                onChange={e => setNewLabelName(e.target.value)}
-                placeholder="NHÃN MỚI"
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-[13px] text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 flex-1 min-w-0"
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { handleAddLabel(); setIsAddingLabel(false); }
-                  else if (e.key === 'Escape') setIsAddingLabel(false);
-                }}
-                autoFocus
-              />
-              <button onClick={() => { handleAddLabel(); setIsAddingLabel(false); }} className="text-[12px] text-indigo-650 dark:text-brand-400 hover:text-indigo-800 dark:hover:text-brand-300 font-semibold px-2.5 py-1.5 bg-indigo-50 dark:bg-brand-500/10 hover:bg-indigo-100 dark:hover:bg-brand-500/20 rounded transition-colors shrink-0">Thêm</button>
-              <button onClick={() => setIsAddingLabel(false)} className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-semibold px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors shrink-0">Hủy</button>
-            </div>
-          )}
-
           {/* Body Content */}
-          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">Nội dung</div>
+          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('sendEmail.content')}</div>
           <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
-            {bodyText || <span className="text-slate-400 dark:text-slate-500 italic">Không có nội dung</span>}
+            {bodyText || <span className="text-slate-400 dark:text-slate-500 italic">{t('item.noContent')}</span>}
           </div>
         </div>
 
         {/* Footer actions — per type */}
         <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 px-5 py-[14px] flex flex-wrap gap-2">
+          {/* Chung cho Event/File/Note/Ticket: quan trọng (isImportant nội bộ) + đánh dấu chưa/đã xem (seenStore).
+              Email có star/mark-read riêng qua Gmail nên loại trừ. */}
+          {/* Quan trọng — dùng field isImportant NỘI BỘ của app cho MỌI loại (kể cả Email).
+              KHÔNG ghi lên provider: đánh dấu quan trọng ở app KHÔNG động vào Gmail STARRED. */}
+          <button
+            onClick={() => importantMutation.mutate(!item.isImportant)}
+            disabled={importantMutation.isPending}
+            className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+          >
+            <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : 'text-slate-400 dark:text-slate-500'}`} />
+            <span>{item.isImportant ? t('item.unmarkImportant') : t('item.markImportant')}</span>
+          </button>
+
+          {/* Đánh dấu chưa/đã xem — Email theo Gmail (write-back read state); còn lại theo seenStore (client). */}
+          {item.type === 'Email' ? (
+            <button
+              onClick={() => patchMutation.mutate({ isUnread: !isUnread })}
+              disabled={patchMutation.isPending}
+              className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+            >
+              {isUnread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
+              <span>{isUnread ? t('item.markRead') : t('item.markUnread')}</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => (unread ? markSeen(item.id) : markUnseen(item.id))}
+              className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+            >
+              {unread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
+              <span>{unread ? t('item.markSeen') : t('item.markUnseen')}</span>
+            </button>
+          )}
+
           {item.type === 'Email' && (
             <>
-              <button
-                onClick={() => patchMutation.mutate({ isUnread: !isUnread })}
-                disabled={patchMutation.isPending}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-              >
-                {isUnread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
-                <span>{isUnread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc'}</span>
-              </button>
-              <button
-                onClick={() => patchMutation.mutate({ isStarred: !isStarred })}
-                disabled={patchMutation.isPending}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-              >
-                <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-450 dark:text-slate-500'}`} />
-                <span>{isStarred ? 'Bỏ quan trọng' : 'Quan trọng'}</span>
-              </button>
-              <button
-                onClick={() => setIsAddingLabel(true)}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <Tag className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>Nhãn</span>
-              </button>
               <button
                 onClick={() => navigate('/scheduled')}
                 className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
-                <Send className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>Soạn mới</span>
+                <Send className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>{t('item.composeNew')}</span>
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm('Bạn có muốn xóa vĩnh viễn email này trên Gmail?')) {
+                  if (window.confirm(t('item.confirmDeleteEmail'))) {
                     deleteMutation.mutate();
                   }
                 }}
@@ -681,9 +713,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               {!isEditing && (
                 <button
                   onClick={startEditingEvent}
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-650 text-white hover:bg-brand-755 shadow-sm transition-colors"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
                 >
-                  <Edit3 className="w-4 h-4" /><span>Sửa sự kiện</span>
+                  <Edit3 className="w-4 h-4" /><span>{t('item.editEventBtn')}</span>
                 </button>
               )}
               {metadata.meetUrl && (
@@ -698,7 +730,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               )}
               <button
                 onClick={() => {
-                  if (window.confirm('Bạn có chắc muốn xóa sự kiện này?')) {
+                  if (window.confirm(t('item.confirmDeleteEvent'))) {
                     deleteMutation.mutate();
                   }
                 }}
@@ -716,7 +748,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 onClick={startRenamingFile}
                 className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
               >
-                <Edit3 className="w-4 h-4" /><span>Đổi tên</span>
+                <Edit3 className="w-4 h-4" /><span>{t('item.rename')}</span>
               </button>
               {metadata.webViewLink && (
                 <a
@@ -725,12 +757,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   rel="noopener noreferrer"
                   className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
                 >
-                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>Mở trên Drive</span>
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInDrive')}</span>
                 </a>
               )}
               <button
                 onClick={() => {
-                  if (window.confirm('Bạn có muốn xóa tệp này trên Google Drive?')) {
+                  if (window.confirm(t('item.confirmDeleteFile'))) {
                     deleteMutation.mutate();
                   }
                 }}
@@ -740,6 +772,20 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </button>
             </>
+          )}
+
+          {item.type === 'Note' && (
+            <button
+              onClick={() => {
+                if (window.confirm(t('item.confirmDeleteNote'))) {
+                  deleteMutation.mutate();
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </button>
           )}
         </div>
 

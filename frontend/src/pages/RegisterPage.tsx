@@ -32,7 +32,7 @@ export const RegisterPage = () => {
   const register = useMutation({
     mutationFn: () => authApi.register({ fullName, email, password, phone }),
     onSuccess: (result) => {
-      toast.success('Đã gửi mã OTP. Vui lòng kiểm tra điện thoại.');
+      toast.success(t('register.otpSent'));
       // SCRUM-64: chưa đăng nhập — sang màn nhập OTP, mang email + cooldown.
       navigate('/verify-otp', {
         replace: true,

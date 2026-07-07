@@ -6,6 +6,7 @@ import { handleApiError } from '../lib/errorUtils';
 import { type FolderResponse } from '../types/items';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useI18n } from '../hooks/useI18n';
 
 interface BulkActionBarProps {
   selectedItemIds: Set<string>;
@@ -15,6 +16,7 @@ interface BulkActionBarProps {
 export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, onClearSelection }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [isAdding, setIsAdding] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
 
@@ -26,27 +28,27 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
   const addBulkMutation = useMutation({
     mutationFn: (folderId: string) => foldersApi.addItemsToFolderBulk(folderId, Array.from(selectedItemIds)),
     onSuccess: () => {
-      toast.success(`Đã thêm ${selectedItemIds.size} thẻ vào thư mục`);
+      toast.success(t('bulk.addedN', { n: selectedItemIds.size }));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       selectedItemIds.forEach(id => {
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       });
       onClearSelection();
     },
-    onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
+    onError: (err) => handleApiError(err, t('item.addFolderFail'), { navigate })
   });
 
   const removeBulkMutation = useMutation({
     mutationFn: (folderId: string) => foldersApi.removeItemsFromFolderBulk(folderId, Array.from(selectedItemIds)),
     onSuccess: () => {
-      toast.success(`Đã gỡ ${selectedItemIds.size} thẻ khỏi thư mục`);
+      toast.success(t('bulk.removedN', { n: selectedItemIds.size }));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       selectedItemIds.forEach(id => {
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       });
       onClearSelection();
     },
-    onError: (err) => handleApiError(err, 'Lỗi gỡ khỏi thư mục', { navigate })
+    onError: (err) => handleApiError(err, t('bulk.removeFail'), { navigate })
   });
 
   if (selectedItemIds.size === 0) return null;
@@ -57,7 +59,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
         <span className="flex items-center justify-center bg-indigo-600 text-white font-bold w-6 h-6 rounded-full text-xs">
           {selectedItemIds.size}
         </span>
-        <span className="text-[13.5px] font-semibold text-slate-600 dark:text-slate-400">đã chọn</span>
+        <span className="text-[13.5px] font-semibold text-slate-600 dark:text-slate-400">{t('bulk.selected')}</span>
       </div>
 
       <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
@@ -74,15 +76,15 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
             }`}
           >
             <FolderPlus className="w-4 h-4" />
-            Thêm vào...
+            {t('bulk.addTo')}
           </button>
           
           {isAdding && (
             <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-xl py-1.5 text-slate-800 dark:text-slate-200">
-              <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Thêm vào thư mục</div>
+              <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{t('item.addToFolder')}</div>
               <div className="max-h-60 overflow-y-auto">
                 {folders.length === 0 ? (
-                  <div className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">Chưa có thư mục</div>
+                  <div className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">{t('bulk.noFolders')}</div>
                 ) : (
                   folders.map((f: FolderResponse) => (
                     <button
@@ -112,15 +114,15 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
             }`}
           >
             <FolderMinus className="w-4 h-4" />
-            Gỡ khỏi...
+            {t('bulk.removeFrom')}
           </button>
           
           {isRemoving && (
             <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-xl py-1.5 text-slate-800 dark:text-slate-200">
-              <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Gỡ khỏi thư mục</div>
+              <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{t('bulk.removeFromFolder')}</div>
               <div className="max-h-60 overflow-y-auto">
                 {folders.length === 0 ? (
-                  <div className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">Chưa có thư mục</div>
+                  <div className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">{t('bulk.noFolders')}</div>
                 ) : (
                   folders.map((f: FolderResponse) => (
                     <button
@@ -145,7 +147,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
       <button
         onClick={onClearSelection}
         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
-        title="Hủy chọn"
+        title={t('bulk.clearSelection')}
       >
         <X className="w-5 h-5" />
       </button>

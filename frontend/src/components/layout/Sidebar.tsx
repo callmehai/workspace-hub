@@ -50,13 +50,13 @@ export const Sidebar = () => {
   const deleteMutation = useMutation({
     mutationFn: foldersApi.deleteFolder,
     onSuccess: (_, deletedId) => {
-      toast.success('Đã xóa thư mục');
+      toast.success(t('sidebar.folderDeleted'));
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       // Đang đứng trong folder vừa xoá → quay về "Tất cả mục" (giữ view)
       if (currentFolder === deletedId) navigate(viewPath);
     },
     onError: () => {
-      toast.error('Lỗi khi xóa thư mục');
+      toast.error(t('sidebar.folderDeleteFail'));
     }
   });
 
@@ -89,7 +89,7 @@ export const Sidebar = () => {
     mutationFn: ({ folderId, itemId }: { folderId: string; itemId: string }) => 
       foldersApi.addItemToFolder(folderId, { itemId }),
     onSuccess: (_, variables) => {
-      toast.success('Đã gán mục vào thư mục');
+      toast.success(t('sidebar.itemAssigned'));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item', variables.itemId] });
     },
@@ -270,7 +270,7 @@ export const Sidebar = () => {
                   <button
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
                     onClick={() => {
-                      if (window.confirm('Bạn có chắc chắn muốn xóa thư mục này?')) {
+                      if (window.confirm(t('sidebar.confirmDeleteFolder'))) {
                         deleteMutation.mutate(folder.id);
                       }
                       setActiveMenuId(null);

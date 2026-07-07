@@ -4,14 +4,18 @@ import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import './DateTimePicker.css';
 import { vi } from 'date-fns/locale/vi';
+import { enUS } from 'date-fns/locale/en-US';
 import {
   addMinutes, addHours, addDays,
   setHours, setMinutes, setSeconds, setMilliseconds,
   startOfDay, isBefore, format,
 } from 'date-fns';
 import { Calendar as CalendarIcon, Clock, ChevronUp, ChevronDown, X, Zap } from 'lucide-react';
+import { useI18n } from '../hooks/useI18n';
+import type { TranslationKey } from '../i18n/translations';
 
 registerLocale('vi', vi);
+registerLocale('en', enUS);
 
 interface DateTimePickerProps {
   value: Date | null;
@@ -26,17 +30,17 @@ const at = (d: Date, h: number, m = 0) =>
 const tidy = (d: Date) =>
   setMilliseconds(setSeconds(setMinutes(d, Math.ceil(d.getMinutes() / 5) * 5), 0), 0);
 
-interface Preset { label: string; get: () => Date; }
+interface Preset { labelKey: TranslationKey; get: () => Date; }
 
 // Preset hướng tương lai — email hẹn giờ chỉ gửi ở thời điểm sau hiện tại.
 const PRESETS: Preset[] = [
-  { label: 'Sau 30 phút', get: () => addMinutes(new Date(), 30) },
-  { label: 'Sau 1 giờ', get: () => addHours(new Date(), 1) },
-  { label: 'Sau 3 giờ', get: () => addHours(new Date(), 3) },
-  { label: 'Tối nay 20:00', get: () => at(new Date(), 20) },
-  { label: 'Sáng mai 09:00', get: () => at(addDays(new Date(), 1), 9) },
-  { label: 'Sau 3 ngày', get: () => addDays(new Date(), 3) },
-  { label: 'Sau 1 tuần', get: () => addDays(new Date(), 7) },
+  { labelKey: 'dtp.in30min', get: () => addMinutes(new Date(), 30) },
+  { labelKey: 'dtp.in1h', get: () => addHours(new Date(), 1) },
+  { labelKey: 'dtp.in3h', get: () => addHours(new Date(), 3) },
+  { labelKey: 'dtp.tonight8', get: () => at(new Date(), 20) },
+  { labelKey: 'dtp.tomorrow9', get: () => at(addDays(new Date(), 1), 9) },
+  { labelKey: 'dtp.in3days', get: () => addDays(new Date(), 3) },
+  { labelKey: 'dtp.in1w', get: () => addDays(new Date(), 7) },
 ];
 
 // ─── Spinner input cho giờ / phút ────────────────────────────────────────────
@@ -84,6 +88,7 @@ const POP_W = 440;
 const POP_H = 420;
 
 export function DateTimePicker({ value, onChange, className, placeholder }: DateTimePickerProps) {
+  const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
   const [hourDraft, setHourDraft] = useState('');
   const [minuteDraft, setMinuteDraft] = useState('');
@@ -187,7 +192,7 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
     setDraft(String(clamped).padStart(2, '0'));
   };
 
-  const displayText = value ? format(value, "HH:mm 'ngày' dd/MM/yyyy") : '';
+  const displayText = value ? format(value, lang === 'vi' ? "HH:mm 'ngày' dd/MM/yyyy" : 'HH:mm dd/MM/yyyy') : '';
 
   return (
     <div className="relative">
@@ -200,7 +205,7 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
       >
         <CalendarIcon className="w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0" />
         <span className={`flex-1 truncate ${value ? 'text-gray-800 dark:text-slate-200' : 'text-gray-400 dark:text-slate-500'}`}>
-          {value ? displayText : (placeholder ?? 'Chọn thời gian')}
+          {value ? displayText : (placeholder ?? t('dtp.placeholder'))}
         </span>
         {value && (
           <span
@@ -208,7 +213,7 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
             tabIndex={-1}
             onClick={(e) => { e.stopPropagation(); commit(null); }}
             className="shrink-0 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 p-0.5 rounded"
-            aria-label="Xoá thời gian"
+            aria-label={t('dtp.clear')}
           >
             <X className="w-3.5 h-3.5" />
           </span>
@@ -226,21 +231,21 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
             {/* Preset column */}
             <div className="w-44 shrink-0 border-r border-gray-100 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-900/40 py-3 px-2.5 flex flex-col">
               <p className="flex items-center gap-1.5 px-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
-                <Zap className="w-3.5 h-3.5" /> Chọn nhanh
+                <Zap className="w-3.5 h-3.5" /> {t('dtp.quickPick')}
               </p>
               <div className="flex flex-col gap-1">
                 {PRESETS.filter((p) => !isBefore(p.get(), now)).map((p) => {
                   const active = value != null && Math.abs(tidy(p.get()).getTime() - value.getTime()) < 60_000;
                   return (
                     <button
-                      key={p.label}
+                      key={p.labelKey}
                       type="button"
                       onClick={() => { commit(tidy(p.get())); setOpen(false); }}
                       className={`text-left whitespace-nowrap px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
                         active ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-brand-500/10 hover:text-brand-700 dark:hover:text-brand-400'
                       }`}
                     >
-                      {p.label}
+                      {t(p.labelKey)}
                     </button>
                   );
                 })}
@@ -254,14 +259,14 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
                 selected={value}
                 onChange={handleDateSelect}
                 minDate={startOfDay(now)}
-                locale="vi"
+                locale={lang === 'en' ? 'en' : 'vi'}
               />
               <div className="flex items-center justify-center gap-2 px-3 py-2.5 border-t border-gray-100 dark:border-slate-700">
                 <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                 <TimePart
                   value={hourDraft}
                   placeholder="HH"
-                  ariaLabel="Giờ"
+                  ariaLabel={t('dtp.hour')}
                   onChange={(r) => commitTimePart(r, 23, 'hour')}
                   onBlur={() => padOnBlur(hourDraft, 23, 'hour')}
                   onStep={(d) => stepPart(d, 'hour')}
@@ -270,7 +275,7 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
                 <TimePart
                   value={minuteDraft}
                   placeholder="mm"
-                  ariaLabel="Phút"
+                  ariaLabel={t('dtp.minute')}
                   onChange={(r) => commitTimePart(r, 59, 'minute')}
                   onBlur={() => padOnBlur(minuteDraft, 59, 'minute')}
                   onStep={(d) => stepPart(d, 'minute')}
@@ -283,14 +288,14 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
                   disabled={!value}
                   className="px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-slate-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
                 >
-                  Xoá
+                  {t('dtp.clearBtn')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
                   className="px-4 py-1.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors"
                 >
-                  Xong
+                  {t('dtp.done')}
                 </button>
               </div>
             </div>

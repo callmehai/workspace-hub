@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
+import { useI18n } from '../hooks/useI18n';
 
 export interface SelectOption {
   value: string;
@@ -19,7 +20,9 @@ interface SelectProps {
 }
 
 /** Dropdown/listbox tự style (thay native <select>) — khớp tông brand, bo góc, có tick chọn. */
-export function Select({ value, onChange, options, placeholder = 'Chọn...', className = '', disabled, dropUp }: SelectProps) {
+export function Select({ value, onChange, options, placeholder, className = '', disabled, dropUp }: SelectProps) {
+  const { t } = useI18n();
+  const ph = placeholder ?? t('common.select');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
@@ -51,7 +54,7 @@ export function Select({ value, onChange, options, placeholder = 'Chọn...', cl
         } ${className}`}
       >
         <span className={`truncate text-left ${selected ? 'text-gray-800 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}`}>
-          {selected ? selected.label : placeholder}
+          {selected ? selected.label : ph}
         </span>
         <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -61,7 +64,7 @@ export function Select({ value, onChange, options, placeholder = 'Chọn...', cl
           dropUp ? 'bottom-full mb-1.5' : 'mt-1.5'
         }`}>
           {options.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-gray-400 dark:text-slate-500">Không có lựa chọn</div>
+            <div className="px-3 py-2 text-sm text-gray-400 dark:text-slate-500">{t('common.noOptions')}</div>
           ) : (
             options.map((o) => {
               const active = o.value === value;

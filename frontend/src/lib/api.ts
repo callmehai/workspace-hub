@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
+import { translate } from '../i18n/translations'
 
 /** Cờ đánh dấu request đã thử refresh 1 lần (tránh vòng lặp refresh vô hạn). */
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean }
@@ -95,7 +96,7 @@ api.interceptors.response.use(
     }
     // 403 CsrfError → cookie CSRF thiếu/lệch (bị xoá tay hoặc trình duyệt chặn cookie).
     else if (status === 403 && error.response?.data?.error === 'CsrfError') {
-      toast.error('Phiên bảo mật không hợp lệ. Vui lòng tải lại trang và thử lại.')
+      toast.error(translate('errors.csrf'))
     }
     return Promise.reject(error)
   },
