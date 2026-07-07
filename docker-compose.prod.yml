@@ -59,6 +59,8 @@ services:
       Cron__AutoRun: "true"
       Cron__Secret: ${CRON_SECRET}
       Cron__IntervalSeconds: "60"
+      Cron__SyncAutoRun: "true"
+      Cron__SyncIntervalSeconds: "60"
       OAuth__google__ClientId: ${GOOGLE_CLIENT_ID}
       OAuth__google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
       # Jira/Atlassian OAuth — code đọc theo integration Key = "atlassian" (KHÔNG phải "jira").
