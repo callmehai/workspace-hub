@@ -8,6 +8,13 @@ export interface PagedResult<T> {
 export type ItemType = 'Email' | 'Event' | 'File' | 'Note' | 'Ticket';
 export type ItemStatus = 'Inbox' | 'Doing' | 'Done';
 
+/** Tag rút gọn nhúng trong item (BE trả kèm mỗi item — SCRUM-71). */
+export interface ItemTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface ItemResponse {
   id: string;
   type: ItemType;
@@ -20,6 +27,7 @@ export interface ItemResponse {
   externalId: string | null;
   metadataJson: string | null;
   folderIds: string[];
+  tags: ItemTag[];
   connectionId?: string | null;
 }
 
@@ -93,4 +101,22 @@ export interface CreateEventRequest {
   end: string;
   location?: string;
   attendees?: string[];
+}
+
+// ── Tags (SCRUM-70/71) ──
+export interface TagResponse {
+  id: string;
+  name: string;
+  color: string;
+  itemCount: number;
+}
+
+export interface CreateTagRequest {
+  name: string;
+  color: string;
+}
+
+export interface UpdateTagRequest {
+  name: string;
+  color: string;
 }

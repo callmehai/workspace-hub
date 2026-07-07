@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { connectionsApi } from '../../lib/connectionsApi';
+import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
 import { TYPE_FILTERS, STATUS_FILTERS, typeIcon } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
+import { TagManagerModal } from '../tags/TagManagerModal';
 
 /*
  * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
@@ -54,6 +56,8 @@ interface WorkspaceToolbarProps {
   onTypeFilter: (t: ItemType | null) => void;
   importantOnly: boolean;
   onImportantToggle: () => void;
+  tagFilter: string | null;
+  onTagFilter: (id: string | null) => void;
   searchInput: string;
   onSearchChange: (v: string) => void;
 }
@@ -63,6 +67,7 @@ export const WorkspaceToolbar = ({
   statusFilter, onStatusFilter,
   typeFilter, onTypeFilter,
   importantOnly, onImportantToggle,
+  tagFilter, onTagFilter,
   searchInput, onSearchChange,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
@@ -71,6 +76,9 @@ export const WorkspaceToolbar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+
+  const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
 
   const q = folderId ? `?folder=${folderId}` : '';
 
@@ -199,6 +207,24 @@ export const WorkspaceToolbar = ({
           <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
           {t('toolbar.important')}
         </Chip>
+
+        <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+        {/* Lọc theo tag — bấm tag đang chọn để bỏ lọc */}
+        {tags.map(tg => (
+          <Chip key={tg.id} active={tagFilter === tg.id} onClick={() => onTagFilter(tagFilter === tg.id ? null : tg.id)}>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tg.color }} />
+            {tg.name}
+          </Chip>
+        ))}
+        <button
+          onClick={() => setIsTagManagerOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
+          title={t('tag.manageTitle')}
+        >
+          {tags.length === 0 ? <Tag className="w-3.5 h-3.5" /> : <Settings2 className="w-3.5 h-3.5" />}
+          {tags.length === 0 ? t('tag.addTag') : t('tag.manage')}
+        </button>
       </div>
 
       {/* ── Hàng 3: search full-width — vị trí + kích thước GIỐNG HỆT 2 view ── */}
@@ -215,6 +241,7 @@ export const WorkspaceToolbar = ({
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
       <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
+      <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
     </>
   );
 };

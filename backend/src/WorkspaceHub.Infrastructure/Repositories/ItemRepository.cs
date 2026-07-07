@@ -23,6 +23,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         ItemType? type = null,
         bool? isImportant = null,
         string? search = null,
+        Guid? tagId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -30,6 +31,8 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         // Base query: items thuộc user, chưa archived, AsNoTracking cho read-only
         var query = Set.AsNoTracking()
             .Include(i => i.ItemFolders)
+            .Include(i => i.TagAssignments)
+                .ThenInclude(ta => ta.Tag)
             .Where(i => i.UserId == userId && !i.IsArchived);
 
         // ── Optional filters ──
@@ -39,6 +42,13 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         {
             query = query.Where(i =>
                 i.ItemFolders.Any(ifj => ifj.FolderId == folderId.Value));
+        }
+
+        // TagId: join qua TagAssignments junction table
+        if (tagId.HasValue)
+        {
+            query = query.Where(i =>
+                i.TagAssignments.Any(ta => ta.TagId == tagId.Value));
         }
 
         // Status: Kanban column filter (Inbox/Doing/Done)
@@ -115,7 +125,11 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     /// <inheritdoc/>
     public async Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default)
     {
-        return await Set.Include(i => i.ItemFolders).FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
+        return await Set
+            .Include(i => i.ItemFolders)
+            .Include(i => i.TagAssignments)
+                .ThenInclude(ta => ta.Tag)
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
     }
 
     /// <inheritdoc/>

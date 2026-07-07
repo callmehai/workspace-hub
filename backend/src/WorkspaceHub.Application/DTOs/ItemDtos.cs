@@ -14,6 +14,7 @@ public record GetItemsRequest(
     ItemType? Type = null,
     bool? IsImportant = null,
     string? Search = null,
+    Guid? TagId = null,
     int Page = 1,
     int Limit = 20);
 
@@ -97,6 +98,13 @@ public record ItemResponse(
     string? ExternalId,
     string? MetadataJson,
     List<Guid> FolderIds,
+    List<ItemTag> Tags,
     Guid? ConnectionId = null);
+
+/// <summary>Tag đang gắn vào item (rút gọn để nhúng trong ItemResponse — SCRUM-71).</summary>
+public record ItemTag(
+    Guid Id,
+    string Name,
+    string Color);
 
 

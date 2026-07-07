@@ -6,6 +6,7 @@ import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
+import { TagChip } from '../components/tags/TagChip';
 import { isItemUnread } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
@@ -54,6 +55,7 @@ export const KanbanBoard = () => {
   // Ở Bảng, statusFilter = lọc CỘT hiển thị (chọn 1 trạng thái → chỉ hiện cột đó)
   const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -81,7 +83,7 @@ export const KanbanBoard = () => {
    * Số trên header cột = TỔNG THẬT từ server (total của envelope), không phải số đã load.
    */
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, search }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -90,6 +92,7 @@ export const KanbanBoard = () => {
       folderId: selectedFolderId || undefined,
       type: typeFilter || undefined,
       isImportant: importantOnly || undefined,
+      tagId: tagFilter || undefined,
       search: search || undefined,
       page: pageParam,
       limit: COL_PAGE_SIZE,
@@ -255,6 +258,8 @@ export const KanbanBoard = () => {
           onTypeFilter={setTypeFilter}
           importantOnly={importantOnly}
           onImportantToggle={() => setImportantOnly(v => !v)}
+          tagFilter={tagFilter}
+          onTagFilter={setTagFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
@@ -412,6 +417,13 @@ export const KanbanBoard = () => {
                             }`}>
                               {item.title}
                             </h4>
+                            {item.tags?.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap mb-2">
+                                {item.tags.map((tg) => (
+                                  <TagChip key={tg.id} name={tg.name} color={tg.color} size="sm" />
+                                ))}
+                              </div>
+                            )}
                             <div className="flex items-center justify-end gap-2 mt-auto pt-1">
                               <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}

@@ -11,6 +11,7 @@ export interface GetItemsParams {
   type?: ItemType;
   isImportant?: boolean;
   search?: string;
+  tagId?: string;
   page?: number;
   limit?: number;
 }

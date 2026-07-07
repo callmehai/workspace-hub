@@ -21,6 +21,7 @@ public interface IItemRepository : IGenericRepository<Item>
         ItemType? type = null,
         bool? isImportant = null,
         string? search = null,
+        Guid? tagId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);

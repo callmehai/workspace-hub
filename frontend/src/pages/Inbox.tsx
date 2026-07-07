@@ -17,6 +17,7 @@ import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
+import { TagChip } from '../components/tags/TagChip';
 import { timeAgo } from '../lib/datetime';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ export const Inbox = () => {
   const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
   const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
   const [importantOnly, setImportantOnly] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -176,11 +178,12 @@ export const Inbox = () => {
     isImportant: importantOnly || undefined,
     search: search || undefined,
     folderId: selectedFolderId || undefined,
+    tagId: tagFilter ?? undefined,
     page,
     limit,
   };
 
-  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, page, limit }];
+  const queryKey = ['items', { status: params.status, type: params.type, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, page, limit }];
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey,
@@ -217,7 +220,7 @@ export const Inbox = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
-  }, [page, limit, statusFilter, typeFilter, importantOnly, search, selectedFolderId]);
+  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilter, search, selectedFolderId]);
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -250,7 +253,7 @@ export const Inbox = () => {
   const currentFolder = selectedFolderId
     ? folders.find(f => f.id === selectedFolderId) ?? null
     : null;
-  const hasActiveFilters = Boolean(statusFilter || typeFilter || importantOnly || search);
+  const hasActiveFilters = Boolean(statusFilter || typeFilter || importantOnly || tagFilter || search);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
@@ -273,6 +276,8 @@ export const Inbox = () => {
           onTypeFilter={(t) => { setTypeFilter(t); setPage(1); }}
           importantOnly={importantOnly}
           onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
+          tagFilter={tagFilter}
+          onTagFilter={(id) => { setTagFilter(id); setPage(1); }}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
@@ -374,17 +379,20 @@ export const Inbox = () => {
                 <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${v.snippet}`}>
                   {item.snippet}
                 </div>
-                {item.folderIds && item.folderIds.length > 0 && (
+                {((item.folderIds && item.folderIds.length > 0) || (item.tags && item.tags.length > 0)) && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                     {item.folderIds.filter(fId => fId !== selectedFolderId).map((fId: string) => {
                       const f = folders.find(fol => fol.id === fId);
                       if (!f) return null;
                       return (
-                        <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
+                        <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100 dark:border-slate-700" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
                           {f.name}
                         </span>
                       );
                     })}
+                    {item.tags?.map((tg) => (
+                      <TagChip key={tg.id} name={tg.name} color={tg.color} size="sm" />
+                    ))}
                   </div>
                 )}
               </div>
