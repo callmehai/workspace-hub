@@ -1,22 +1,29 @@
 import { Mail, Calendar, FileText, StickyNote, Briefcase } from 'lucide-react';
 import type { ItemType, ItemStatus } from '../types/items';
+import type { TranslationKey } from '../i18n/translations';
 
-/** Danh mục filter dùng chung cho 2 view workspace (Danh sách + Bảng). */
-export const TYPE_FILTERS: { label: string; value: ItemType | null }[] = [
-  { label: 'Mọi loại', value: null },
-  { label: 'Email', value: 'Email' },
-  { label: 'Sự kiện', value: 'Event' },
-  { label: 'Tệp', value: 'File' },
-  { label: 'Ghi chú', value: 'Note' },
-  { label: 'Ticket', value: 'Ticket' },
+/** Danh mục filter dùng chung cho 2 view workspace (Danh sách + Bảng). labelKey → dịch qua t(). */
+export const TYPE_FILTERS: { labelKey: TranslationKey; value: ItemType | null }[] = [
+  { labelKey: 'filter.allType', value: null },
+  { labelKey: 'type.email', value: 'Email' },
+  { labelKey: 'type.event', value: 'Event' },
+  { labelKey: 'type.file', value: 'File' },
+  { labelKey: 'type.note', value: 'Note' },
+  { labelKey: 'type.ticket', value: 'Ticket' },
 ];
 
-export const STATUS_FILTERS: { label: string; value: ItemStatus | null }[] = [
-  { label: 'Mọi trạng thái', value: null },
-  { label: 'Chưa xem', value: 'Inbox' },
-  { label: 'Đang xử lý', value: 'Doing' },
-  { label: 'Hoàn thành', value: 'Done' },
+export const STATUS_FILTERS: { labelKey: TranslationKey; value: ItemStatus | null }[] = [
+  { labelKey: 'filter.allStatus', value: null },
+  { labelKey: 'kanban.colInbox', value: 'Inbox' },
+  { labelKey: 'kanban.colDoing', value: 'Doing' },
+  { labelKey: 'kanban.colDone', value: 'Done' },
 ];
+
+/** Key i18n cho nhãn loại item — dùng ở chip lọc, chip "đang lọc", nhãn thẻ Kanban, drawer. */
+const TYPE_KEY: Record<ItemType, TranslationKey> = {
+  Email: 'type.email', Event: 'type.event', File: 'type.file', Note: 'type.note', Ticket: 'type.ticket',
+};
+export const typeLabelKey = (type: ItemType): TranslationKey => TYPE_KEY[type] ?? 'type.note';
 
 export function typeIcon(t: ItemType, cls = 'w-4 h-4') {
   switch (t) {

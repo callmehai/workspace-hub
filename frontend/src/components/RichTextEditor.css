@@ -13,3 +13,7 @@
   margin: 0.5em 0;
 }
 .wh-rte img { max-width: 100%; height: auto; }
+
+/* Dark mode: khớp với editor nền tối (dark:bg-slate-800). */
+.dark .wh-rte a { color: #818cf8; }
+.dark .wh-rte blockquote { border-left-color: #334155; color: #94a3b8; }

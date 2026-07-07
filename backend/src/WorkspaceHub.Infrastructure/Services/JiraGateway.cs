@@ -401,7 +401,7 @@ public class JiraGateway : IJiraGateway
             HttpStatusCode.Unauthorized => new ForbiddenException("Token Jira hết hạn hoặc thiếu quyền — cần kết nối lại."),
             HttpStatusCode.Forbidden    => new ForbiddenException("Thiếu quyền truy cập Jira — cần kết nối lại với quyền đầy đủ."),
             HttpStatusCode.NotFound     => new NotFoundException("Jira resource", detail),
-            _ => new ProviderException($"Jira API error {(int)response.StatusCode}: {detail}")
+            _ => new ProviderException($"Jira API error {(int)response.StatusCode}: {detail}", response.StatusCode)
         };
     }
 
