@@ -6,6 +6,7 @@ import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
+import { TagChip, FolderChip } from '../components/tags/TagChip';
 import { isItemUnread } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
@@ -52,10 +53,11 @@ export const KanbanBoard = () => {
 
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
-  // Ở Bảng, statusFilter = lọc CỘT hiển thị (chọn 1 trạng thái → chỉ hiện cột đó)
-  const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
+  const [typeFilter, setTypeFilter] = useState<ItemType[]>([]);
+  // Ở Bảng, statusFilter = lọc CỘT hiển thị (đa chọn — không chọn gì = hiện đủ 3 cột)
+  const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -63,6 +65,13 @@ export const KanbanBoard = () => {
 
   const [dragOverCol, setDragOverCol] = useState<ItemStatus | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  const toggleStatusFilter = (s: ItemStatus) => {
+    setStatusFilter(prev => prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]);
+  };
+  const toggleTypeFilter = (ty: ItemType) => {
+    setTypeFilter(prev => prev.includes(ty) ? prev.filter(v => v !== ty) : [...prev, ty]);
+  };
 
   const handleSearchChange = useCallback((val: string) => {
     setSearchInput(val);
@@ -83,15 +92,16 @@ export const KanbanBoard = () => {
    * Số trên header cột = TỔNG THẬT từ server (total của envelope), không phải số đã load.
    */
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, search }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
     queryFn: ({ pageParam }: { pageParam: number }) => itemsApi.getItems({
-      status,
+      statuses: [status],
       folderId: selectedFolderId || undefined,
-      type: typeFilter || undefined,
+      types: typeFilter.length > 0 ? typeFilter : undefined,
       isImportant: importantOnly || undefined,
+      tagId: tagFilter || undefined,
       search: search || undefined,
       page: pageParam,
       limit: COL_PAGE_SIZE,
@@ -260,11 +270,13 @@ export const KanbanBoard = () => {
           subtitle={t('kanban.subtitle')}
           isBackgroundFetching={isBackgroundFetching}
           statusFilter={statusFilter}
-          onStatusFilter={setStatusFilter}
+          onToggleStatusFilter={toggleStatusFilter}
           typeFilter={typeFilter}
-          onTypeFilter={setTypeFilter}
+          onToggleTypeFilter={toggleTypeFilter}
           importantOnly={importantOnly}
           onImportantToggle={() => setImportantOnly(v => !v)}
+          tagFilter={tagFilter}
+          onTagFilter={setTagFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
@@ -283,8 +295,8 @@ export const KanbanBoard = () => {
               </button>
             </div>
           ) : (
-            <div className={`flex h-full gap-5 ${statusFilter ? '' : 'min-w-[900px]'}`}>
-              {COLUMNS.filter(col => !statusFilter || col.status === statusFilter).map(col => {
+            <div className={`flex h-full gap-5 ${statusFilter.length > 0 ? '' : 'min-w-[900px]'}`}>
+              {COLUMNS.filter(col => statusFilter.length === 0 || statusFilter.includes(col.status)).map(col => {
                 const q = colQueries[col.status];
                 const colItems = colItemsOf(q);
                 const colTotal = colTotalOf(q);
@@ -365,14 +377,10 @@ export const KanbanBoard = () => {
                                     {t('status.unread')}
                                   </span>
                                 )}
-                                {item.folderIds?.filter(fId => fId !== selectedFolderId).map(fId => {
+                                {item.folderIds?.map(fId => {
                                   const f = folders.find(fol => fol.id === fId);
                                   if (!f) return null;
-                                  return (
-                                    <span key={f.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-100" style={{ backgroundColor: f.color ? `${f.color}15` : '#f1f5f9', color: f.color || '#475569' }}>
-                                      {f.name}
-                                    </span>
-                                  );
+                                  return <FolderChip key={f.id} name={f.name} color={f.color || '#94a3b8'} size="sm" />;
                                 })}
 
                                 <div className="relative" onClick={e => e.stopPropagation()}>
@@ -422,6 +430,13 @@ export const KanbanBoard = () => {
                             }`}>
                               {item.title}
                             </h4>
+                            {item.tags?.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap mb-2">
+                                {item.tags.map((tg) => (
+                                  <TagChip key={tg.id} name={tg.name} color={tg.color} size="sm" />
+                                ))}
+                              </div>
+                            )}
                             <div className="flex items-center justify-end gap-2 mt-auto pt-1">
                               <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}

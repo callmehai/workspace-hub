@@ -17,10 +17,11 @@ public interface IItemRepository : IGenericRepository<Item>
     Task<(IReadOnlyList<Item> Items, int TotalCount)> GetPagedAsync(
         Guid userId,
         Guid? folderId = null,
-        ItemStatus? status = null,
-        ItemType? type = null,
+        IReadOnlyList<ItemStatus>? statuses = null,
+        IReadOnlyList<ItemType>? types = null,
         bool? isImportant = null,
         string? search = null,
+        Guid? tagId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);

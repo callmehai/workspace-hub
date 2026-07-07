@@ -3,10 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
-  Trash2, Edit3, ExternalLink, Loader2,
+  Trash2, Edit3, ExternalLink, Loader2, Tag,
   AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
+import { tagsApi } from '../lib/tagsApi';
+import { TagChip, FolderChip } from './tags/TagChip';
+import { TagManagerModal } from './tags/TagManagerModal';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
@@ -60,6 +63,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingToFolder, setIsAddingToFolder] = useState(false);
   const addFolderRef = useRef<HTMLDivElement>(null);
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const addTagRef = useRef<HTMLDivElement>(null);
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
 
   // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
@@ -75,6 +81,21 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       document.removeEventListener('keydown', onKey);
     };
   }, [isAddingToFolder]);
+
+  // Đóng dropdown "Thêm tag" khi click ra ngoài / nhấn Esc.
+  useEffect(() => {
+    if (!isAddingTag) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (addTagRef.current && !addTagRef.current.contains(e.target as Node)) setIsAddingTag(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsAddingTag(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isAddingTag]);
 
   // Event form edit state
   const [eventForm, setEventForm] = useState({
@@ -221,6 +242,25 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
     onError: (err) => handleApiError(err, t('item.removeFolderFail'), { navigate })
+  });
+
+  // ── Tags (SCRUM-71): danh sách tag của user + gắn/gỡ tag khỏi item ──
+  const { data: allTags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
+
+  const invalidateAfterTag = () => {
+    queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+    queryClient.invalidateQueries({ queryKey: ['items'] });
+    queryClient.invalidateQueries({ queryKey: ['tags'] });
+  };
+  const assignTagMutation = useMutation({
+    mutationFn: (tagId: string) => tagsApi.assignTag(tagId, itemId),
+    onSuccess: invalidateAfterTag,
+    onError: (err) => handleApiError(err, t('tag.assignFail'), { navigate })
+  });
+  const unassignTagMutation = useMutation({
+    mutationFn: (tagId: string) => tagsApi.unassignTag(tagId, itemId),
+    onSuccess: invalidateAfterTag,
+    onError: (err) => handleApiError(err, t('tag.unassignFail'), { navigate })
   });
 
   const metadata = (() => {
@@ -511,17 +551,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
               const f = folders.find((fol: FolderResponse) => fol.id === fId);
               if (!f) return null;
               return (
-                <div key={f.id} className="inline-flex items-center gap-[6px] text-[12.5px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 pl-[11px] pr-1 py-1 rounded-full group">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
-                  <span className="mr-0.5">{f.name}</span>
-                  <button
-                    onClick={() => removeFromFolderMutation.mutate(f.id)}
-                    disabled={removeFromFolderMutation.isPending}
-                    className="p-0.5 rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-rose-500 dark:hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+                <FolderChip
+                  key={f.id}
+                  name={f.name}
+                  color={f.color || '#94a3b8'}
+                  onRemove={() => removeFromFolderMutation.mutate(f.id)}
+                />
               );
             })}
             
@@ -556,6 +591,53 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                       </button>
                     ))
                   )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tags — gắn/gỡ label private của user (SCRUM-71) */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {item.tags?.map((tg) => (
+              <TagChip key={tg.id} name={tg.name} color={tg.color} onRemove={() => unassignTagMutation.mutate(tg.id)} />
+            ))}
+
+            <div className="relative" ref={addTagRef}>
+              <button
+                onClick={() => setIsAddingTag(!isAddingTag)}
+                className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-[12px] font-medium"
+                title={t('tag.addTag')}
+              >
+                <Tag className="w-3.5 h-3.5" />
+                <span>{t('tag.addTag')}</span>
+              </button>
+
+              {isAddingTag && (
+                <div className="absolute top-full left-0 mt-1.5 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                  {allTags.filter((tg) => !item.tags?.some((it) => it.id === tg.id)).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('tag.noneAvailable')}</div>
+                  ) : (
+                    allTags.filter((tg) => !item.tags?.some((it) => it.id === tg.id)).map((tag) => (
+                      <button
+                        key={tag.id}
+                        onClick={() => { assignTagMutation.mutate(tag.id); setIsAddingTag(false); }}
+                        disabled={assignTagMutation.isPending}
+                        className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                        <span className="truncate">{tag.name}</span>
+                      </button>
+                    ))
+                  )}
+                  <div className="mt-1 pt-1 border-t border-slate-100 dark:border-slate-700">
+                    <button
+                      onClick={() => { setTagManagerOpen(true); setIsAddingTag(false); }}
+                      className="w-full text-left px-3 py-2 text-[12.5px] font-medium text-brand-600 dark:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>{t('tag.manage')}</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -795,6 +877,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       <style>{`
         @keyframes wh-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
       `}</style>
+
+      <TagManagerModal isOpen={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
     </div>
   );
 };

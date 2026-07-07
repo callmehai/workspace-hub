@@ -2,9 +2,11 @@ import { Mail, Calendar, FileText, StickyNote, Briefcase } from 'lucide-react';
 import type { ItemType, ItemStatus } from '../types/items';
 import type { TranslationKey } from '../i18n/translations';
 
-/** Danh mục filter dùng chung cho 2 view workspace (Danh sách + Bảng). labelKey → dịch qua t(). */
-export const TYPE_FILTERS: { labelKey: TranslationKey; value: ItemType | null }[] = [
-  { labelKey: 'filter.allType', value: null },
+/**
+ * Danh mục filter dùng chung cho 2 view workspace (Danh sách + Bảng). labelKey → dịch qua t().
+ * Đa chọn (như tag): không chọn gì = không lọc; bấm lại chip đang active để tắt.
+ */
+export const TYPE_FILTERS: { labelKey: TranslationKey; value: ItemType }[] = [
   { labelKey: 'type.email', value: 'Email' },
   { labelKey: 'type.event', value: 'Event' },
   { labelKey: 'type.file', value: 'File' },
@@ -12,8 +14,7 @@ export const TYPE_FILTERS: { labelKey: TranslationKey; value: ItemType | null }[
   { labelKey: 'type.ticket', value: 'Ticket' },
 ];
 
-export const STATUS_FILTERS: { labelKey: TranslationKey; value: ItemStatus | null }[] = [
-  { labelKey: 'filter.allStatus', value: null },
+export const STATUS_FILTERS: { labelKey: TranslationKey; value: ItemStatus }[] = [
   { labelKey: 'kanban.colInbox', value: 'Inbox' },
   { labelKey: 'kanban.colDoing', value: 'Doing' },
   { labelKey: 'kanban.colDone', value: 'Done' },
