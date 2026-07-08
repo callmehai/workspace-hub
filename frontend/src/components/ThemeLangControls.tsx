@@ -20,7 +20,7 @@ export const ThemeLangControls = () => {
         title={isDark ? t('theme.toLight') : t('theme.toDark')}
         className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition-colors"
       >
-        {isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+        {isDark ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
       </button>
 
       <button
@@ -30,7 +30,7 @@ export const ThemeLangControls = () => {
         title={t('lang.label')}
         className="flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-[12px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition-colors"
       >
-        {lang === 'vi' ? 'EN' : 'VI'}
+        {lang === 'vi' ? 'VI' : 'EN'}
       </button>
     </div>
   );

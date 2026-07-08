@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { connectionsApi } from '../../lib/connectionsApi';
+import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
 import { TYPE_FILTERS, STATUS_FILTERS, typeIcon } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
+import { TagManagerModal } from '../tags/TagManagerModal';
 
 /*
  * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
@@ -47,22 +49,27 @@ interface WorkspaceToolbarProps {
   /** Context không tìm thấy trong list folders (share/ẩn) nhưng vẫn đang chọn */
   folderId: string | null;
   subtitle: string;
+  /** Poll/refetch nền (TanStack isFetching && !isLoading) — hiện "Đang cập nhật…" cạnh tiêu đề */
+  isBackgroundFetching?: boolean;
 
-  statusFilter: ItemStatus | null;
-  onStatusFilter: (s: ItemStatus | null) => void;
-  typeFilter: ItemType | null;
-  onTypeFilter: (t: ItemType | null) => void;
+  statusFilter: ItemStatus[];
+  onToggleStatusFilter: (s: ItemStatus) => void;
+  typeFilter: ItemType[];
+  onToggleTypeFilter: (t: ItemType) => void;
   importantOnly: boolean;
   onImportantToggle: () => void;
+  tagFilter: string | null;
+  onTagFilter: (id: string | null) => void;
   searchInput: string;
   onSearchChange: (v: string) => void;
 }
 
 export const WorkspaceToolbar = ({
-  view, folder, folderId, subtitle,
-  statusFilter, onStatusFilter,
-  typeFilter, onTypeFilter,
+  view, folder, folderId, subtitle, isBackgroundFetching = false,
+  statusFilter, onToggleStatusFilter,
+  typeFilter, onToggleTypeFilter,
   importantOnly, onImportantToggle,
+  tagFilter, onTagFilter,
   searchInput, onSearchChange,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
@@ -71,6 +78,9 @@ export const WorkspaceToolbar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+
+  const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
 
   const q = folderId ? `?folder=${folderId}` : '';
 
@@ -115,6 +125,9 @@ export const WorkspaceToolbar = ({
             <h1 className="text-[22px] font-semibold text-slate-900 dark:text-slate-100 leading-tight m-0">
               {folderId ? (folder?.name ?? t('toolbar.folder')) : t('nav.allItems')}
             </h1>
+            {isBackgroundFetching && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">{t('common.updating')}</span>
+            )}
           </div>
           <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
             {folderId ? t('toolbar.folderPrefix') : ''}{subtitle}
@@ -176,7 +189,7 @@ export const WorkspaceToolbar = ({
       {/* ── Hàng 2: filter chips — GIỐNG HỆT 2 view (Bảng: chip trạng thái lọc cột hiển thị) ── */}
       <div className="flex flex-wrap gap-2 items-center mb-3">
         {STATUS_FILTERS.map(f => (
-          <Chip key={String(f.value)} active={statusFilter === f.value} onClick={() => onStatusFilter(f.value)}>
+          <Chip key={f.value} active={statusFilter.includes(f.value)} onClick={() => onToggleStatusFilter(f.value)}>
             {t(f.labelKey)}
           </Chip>
         ))}
@@ -184,12 +197,10 @@ export const WorkspaceToolbar = ({
         <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
         {TYPE_FILTERS.map(f => (
-          <Chip key={String(f.value)} active={typeFilter === f.value} onClick={() => onTypeFilter(f.value)}>
-            {f.value ? (
-              <span className="inline-flex items-center gap-1">
-                {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
-              </span>
-            ) : t(f.labelKey)}
+          <Chip key={f.value} active={typeFilter.includes(f.value)} onClick={() => onToggleTypeFilter(f.value)}>
+            <span className="inline-flex items-center gap-1">
+              {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
+            </span>
           </Chip>
         ))}
 
@@ -199,6 +210,24 @@ export const WorkspaceToolbar = ({
           <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
           {t('toolbar.important')}
         </Chip>
+
+        <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+        {/* Lọc theo tag — bấm tag đang chọn để bỏ lọc */}
+        {tags.map(tg => (
+          <Chip key={tg.id} active={tagFilter === tg.id} onClick={() => onTagFilter(tagFilter === tg.id ? null : tg.id)}>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tg.color }} />
+            {tg.name}
+          </Chip>
+        ))}
+        <button
+          onClick={() => setIsTagManagerOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
+          title={t('tag.manageTitle')}
+        >
+          {tags.length === 0 ? <Tag className="w-3.5 h-3.5" /> : <Settings2 className="w-3.5 h-3.5" />}
+          {tags.length === 0 ? t('tag.addTag') : t('tag.manage')}
+        </button>
       </div>
 
       {/* ── Hàng 3: search full-width — vị trí + kích thước GIỐNG HỆT 2 view ── */}
@@ -215,6 +244,7 @@ export const WorkspaceToolbar = ({
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
       <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
+      <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
     </>
   );
 };

@@ -29,7 +29,8 @@ public class CsrfMiddleware
         "/api/auth/refresh",
         "/api/auth/send-otp",
         "/api/auth/verify-otp",
-        "/api/internal/process-scheduled" // bảo vệ riêng bằng X-Cron-Secret
+        "/api/internal/process-scheduled", // bảo vệ riêng bằng X-Cron-Secret
+        "/api/internal/process-sync"
     };
 
     private static readonly HashSet<string> MutatingMethods =
