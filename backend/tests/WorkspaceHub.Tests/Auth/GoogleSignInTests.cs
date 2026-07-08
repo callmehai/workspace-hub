@@ -64,12 +64,13 @@ public class GoogleSignInTests
     /// Returns (service, userRepoMock, tokenClientMock, verifierMock, cache)
     /// so tests can arrange per-scenario behavior.
     /// </summary>
-    private static (AuthService Service, Mock<IUserRepository> Users, Mock<IOAuthTokenClient> TokenClient, Mock<IGoogleTokenVerifier> Verifier, IDistributedCache Cache)
+    private static (AuthService Service, Mock<IUserRepository> Users, Mock<IOAuthTokenClient> TokenClient, Mock<IGoogleTokenVerifier> Verifier, Mock<IFirebasePhoneVerifier> FirebaseVerifier, IDistributedCache Cache)
         CreateService()
     {
         var users = new Mock<IUserRepository>();
         var tokenClient = new Mock<IOAuthTokenClient>();
         var verifier = new Mock<IGoogleTokenVerifier>();
+        var firebaseVerifier = new Mock<IFirebasePhoneVerifier>();
         var cache = CreateCache();
         var config = CreateConfig();
         var (regVal, loginVal) = CreateDummyValidators();
@@ -83,9 +84,10 @@ public class GoogleSignInTests
             cache,
             tokenClient.Object,
             verifier.Object,
+            firebaseVerifier.Object,
             jwtFactory);
 
-        return (service, users, tokenClient, verifier, cache);
+        return (service, users, tokenClient, verifier, firebaseVerifier, cache);
     }
 
     /// <summary>Seeds the CSRF state into the cache (simulates GoogleStartAsync having been called).</summary>
@@ -112,7 +114,7 @@ public class GoogleSignInTests
     public async Task GoogleStartAsync_ReturnsAuthorizationUrlAndState()
     {
         // Arrange
-        var (service, _, _, _, _) = CreateService();
+        var (service, _, _, _, _, _) = CreateService();
 
         // Act
         var result = await service.GoogleStartAsync();
@@ -130,7 +132,7 @@ public class GoogleSignInTests
     public async Task GoogleCallbackAsync_NewUser_CreatesUserWithGoogleProvider()
     {
         // Arrange
-        var (service, users, tokenClient, verifier, cache) = CreateService();
+        var (service, users, tokenClient, verifier, _, cache) = CreateService();
         await SeedStateAsync(cache, TestState);
 
         ArrangeTokenExchange(tokenClient);
@@ -169,7 +171,7 @@ public class GoogleSignInTests
     public async Task GoogleCallbackAsync_ExistingEmailUser_LinksGoogleSub()
     {
         // Arrange
-        var (service, users, tokenClient, verifier, cache) = CreateService();
+        var (service, users, tokenClient, verifier, _, cache) = CreateService();
         await SeedStateAsync(cache, TestState);
 
         ArrangeTokenExchange(tokenClient);
@@ -209,7 +211,7 @@ public class GoogleSignInTests
     public async Task GoogleCallbackAsync_ExistingGoogleSubUser_ReturnsJwt()
     {
         // Arrange
-        var (service, users, tokenClient, verifier, cache) = CreateService();
+        var (service, users, tokenClient, verifier, _, cache) = CreateService();
         await SeedStateAsync(cache, TestState);
 
         ArrangeTokenExchange(tokenClient);
@@ -249,7 +251,7 @@ public class GoogleSignInTests
     public async Task GoogleCallbackAsync_LockedUser_FoundByGoogleSub_Throws401()
     {
         // Arrange
-        var (service, users, tokenClient, verifier, cache) = CreateService();
+        var (service, users, tokenClient, verifier, _, cache) = CreateService();
         await SeedStateAsync(cache, TestState);
 
         ArrangeTokenExchange(tokenClient);
@@ -281,7 +283,7 @@ public class GoogleSignInTests
     public async Task GoogleCallbackAsync_LockedUser_FoundByEmail_Throws401()
     {
         // Arrange
-        var (service, users, tokenClient, verifier, cache) = CreateService();
+        var (service, users, tokenClient, verifier, _, cache) = CreateService();
         await SeedStateAsync(cache, TestState);
 
         ArrangeTokenExchange(tokenClient);
@@ -315,7 +317,7 @@ public class GoogleSignInTests
     public async Task GoogleCallbackAsync_InvalidState_ThrowsCsrfException()
     {
         // Arrange
-        var (service, _, _, _, _) = CreateService();
+        var (service, _, _, _, _, _) = CreateService();
         // State NOT seeded in cache — simulates expired or invalid state
 
         // Act & Assert
@@ -327,7 +329,7 @@ public class GoogleSignInTests
     public async Task GoogleCallbackAsync_InvalidIdToken_ThrowsBusinessRuleException()
     {
         // Arrange
-        var (service, users, tokenClient, verifier, cache) = CreateService();
+        var (service, users, tokenClient, verifier, _, cache) = CreateService();
         await SeedStateAsync(cache, TestState);
 
         ArrangeTokenExchange(tokenClient);

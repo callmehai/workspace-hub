@@ -18,6 +18,8 @@ namespace WorkspaceHub.Infrastructure;
 /// <summary>Đăng ký DbContext + repository của tầng Infrastructure.</summary>
 public static class DependencyInjection
 {
+    private static readonly object _firebaseLock = new object();
+
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services, IConfiguration config, bool isDevelopment = false)
     {
@@ -44,6 +46,7 @@ public static class DependencyInjection
             .PersistKeysToFileSystem(new DirectoryInfo("dp-keys"));
         services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
         services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
+        services.AddScoped<IFirebasePhoneVerifier, FirebasePhoneVerifier>();
 
         // SCRUM-63: Redis làm distributed cache (refresh token + OTP + OAuth state).
         // Có ConnectionStrings:Redis → dùng Redis; thiếu → fallback in-memory (dev),
@@ -98,11 +101,17 @@ public static class DependencyInjection
         // một dummy credential để bypass lỗi "Credential must be set".
         if (FirebaseAdmin.FirebaseApp.DefaultInstance == null)
         {
-            FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
+            lock (_firebaseLock)
             {
-                ProjectId = config["Firebase:ProjectId"] ?? "workspacehub",
-                Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromAccessToken("dummy-access-token")
-            });
+                if (FirebaseAdmin.FirebaseApp.DefaultInstance == null)
+                {
+                    FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
+                    {
+                        ProjectId = config["Firebase:ProjectId"] ?? "workspacehub",
+                        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromAccessToken("dummy-access-token")
+                    });
+                }
+            }
         }
 
         services.AddScoped<ITokenService, TokenService>();

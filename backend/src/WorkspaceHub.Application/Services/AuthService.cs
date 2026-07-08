@@ -29,6 +29,7 @@ public class AuthService : IAuthService
     private readonly IDistributedCache _cache;
     private readonly IOAuthTokenClient _tokenClient;
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
+    private readonly IFirebasePhoneVerifier _firebasePhoneVerifier;
     private readonly IJwtTokenFactory _jwt;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -46,6 +47,7 @@ public class AuthService : IAuthService
         IDistributedCache cache,
         IOAuthTokenClient tokenClient,
         IGoogleTokenVerifier googleTokenVerifier,
+        IFirebasePhoneVerifier firebasePhoneVerifier,
         IJwtTokenFactory jwt)
     {
         _users = users;
@@ -55,6 +57,7 @@ public class AuthService : IAuthService
         _cache = cache;
         _tokenClient = tokenClient;
         _googleTokenVerifier = googleTokenVerifier;
+        _firebasePhoneVerifier = firebasePhoneVerifier;
         _jwt = jwt;
     }
 
@@ -125,25 +128,15 @@ public class AuthService : IAuthService
         if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
             throw new BusinessRuleException("Dữ liệu không hợp lệ hoặc tài khoản đã được xác minh.");
 
-        FirebaseAdmin.Auth.FirebaseToken decodedToken;
-        try
+        var verifiedPhone = await _firebasePhoneVerifier.VerifyPhoneTokenAsync(firebaseToken, ct);
+
+        // Normalize user phone to E.164 for comparison
+        var userPhoneE164 = user.Phone.StartsWith("0") ? "+84" + user.Phone.Substring(1) : user.Phone;
+        if (verifiedPhone != userPhoneE164)
         {
-            decodedToken = await FirebaseAdmin.Auth.FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(firebaseToken, ct);
-        }
-        catch (FirebaseAdmin.Auth.FirebaseAuthException)
-        {
-            throw new BusinessRuleException("Mã OTP không hợp lệ hoặc đã hết hạn.");
-        }
-        catch (ArgumentException)
-        {
-            throw new BusinessRuleException("Firebase token không hợp lệ.");
+            throw new BusinessRuleException("Số điện thoại xác thực không khớp với tài khoản.");
         }
 
-        // Có thể check decodedToken.Claims["phone_number"] xem có khớp số đt đã đăng ký không,
-        // nhưng Firebase đã xác thực số đó là của người dùng.
-        // Chúng ta tạm tin cậy user đã pass qua Firebase Phone Auth.
-        // (Nếu cần bảo mật cao: normalize Firebase phone_number và user.Phone rồi so sánh).
-        
         user.PhoneVerified = true;
         await _users.SaveChangesAsync(ct);
 

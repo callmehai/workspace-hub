@@ -111,6 +111,11 @@ export const vi = {
   'verifyOtp.resent': 'Đã gửi lại mã OTP.',
   'verifyOtp.resendFail': 'Không gửi lại được mã. Vui lòng thử lại.',
   'verifyOtp.sixDigits': 'Mã OTP gồm 6 chữ số.',
+  'verifyOtp.enterRegisteredPhone': 'Nhập số điện thoại đã đăng ký',
+  'verifyOtp.invalidPhoneFormat': 'Số điện thoại không hợp lệ (vd: 0912345678).',
+  'verifyOtp.sending': 'Đang gửi...',
+  'verifyOtp.sendOtp': 'Gửi mã xác nhận',
+  'verifyOtp.noPhoneToResend': 'Không có số điện thoại để gửi mã.',
 
   // ── oauth callback ──
   'oauth.connected': 'Kết nối thành công',
@@ -604,6 +609,11 @@ export const en: Record<TranslationKey, string> = {
   'verifyOtp.resent': 'OTP code resent.',
   'verifyOtp.resendFail': 'Could not resend the code. Please try again.',
   'verifyOtp.sixDigits': 'The OTP code has 6 digits.',
+  'verifyOtp.enterRegisteredPhone': 'Enter registered phone number',
+  'verifyOtp.invalidPhoneFormat': 'Invalid phone format (e.g. 0912345678).',
+  'verifyOtp.sending': 'Sending...',
+  'verifyOtp.sendOtp': 'Send confirmation code',
+  'verifyOtp.noPhoneToResend': 'No phone number to send code.',
 
   // ── oauth callback ──
   'oauth.connected': 'Connected successfully',

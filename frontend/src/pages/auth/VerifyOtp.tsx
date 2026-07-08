@@ -47,11 +47,9 @@ export const VerifyOtp = () => {
 
   const initRecaptcha = () => {
     if (!window.recaptchaVerifier) {
-      console.log('Initializing RecaptchaVerifier...');
       window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
-        callback: (response: string) => {
-          console.log('Recaptcha solved:', response);
+        callback: () => {
         },
         'expired-callback': () => {
           console.warn('Recaptcha expired');
@@ -63,19 +61,16 @@ export const VerifyOtp = () => {
 
   const sendFirebaseOtp = async (phoneToUse: string) => {
     if (!phoneToUse) {
-      setBanner('Không có số điện thoại để gửi mã.');
+      setBanner(t('verifyOtp.noPhoneToResend') || 'Không có số điện thoại để gửi mã.');
       return;
     }
     try {
-      console.log('Starting sendFirebaseOtp for', phoneToUse);
       setBanner('');
       setIsSending(true);
       initRecaptcha();
       const appVerifier = window.recaptchaVerifier;
       if (appVerifier) {
-        console.log('Calling signInWithPhoneNumber...');
         const confirmResult = await signInWithPhoneNumber(auth, phoneToUse, appVerifier);
-        console.log('signInWithPhoneNumber success:', confirmResult);
         setConfirmationResult(confirmResult);
         toast.success(t('verifyOtp.resent') || 'Đã gửi mã OTP qua Firebase.');
       }
@@ -96,7 +91,6 @@ export const VerifyOtp = () => {
   // Tự động gửi OTP lần đầu khi vào trang nếu có state.phone
   useEffect(() => {
     if (state.phone && !confirmationResult && !isSending) {
-      console.log('Auto-sending OTP because state.phone exists');
       const phoneToUse = state.phone;
       setTimeout(() => {
         void sendFirebaseOtp(phoneToUse);
@@ -142,7 +136,7 @@ export const VerifyOtp = () => {
     e.preventDefault();
     setBanner('');
     if (!PHONE_RE.test(phoneInput)) {
-      setBanner('Số điện thoại không hợp lệ (vd: 0912345678).');
+      setBanner(t('verifyOtp.invalidPhoneFormat') || 'Số điện thoại không hợp lệ (vd: 0912345678).');
       return;
     }
     const normalized = normalizePhone(phoneInput);
@@ -177,7 +171,7 @@ export const VerifyOtp = () => {
 
           {!phone && !confirmationResult ? (
             <form onSubmit={handleRequestOtp} noValidate>
-              <label htmlFor="phoneInput" className="mb-1.5 block text-[13px] font-medium text-gray-900 dark:text-slate-100">Nhập số điện thoại đã đăng ký</label>
+              <label htmlFor="phoneInput" className="mb-1.5 block text-[13px] font-medium text-gray-900 dark:text-slate-100">{t('verifyOtp.enterRegisteredPhone') || 'Nhập số điện thoại đã đăng ký'}</label>
               <input
                 id="phoneInput"
                 type="tel"
@@ -191,7 +185,7 @@ export const VerifyOtp = () => {
                 disabled={isSending}
                 className="mt-4 h-10 w-full rounded-lg bg-brand-600 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
               >
-                {isSending ? 'Đang gửi...' : 'Gửi mã xác nhận'}
+                {isSending ? t('verifyOtp.sending') || 'Đang gửi...' : t('verifyOtp.sendOtp') || 'Gửi mã xác nhận'}
               </button>
             </form>
           ) : (
@@ -225,7 +219,7 @@ export const VerifyOtp = () => {
                 disabled={isSending || verify.isPending}
                 className="font-semibold text-brand-600 hover:text-brand-700 disabled:opacity-50"
               >
-                {isSending ? 'Đang gửi...' : t('verifyOtp.resend')}
+                {isSending ? t('verifyOtp.sending') || 'Đang gửi...' : t('verifyOtp.resend')}
               </button>
             </div>
           )}
