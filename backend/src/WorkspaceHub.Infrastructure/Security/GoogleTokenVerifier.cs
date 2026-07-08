@@ -20,7 +20,7 @@ public class GoogleTokenVerifier : IGoogleTokenVerifier
                     ?? throw new InvalidOperationException("Google ClientId is not configured.");
     }
 
-    public async Task<(string Sub, string Email)> VerifyAsync(string idToken, CancellationToken ct = default)
+    public async Task<(string Sub, string Email, string Name)> VerifyAsync(string idToken, CancellationToken ct = default)
     {
         try
         {
@@ -29,7 +29,12 @@ public class GoogleTokenVerifier : IGoogleTokenVerifier
                 Audience = new[] { _clientId }
             };
             var payload = await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
-            return (payload.Subject, payload.Email);
+            // payload.Name = claim "name" từ id_token (Google display name).
+            // Fallback về email prefix nếu Google không trả về name (scope profile thiếu).
+            var name = string.IsNullOrWhiteSpace(payload.Name)
+                ? payload.Email.Split('@')[0]
+                : payload.Name;
+            return (payload.Subject, payload.Email, name);
         }
         catch (InvalidJwtException ex)
         {

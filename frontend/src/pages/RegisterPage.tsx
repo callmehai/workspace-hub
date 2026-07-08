@@ -11,8 +11,12 @@ import { ThemeLangControls } from '../components/ThemeLangControls';
 import { useI18n } from '../hooks/useI18n';
 import type { ApiError } from '../types/auth';
 
-// SĐT định dạng E.164 (vd +84901234567) — khớp validator backend SCRUM-64.
-const PHONE_RE = /^\+[1-9]\d{7,14}$/;
+// Chấp nhận SĐT VN dạng 0xxxxxxxxx (10 số) hoặc E.164 (+84xxxxxxxxx).
+const PHONE_RE = /^(0[3-9]\d{8}|\+[1-9]\d{7,14})$/;
+
+// Convert 0xxxxxxxxx → +84xxxxxxxxx trước khi gửi lên BE (BE chỉ nhận E.164).
+const normalizePhone = (phone: string): string =>
+  phone.startsWith('0') ? '+84' + phone.slice(1) : phone;
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
@@ -30,7 +34,7 @@ export const RegisterPage = () => {
   const [banner, setBanner] = useState('');
 
   const register = useMutation({
-    mutationFn: () => authApi.register({ fullName, email, password, phone }),
+    mutationFn: () => authApi.register({ fullName, email, password, phone: normalizePhone(phone) }),
     onSuccess: (result) => {
       toast.success(t('register.otpSent'));
       // SCRUM-64: chưa đăng nhập — sang màn nhập OTP, mang email + cooldown.
@@ -134,7 +138,7 @@ export const RegisterPage = () => {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+84901234567"
+              placeholder="0912345678 hoặc +84912345678"
               className={`h-[38px] w-full rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
                 errPhone ? 'border-red-400' : 'border-slate-300 dark:border-slate-700'
               }`}

@@ -22,6 +22,7 @@ public class GoogleSignInTests
 
     private const string TestGoogleSub = "google-sub-12345";
     private const string TestEmail = "testuser@gmail.com";
+    private const string TestName = "Test Google User";
     private const string TestState = "valid-state";
     private const string TestCode = "auth-code-xyz";
 
@@ -137,7 +138,7 @@ public class GoogleSignInTests
 
         ArrangeTokenExchange(tokenClient);
         verifier.Setup(v => v.VerifyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TestGoogleSub, TestEmail));
+            .ReturnsAsync((TestGoogleSub, TestEmail, TestName));
 
         users.Setup(u => u.GetByGoogleSubAsync(TestGoogleSub, It.IsAny<CancellationToken>()))
             .ReturnsAsync((User?)null);
@@ -164,6 +165,7 @@ public class GoogleSignInTests
         createdUser.PasswordHash.Should().BeNull();
         createdUser.GoogleSub.Should().Be(TestGoogleSub);
         createdUser.Email.Should().Be(TestEmail);
+        createdUser.FullName.Should().Be(TestName); // FullName phải là Google display name, không phải email prefix
     }
 
     [Fact]
@@ -175,7 +177,7 @@ public class GoogleSignInTests
 
         ArrangeTokenExchange(tokenClient);
         verifier.Setup(v => v.VerifyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TestGoogleSub, TestEmail));
+            .ReturnsAsync((TestGoogleSub, TestEmail, TestName));
 
         var existingUser = new User
         {
@@ -215,7 +217,7 @@ public class GoogleSignInTests
 
         ArrangeTokenExchange(tokenClient);
         verifier.Setup(v => v.VerifyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TestGoogleSub, TestEmail));
+            .ReturnsAsync((TestGoogleSub, TestEmail, TestName));
 
         var existingUser = new User
         {
@@ -255,7 +257,7 @@ public class GoogleSignInTests
 
         ArrangeTokenExchange(tokenClient);
         verifier.Setup(v => v.VerifyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TestGoogleSub, TestEmail));
+            .ReturnsAsync((TestGoogleSub, TestEmail, TestName));
 
         var lockedUser = new User
         {
@@ -287,7 +289,7 @@ public class GoogleSignInTests
 
         ArrangeTokenExchange(tokenClient);
         verifier.Setup(v => v.VerifyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TestGoogleSub, TestEmail));
+            .ReturnsAsync((TestGoogleSub, TestEmail, TestName));
 
         var lockedUser = new User
         {

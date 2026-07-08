@@ -168,7 +168,7 @@ export const vi = {
   'valid.emailInvalid': 'Email không hợp lệ',
   'valid.passwordMin': 'Mật khẩu phải từ 8 ký tự trở lên',
   'valid.nameRequired': 'Vui lòng nhập họ tên',
-  'valid.phoneE164': 'SĐT phải dạng E.164, vd +84901234567',
+  'valid.phoneE164': 'SĐT không hợp lệ. Vd: 0912345678 hoặc +84912345678',
   'valid.confirmMismatch': 'Mật khẩu nhập lại không khớp',
 
   // ── profile ──
@@ -649,7 +649,7 @@ export const en: Record<TranslationKey, string> = {
   'valid.emailInvalid': 'Invalid email',
   'valid.passwordMin': 'Password must be at least 8 characters',
   'valid.nameRequired': 'Please enter your full name',
-  'valid.phoneE164': 'Phone must be E.164, e.g. +84901234567',
+  'valid.phoneE164': 'Invalid phone. E.g. 0912345678 or +84912345678',
   'valid.confirmMismatch': 'Passwords do not match',
 
   // ── profile ──

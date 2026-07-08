@@ -254,7 +254,7 @@ public class AuthService : IAuthService
             throw new BusinessRuleException("Google did not return an id_token");
 
         // Step 4 — Verify id_token using Google.Apis.Auth (via IGoogleTokenVerifier)
-        var (sub, email) = await _googleTokenVerifier.VerifyAsync(tokenResponse.IdToken, ct);
+        var (sub, email, name) = await _googleTokenVerifier.VerifyAsync(tokenResponse.IdToken, ct);
 
         // Step 5 — Lookup user by GoogleSub, then by email
         var user = await _users.GetByGoogleSubAsync(sub, ct);
@@ -279,7 +279,7 @@ public class AuthService : IAuthService
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = null,
-            FullName = email.Split('@')[0],
+            FullName = name,  // Google display name (claim "name" từ id_token)
             AuthProvider = AuthProvider.Google,
             GoogleSub = sub,
             IsActive = true,
