@@ -14,5 +14,5 @@ public class NotificationsController : ODataApiControllerBase
     public NotificationsController(INotificationService service) => _service = service;
 
     [EnableQuery(MaxTop = 100, PageSize = 100)]
-    public IQueryable<NotificationDto> Get() => _service.QueryByUserId(CurrentUserId);
+    public IQueryable<NotificationDto> Get() => _service.GetByUserId(CurrentUserId);
 }

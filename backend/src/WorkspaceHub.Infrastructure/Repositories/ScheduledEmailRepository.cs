@@ -13,7 +13,11 @@ public class ScheduledEmailRepository : GenericRepository<ScheduledEmail>, ISche
 {
     public ScheduledEmailRepository(AppDbContext db) : base(db) { }
 
-    public IQueryable<ScheduledEmailDto> QueryByUserId(Guid userId) =>
+    /// <summary>
+    /// OData in-memory: load rows theo userId rồi map DTO — $filter/$orderby/$top chạy trên memory
+    /// (ToJson parse không dịch sang SQL). Dataset scoped theo user nên chấp nhận được MVP.
+    /// </summary>
+    public IQueryable<ScheduledEmailDto> GetByUserId(Guid userId) =>
         Set.AsNoTracking()
             .Where(se => se.UserId == userId)
             .AsEnumerable()
@@ -26,15 +30,6 @@ public class ScheduledEmailRepository : GenericRepository<ScheduledEmail>, ISche
         await Set
             .Where(se => se.ConnectionId == connectionId)
             .ExecuteDeleteAsync(ct);
-    }
-
-    /// <inheritdoc/>
-    public async Task<IReadOnlyList<ScheduledEmail>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
-    {
-        return await Set.AsNoTracking()
-            .Where(se => se.UserId == userId)
-            .OrderByDescending(se => se.SendAt)
-            .ToListAsync(ct);
     }
 
     /// <inheritdoc/>

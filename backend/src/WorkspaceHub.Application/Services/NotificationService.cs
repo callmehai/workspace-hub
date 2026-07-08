@@ -18,14 +18,8 @@ public class NotificationService : INotificationService
         _publisher = publisher;
     }
 
-    public async Task<IReadOnlyList<NotificationDto>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
-    {
-        var items = await _notifications.GetByUserIdAsync(userId, ct);
-        return items.Select(MapToDto).ToList().AsReadOnly();
-    }
-
-    public IQueryable<NotificationDto> QueryByUserId(Guid userId) =>
-        _notifications.QueryByUserId(userId);
+    public IQueryable<NotificationDto> GetByUserId(Guid userId) =>
+        _notifications.GetByUserId(userId);
 
     public async Task MarkAsReadAsync(Guid userId, Guid notificationId, CancellationToken ct = default)
     {

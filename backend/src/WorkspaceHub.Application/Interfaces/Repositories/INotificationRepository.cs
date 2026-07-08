@@ -6,10 +6,8 @@ namespace WorkspaceHub.Application.Interfaces.Repositories;
 
 public interface INotificationRepository : IGenericRepository<Notification>
 {
-    Task<IReadOnlyList<Notification>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
-
     /// <summary>OData list — EF projection, filter theo user trước khi trả IQueryable.</summary>
-    IQueryable<NotificationDto> QueryByUserId(Guid userId);
+    IQueryable<NotificationDto> GetByUserId(Guid userId);
 
     Task<Notification?> GetByIdForUserAsync(Guid userId, Guid notificationId, CancellationToken ct = default);
 

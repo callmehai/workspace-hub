@@ -35,7 +35,7 @@ public class SyncItemNotificationService : ISyncItemNotificationService
         const int maxPerSync = 10;
         var toNotify = newItems.Count <= maxPerSync
             ? newItems
-            : newItems.Where(i => i.IsImportant).ToList();
+            : newItems.Where(i => i.IsImportant).Take(maxPerSync).ToList();
 
         foreach (var item in toNotify)
         {

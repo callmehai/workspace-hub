@@ -18,6 +18,7 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
 {
     private readonly WebApplicationFactory<Program> _factory;
     private static readonly Guid UserId = Guid.Parse(TestAuthHandler.DefaultUserId);
+    private static readonly Guid User2Id = Guid.Parse(TestAuthHandler.User2Id);
 
     public ODataInMemoryEndpointsTests(WebApplicationFactory<Program> factory)
     {
@@ -47,6 +48,13 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "TestToken_User1");
+        return client;
+    }
+
+    private static HttpClient CreateAuthClientForUser2(WebApplicationFactory<Program> factory)
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "TestToken_User2");
         return client;
     }
 
@@ -169,6 +177,163 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
             });
 
         await db.SaveChangesAsync();
+    }
+
+    private async Task SeedUserIsolationAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.EnsureCreated();
+        db.Notifications.RemoveRange(db.Notifications);
+        db.ScheduledEmails.RemoveRange(db.ScheduledEmails);
+        db.Connections.RemoveRange(db.Connections);
+        db.Integrations.RemoveRange(db.Integrations);
+        db.Users.RemoveRange(db.Users);
+        await db.SaveChangesAsync();
+
+        var integration = new Integration
+        {
+            Id = Guid.NewGuid(),
+            Key = "google_iso",
+            DisplayName = "Google",
+            IconUrl = "",
+            Description = "",
+            Provider = "Google",
+            AuthorizationEndpoint = "https://example.com/auth",
+            TokenEndpoint = "https://example.com/token",
+            SupportedServices = "[]",
+            IsEnabled = true,
+        };
+
+        var user1 = new User { Id = UserId, Email = "u1@test.com", FullName = "U1", Role = UserRole.User };
+        var user2 = new User { Id = User2Id, Email = "u2@test.com", FullName = "U2", Role = UserRole.User };
+
+        var conn1 = new Connection
+        {
+            Id = Guid.NewGuid(),
+            UserId = UserId,
+            IntegrationId = integration.Id,
+            Integration = integration,
+            ProviderAccountId = "g1",
+            AccessTokenEncrypted = "a",
+            RefreshTokenEncrypted = "r",
+            ServiceType = ServiceType.Gmail,
+            Status = ConnectionStatus.Active,
+        };
+
+        var conn2 = new Connection
+        {
+            Id = Guid.NewGuid(),
+            UserId = User2Id,
+            IntegrationId = integration.Id,
+            ProviderAccountId = "g2",
+            AccessTokenEncrypted = "a",
+            RefreshTokenEncrypted = "r",
+            ServiceType = ServiceType.Gmail,
+            Status = ConnectionStatus.Active,
+        };
+
+        db.Users.AddRange(user1, user2);
+        db.Integrations.Add(integration);
+        db.Connections.AddRange(conn1, conn2);
+
+        db.Notifications.AddRange(
+            new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = UserId,
+                Type = NotificationType.ItemSynced,
+                Title = "User1 only",
+                Body = "body",
+                LinkUrl = "/inbox",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow,
+            },
+            new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = User2Id,
+                Type = NotificationType.ItemSynced,
+                Title = "User2 only",
+                Body = "body",
+                LinkUrl = "/inbox",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow,
+            });
+
+        db.ScheduledEmails.AddRange(
+            new ScheduledEmail
+            {
+                Id = Guid.NewGuid(),
+                UserId = UserId,
+                ConnectionId = conn1.Id,
+                Connection = conn1,
+                Subject = "User1 scheduled",
+                BodyHtml = "<p>u1</p>",
+                ToJson = "[\"u1@test.com\"]",
+                SendAt = DateTime.UtcNow.AddHours(1),
+                Status = ScheduledEmailStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+            },
+            new ScheduledEmail
+            {
+                Id = Guid.NewGuid(),
+                UserId = User2Id,
+                ConnectionId = conn2.Id,
+                Connection = conn2,
+                Subject = "User2 scheduled",
+                BodyHtml = "<p>u2</p>",
+                ToJson = "[\"u2@test.com\"]",
+                SendAt = DateTime.UtcNow.AddHours(1),
+                Status = ScheduledEmailStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+            });
+
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Notifications_Get_UserIsolation_OnlyReturnsOwnRows()
+    {
+        await SeedUserIsolationAsync();
+        var client1 = CreateAuthClient();
+        var client2 = CreateAuthClientForUser2(_factory);
+
+        var response1 = await client1.GetAsync("/api/Notifications?$count=true&$top=10");
+        var response2 = await client2.GetAsync("/api/Notifications?$count=true&$top=10");
+
+        response1.StatusCode.Should().Be(HttpStatusCode.OK);
+        response2.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var (items1, total1) = await ParseODataCollectionAsync(response1);
+        var (items2, total2) = await ParseODataCollectionAsync(response2);
+
+        total1.Should().Be(1);
+        total2.Should().Be(1);
+        items1[0].GetProperty("title").GetString().Should().Be("User1 only");
+        items2[0].GetProperty("title").GetString().Should().Be("User2 only");
+    }
+
+    [Fact]
+    public async Task ScheduledEmails_Get_UserIsolation_OnlyReturnsOwnRows()
+    {
+        await SeedUserIsolationAsync();
+        var client1 = CreateAuthClient();
+        var client2 = CreateAuthClientForUser2(_factory);
+
+        var response1 = await client1.GetAsync("/api/ScheduledEmails?$count=true&$top=10");
+        var response2 = await client2.GetAsync("/api/ScheduledEmails?$count=true&$top=10");
+
+        response1.StatusCode.Should().Be(HttpStatusCode.OK);
+        response2.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var (items1, total1) = await ParseODataCollectionAsync(response1);
+        var (items2, total2) = await ParseODataCollectionAsync(response2);
+
+        total1.Should().Be(1);
+        total2.Should().Be(1);
+        items1[0].GetProperty("subject").GetString().Should().Be("User1 scheduled");
+        items2[0].GetProperty("subject").GetString().Should().Be("User2 scheduled");
     }
 
     [Fact]

@@ -10,15 +10,7 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
 {
     public NotificationRepository(AppDbContext db) : base(db) { }
 
-    public async Task<IReadOnlyList<Notification>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
-    {
-        return await Set.AsNoTracking()
-            .Where(n => n.UserId == userId)
-            .OrderByDescending(n => n.CreatedAt)
-            .ToListAsync(ct);
-    }
-
-    public IQueryable<NotificationDto> QueryByUserId(Guid userId) =>
+    public IQueryable<NotificationDto> GetByUserId(Guid userId) =>
         Set
             .AsNoTracking()
             .Where(n => n.UserId == userId)

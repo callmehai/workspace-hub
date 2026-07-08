@@ -14,5 +14,5 @@ public class ScheduledEmailsController : ODataApiControllerBase
     public ScheduledEmailsController(IScheduledEmailsService service) => _service = service;
 
     [EnableQuery(MaxTop = 100, PageSize = 100)]
-    public IQueryable<ScheduledEmailDto> Get() => _service.QueryByUserId(CurrentUserId);
+    public IQueryable<ScheduledEmailDto> Get() => _service.GetByUserId(CurrentUserId);
 }

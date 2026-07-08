@@ -58,18 +58,11 @@ public class SendEmailService : ISendEmailService
         return await _gmail.GetSignatureAsync(connection, ct);
     }
 
-    public async Task<IReadOnlyList<ContactSuggestionDto>> GetContactSuggestionsAsync(
-        Guid userId, Guid connectionId, CancellationToken ct = default)
-    {
-        var query = await QueryContactSuggestionsAsync(userId, connectionId, ct);
-        return query.ToList().AsReadOnly();
-    }
-
-    public async Task<IQueryable<ContactSuggestionDto>> QueryContactSuggestionsAsync(
+    public async Task<IQueryable<ContactSuggestionDto>> GetContactSuggestionsAsync(
         Guid userId, Guid connectionId, CancellationToken ct = default)
     {
         await ValidateGmailConnectionAsync(userId, connectionId, ct);
-        return _googleContacts.QueryByConnectionId(connectionId);
+        return _googleContacts.GetByConnectionId(connectionId);
     }
 
     private async Task ValidateGmailConnectionAsync(Guid userId, Guid connectionId, CancellationToken ct)

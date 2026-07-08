@@ -22,8 +22,8 @@ public class ScheduledEmailsService : IScheduledEmailsService
         _connections = connections;
     }
 
-    public IQueryable<ScheduledEmailDto> QueryByUserId(Guid userId) =>
-        _scheduledEmails.QueryByUserId(userId);
+    public IQueryable<ScheduledEmailDto> GetByUserId(Guid userId) =>
+        _scheduledEmails.GetByUserId(userId);
 
     public async Task<ScheduledEmailDto> CreateAsync(Guid userId, CreateScheduledEmailRequest request, CancellationToken ct = default)
     {
@@ -59,12 +59,6 @@ public class ScheduledEmailsService : IScheduledEmailsService
         await _scheduledEmails.SaveChangesAsync(ct);
 
         return ScheduledEmailMapper.ToDto(email);
-    }
-
-    public async Task<IReadOnlyList<ScheduledEmailDto>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
-    {
-        var items = await _scheduledEmails.GetByUserIdAsync(userId, ct);
-        return items.Select(ScheduledEmailMapper.ToDto).ToList().AsReadOnly();
     }
 
     public async Task<ScheduledEmailDto> GetByIdAsync(Guid userId, Guid id, CancellationToken ct = default)

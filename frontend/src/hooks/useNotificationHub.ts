@@ -37,7 +37,7 @@ let activeConnection: HubConnection | null = null;
 let activeUserId: string | null = null;
 let connectPromise: Promise<void> | null = null;
 let connectAbortHandle: { userId: string; aborted: boolean } | null = null;
-let receiveHandlerRegistered = false;
+/** Singleton hub — giả định chỉ MainLayout gọi useNotificationHub một lần. */
 const subscribers = new Set<NotificationHandler>();
 
 export function getNotificationHubState(): string {
@@ -84,14 +84,7 @@ function notifySubscribers(notification: NotificationDto): void {
   }
 }
 
-function registerReceiveHandler(connection: HubConnection): void {
-  if (receiveHandlerRegistered) return;
-  connection.on('ReceiveNotification', notifySubscribers);
-  receiveHandlerRegistered = true;
-}
-
 function buildHubConnection(): HubConnection {
-  receiveHandlerRegistered = false;
   const csrfToken = readCookie(CSRF_COOKIE);
 
   const connection = new HubConnectionBuilder()
@@ -103,7 +96,7 @@ function buildHubConnection(): HubConnection {
     .configureLogging(LogLevel.Error)
     .build();
 
-  registerReceiveHandler(connection);
+  connection.on('ReceiveNotification', notifySubscribers);
 
   connection.onreconnected(() => {
     if (import.meta.env.DEV) {
@@ -243,7 +236,6 @@ async function startHubWithRetry(userId: string): Promise<void> {
 async function stopHub(): Promise<void> {
   abortHubConnect();
   connectPromise = null;
-  receiveHandlerRegistered = false;
 
   const connection = activeConnection;
   activeConnection = null;
@@ -380,6 +372,7 @@ export function useNotificationHub(): void {
 
     return () => {
       disposed = true;
+      // abortHubConnect chỉ hợp lệ khi có đúng 1 subscriber (MainLayout) — nhiều call site sẽ cần ref-count.
       abortHubConnect(userId);
       subscribers.delete(handler);
       document.removeEventListener('visibilitychange', onTabVisible);

@@ -11,8 +11,6 @@ public interface IGoogleContactRepository
     /// </summary>
     Task ReplaceAllForConnectionAsync(Guid connectionId, IReadOnlyList<GoogleContact> contacts, CancellationToken ct = default);
 
-    Task<IReadOnlyList<GoogleContact>> GetByConnectionAsync(Guid connectionId, CancellationToken ct = default);
-
-    /// <summary>OData — dedupe theo email, projection sang ContactSuggestionDto.</summary>
-    IQueryable<ContactSuggestionDto> QueryByConnectionId(Guid connectionId);
+    /// <summary>OData list — dedupe theo email, projection sang ContactSuggestionDto (in-memory).</summary>
+    IQueryable<ContactSuggestionDto> GetByConnectionId(Guid connectionId);
 }

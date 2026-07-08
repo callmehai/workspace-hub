@@ -20,7 +20,7 @@ public class EmailContactSuggestionsController : ODataApiControllerBase
         if (connectionId == Guid.Empty)
             return BadRequest(new { error = "connectionId is required" });
 
-        var query = await _service.QueryContactSuggestionsAsync(CurrentUserId, connectionId, ct);
+        var query = await _service.GetContactSuggestionsAsync(CurrentUserId, connectionId, ct);
         return Ok(query);
     }
 }

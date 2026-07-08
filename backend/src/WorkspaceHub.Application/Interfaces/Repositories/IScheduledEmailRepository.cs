@@ -9,18 +9,13 @@ namespace WorkspaceHub.Application.Interfaces.Repositories;
 public interface IScheduledEmailRepository : IGenericRepository<ScheduledEmail>
 {
     /// <summary>OData list — scope userId server-side, map in-memory (JSON To/Cc/Bcc).</summary>
-    IQueryable<ScheduledEmailDto> QueryByUserId(Guid userId);
+    IQueryable<ScheduledEmailDto> GetByUserId(Guid userId);
 
     /// <summary>
     /// Xoá tất cả ScheduledEmails trỏ vào connectionId (DB-level, không load vào memory).
     /// Dùng khi disconnect connection — tránh FK violation (NoAction ở DB).
     /// </summary>
     Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Lấy danh sách email đã lên lịch của user.
-    /// </summary>
-    Task<IReadOnlyList<ScheduledEmail>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// Lấy các email Pending đã tới hạn (SendAt &lt;= nowUtc) cho cron processor (SCRUM-31).

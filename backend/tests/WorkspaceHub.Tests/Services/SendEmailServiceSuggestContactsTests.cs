@@ -29,14 +29,15 @@ public class SendEmailServiceSuggestContactsTests
         var connId = Guid.NewGuid();
         SetupGmailConnection(userId, connId);
 
-        _googleContacts.Setup(m => m.QueryByConnectionId(connId))
+        _googleContacts.Setup(m => m.GetByConnectionId(connId))
             .Returns(new List<ContactSuggestionDto>
             {
                 new() { Email = "alice@example.com", DisplayName = "Alice", Source = "Contact" },
                 new() { Email = "alex@example.com", DisplayName = "Alex", Source = "OtherContact" },
             }.AsQueryable());
 
-        var result = await _service.GetContactSuggestionsAsync(userId, connId);
+        var query = await _service.GetContactSuggestionsAsync(userId, connId);
+        var result = query.ToList();
 
         result.Should().HaveCount(2);
         result.Should().Contain(x => x.Email == "alice@example.com" && x.Source == "Contact");
@@ -50,13 +51,14 @@ public class SendEmailServiceSuggestContactsTests
         var connId = Guid.NewGuid();
         SetupGmailConnection(userId, connId);
 
-        _googleContacts.Setup(m => m.QueryByConnectionId(connId))
+        _googleContacts.Setup(m => m.GetByConnectionId(connId))
             .Returns(new List<ContactSuggestionDto>
             {
                 new() { Email = "alice@example.com", DisplayName = "Alice", Source = "Contact" },
             }.AsQueryable());
 
-        var result = await _service.GetContactSuggestionsAsync(userId, connId);
+        var query = await _service.GetContactSuggestionsAsync(userId, connId);
+        var result = query.ToList();
 
         result.Should().HaveCount(1);
         result[0].Email.Should().Be("alice@example.com");
