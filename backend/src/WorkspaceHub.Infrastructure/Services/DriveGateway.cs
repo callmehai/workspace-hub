@@ -119,8 +119,10 @@ public class DriveGateway : IDriveGateway
             var metadata = new Google.Apis.Drive.v3.Data.File
             {
                 Name = name,
-                MimeType = "application/vnd.google-apps.folder",
-                Parents = parentExternalId != null ? new List<string> { parentExternalId } : null
+                MimeType = DriveMimeTypes.Folder,
+                Parents = string.IsNullOrEmpty(parentExternalId)
+                    ? null
+                    : new List<string> { parentExternalId }
             };
             var request = drive.Files.Create(metadata);
             request.Fields = CreateFolderFields;
@@ -135,7 +137,7 @@ public class DriveGateway : IDriveGateway
         }
     }
 
-    public async Task<IReadOnlyList<DrivePermissionDto>> ListPermissionAsync(
+    public async Task<IReadOnlyList<DrivePermissionDto>> ListPermissionsAsync(
     Connection connection,
     string fileId,
     CancellationToken ct = default)
@@ -178,12 +180,13 @@ public class DriveGateway : IDriveGateway
             var permission = new Google.Apis.Drive.v3.Data.Permission
             {
                 //Loại là "User" vì đang tạo quyền cho một người dùng cụ thể.
-                Type = DrivePermisionTypes.User,
-                Role = role.ToString().ToLowerInvariant(),
+                Type = DrivePermissionTypes.User,
+                Role = DrivePermissionRoles.ToApiValue(role),
                 EmailAddress = email
             };
             var request = drive.Permissions.Create(permission, fileId);
             request.SendNotificationEmail = notify;
+            request.Fields = PermissionFields;
             var created = await request.ExecuteAsync(ct);
             return MapPermissionToDto(created);
         }
@@ -245,9 +248,9 @@ public class DriveGateway : IDriveGateway
         CancellationToken ct = default)
     {
         //Lấy danh sách quyền của file/folder hiện tại
-        var existing = await ListPermissionAsync(connection, fileId, ct);
+        var existing = await ListPermissionsAsync(connection, fileId, ct);
         //Lấy ra permission có type == anyone (link share) nếu có
-        var linkPermission = existing.FirstOrDefault(p => DrivePermisionTypes.IsLinkType(p.Type));
+        var linkPermission = existing.FirstOrDefault(p => DrivePermissionTypes.IsLinkType(p.Type));
 
         //nếu tắt share ==> phải xóa permission nếu có
         if (!enabled)
@@ -280,7 +283,7 @@ public class DriveGateway : IDriveGateway
             using var drive = await BuildDriveServiceAsync(connection, ct);
             var permission = new Google.Apis.Drive.v3.Data.Permission
             {
-                Type = DrivePermisionTypes.Anyone,
+                Type = DrivePermissionTypes.Anyone,
                 Role = roleValue
             };
             var request = drive.Permissions.Create(permission, fileId);
@@ -334,7 +337,7 @@ public class DriveGateway : IDriveGateway
             EmailAddress = permission.EmailAddress,
             DisplayName = permission.DisplayName,
             IsOwner = DrivePermissionRoles.IsOwner(role),
-            IsLink = DrivePermisionTypes.IsLinkType(type)
+            IsLink = DrivePermissionTypes.IsLinkType(type)
         };
     }
 

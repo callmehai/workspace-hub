@@ -95,7 +95,7 @@ public static class DrivePermissionRoles
 /// type permission từ Google: user, anyone, domain, group.
 /// v1 chủ yếu dùng User + Anyone.
 /// </summary>
-public static class DrivePermisionTypes
+public static class DrivePermissionTypes
 {
     public const string User = "user";
     public const string Anyone = "anyone";
@@ -113,8 +113,8 @@ public static class DriveMimeTypes
     /// <summary>MimeType của folder trên Google Drive.</summary>
     public const string Folder = "application/vnd.google-apps.folder";
 
-    public static bool IsFolder(string? mimeTyppe) =>
-        string.Equals(mimeTyppe, Folder, StringComparison.OrdinalIgnoreCase);
+    public static bool IsFolder(string? mimeType) =>
+        string.Equals(mimeType, Folder, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>

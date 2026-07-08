@@ -17,7 +17,7 @@ public interface IDriveGateway
         CancellationToken ct= default);
 
     // Danh sách quyền share của file/folder trên Google Drive.
-    Task<IReadOnlyList<DrivePermissionDto>> ListPermissionAsync(
+    Task<IReadOnlyList<DrivePermissionDto>> ListPermissionsAsync(
         Connection connection,
         string fileId,
         CancellationToken ct = default);
