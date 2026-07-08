@@ -65,23 +65,23 @@ public class GmailGateway : IGmailGateway
         var msg = await request.ExecuteAsync(ct);
 
         var headers = msg.Payload?.Headers;
-        var subject = headers?.FirstOrDefault(h => h.Name.Equals("Subject", StringComparison.OrdinalIgnoreCase))?.Value;
-        var from = headers?.FirstOrDefault(h => h.Name.Equals("From", StringComparison.OrdinalIgnoreCase))?.Value;
+        var subject = DecodeMimeHeader(headers?.FirstOrDefault(h => h.Name.Equals("Subject", StringComparison.OrdinalIgnoreCase))?.Value);
+        var from = DecodeMimeHeader(headers?.FirstOrDefault(h => h.Name.Equals("From", StringComparison.OrdinalIgnoreCase))?.Value);
         var toHeader = headers?.FirstOrDefault(h => h.Name.Equals("To", StringComparison.OrdinalIgnoreCase))?.Value;
-        
-        var toList = string.IsNullOrEmpty(toHeader) 
-            ? (IReadOnlyList<string>)new List<string>() 
-            : toHeader.Split(',').Select(x => x.Trim()).ToList();
+
+        var toList = string.IsNullOrEmpty(toHeader)
+            ? (IReadOnlyList<string>)new List<string>()
+            : toHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
 
         var ccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Cc", StringComparison.OrdinalIgnoreCase))?.Value;
         var ccList = string.IsNullOrEmpty(ccHeader)
             ? (IReadOnlyList<string>)new List<string>()
-            : ccHeader.Split(',').Select(x => x.Trim()).ToList();
+            : ccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
 
         var bccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Bcc", StringComparison.OrdinalIgnoreCase))?.Value;
         var bccList = string.IsNullOrEmpty(bccHeader)
             ? (IReadOnlyList<string>)new List<string>()
-            : bccHeader.Split(',').Select(x => x.Trim()).ToList();
+            : bccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
 
         var rfc822MessageId = headers?.FirstOrDefault(h => h.Name.Equals("Message-ID", StringComparison.OrdinalIgnoreCase))?.Value;
 
@@ -290,17 +290,17 @@ public class GmailGateway : IGmailGateway
                 foreach (var msg in thread.Messages)
                 {
                     var headers = msg.Payload?.Headers;
-                    var subject = headers?.FirstOrDefault(h => h.Name.Equals("Subject", StringComparison.OrdinalIgnoreCase))?.Value;
+                    var subject = DecodeMimeHeader(headers?.FirstOrDefault(h => h.Name.Equals("Subject", StringComparison.OrdinalIgnoreCase))?.Value);
                     if (threadSubject == null && !string.IsNullOrEmpty(subject)) threadSubject = subject;
-                    
-                    var from = headers?.FirstOrDefault(h => h.Name.Equals("From", StringComparison.OrdinalIgnoreCase))?.Value;
+
+                    var from = DecodeMimeHeader(headers?.FirstOrDefault(h => h.Name.Equals("From", StringComparison.OrdinalIgnoreCase))?.Value);
                     var toHeader = headers?.FirstOrDefault(h => h.Name.Equals("To", StringComparison.OrdinalIgnoreCase))?.Value;
                     var ccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Cc", StringComparison.OrdinalIgnoreCase))?.Value;
                     var bccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Bcc", StringComparison.OrdinalIgnoreCase))?.Value;
 
-                    var toList = string.IsNullOrEmpty(toHeader) ? new List<string>() : toHeader.Split(',').Select(x => x.Trim()).ToList();
-                    var ccList = string.IsNullOrEmpty(ccHeader) ? new List<string>() : ccHeader.Split(',').Select(x => x.Trim()).ToList();
-                    var bccList = string.IsNullOrEmpty(bccHeader) ? new List<string>() : bccHeader.Split(',').Select(x => x.Trim()).ToList();
+                    var toList = string.IsNullOrEmpty(toHeader) ? new List<string>() : toHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
+                    var ccList = string.IsNullOrEmpty(ccHeader) ? new List<string>() : ccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
+                    var bccList = string.IsNullOrEmpty(bccHeader) ? new List<string>() : bccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
 
                     string? html = null;
                     string? plain = null;
@@ -398,15 +398,15 @@ public class GmailGateway : IGmailGateway
         IReadOnlyList<GmailAttachmentData>? attachments = null)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("From: ").Append(from).Append("\r\n");
-        sb.Append("To: ").Append(string.Join(", ", to)).Append("\r\n");
+        sb.Append("From: ").Append(EncodeAddress(from)).Append("\r\n");
+        sb.Append("To: ").Append(EncodeAddressList(to)).Append("\r\n");
         if (cc.Count > 0)
         {
-            sb.Append("Cc: ").Append(string.Join(", ", cc)).Append("\r\n");
+            sb.Append("Cc: ").Append(EncodeAddressList(cc)).Append("\r\n");
         }
         if (bcc.Count > 0)
         {
-            sb.Append("Bcc: ").Append(string.Join(", ", bcc)).Append("\r\n");
+            sb.Append("Bcc: ").Append(EncodeAddressList(bcc)).Append("\r\n");
         }
         sb.Append("Subject: ").Append(EncodeHeaderValue(subject)).Append("\r\n");
         
@@ -491,6 +491,80 @@ public class GmailGateway : IGmailGateway
 
     private static string ToEncodedWord(List<byte> bytes)
         => $"=?UTF-8?B?{Convert.ToBase64String(bytes.ToArray())}?=";
+
+    /// <summary>Mã hoá header địa chỉ (To/Cc/Bcc): encode phần display-name non-ASCII (RFC 2047), giữ nguyên &lt;email&gt;.</summary>
+    private static string EncodeAddressList(IReadOnlyList<string> addresses)
+        => string.Join(", ", addresses.Select(EncodeAddress));
+
+    /// <summary>Encode 1 địa chỉ "Display Name &lt;email&gt;" — encode display-name nếu chứa ký tự non-ASCII (vd tên tiếng Việt); email thuần ASCII giữ nguyên.</summary>
+    private static string EncodeAddress(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address)) return address;
+        var s = address.Trim();
+
+        var lt = s.LastIndexOf('<');
+        var gt = s.LastIndexOf('>');
+        if (lt > 0 && gt > lt)
+        {
+            var display = s[..lt].Trim().Trim('"').Trim();
+            var email = s[lt..]; // "<email@domain>"
+            if (string.IsNullOrEmpty(display) || IsAscii(display)) return s;
+            return $"{EncodeHeaderValue(display)} {email}";
+        }
+        return s; // chỉ có email thuần
+    }
+
+    private static bool IsAscii(string s)
+    {
+        foreach (var c in s) if (c > 127) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Giải mã encoded-word RFC 2047 (=?charset?B|Q?text?=) trong header đọc từ Gmail
+    /// (vd display-name tiếng Việt). Trả nguyên văn nếu không chứa encoded-word.
+    /// </summary>
+    private static string? DecodeMimeHeader(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || !value.Contains("=?")) return value;
+
+        // Encoded-word liền nhau cách nhau chỉ bằng whitespace phải nối liền (RFC 2047 §6.2).
+        var collapsed = System.Text.RegularExpressions.Regex.Replace(
+            value, @"(=\?[^?]+\?[BbQq]\?[^?]*\?=)\s+(?==\?)", "$1");
+
+        return System.Text.RegularExpressions.Regex.Replace(
+            collapsed, @"=\?([^?]+)\?([BbQq])\?([^?]*)\?=", m =>
+            {
+                try
+                {
+                    var charset = m.Groups[1].Value;
+                    var enc = char.ToUpperInvariant(m.Groups[2].Value[0]);
+                    var text = m.Groups[3].Value;
+                    var bytes = enc == 'B' ? Convert.FromBase64String(text) : DecodeQ(text);
+                    return System.Text.Encoding.GetEncoding(charset).GetString(bytes);
+                }
+                catch { return m.Value; }
+            });
+    }
+
+    /// <summary>Giải mã Q-encoding (RFC 2047): '_' → space, '=XX' → byte hex.</summary>
+    private static byte[] DecodeQ(string text)
+    {
+        var bytes = new List<byte>(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '_') bytes.Add((byte)' ');
+            else if (c == '=' && i + 2 < text.Length &&
+                     byte.TryParse(text.AsSpan(i + 1, 2), System.Globalization.NumberStyles.HexNumber, null, out var b))
+            {
+                bytes.Add(b);
+                i += 2;
+            }
+            else bytes.Add((byte)c);
+        }
+        return bytes.ToArray();
+    }
 
     /// <summary>Base64url (RFC 4648) — '+'→'-', '/'→'_', bỏ '=' padding theo yêu cầu Gmail API.</summary>
     private static string Base64UrlEncode(byte[] bytes)
