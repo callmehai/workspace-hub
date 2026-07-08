@@ -122,7 +122,8 @@ export const VerifyOtp = () => {
         const msg = err.response?.data?.message;
         setBanner(msg ?? t('verifyOtp.invalidCode'));
       } else {
-        setBanner(err.message || t('verifyOtp.invalidCode'));
+        const msg = err instanceof Error ? err.message : '';
+        setBanner(msg || t('verifyOtp.invalidCode') || '');
       }
     },
   });
