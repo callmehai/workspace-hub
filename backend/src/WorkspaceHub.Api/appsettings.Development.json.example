@@ -47,5 +47,13 @@
     "IntervalSeconds": 300,
     "SyncAutoRun": true,
     "SyncIntervalSeconds": 60
+  },
+  "R2": {
+    "//": "Cloudflare R2 (SCRUM-75) cho avatar. Lấy từ Cloudflare Dashboard → R2. Hỏi lead để có giá trị dev thật.",
+    "AccountId": "YOUR_R2_ACCOUNT_ID",
+    "BucketName": "workspace-hub-assets",
+    "PublicUrl": "https://pub-YOUR_HASH.r2.dev",
+    "AccessKeyId": "YOUR_R2_ACCESS_KEY_ID",
+    "SecretAccessKey": "YOUR_R2_SECRET_ACCESS_KEY"
   }
 }
