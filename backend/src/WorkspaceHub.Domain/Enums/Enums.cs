@@ -88,6 +88,13 @@ public enum ImportantContactType
     JiraAccount   // Jira accountId — đánh dấu 1 account Jira là liên hệ quan trọng
 }
 
+/// <summary>Nguồn contact cache từ Google People API (SCRUM-69).</summary>
+public enum GoogleContactSource
+{
+    Contact,       // Danh bạ đã lưu (connections.list)
+    OtherContact   // Người từng mail (otherContacts.list) — read-only trên Google
+}
+
 /// <summary>Phân loại thông báo in-app.</summary>
 public enum NotificationType
 {

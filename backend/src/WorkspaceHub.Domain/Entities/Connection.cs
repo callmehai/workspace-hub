@@ -30,4 +30,5 @@ public class Connection
     public Integration Integration { get; set; } = null!;
     public ICollection<Item> Items { get; set; } = new List<Item>();
     public ICollection<ScheduledEmail> ScheduledEmails { get; set; } = new List<ScheduledEmail>();
+    public ICollection<GoogleContact> GoogleContacts { get; set; } = new List<GoogleContact>();
 }

@@ -95,8 +95,9 @@
 | SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
 | SCRUM-67 | FE: Highlight email chưa đọc (đồng bộ trạng thái read/unread với Gmail; fix payload sai → 409) — **không thêm cột DB** | Vũ | ⏳ To Do |
 | SCRUM-68 | Notifications in-app (chuông + badge unread + dropdown mark-as-read; BE API list phân trang + cập nhật trạng thái đọc) | Khánh | 🔄 In Progress |
-| SCRUM-69 | Tích hợp Google People API gợi ý contact khi soạn email (autocomplete To/Cc/Bcc, debounce, chip; fallback nhập tay khi API lỗi) | Khánh | ⏳ To Do |
-| SCRUM-72 | **[BE+FE] Cron sync connection định kỳ + FE auto-refresh** — `POST /api/internal/process-sync` (X-Cron-Secret, exempt CSRF) quét Connection Active + refresh token + dispatch sync theo ServiceType; FE polling Inbox/Kanban/Integrations (`refetchIntervalInBackground`, đồng bộ cross-tab/lọc khi total đổi). **BỔ SUNG** sync định kỳ ngoài on-demand, KHÔNG phải webhook. | Dũng | ⏳ To Do |
+| SCRUM-69 | Tích hợp Google People API gợi ý contact khi soạn email: sync **Contact + OtherContact** vào DB; autocomplete To/Cc/Bcc **cả hai nguồn**; debounce, chip; fallback nhập tay khi API lỗi | Khánh | ✅ Done — migration `AddGoogleContacts`; optional scopes `contacts.readonly` + `contacts.other.readonly`; `IPeopleGateway`/`PeopleGateway` (list phân trang); sync best-effort trong `GmailSyncService` (kéo kèm mỗi lần sync Gmail — cron định kỳ / manual / lazy); `GET /api/emails/contacts/suggest`; FE `EmailChipsInput` debounce + dropdown; wire `SendEmail` + `ScheduledEmails`. Test: `GmailSyncServiceTests`, `SendEmailServiceSuggestContactsTests`. |
+| SCRUM-76 | **Google Contacts write-back 2 chiều + trang `/contacts`** — CRUD contact đã lưu (`Source=Contact`) ghi ngược People API; OtherContact read-only; conflict etag 409; trang `/contacts`. **Phụ thuộc SCRUM-69.** Spec: `docs/CONTACTS_WRITEBACK.md` | Khánh | ⏳ To Do |
+| SCRUM-72 | **[BE+FE] Cron sync connection định kỳ + FE auto-refresh** — `POST /api/internal/process-sync` (X-Cron-Secret, exempt CSRF) quét Connection Active + refresh token + dispatch sync theo ServiceType; FE polling Inbox/Kanban/Integrations (tắt khi tab hidden). **BỔ SUNG** sync định kỳ ngoài on-demand, KHÔNG phải webhook. | Dũng | ⏳ To Do |
 | SCRUM-70 | **BE: Tag management** — CRUD tag + gắn/gỡ tag khỏi item | Lộc | ✅ Done — `TagsController` (`GET /api/tags`, `POST`, `PUT /{id}`, `DELETE /{id}`, `POST /{id}/items`, `DELETE /{id}/items/{itemId}`); `ITagService`/`TagService` (owner-scoped CRUD; tên tag unique **trong 1 user** → 409; assign/unassign junction `TagAssignment`, cả tag lẫn item phải thuộc user, trùng gắn → 409); `ITagRepository`/`TagRepository` (list kèm ItemCount, name-exists, assignment CRUD); validators (name ≤100, color hex). Dùng entity `Tag`/`TagAssignment` **có sẵn**. DI đăng ký. **Fix code-review PR #70:** (1) unique index `IX_Tags_UserId_Name` (migration `AddTagUserNameUniqueIndex`, đã apply DB) đóng TOCTOU race, `DbUpdateException`→409 qua `SaveOrThrowConflictAsync`; (2) `UpdateAsync` dùng `GetItemCountAsync` (1 COUNT) thay vì quét toàn bộ tag của user. Unit test: `TagServiceTests` (13). Build + 255 test pass. |
 | SCRUM-71 | **FE: Tag UI** — quản lý tag (list/create/edit/delete) + chip tag + gắn/gỡ tag trên item + filter theo tag | Huy | ✅ Done — `tagsApi` (wire 6 endpoint SCRUM-70); `TagManagerModal` (CRUD tag + palette màu + itemCount), `TagChip` (chip màu tint + nút gỡ); ItemDetail: section gắn/gỡ tag (dropdown chọn tag chưa gắn + link quản lý); chip tag hiển thị list (Inbox) + board (Kanban) + drawer; filter theo tag ở `WorkspaceToolbar` (chip tag + nút quản lý) wire vào query cả 2 view; i18n VI/EN đủ. **BE bổ sung (không migration):** `ItemResponse.Tags` (join `TagAssignment.Tag`, Include ở repo paged + byId), `GetItemsRequest.TagId` + filter `TagAssignments.Any`. Build BE (256 test pass) + FE (lint sạch). |
 
@@ -136,16 +137,16 @@
 
 ---
 
-## UI polish + Theme + i18n + Profile (đề xuất — CHƯA có trên Jira, số tạm SCRUM-73→76)
+## UI polish + Theme + i18n + Profile (đề xuất — CHƯA có trên Jira, số tạm SCRUM-73→75)
 
-> Phát sinh từ owner 2026-07-07: review UI (fix lệch tông màu brand blue↔indigo, Header nền, avatar) + **theme Sáng/Tối**, **song ngữ VI/EN** (đổi KHÔNG remount), **trang Profile** (chuẩn bị avatar/R2). 4 task này **chưa có trên board** — draft đầy đủ + CSV import ở `docs/tickets-ui-i18n-theme-profile.md`; quyết định kỹ thuật: `docs/CHANGELOG.md` [2026-07-07].
+> Phát sinh từ owner 2026-07-07: review UI (fix lệch tông màu brand blue↔indigo, Header nền, avatar) + **theme Sáng/Tối**, **song ngữ VI/EN** (đổi KHÔNG remount), **trang Profile** (chuẩn bị avatar/R2). 4 task này **chưa có trên board** — draft đầy đủ + CSV import ở `docs/tickets-ui-i18n-theme-profile.md`; quyết định kỹ thuật: `docs/CHANGELOG.md` [2026-07-07]. **Theme Done** gộp theo CHANGELOG / SCRUM-50 — **không dùng SCRUM-76** (số 76 chốt cho Contacts write-back).
 
 | Ticket (tạm) | Việc | Labels | Status |
 |---|---|---|---|
 | SCRUM-73 | FE: Song ngữ VI/EN (i18n tự viết, `useI18n().t()`, đổi lang KHÔNG remount) | frontend, i18n | 🔄 In Progress — hạ tầng + shell/auth/profile/toolbar + nhãn chính Inbox/Kanban/Integrations xong; ScheduledEmails/SendEmail/Admin/ItemDetail/modals mở rộng dần |
 | SCRUM-74 | FE: Trang Hồ sơ người dùng `/profile` (info + tuỳ chọn theme/ngôn ngữ; link Header+Sidebar) | frontend, profile | ✅ Done — vùng avatar chừa chỗ cho SCRUM-75 |
 | SCRUM-75 | Avatar upload + lưu trữ **Cloudflare R2** (cột `Users.AvatarUrl` + migration, `POST/DELETE /api/users/me/avatar`, config env `R2:*`) | backend, frontend, storage, r2 | ⏳ To Do — **task kế tiếp** (owner đã báo) |
-| SCRUM-76 | FE: Theme Sáng/Tối (toggle, persist `wh-theme`, class `.dark`, no remount, chống FOUC) | frontend, theme | ✅ Done (dark) — phủ **toàn app**: shell + auth + profile + Inbox/Kanban/Integrations + Admin + ScheduledEmails/SendEmail + ItemDetail drawer + tất cả modal + RichTextEditor/BulkActionBar/DateTimePicker/EmailChipsInput + badge tint đã chỉnh contrast. **Có thể gộp vào SCRUM-50**. |
+| *(Theme Sáng/Tối)* | FE: Theme (toggle, persist `wh-theme`, class `.dark`, no remount, chống FOUC) | frontend, theme | ✅ Done — xem CHANGELOG [2026-07-07]; **gộp SCRUM-50**, không dùng key Jira riêng |
 
 ---
 

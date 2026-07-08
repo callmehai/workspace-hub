@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Bell, Plus } from 'lucide-react';
+import { Search, Bell, Plus, Menu } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../hooks/useI18n';
@@ -10,7 +10,11 @@ import { NotificationsDropdown } from './NotificationsDropdown';
 import { ThemeLangControls } from '../ThemeLangControls';
 import { usePollingInterval } from '../../hooks/usePollingInterval';
 
-export const Header = () => {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export const Header = ({ onMenuClick }: HeaderProps) => {
   const { user } = useAuth();
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -50,9 +54,18 @@ export const Header = () => {
   }, [isOpen]);
 
   return (
-    <header className="h-16 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between gap-4 px-6 shrink-0">
-      <div className="flex-1 max-w-2xl">
-        <div className="relative group">
+    <header className="h-16 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between gap-3 px-4 md:px-6 shrink-0">
+      <div className="flex items-center gap-2 min-w-0 flex-1 max-w-2xl">
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label={t('nav.openMenu')}
+          className="lg:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <div className="relative group flex-1 min-w-0 hidden md:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-brand-500" />
           <input
             type="text"
@@ -62,10 +75,10 @@ export const Header = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         <Link
           to="/integrations"
-          className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors shadow-sm"
+          className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3.5 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">{t('header.connect')}</span>

@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 
         services.AddScoped<IGmailItemMapper, GmailItemMapper>();
+        services.AddScoped<IGoogleContactMapper, GoogleContactMapper>();
         services.AddScoped<IGmailSyncService, GmailSyncService>();
         services.AddScoped<IConnectionHealthChecker, ConnectionHealthChecker>();
 

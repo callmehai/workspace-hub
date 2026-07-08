@@ -13,8 +13,8 @@
 | Hạng mục | Sự thật trong code |
 |---|---|
 | Config section | `OAuth:{provider}:ClientId/ClientSecret` ở mọi nơi (ConnectionsService, AuthService, TokenService, GoogleTokenVerifier). KHÔNG còn `Dev:`. appsettings.json có key `OAuth`, không có `Dev`. |
-| Scope/service | Gmail=[`gmail.modify`,`gmail.send`], GCal=[`calendar`], Drive=[`drive`]; Login=[`openid`,`email`,`profile`] (GoogleScopes.cs) |
-| Migrations | **4**: InitialCreate, UsersMultiAuth, ModelBConnections, **RemoveClientCredentialsFromIntegration** |
+| Scope/service | Gmail bắt buộc=[`gmail.modify`,`gmail.send`]; Gmail optional=[`gmail.settings.basic`,`contacts.readonly`,`contacts.other.readonly`] (SCRUM-69); GCal=[`calendar`]; Drive=[`drive`]; Login=[`openid`,`email`,`profile`] (GoogleScopes.cs) |
+| Migrations | **10** (đến 2026-07-08): InitialCreate, UsersMultiAuth, ModelBConnections, RemoveClientCredentialsFromIntegration, AddCreatedAtToScheduledEmails, AddAtlassianIntegrationSeed, AddUserPhoneOtp, AddTagUserNameUniqueIndex, EnableJiraIntegration, **AddGoogleContacts** (SCRUM-69) |
 | ServiceType enum | Gmail, GCal, Drive, Jira (Jira seed sẵn cho phase sau) |
 | Admin endpoint | `PATCH /api/admin/integrations/{key}/enable`, [Authorize(Roles=Admin)], trả `IntegrationResponse{id,key,displayName,isEnabled}` |
 | Health endpoint | `GET /api/health` [AllowAnonymous] → `HealthDto{status,database,userCount,serverTimeUtc}` (status="Healthy"/"Degraded", database="Connected"/"Unreachable") |

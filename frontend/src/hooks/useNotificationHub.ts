@@ -68,7 +68,6 @@ function buildHubConnection(): HubConnection {
       withCredentials: true,
       headers: csrf ? { [CSRF_HEADER]: csrf } : {},
     })
-    // BE restart / 502 proxy → retry chậm dần, tránh spam console.
     .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
     .configureLogging(LogLevel.Error)
     .build();
@@ -122,7 +121,7 @@ async function ensureHubStarted(connection: HubConnection): Promise<void> {
   return hubStartPromise;
 }
 
-/** Cập nhật cache + toast khi có notification mới (SignalR hoặc poll). */
+/** Cập nhật cache + toast khi có notification mới (SignalR). */
 export function applyIncomingNotification(
   queryClient: ReturnType<typeof useQueryClient>,
   navigate: ReturnType<typeof useNavigate>,

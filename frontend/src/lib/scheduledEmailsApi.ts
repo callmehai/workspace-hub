@@ -33,9 +33,9 @@ export interface PaginatedResponse<T> {
 
 export const scheduledEmailsApi = {
   getScheduledEmails: async (skip: number = 0, top: number = 20, status?: string): Promise<PaginatedResponse<ScheduledEmailDto>> => {
-    let url = `/ScheduledEmails?$top=${top}&$skip=${skip}&$count=true&$orderby=createdAt desc`;
+    let url = `/scheduled-emails?$top=${top}&$skip=${skip}&$count=true&$orderby=CreatedAt desc`;
     if (status && status !== 'All') {
-      url += `&$filter=status eq '${status}'`;
+      url += `&$filter=Status eq '${status}'`;
     }
     const response = await api.get(url);
     const data = response.data;
