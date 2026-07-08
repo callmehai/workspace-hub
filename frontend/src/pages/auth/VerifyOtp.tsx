@@ -50,7 +50,7 @@ export const VerifyOtp = () => {
       console.log('Initializing RecaptchaVerifier...');
       window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
-        callback: (response: any) => {
+        callback: (response: string) => {
           console.log('Recaptcha solved:', response);
         },
         'expired-callback': () => {
@@ -79,9 +79,10 @@ export const VerifyOtp = () => {
         setConfirmationResult(confirmResult);
         toast.success(t('verifyOtp.resent') || 'Đã gửi mã OTP qua Firebase.');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Firebase Auth Error:', error);
-      setBanner(error.message || t('verifyOtp.resendFail'));
+      const msg = error instanceof Error ? error.message : '';
+      setBanner(msg || t('verifyOtp.resendFail') || '');
       // Reset recaptcha if failed so user can try again
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
@@ -96,7 +97,10 @@ export const VerifyOtp = () => {
   useEffect(() => {
     if (state.phone && !confirmationResult && !isSending) {
       console.log('Auto-sending OTP because state.phone exists');
-      sendFirebaseOtp(state.phone);
+      const phoneToUse = state.phone;
+      setTimeout(() => {
+        void sendFirebaseOtp(phoneToUse);
+      }, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -113,7 +117,7 @@ export const VerifyOtp = () => {
       toast.success(t('verifyOtp.success'));
       navigate('/', { replace: true });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       if (isAxiosError<ApiError>(err)) {
         const msg = err.response?.data?.message;
         setBanner(msg ?? t('verifyOtp.invalidCode'));
