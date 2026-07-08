@@ -7,6 +7,7 @@ using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.Services;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
+using WorkspaceHub.Application.DTOs.Sync;
 using WorkspaceHub.Application.Abstractions;
 using Xunit;
 
@@ -16,7 +17,7 @@ public class ConnectionHealthCheckerTests
 {
     private readonly Mock<IConnectionRepository> _connectionRepoMock;
     private readonly Mock<IConnectionsService> _connectionsServiceMock;
-    private readonly Mock<IGmailSyncService> _syncServiceMock;
+    private readonly Mock<IConnectionSyncDispatcher> _syncDispatcherMock;
     private readonly Mock<ILogger<ConnectionHealthChecker>> _loggerMock;
     private readonly Mock<IConfiguration> _configMock;
     private readonly ConnectionHealthChecker _checker;
@@ -25,7 +26,7 @@ public class ConnectionHealthCheckerTests
     {
         _connectionRepoMock = new Mock<IConnectionRepository>();
         _connectionsServiceMock = new Mock<IConnectionsService>();
-        _syncServiceMock = new Mock<IGmailSyncService>();
+        _syncDispatcherMock = new Mock<IConnectionSyncDispatcher>();
         _loggerMock = new Mock<ILogger<ConnectionHealthChecker>>();
         
         _configMock = new Mock<IConfiguration>();
@@ -36,7 +37,7 @@ public class ConnectionHealthCheckerTests
         _checker = new ConnectionHealthChecker(
             _connectionRepoMock.Object,
             _connectionsServiceMock.Object,
-            _syncServiceMock.Object,
+            _syncDispatcherMock.Object,
             _loggerMock.Object,
             _configMock.Object);
     }
@@ -52,7 +53,7 @@ public class ConnectionHealthCheckerTests
         await _checker.EnsureAllSyncedAsync(userId);
 
         _connectionRepoMock.Verify(r => r.GetByIdTrackedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-        _syncServiceMock.Verify(s => s.SyncConnectionAsync(It.IsAny<Connection>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -75,14 +76,14 @@ public class ConnectionHealthCheckerTests
         _connectionRepoMock
             .Setup(r => r.GetByIdTrackedAsync(conn.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(conn);
-        _syncServiceMock
-            .Setup(s => s.SyncConnectionAsync(conn, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _syncDispatcherMock
+            .Setup(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SyncResult(10, 5, 0, "cursor"));
 
         await _checker.EnsureAllSyncedAsync(userId);
 
         _connectionsServiceMock.Verify(s => s.RefreshConnectionAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-        _syncServiceMock.Verify(s => s.SyncConnectionAsync(conn, 50, It.IsAny<CancellationToken>()), Times.Once);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -117,14 +118,14 @@ public class ConnectionHealthCheckerTests
             .ReturnsAsync(conn)         // First call before refresh
             .ReturnsAsync(refreshedConn); // Second call after refresh
 
-        _syncServiceMock
-            .Setup(s => s.SyncConnectionAsync(refreshedConn, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _syncDispatcherMock
+            .Setup(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SyncResult(10, 5, 0, "cursor"));
 
         await _checker.EnsureAllSyncedAsync(userId);
 
         _connectionsServiceMock.Verify(s => s.RefreshConnectionAsync(conn.Id, userId, It.IsAny<CancellationToken>()), Times.Once);
-        _syncServiceMock.Verify(s => s.SyncConnectionAsync(refreshedConn, 50, It.IsAny<CancellationToken>()), Times.Once);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -163,11 +164,15 @@ public class ConnectionHealthCheckerTests
         _connectionsServiceMock
             .Setup(s => s.RefreshConnectionAsync(conn1.Id, userId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Revoked"));
+        
+        _syncDispatcherMock
+            .Setup(s => s.SyncAsync(conn2.Id, conn2.UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncResult(10, 5, 0, "cursor"));
 
         await _checker.EnsureAllSyncedAsync(userId);
 
         // Conn1 sync is skipped
-        _syncServiceMock.Verify(s => s.SyncConnectionAsync(conn1, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn1.Id, conn1.UserId, It.IsAny<CancellationToken>()), Times.Never);
         
         // Assert conn1 is marked as needing re-auth
         Assert.Equal(ConnectionStatus.Error, conn1.Status);
@@ -177,7 +182,7 @@ public class ConnectionHealthCheckerTests
         _connectionRepoMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
 
         // Conn2 sync still happens
-        _syncServiceMock.Verify(s => s.SyncConnectionAsync(conn2, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn2.Id, conn2.UserId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -203,6 +208,6 @@ public class ConnectionHealthCheckerTests
 
         await _checker.EnsureAllSyncedAsync(userId);
 
-        _syncServiceMock.Verify(s => s.SyncConnectionAsync(It.IsAny<Connection>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

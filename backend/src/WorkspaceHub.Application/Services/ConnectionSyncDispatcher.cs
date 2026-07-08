@@ -52,7 +52,9 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
         catch (GoogleApiException ex)
         {
             throw new ProviderException(
-                $"Google API trả về lỗi {(int)ex.HttpStatusCode}: {ex.Error?.Message ?? ex.Message}", ex);
+                $"Google API trả về lỗi {(int)ex.HttpStatusCode}: {ex.Error?.Message ?? ex.Message}",
+                ex.HttpStatusCode,
+                ex);
         }
     }
 }

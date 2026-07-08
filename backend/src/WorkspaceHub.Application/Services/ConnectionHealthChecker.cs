@@ -14,20 +14,20 @@ public class ConnectionHealthChecker : IConnectionHealthChecker
 {
     private readonly IConnectionRepository _connections;
     private readonly IConnectionsService _connectionsService;
-    private readonly IGmailSyncService _syncService;
+    private readonly IConnectionSyncDispatcher _syncDispatcher;
     private readonly ILogger<ConnectionHealthChecker> _logger;
     private readonly int _debounceSeconds;
 
     public ConnectionHealthChecker(
         IConnectionRepository connections,
         IConnectionsService connectionsService,
-        IGmailSyncService syncService,
+        IConnectionSyncDispatcher syncDispatcher,
         ILogger<ConnectionHealthChecker> logger,
         IConfiguration config)
     {
         _connections = connections;
         _connectionsService = connectionsService;
-        _syncService = syncService;
+        _syncDispatcher = syncDispatcher;
         _logger = logger;
         _debounceSeconds = config.GetValue("Sync:DebounceSeconds", 30);
     }
@@ -98,15 +98,7 @@ public class ConnectionHealthChecker : IConnectionHealthChecker
             }
         }
 
-        // Chỉ hỗ trợ Gmail hiện tại
-        if (conn.ServiceType != ServiceType.Gmail)
-        {
-            _logger.LogDebug("On-demand sync skipped: ServiceType {ServiceType} not yet supported.", conn.ServiceType);
-            return;
-        }
-
-        // Sync
-        var result = await _syncService.SyncConnectionAsync(conn, 50, ct);
+        var result = await _syncDispatcher.SyncAsync(connectionId, userId, ct);
         _logger.LogInformation(
             "On-demand sync completed for connection {ConnectionId}. Scanned: {Scanned}, Created: {Created}, Skipped: {Skipped}",
             connectionId, result.Scanned, result.Created, result.Skipped);

@@ -1,5 +1,7 @@
 namespace WorkspaceHub.Application.Common;
 
+using System.Net;
+
 /// <summary>
 /// Lỗi 404 — resource không tồn tại.
 /// Middleware sẽ map sang HTTP 404 NotFound.
@@ -65,6 +67,15 @@ public class CsrfException : Exception
 /// </summary>
 public class ProviderException : Exception
 {
+    public HttpStatusCode? StatusCode { get; }
+
     public ProviderException(string message) : base(message) { }
+
     public ProviderException(string message, Exception inner) : base(message, inner) { }
+
+    public ProviderException(string message, HttpStatusCode statusCode, Exception? inner = null)
+        : base(message, inner)
+    {
+        StatusCode = statusCode;
+    }
 }

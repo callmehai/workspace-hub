@@ -146,6 +146,21 @@ public class ItemWriteBackService : IItemWriteBackService
                 var metaDictEmail = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
                 if (isUnreadChanged) metaDictEmail["isUnread"] = payload.IsUnread!.Value;
                 if (isStarredChanged) metaDictEmail["isStarred"] = payload.IsStarred!.Value;
+
+                // Đồng bộ luôn mảng `labels` trong metadata với thay đổi vừa ghi lên Gmail.
+                // Nếu chỉ set field isUnread/isStarred mà không sửa labels → refetch từ DB sẽ
+                // "hồi sinh" nhãn cũ (vd UNREAD) làm UI hiện lại sai sau khi đã đọc (bug desync).
+                if (addLabels.Any() || removeLabels.Any())
+                {
+                    var labels = new List<string>();
+                    if (metaDictEmail.TryGetValue("labels", out var lv) && lv is JsonElement je && je.ValueKind == JsonValueKind.Array)
+                        labels = je.EnumerateArray().Select(e => e.GetString() ?? string.Empty).Where(s => s.Length > 0).ToList();
+                    labels.RemoveAll(l => removeLabels.Contains(l));
+                    foreach (var al in addLabels)
+                        if (!labels.Contains(al)) labels.Add(al);
+                    metaDictEmail["labels"] = labels;
+                }
+
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEmail);
 
                 break;
@@ -208,7 +223,7 @@ public class ItemWriteBackService : IItemWriteBackService
         if (newETag != null) item.ETag = newETag;
         
         await _items.SaveChangesAsync(ct);
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
 
     public async Task<ItemResponse> CreateEventAsync(Guid userId, CreateEventRequest payload, CancellationToken ct = default)
@@ -251,7 +266,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
 
     public async Task<ItemResponse> CreateTicketAsync(Guid userId, CreateTicketRequest payload, CancellationToken ct = default)
@@ -282,7 +297,7 @@ public class ItemWriteBackService : IItemWriteBackService
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
 
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
 
     /// <summary>
@@ -354,7 +369,7 @@ public class ItemWriteBackService : IItemWriteBackService
         item.Status = mapped.Status;
 
         await _items.SaveChangesAsync(ct);
-        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.ConnectionId);
+        return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
 
     public async Task DeleteItemAsync(Guid itemId, Guid userId, CancellationToken ct = default)
