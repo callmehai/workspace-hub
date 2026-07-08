@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Domain.Entities;
@@ -6,6 +7,7 @@ using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Domain.Enums;
+using WorkspaceHub.Application.Mapping;
 
 namespace WorkspaceHub.Application.Services;
 
@@ -17,19 +19,22 @@ public class SendEmailService : ISendEmailService
     private readonly IGoogleContactRepository _googleContacts;
     private readonly IGoogleContactMapper _googleContactMapper;
     private readonly IItemRepository _items;
+    private readonly ILogger<SendEmailService> _logger;
 
     public SendEmailService(
         IConnectionRepository connections,
         IGmailGateway gmail,
         IGoogleContactRepository googleContacts,
         IGoogleContactMapper googleContactMapper,
-        IItemRepository items)
+        IItemRepository items,
+        ILogger<SendEmailService> logger)
     {
         _connections = connections;
         _gmail = gmail;
         _googleContacts = googleContacts;
         _googleContactMapper = googleContactMapper;
         _items = items;
+        _logger = logger;
     }
 
     public async Task<SendEmailResult> SendAsync(Guid userId, SendEmailRequest request, CancellationToken ct = default)
@@ -113,7 +118,8 @@ public class SendEmailService : ISendEmailService
         var threadId = GetMetadataString(item.MetadataJson, "threadId");
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
 
-        var inReplyTo = item.ExternalId;
+        // Lấy RFC 5322 Message-ID header thật (dạng <xxx@mail.gmail.com>) để In-Reply-To/References chuẩn
+        var inReplyTo = GetMetadataString(item.MetadataJson, "rfc822MessageId") ?? item.ExternalId;
         var subject = item.Title;
         if (!subject.StartsWith("Re: ", StringComparison.OrdinalIgnoreCase))
         {
@@ -136,8 +142,8 @@ public class SendEmailService : ISendEmailService
             
             var me = connection.ProviderAccountId;
             
-            var allTo = originalTo.Where(x => !x.Contains(me, StringComparison.OrdinalIgnoreCase));
-            var allCc = originalCc.Where(x => !x.Contains(me, StringComparison.OrdinalIgnoreCase));
+            var allTo = originalTo.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase));
+            var allCc = originalCc.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase));
             
             toList.AddRange(allTo);
             ccList.AddRange(allCc);
@@ -151,14 +157,16 @@ public class SendEmailService : ISendEmailService
         {
              var liveMsg = await _gmail.GetMessageAsync(connection, item.ExternalId, ct);
              var me = connection.ProviderAccountId;
-             ccList.AddRange(liveMsg.Cc.Where(x => !x.Contains(me, StringComparison.OrdinalIgnoreCase)));
-             toList.AddRange(liveMsg.To.Where(x => !x.Contains(me, StringComparison.OrdinalIgnoreCase) && !toList.Contains(x)));
+             ccList.AddRange(liveMsg.Cc.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase)));
+             toList.AddRange(liveMsg.To.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase) && !toList.Any(t => ExtractEmail(t).Equals(ExtractEmail(x), StringComparison.OrdinalIgnoreCase))));
         }
 
         // Loại bỏ trùng lặp và loại trừ tài khoản của mình khỏi danh sách nhận nếu bị dính
         var myEmail = connection.ProviderAccountId;
-        toList = toList.Where(x => !x.Contains(myEmail, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        ccList = ccList.Where(x => !x.Contains(myEmail, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        toList = toList.Where(x => !ExtractEmail(x).Equals(myEmail, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(x => ExtractEmail(x), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+        ccList = ccList.Where(x => !ExtractEmail(x).Equals(myEmail, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(x => ExtractEmail(x), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
 
         // Nếu gửi cho chính mình từ một luồng mà không có ai khác
         if (toList.Count == 0 && !string.IsNullOrEmpty(fromOriginal))
@@ -184,27 +192,31 @@ public class SendEmailService : ISendEmailService
             subject = "Fwd: " + subject;
         }
 
-        // Lấy live body và attachments từ email gốc
-        var liveThread = await _gmail.GetThreadAsync(connection, threadId, ct);
-        var originalMessage = liveThread.Messages.FirstOrDefault(m => m.MessageId == item.ExternalId);
-        if (originalMessage == null) throw new BusinessRuleException("Original message not found in thread.");
+        // Lấy live message gốc (chỉ 1 message, không cần cả thread)
+        var liveMsg = await _gmail.GetMessageAsync(connection, item.ExternalId, ct);
 
-        var bodyGoc = originalMessage.BodyHtml ?? originalMessage.BodyPlainText?.Replace("\n", "<br/>") ?? "";
+        var bodyGoc = liveMsg.BodyHtml ?? liveMsg.BodyPlain?.Replace("\n", "<br/>") ?? "";
 
         var fwdBody = request.BodyHtml + "<br/><br/>---------- Forwarded message ----------<br/>" + 
-            $"From: {originalMessage.From}<br/>" +
-            $"Date: {originalMessage.OccurredAt?.ToString("f")}<br/>" +
-            $"Subject: {originalMessage.Subject}<br/>" +
-            $"To: {string.Join(", ", originalMessage.To)}<br/><br/>" +
+            $"From: {liveMsg.From}<br/>" +
+            $"Date: {liveMsg.OccurredAt?.ToString("f")}<br/>" +
+            $"Subject: {liveMsg.Subject}<br/>" +
+            $"To: {string.Join(", ", liveMsg.To)}<br/><br/>" +
             bodyGoc;
 
         var attachmentsData = new List<Application.Abstractions.GmailAttachmentData>();
-        if (request.IncludeAttachments && originalMessage.Attachments.Count > 0)
+        if (request.IncludeAttachments && liveMsg.HasAttachment)
         {
-            foreach (var attInfo in originalMessage.Attachments)
+            // Lấy attachment metadata từ thread (cần payload detail) để có attachmentId
+            var liveThread = await _gmail.GetThreadAsync(connection, threadId, ct);
+            var threadMsg = liveThread.Messages.FirstOrDefault(m => m.MessageId == item.ExternalId);
+            if (threadMsg != null)
             {
-                var attData = await _gmail.GetAttachmentAsync(connection, originalMessage.MessageId, attInfo.AttachmentId, attInfo.Filename, attInfo.MimeType, ct);
-                attachmentsData.Add(attData);
+                foreach (var attInfo in threadMsg.Attachments)
+                {
+                    var attData = await _gmail.GetAttachmentAsync(connection, threadMsg.MessageId, attInfo.AttachmentId, attInfo.Filename, attInfo.MimeType, ct);
+                    attachmentsData.Add(attData);
+                }
             }
         }
 
@@ -217,7 +229,7 @@ public class SendEmailService : ISendEmailService
     {
         var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
 
-        // Lấy metadata live
+        // Lấy attachment metadata từ thread (cần payload detail để có filename/mimeType)
         var threadId = GetMetadataString(item.MetadataJson, "threadId");
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
 
@@ -228,7 +240,7 @@ public class SendEmailService : ISendEmailService
         var attInfo = msg.Attachments.FirstOrDefault(a => a.AttachmentId == attachmentId);
         if (attInfo == null) throw new NotFoundException("Attachment", attachmentId);
 
-        return await _gmail.GetAttachmentAsync(connection, msg.MessageId, attachmentId, attInfo.Filename, attInfo.MimeType, ct);
+        return await _gmail.GetAttachmentAsync(connection, item.ExternalId, attachmentId, attInfo.Filename, attInfo.MimeType, ct);
     }
 
     // ───────────────────────── Private Helpers ─────────────────────────
@@ -273,7 +285,10 @@ public class SendEmailService : ISendEmailService
                 return prop.GetString();
             }
         }
-        catch { }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse MetadataJson for property '{Property}'", propertyName);
+        }
         return null;
     }
 
@@ -294,7 +309,24 @@ public class SendEmailService : ISendEmailService
                 return list;
             }
         }
-        catch { }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse MetadataJson array for property '{Property}'", propertyName);
+        }
         return new List<string>();
+    }
+
+    /// <summary>Trích xuất phần email thuần từ chuỗi dạng "Display Name &lt;email@domain.com&gt;" hoặc "email@domain.com".</summary>
+    private static string ExtractEmail(string emailOrHeader)
+    {
+        if (string.IsNullOrWhiteSpace(emailOrHeader)) return emailOrHeader;
+        var trimmed = emailOrHeader.Trim();
+        var ltIdx = trimmed.LastIndexOf('<');
+        var gtIdx = trimmed.LastIndexOf('>');
+        if (ltIdx >= 0 && gtIdx > ltIdx)
+        {
+            return trimmed[(ltIdx + 1)..gtIdx].Trim();
+        }
+        return trimmed;
     }
 }

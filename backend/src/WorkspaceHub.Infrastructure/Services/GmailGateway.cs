@@ -83,7 +83,18 @@ public class GmailGateway : IGmailGateway
             ? (IReadOnlyList<string>)new List<string>()
             : bccHeader.Split(',').Select(x => x.Trim()).ToList();
 
+        var rfc822MessageId = headers?.FirstOrDefault(h => h.Name.Equals("Message-ID", StringComparison.OrdinalIgnoreCase))?.Value;
+
         bool hasAttachment = msg.Payload != null && CheckHasAttachment(msg.Payload);
+
+        // Extract body HTML/plain for forwarding
+        string? bodyHtml = null;
+        string? bodyPlain = null;
+        var dummyAtts = new List<GmailAttachmentInfo>();
+        if (msg.Payload != null)
+        {
+            ExtractBodyAndAttachments(msg.Payload, ref bodyHtml, ref bodyPlain, dummyAtts);
+        }
 
         DateTimeOffset? occurredAt = null;
         if (msg.InternalDate.HasValue)
@@ -103,7 +114,10 @@ public class GmailGateway : IGmailGateway
             msg.LabelIds?.ToList() ?? new List<string>(),
             hasAttachment,
             occurredAt,
-            msg.HistoryId?.ToString());
+            msg.HistoryId?.ToString(),
+            rfc822MessageId,
+            bodyHtml,
+            bodyPlain);
     }
 
     public async Task<GmailHistory> ListHistoryAsync(Connection connection, string startHistoryId, string? pageToken, CancellationToken ct = default)

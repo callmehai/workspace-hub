@@ -15,6 +15,9 @@ public record GmailMessage(
     IReadOnlyList<string> LabelIds,
     bool HasAttachment,
     DateTimeOffset? OccurredAt,
-    string? ETag = null);
+    string? ETag = null,
+    string? Rfc822MessageId = null,
+    string? BodyHtml = null,
+    string? BodyPlain = null);
 
 public record GmailMessageList(IReadOnlyList<string> MessageIds, string? NextPageToken);

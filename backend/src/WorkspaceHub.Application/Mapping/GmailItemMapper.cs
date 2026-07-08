@@ -35,6 +35,7 @@ public class GmailItemMapper : IGmailItemMapper
             threadId = message.ThreadId,
             labels = message.LabelIds,
             hasAttachment = message.HasAttachment,
+            rfc822MessageId = message.Rfc822MessageId,
             webUrl = $"https://mail.google.com/mail/u/0/#all/{message.Id}",
             isUnread = message.LabelIds != null && message.LabelIds.Contains("UNREAD")
         };
