@@ -25,13 +25,17 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
 
   // Hết selection (sau khi hành động xong / bấm X) → reset dropdown, tránh lần sau
   // thanh hiện lại đã tự bung listbox vì component chỉ return null chứ không unmount.
-  useEffect(() => {
+  // Điều chỉnh state khi prop đổi ngay trong render (guard prevCount) theo React docs
+  // — không dùng effect + setState (vi phạm rule react-hooks/set-state-in-effect).
+  const [prevCount, setPrevCount] = useState(selectedItemIds.size);
+  if (selectedItemIds.size !== prevCount) {
+    setPrevCount(selectedItemIds.size);
     if (selectedItemIds.size === 0) {
       setIsAdding(false);
       setIsRemoving(false);
       setIsTagging(false);
     }
-  }, [selectedItemIds.size]);
+  }
 
   // Đóng mọi dropdown (thêm/gỡ thư mục, gắn tag) khi click ra ngoài thanh / nhấn Esc.
   useEffect(() => {
