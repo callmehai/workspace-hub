@@ -46,7 +46,7 @@ public enum DrivePermissionRole
 /// Owner chỉ để hiển thị, không assign qua API app.
 /// </summary>
 
-public static class DrivePermissionRoloes
+public static class DrivePermissionRoles
 {
     public const string Reader = "reader";
     public const string Commenter = "commenter";
@@ -89,51 +89,50 @@ public static class DrivePermissionRoloes
 
     //Kiểm tra role là Owner (không assign được qua API app)
     public static bool IsOwner(string? role) => string.Equals(role, Owner, StringComparison.OrdinalIgnoreCase);
+}
 
-    //Trong gg drive (pdf/docx/..) đều lưu dạng drive.file, nên dùng minetype để check file type
-    public static class DriveMimeTypes
-    {
-        /// <summary>MimeType của folder trên Google Drive.</summary>
-        public const string Folder = "application/vnd.googgle-apps.folder";
+/// <summary>
+/// type permission từ Google: user, anyone, domain, group.
+/// v1 chủ yếu dùng User + Anyone.
+/// </summary>
+public static class DrivePermisionTypes
+{
+    public const string User = "user";
+    public const string Anyone = "anyone";
+    public const string Domain = "domain";
+    public const string Group = "group";
 
-        public static bool IsFolder(string? mimeTyppe)=>
-            string.Equals(mimeTyppe, Folder, StringComparison.OrdinalIgnoreCase);
-    }
+    /// Kiểm tra type permission là Anyone (public link)
+    public static bool IsLinkType(string? type) =>
+        string.Equals(type, Anyone, StringComparison.OrdinalIgnoreCase);
+}
 
-    /// <summary>
-    /// type permission từ Google: user, anyone, domain, group.
-    /// v1 chủ yếu dùng User + Anyone.
-    /// </summary>
-    public static class DrivePermision
-    {
-        public const string User = "user";
-        public const string Anyone = "anyone";
-        public const string Domain = "domain";
-        public const string Group = "group";
+//Trong gg drive (pdf/docx/..) đều lưu dạng drive.file, nên dùng minetype để check file type
+public static class DriveMimeTypes
+{
+    /// <summary>MimeType của folder trên Google Drive.</summary>
+    public const string Folder = "application/vnd.google-apps.folder";
 
-        /// Kiểm tra type permission là Anyone (public link)
-        public static bool IsLinkType(string? type)=>
-            string.Equals(type, Anyone, StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsFolder(string? mimeTyppe) =>
+        string.Equals(mimeTyppe, Folder, StringComparison.OrdinalIgnoreCase);
+}
 
-    /// <summary>
-    /// Một dòng permission trả về từ Gateway / Service / API list.
-    /// Map từ Google.Apis.Drive.v3.Data.Permission (Bước A2).
-    /// </summary>
-    public class DrivePermissionDto
-    {
-        //permissionId trên gg, dùng cho việc update/delete permission, không phải email
-        public string Id { get;set; } = string.Empty;
-        //user / anyone / domain / group
-        public string Type { get;set; } = string.Empty;
-        //reader / commenter / writer / owner
-        public string Role { get;set; } = string.Empty;
-        public string? EmailAddress { get;set; }
-        public string? DisplayName { get;set; }
-        //true nếu là owner, UI chỉ hiển thị khong xóa
-        public bool IsOwner { get; set; }
-        //true khi là link public, false nếu là link public (anyone)
-        public bool IsLink { get;set; }
-    }
-
+/// <summary>
+/// Một dòng permission trả về từ Gateway / Service / API list.
+/// Map từ Google.Apis.Drive.v3.Data.Permission (Bước A2).
+/// </summary>
+public class DrivePermissionDto
+{
+    //permissionId trên gg, dùng cho việc update/delete permission, không phải email
+    public string Id { get; set; } = string.Empty;
+    //user / anyone / domain / group
+    public string Type { get; set; } = string.Empty;
+    //reader / commenter / writer / owner
+    public string Role { get; set; } = string.Empty;
+    public string? EmailAddress { get; set; }
+    public string? DisplayName { get; set; }
+    //true nếu là owner, UI chỉ hiển thị khong xóa
+    public bool IsOwner { get; set; }
+    //true khi là link public, false nếu là link public (anyone)
+    public bool IsLink { get; set; }
 }
