@@ -32,4 +32,27 @@ public interface IGmailGateway
     /// Trả null nếu chưa đặt chữ ký HOẶC connection thiếu scope gmail.settings.basic (không throw).
     /// </summary>
     Task<string?> GetSignatureAsync(Connection connection, CancellationToken ct = default);
+
+    /// <summary>Lấy toàn bộ thread với body decoded + attachment metadata.</summary>
+    Task<GmailThread> GetThreadAsync(Connection connection, string threadId, CancellationToken ct = default);
+
+    /// <summary>Download attachment binary data.</summary>
+    Task<GmailAttachmentData> GetAttachmentAsync(Connection connection, string messageId, string attachmentId, string filename, string mimeType, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gửi reply/forward (email trong thread có sẵn).
+    /// threadId để Gmail nhóm, inReplyToMessageId cho header In-Reply-To/References.
+    /// attachmentParts cho forward (đính kèm từ email gốc).
+    /// </summary>
+    Task<string> SendInThreadAsync(
+        Connection connection,
+        string threadId,
+        string? inReplyToMessageId,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default);
 }

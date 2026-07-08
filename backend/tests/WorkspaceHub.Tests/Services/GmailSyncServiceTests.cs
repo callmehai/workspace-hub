@@ -92,7 +92,7 @@ public class GmailSyncServiceTests
 
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Connection c, string id, CancellationToken ct) => 
-                new GmailMessage(id, "t", "S", null, new List<string>(), null, new List<string>(), false, null));
+                new GmailMessage(id, "t", "S", null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null));
 
         _mapperMock.Setup(m => m.ToItem(It.IsAny<GmailMessage>(), connection.UserId, connection.Id, It.IsAny<ISet<string>>()))
             .Returns((GmailMessage msg, Guid u, Guid c, ISet<string> s) => new Item { ExternalId = msg.Id });
@@ -125,7 +125,7 @@ public class GmailSyncServiceTests
 
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Connection c, string id, CancellationToken ct) => 
-                new GmailMessage(id, "t", "S", null, new List<string>(), null, new List<string>(), false, null));
+                new GmailMessage(id, "t", "S", null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null));
 
         _mapperMock.Setup(m => m.ToItem(It.IsAny<GmailMessage>(), connection.UserId, connection.Id, It.IsAny<ISet<string>>()))
             .Returns((GmailMessage msg, Guid u, Guid c, ISet<string> s) => new Item { ExternalId = msg.Id, ETag = "new" });
@@ -149,7 +149,7 @@ public class GmailSyncServiceTests
 
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Connection c, string id, CancellationToken ct) => 
-                new GmailMessage(id, "t", "S", null, new List<string>(), null, new List<string>(), false, null));
+                new GmailMessage(id, "t", "S", null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null));
 
         _mapperMock.Setup(m => m.ToItem(It.IsAny<GmailMessage>(), connection.UserId, connection.Id, It.IsAny<ISet<string>>()))
             .Returns((GmailMessage msg, Guid u, Guid c, ISet<string> s) => new Item { ExternalId = msg.Id });
@@ -182,7 +182,7 @@ public class GmailSyncServiceTests
 
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Connection c, string id, CancellationToken ct) => 
-                new GmailMessage(id, "t", "S", null, new List<string>(), null, new List<string>(), false, null));
+                new GmailMessage(id, "t", "S", null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null));
 
         _mapperMock.Setup(m => m.ToItem(It.IsAny<GmailMessage>(), connection.UserId, connection.Id, It.IsAny<ISet<string>>()))
             .Returns((GmailMessage msg, Guid u, Guid c, ISet<string> s) => new Item { ExternalId = msg.Id });

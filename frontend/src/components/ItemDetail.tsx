@@ -10,6 +10,7 @@ import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
 import { TagChip, FolderChip } from './tags/TagChip';
 import { TagManagerModal } from './tags/TagManagerModal';
+import { EmailThreadView } from './emails/EmailThreadView';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
@@ -727,10 +728,18 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           )}
 
           {/* Body Content */}
-          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('sendEmail.content')}</div>
-          <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
-            {bodyText || <span className="text-slate-400 dark:text-slate-500 italic">{t('item.noContent')}</span>}
-          </div>
+          {item.type === 'Email' && item.connectionId ? (
+            <div className="mt-4">
+              <EmailThreadView itemId={item.id} connectionId={item.connectionId} />
+            </div>
+          ) : (
+            <>
+              <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('sendEmail.content')}</div>
+              <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
+                {bodyText || <span className="text-slate-400 dark:text-slate-500 italic">{t('item.noContent')}</span>}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Footer actions — per type */}

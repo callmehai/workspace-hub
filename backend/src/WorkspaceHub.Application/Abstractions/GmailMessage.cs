@@ -9,6 +9,8 @@ public record GmailMessage(
     string? Subject,
     string? From,
     IReadOnlyList<string> To,
+    IReadOnlyList<string> Cc,
+    IReadOnlyList<string> Bcc,
     string? Snippet,
     IReadOnlyList<string> LabelIds,
     bool HasAttachment,

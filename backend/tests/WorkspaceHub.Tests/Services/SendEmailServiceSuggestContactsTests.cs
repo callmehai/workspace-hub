@@ -15,12 +15,13 @@ public class SendEmailServiceSuggestContactsTests
     private readonly Mock<IConnectionRepository> _connections = new();
     private readonly Mock<IGmailGateway> _gmail = new();
     private readonly Mock<IGoogleContactRepository> _googleContacts = new();
+    private readonly Mock<IItemRepository> _items = new();
     private readonly GoogleContactMapper _mapper = new();
     private readonly SendEmailService _service;
 
     public SendEmailServiceSuggestContactsTests()
     {
-        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object, _mapper);
+        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object, _mapper, _items.Object);
     }
 
     [Fact]

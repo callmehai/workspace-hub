@@ -14,6 +14,60 @@ export interface SendEmailResult {
   sentAt: string;
 }
 
+export interface EmailAttachmentDto {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface EmailThreadMessageDto {
+  messageId: string;
+  from: string | null;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string | null;
+  bodyHtml: string | null;
+  bodyPlainText: string | null;
+  occurredAt: string;
+  isUnread: boolean;
+  isStarred: boolean;
+  hasAttachment: boolean;
+  attachments: EmailAttachmentDto[];
+}
+
+export interface EmailThreadResponse {
+  threadId: string;
+  subject: string | null;
+  messages: EmailThreadMessageDto[];
+}
+
+export interface ReplyEmailRequest {
+  connectionId: string;
+  itemId: string;
+  cc?: string[];
+  bcc?: string[];
+  bodyHtml: string;
+  replyAll: boolean;
+}
+
+export interface ForwardEmailRequest {
+  connectionId: string;
+  itemId: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  bodyHtml: string;
+  includeAttachments: boolean;
+}
+
+export interface SendInThreadResult {
+  messageId: string;
+  threadId: string;
+  sentAt: string;
+}
+
 export interface ContactSuggestion {
   email: string;
   displayName?: string | null;
@@ -61,5 +115,34 @@ export const sendEmailApi = {
     } catch {
       return [];
     }
+  },
+
+  getThread: async (itemId: string): Promise<EmailThreadResponse> => {
+    const response = await api.get(`/emails/${itemId}/thread`);
+    return response.data;
+  },
+
+  reply: async (data: ReplyEmailRequest): Promise<SendInThreadResult> => {
+    const response = await api.post('/emails/reply', data);
+    return response.data;
+  },
+
+  forward: async (data: ForwardEmailRequest): Promise<SendInThreadResult> => {
+    const response = await api.post('/emails/forward', data);
+    return response.data;
+  },
+
+  downloadAttachment: async (itemId: string, attachmentId: string, filename: string): Promise<void> => {
+    const response = await api.get(`/emails/${itemId}/attachments/${attachmentId}`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
 };

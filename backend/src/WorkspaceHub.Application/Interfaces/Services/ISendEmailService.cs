@@ -13,4 +13,16 @@ public interface ISendEmailService
     /// <summary>Danh sách contact cache theo connection (Contact + OtherContact) — OData filter/sort/paging ở controller.</summary>
     Task<IReadOnlyList<ContactSuggestionDto>> GetContactSuggestionsAsync(
         Guid userId, Guid connectionId, CancellationToken ct = default);
+
+    Task<EmailThreadResponse> GetThreadAsync(
+        Guid userId, Guid itemId, CancellationToken ct = default);
+
+    Task<SendInThreadResult> ReplyAsync(
+        Guid userId, ReplyEmailRequest request, CancellationToken ct = default);
+
+    Task<SendInThreadResult> ForwardAsync(
+        Guid userId, ForwardEmailRequest request, CancellationToken ct = default);
+
+    Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(
+        Guid userId, Guid itemId, string attachmentId, CancellationToken ct = default);
 }

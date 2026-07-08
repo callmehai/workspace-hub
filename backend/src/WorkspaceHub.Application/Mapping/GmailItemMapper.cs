@@ -30,6 +30,8 @@ public class GmailItemMapper : IGmailItemMapper
         {
             from = message.From,
             to = message.To,
+            cc = message.Cc,
+            bcc = message.Bcc,
             threadId = message.ThreadId,
             labels = message.LabelIds,
             hasAttachment = message.HasAttachment,

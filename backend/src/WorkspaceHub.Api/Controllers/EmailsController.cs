@@ -15,11 +15,19 @@ public class EmailsController : ApiControllerBase
 {
     private readonly ISendEmailService _service;
     private readonly IValidator<SendEmailRequest> _validator;
+    private readonly IValidator<ReplyEmailRequest> _replyValidator;
+    private readonly IValidator<ForwardEmailRequest> _forwardValidator;
 
-    public EmailsController(ISendEmailService service, IValidator<SendEmailRequest> validator)
+    public EmailsController(
+        ISendEmailService service, 
+        IValidator<SendEmailRequest> validator,
+        IValidator<ReplyEmailRequest> replyValidator,
+        IValidator<ForwardEmailRequest> forwardValidator)
     {
         _service = service;
         _validator = validator;
+        _replyValidator = replyValidator;
+        _forwardValidator = forwardValidator;
     }
 
     /// <summary>Gửi email trực tiếp (gửi ngay) qua Gmail. 200 + { messageId, sentAt }.</summary>
@@ -51,5 +59,51 @@ public class EmailsController : ApiControllerBase
     {
         var items = await _service.GetContactSuggestionsAsync(CurrentUserId, connectionId, ct);
         return Ok(items);
+    }
+
+    /// <summary>
+    /// Lấy toàn bộ luồng hội thoại của một email (bao gồm cả thư gửi/nhận).
+    /// Trả về metadata và HTML body của các tin nhắn trong thread.
+    /// </summary>
+    [HttpGet("{itemId}/thread")]
+    public async Task<IActionResult> GetThread([FromRoute] Guid itemId, CancellationToken ct)
+    {
+        var result = await _service.GetThreadAsync(CurrentUserId, itemId, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Trả lời (Reply / Reply-All) trong một luồng hội thoại email đã có.
+    /// Trả về messageId mới của Gmail.
+    /// </summary>
+    [HttpPost("reply")]
+    public async Task<IActionResult> Reply([FromBody] ReplyEmailRequest request, CancellationToken ct)
+    {
+        await _replyValidator.ValidateAndThrowAsync(request, ct);
+        var result = await _service.ReplyAsync(CurrentUserId, request, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Chuyển tiếp (Forward) một email trong luồng, bao gồm tùy chọn đính kèm file gốc.
+    /// Trả về messageId mới của Gmail.
+    /// </summary>
+    [HttpPost("forward")]
+    public async Task<IActionResult> Forward([FromBody] ForwardEmailRequest request, CancellationToken ct)
+    {
+        await _forwardValidator.ValidateAndThrowAsync(request, ct);
+        var result = await _service.ForwardAsync(CurrentUserId, request, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Tải một file đính kèm trực tiếp từ Gmail thông qua Backend.
+    /// Trả về file stream để tải về.
+    /// </summary>
+    [HttpGet("{itemId}/attachments/{attachmentId}")]
+    public async Task<IActionResult> GetAttachment([FromRoute] Guid itemId, [FromRoute] string attachmentId, CancellationToken ct)
+    {
+        var attachment = await _service.GetAttachmentAsync(CurrentUserId, itemId, attachmentId, ct);
+        return File(attachment.Data, attachment.MimeType, attachment.Filename);
     }
 }
