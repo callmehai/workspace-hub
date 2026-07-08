@@ -8,6 +8,12 @@
 - **Kiến trúc mới:** FE gọi Firebase (kèm reCAPTCHA) để lấy OTP, người dùng nhập OTP, FE gửi lại cho Firebase để lấy **Firebase ID Token**. FE gửi ID Token này lên BE. BE chỉ việc dùng `FirebaseAdmin` SDK (`VerifyIdTokenAsync`) để xác thực token và cập nhật trạng thái `PhoneVerified = true`.
 - **Lược bỏ BE:** Đã xoá toàn bộ `OtpService`, `ISmsSender`, các implement SMS và lưu trữ OTP trên Redis. `AuthController` bỏ endpoint `send-otp`, đổi `verify-otp` thành `verify-phone`.
 - **Config:** Thay thế các biến môi trường SMS (`Sms:Twilio:*`) thành `Firebase:ProjectId` (`FIREBASE_PROJECT_ID`).
+## [2026-07-08] Notifications in-app + SignalR hub retry (SCRUM-68)
+
+- **Sync → notification:** Mọi sync (`ConnectionSyncDispatcher`) khi `Created > 0` gọi `SyncItemNotificationService` — tối đa 10 item/sync (ưu tiên `IsImportant` nếu vượt). Lưu DB + push SignalR `ReceiveNotification`.
+- **FE:** Chuông + badge unread (poll 45s) + dropdown OData phân trang + mark read/read-all + toast realtime + deep link `/inbox?item=`.
+- **Copy i18n:** `Title` = key (`notifications.newEmailFrom`, …); `Body` = JSON `{ from?, itemTitle, preview }` — FE dịch theo lang.
+- **SignalR resilience:** `useNotificationHub` — retry start vô hạn + backoff; rebuild hub (CSRF header mới) mỗi lần retry; BE exempt `/hubs/*` khỏi CSRF negotiate. `withAutomaticReconnect` sau connect.
 
 ## [2026-07-08] Google Contacts autocomplete (SCRUM-69)
 

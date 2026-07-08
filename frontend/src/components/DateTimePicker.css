@@ -86,3 +86,50 @@
 .wh-dtp .react-datepicker__day--outside-month {
   color: #cbd5e1;
 }
+
+/* ── Dark mode (class `dark` trên <html>; popover render qua portal vào body) ──
+   Sửa lỗi đảo màu: mặc định chỉ có màu light nên trên nền tối, ngày chọn được
+   (#374151) bị tối mờ còn ngày quá khứ disabled (#d1d5db) lại sáng. Ở đây đảo lại
+   cho đúng: tương lai = sáng rõ, quá khứ = mờ tối. */
+.dark .wh-dtp .react-datepicker__header {
+  background: transparent;
+  border-bottom-color: #334155; /* slate-700 */
+}
+
+.dark .wh-dtp .react-datepicker__current-month {
+  color: #f1f5f9; /* slate-100 */
+}
+
+.dark .wh-dtp .react-datepicker__day-name {
+  color: #94a3b8; /* slate-400 */
+}
+
+/* Ngày chọn được (hôm nay trở đi) — sáng rõ */
+.dark .wh-dtp .react-datepicker__day {
+  color: #e2e8f0; /* slate-200 */
+}
+
+.dark .wh-dtp .react-datepicker__day:hover {
+  background: rgba(37, 99, 235, 0.15);
+  color: #93c5fd; /* brand-300 */
+}
+
+.dark .wh-dtp .react-datepicker__day--today {
+  color: #60a5fa; /* brand-400 */
+}
+
+/* Ngày quá khứ (disabled) + ngoài tháng — mờ tối, không gây rối mắt */
+.dark .wh-dtp .react-datepicker__day--disabled,
+.dark .wh-dtp .react-datepicker__day--disabled:hover,
+.dark .wh-dtp .react-datepicker__day--outside-month {
+  color: #475569; /* slate-600 */
+}
+
+/* Mũi tên điều hướng tháng */
+.dark .wh-dtp .react-datepicker__navigation-icon::before {
+  border-color: #94a3b8; /* slate-400 */
+}
+
+.dark .wh-dtp .react-datepicker__navigation:hover .react-datepicker__navigation-icon::before {
+  border-color: #e2e8f0; /* slate-200 */
+}

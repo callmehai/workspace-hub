@@ -1,4 +1,5 @@
 import api from './api';
+import type { ODataResponse } from './odata';
 
 export interface CreateScheduledEmailRequest {
   connectionId: string;
@@ -26,14 +27,9 @@ export interface ScheduledEmailDto {
   createdAt: string;
 }
 
-export interface PaginatedResponse<T> {
-  value: T[];
-  '@odata.count'?: number;
-}
-
 export const scheduledEmailsApi = {
-  getScheduledEmails: async (skip: number = 0, top: number = 20, status?: string): Promise<PaginatedResponse<ScheduledEmailDto>> => {
-    let url = `/scheduled-emails?$top=${top}&$skip=${skip}&$count=true&$orderby=CreatedAt desc`;
+  getScheduledEmails: async (skip: number = 0, top: number = 20, status?: string): Promise<ODataResponse<ScheduledEmailDto>> => {
+    let url = `/ScheduledEmails?$top=${top}&$skip=${skip}&$count=true&$orderby=CreatedAt desc`;
     if (status && status !== 'All') {
       url += `&$filter=Status eq '${status}'`;
     }
@@ -41,7 +37,7 @@ export const scheduledEmailsApi = {
     const data = response.data;
     // OData bọc trong { value: [...], '@odata.count': N }
     if (data && typeof data === 'object' && Array.isArray(data.value)) {
-      return data as PaginatedResponse<ScheduledEmailDto>;
+      return data as ODataResponse<ScheduledEmailDto>;
     }
     if (Array.isArray(data)) {
       return { value: data, '@odata.count': data.length };

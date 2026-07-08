@@ -66,6 +66,12 @@ public class CsrfMiddleware
             return false;
 
         var path = context.Request.Path.Value ?? string.Empty;
+
+        // SignalR negotiate = POST + cookie; client cache header CSRF cố định lúc build hub
+        // (reconnect/retry không refresh) — hub vẫn [Authorize] JWT từ cookie.
+        if (path.StartsWith("/hubs", StringComparison.OrdinalIgnoreCase))
+            return false;
+
         // Exact match (không StartsWith) — tránh exempt nhầm endpoint tương lai như
         // /api/auth/login-history vô tình khớp prefix /api/auth/login.
         return !ExemptPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase));

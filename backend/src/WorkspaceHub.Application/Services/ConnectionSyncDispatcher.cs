@@ -10,6 +10,8 @@ namespace WorkspaceHub.Application.Services;
 public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
 {
     private readonly IConnectionRepository _connections;
+    private readonly IItemRepository _items;
+    private readonly ISyncItemNotificationService _syncNotifications;
     private readonly IGmailSyncService _gmailSync;
     private readonly ICalendarSyncService _calendarSync;
     private readonly IDriveSyncService _driveSync;
@@ -20,12 +22,16 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
 
     public ConnectionSyncDispatcher(
         IConnectionRepository connections,
+        IItemRepository items,
+        ISyncItemNotificationService syncNotifications,
         IGmailSyncService gmailSync,
         ICalendarSyncService calendarSync,
         IDriveSyncService driveSync,
         IJiraSyncService jiraSync)
     {
         _connections = connections;
+        _items = items;
+        _syncNotifications = syncNotifications;
         _gmailSync = gmailSync;
         _calendarSync = calendarSync;
         _driveSync = driveSync;
@@ -40,7 +46,9 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
 
         try
         {
-            return connection.ServiceType switch
+            var beforeExternalIds = await _items.GetExistingExternalIdsAsync(connectionId, ct);
+
+            var result = connection.ServiceType switch
             {
                 ServiceType.Gmail  => await _gmailSync.SyncConnectionAsync(connection, GmailDefaultBatchSize, ct),
                 ServiceType.GCal   => await _calendarSync.SyncConnectionAsync(connection, ct),
@@ -48,6 +56,14 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
                 ServiceType.Jira   => await _jiraSync.SyncConnectionAsync(connection, JiraDefaultBatchSize, ct),
                 _ => throw new BusinessRuleException("Service type không hỗ trợ đồng bộ.")
             };
+
+            if (result.Created > 0)
+            {
+                await _syncNotifications.NotifyNewItemsAsync(
+                    connectionId, userId, beforeExternalIds, ct);
+            }
+
+            return result;
         }
         catch (GoogleApiException ex)
         {
