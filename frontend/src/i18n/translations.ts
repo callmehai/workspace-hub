@@ -35,6 +35,8 @@ export const vi = {
   'nav.newFolder': 'Thư mục mới',
   'nav.noFolders': 'Chưa có thư mục. Tạo thư mục để gom item theo dự án / khách hàng.',
   'nav.logout': 'Đăng xuất',
+  'nav.openMenu': 'Mở menu',
+  'nav.closeMenu': 'Đóng menu',
   'nav.loggedOut': 'Đã đăng xuất',
   'nav.user': 'Người dùng',
 
@@ -304,6 +306,7 @@ export const vi = {
   'admin.syncErrors24h': 'Lỗi đồng bộ (24h)',
   'admin.connectionStatus': 'Trạng thái kết nối',
   'admin.chartError': 'Lỗi tải dữ liệu',
+  'admin.chartEmpty': 'Chưa có kết nối',
   'admin.userList': 'Danh sách người dùng',
   'admin.searchPlaceholder': 'Tìm kiếm email, tên...',
   'admin.colUser': 'Người dùng',
@@ -513,6 +516,8 @@ export const en: Record<TranslationKey, string> = {
   'nav.newFolder': 'New folder',
   'nav.noFolders': 'No folders yet. Create one to group items by project / client.',
   'nav.logout': 'Log out',
+  'nav.openMenu': 'Open menu',
+  'nav.closeMenu': 'Close menu',
   'nav.loggedOut': 'Logged out',
   'nav.user': 'User',
 
@@ -782,6 +787,7 @@ export const en: Record<TranslationKey, string> = {
   'admin.syncErrors24h': 'Sync errors (24h)',
   'admin.connectionStatus': 'Connection status',
   'admin.chartError': 'Failed to load data',
+  'admin.chartEmpty': 'No connections yet',
   'admin.userList': 'User list',
   'admin.searchPlaceholder': 'Search email, name...',
   'admin.colUser': 'User',

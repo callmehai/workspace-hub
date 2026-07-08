@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.OData.Query;
 namespace WorkspaceHub.Api.Controllers;
 
 [Authorize]
+[ODataIgnored]
 [Route("api/scheduled-emails")]
 public class ScheduledEmailsController : ApiControllerBase
 {

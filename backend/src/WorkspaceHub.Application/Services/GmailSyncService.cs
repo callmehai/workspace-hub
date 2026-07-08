@@ -17,6 +17,9 @@ public class GmailSyncService : IGmailSyncService
     private readonly IImportantContactRepository _importantContacts;
     private readonly IConnectionRepository _connections;
     private readonly ITokenService _tokenService;
+    private readonly IPeopleGateway _peopleGateway;
+    private readonly IGoogleContactRepository _googleContacts;
+    private readonly IGoogleContactMapper _googleContactMapper;
     private readonly ILogger<GmailSyncService> _logger;
 
     public GmailSyncService(
@@ -26,6 +29,9 @@ public class GmailSyncService : IGmailSyncService
         IImportantContactRepository importantContacts,
         IConnectionRepository connections,
         ITokenService tokenService,
+        IPeopleGateway peopleGateway,
+        IGoogleContactRepository googleContacts,
+        IGoogleContactMapper googleContactMapper,
         ILogger<GmailSyncService> logger)
     {
         _gmailGateway = gmailGateway;
@@ -34,6 +40,9 @@ public class GmailSyncService : IGmailSyncService
         _importantContacts = importantContacts;
         _connections = connections;
         _tokenService = tokenService;
+        _peopleGateway = peopleGateway;
+        _googleContacts = googleContacts;
+        _googleContactMapper = googleContactMapper;
         _logger = logger;
     }
 
@@ -185,7 +194,28 @@ public class GmailSyncService : IGmailSyncService
         _connections.Update(connection);
         await _connections.SaveChangesAsync(ct);
 
+        await SyncContactsAsync(connection, ct);
+
         return new SyncResult(scanned, created, skipped, newCursor);
+    }
+
+/// <summary>Đồng bộ contact Google vào cache DB (best-effort — lỗi không làm fail mail sync). Chạy cuối mỗi lần sync Gmail (cron định kỳ, manual, hoặc lazy).</summary>
+    private async Task SyncContactsAsync(Connection connection, CancellationToken ct)
+    {
+        try
+        {
+            var rows = await _peopleGateway.ListAllAsync(connection, ct);
+            var syncedAt = DateTime.UtcNow;
+            var entities = rows
+                .Select(r => _googleContactMapper.ToEntity(r, connection.Id, syncedAt))
+                .ToList();
+
+            await _googleContacts.ReplaceAllForConnectionAsync(connection.Id, entities, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Contact sync skipped for connection {ConnectionId}", connection.Id);
+        }
     }
 
     private async Task<(int Created, int Skipped)> ProcessMessageIdsAsync(

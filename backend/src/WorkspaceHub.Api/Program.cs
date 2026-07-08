@@ -4,15 +4,20 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.OData;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.ModelBuilder;
 using Microsoft.OpenApi.Models;
 using WorkspaceHub.Api.Auth;
+using WorkspaceHub.Api.Hubs;
 using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application;
 using WorkspaceHub.Application.DTOs;
+using WorkspaceHub.Application.DTOs.Notifications;
+using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.DTOs.ScheduledEmails;
+using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +27,10 @@ var edmBuilder = new ODataConventionModelBuilder();
 edmBuilder.EnableLowerCamelCase(); // Force camelCase cho tất cả OData response
 edmBuilder.EntitySet<FolderResponse>("Folders");
 edmBuilder.EntitySet<ScheduledEmailDto>("ScheduledEmails");
+var contactSuggestionType = edmBuilder.EntityType<ContactSuggestionDto>();
+contactSuggestionType.HasKey(c => c.Email);
+edmBuilder.EntitySet<ContactSuggestionDto>("EmailContactSuggestions");
+edmBuilder.EntitySet<NotificationDto>("Notifications");
 
 // Controllers + serialize enum dạng string (khớp cách lưu DB) + OData.
 builder.Services.AddControllers()
@@ -142,6 +151,11 @@ builder.Services.AddAuthentication(options =>
             if (ctx.Request.Cookies.TryGetValue(AuthCookieService.AccessCookieName, out var cookieToken))
                 ctx.Token = cookieToken;
 
+            if (string.IsNullOrEmpty(ctx.Token)
+                && ctx.Request.Path.StartsWithSegments("/hubs")
+                && ctx.Request.Query.TryGetValue("access_token", out var accessToken))
+                ctx.Token = accessToken;
+
             return Task.CompletedTask;
         }
     };
@@ -159,6 +173,10 @@ if (allowedOrigins is { Length: > 0 })
 }
 
 builder.Services.AddSingleton<AuthCookieService>();
+
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, SubUserIdProvider>();
+builder.Services.AddScoped<INotificationPublisher, SignalRNotificationPublisher>();
 
 // Register application and infrastructure services
 builder.Services.AddApplication();
@@ -212,6 +230,7 @@ app.UseAuthentication();
 app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
 

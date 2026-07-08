@@ -1,12 +1,15 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Routing.Attributes;
 using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Services;
 
 namespace WorkspaceHub.Api.Controllers;
 
 [Authorize]
+[ODataIgnored]
 [Route("api/emails")]
 public class EmailsController : ApiControllerBase
 {
@@ -34,5 +37,19 @@ public class EmailsController : ApiControllerBase
     {
         var signature = await _service.GetSignatureAsync(CurrentUserId, connectionId, ct);
         return Ok(new { signature = signature ?? "" });
+    }
+
+    /// <summary>
+    /// GET /api/emails/contacts/suggest?connectionId= — cache GoogleContacts (Contact + OtherContact).
+    /// OData in-memory: $filter, $orderby, $top, $skip, $count, $select.
+    /// </summary>
+    [HttpGet("contacts/suggest")]
+    [EnableQuery(MaxTop = 20)]
+    public async Task<ActionResult<IEnumerable<ContactSuggestionDto>>> SuggestContacts(
+        [FromQuery] Guid connectionId,
+        CancellationToken ct = default)
+    {
+        var items = await _service.GetContactSuggestionsAsync(CurrentUserId, connectionId, ct);
+        return Ok(items);
     }
 }

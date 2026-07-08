@@ -1268,6 +1268,80 @@
       ]
     },
     {
+      "name": "10 — Notifications",
+      "item": [
+        {
+          "name": "List notifications (200) — OData",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?$top=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                { "key": "$top", "value": "20" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "var res = pm.response.json();",
+              "var items = Array.isArray(res) ? res : (res.value || []);",
+              "if (items.length > 0) {",
+              "  pm.environment.set('notificationId', items[0].id);",
+              "}"
+            ] } }
+          ]
+        },
+        {
+          "name": "Mark single notification as read (204)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "X-CSRF-Token", "value": "{{csrfToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notifications/{{notificationId}}/read", "host": ["{{baseUrl}}"], "path": ["api", "notifications", "{{notificationId}}", "read"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "if (!pm.environment.get('notificationId')) { pm.test.skip('skipped — không có notification để mark as read'); return; }",
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Mark all notifications as read (204)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-CSRF-Token", "value": "{{csrfToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notifications/read-all", "host": ["{{baseUrl}}"], "path": ["api", "notifications", "read-all"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Seed test notification (200) [Dev only]",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-CSRF-Token", "value": "{{csrfToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notifications/dev/seed", "host": ["{{baseUrl}}"], "path": ["api", "notifications", "dev", "seed"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "pm.test('200 OK (or 404 if not Development)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
       "name": "99 — Session",
       "item": [
         {

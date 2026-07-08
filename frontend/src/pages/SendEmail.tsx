@@ -96,17 +96,17 @@ export const SendEmail = () => {
           <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-5 md:p-6 shadow-sm flex flex-col overflow-y-auto">
           <label className={`${labelClass} shrink-0`}>{t('sendEmail.to')}</label>
           <div className="shrink-0">
-            <EmailChipsInput value={to} onChange={setTo} placeholder={t('sendEmail.toPlaceholder')} />
+            <EmailChipsInput value={to} onChange={setTo} connectionId={resolvedConn || undefined} placeholder={t('sendEmail.toPlaceholder')} />
           </div>
 
           <div className="flex flex-col sm:flex-row sm:gap-3 shrink-0">
             <div className="flex-1">
               <label className={labelClass}>Cc</label>
-              <EmailChipsInput value={cc} onChange={setCc} placeholder="email@..." />
+              <EmailChipsInput value={cc} onChange={setCc} connectionId={resolvedConn || undefined} placeholder="email@..." />
             </div>
             <div className="flex-1">
               <label className={labelClass}>Bcc</label>
-              <EmailChipsInput value={bcc} onChange={setBcc} placeholder="email@..." />
+              <EmailChipsInput value={bcc} onChange={setBcc} connectionId={resolvedConn || undefined} placeholder="email@..." />
             </div>
           </div>
 
