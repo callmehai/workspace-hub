@@ -54,7 +54,7 @@ export const AdminDashboard = () => {
     if (usersError) handleApiError(usersError, t('admin.usersLoadError'));
   }, [usersError, t]);
 
-    const pieData = stats ? [
+  const pieData = stats ? [
     { name: t('integrations.statusActive'), value: stats.connectionsByStatus.Active ?? 0 },
     { name: t('integrations.statusError'), value: stats.connectionsByStatus.Error ?? 0 },
     { name: t('integrations.statusDisconnected'), value: stats.connectionsByStatus.Disconnected ?? 0 },

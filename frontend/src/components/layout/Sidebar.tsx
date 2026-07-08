@@ -122,7 +122,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
     e.currentTarget.classList.add('bg-indigo-50', 'dark:bg-brand-500/10');
   };
 
- const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent) => {
     e.currentTarget.classList.remove('bg-indigo-50', 'dark:bg-brand-500/10');
   };
   const handleDrop = (e: React.DragEvent, folderId: string) => {
