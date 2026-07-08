@@ -47,14 +47,14 @@ Code → PR vào develop → CI (build/test) → merge → CD tự deploy lên L
 ## 3. Cấu hình & secret
 
 Secret prod nằm ở **`.env` trên server** (gitignored, KHÔNG commit) — xem `deploy/.env.prod.example` để biết các key:
-`SITE_ADDRESS`, `MSSQL_SA_PASSWORD`, `JWT_SECRET`, `CRON_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, (Twilio tuỳ chọn), `R2_*` (SCRUM-75 — avatar, xem dưới).
+`SITE_ADDRESS`, `MSSQL_SA_PASSWORD`, `JWT_SECRET`, `CRON_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `FIREBASE_PROJECT_ID` (tuỳ chọn), `R2_*` (SCRUM-75 — avatar, xem dưới).
 
 Env quan trọng (set trong compose, đọc từ `.env`):
 - `Db__AutoMigrate=true` — api tự áp migration lúc khởi động (single-instance).
 - `Cron__AutoRun=true` — BackgroundService tự quét & gửi scheduled email mỗi `Cron__IntervalSeconds` (60s).
 - `Cron__SyncAutoRun=true` + `Cron__SyncIntervalSeconds=60` — BackgroundService sync connections (Gmail/GCal/Drive/Jira) mỗi 60s. **Không** cần cron-job.org cho sync; **không** bật đồng thời với job HTTP `POST /api/internal/process-sync`.
 - `Auth__CrossSiteCookies=false` — same-origin ⇒ cookie SameSite=Lax.
-- Twilio để trống ⇒ OTP đăng ký **log ra console** thay vì gửi SMS: `docker compose -f docker-compose.prod.yml logs api | grep -i otp`.
+- Để xác thực SĐT đăng ký, cần thiết lập `Firebase:ProjectId`. Nếu không có, tính năng đăng ký sẽ báo lỗi khi FE yêu cầu Firebase ID Token.
 
 ### Cập nhật `.env` cho R2 (SCRUM-75) trên server đang chạy
 

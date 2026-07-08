@@ -10,11 +10,8 @@ public interface IAuthService
     Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default);
     Task<UserDto> GetMeAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>SCRUM-64: gửi lại OTP cho user chưa verify (theo email). Trả cooldown (giây).</summary>
-    Task<int> SendOtpAsync(string email, CancellationToken ct = default);
-
-    /// <summary>SCRUM-64: verify OTP → set PhoneVerified=true → phát JWT (đăng nhập luôn).</summary>
-    Task<AuthResponse> VerifyOtpAsync(string email, string code, CancellationToken ct = default);
+    /// <summary>SCRUM-64: verify Firebase ID Token → set PhoneVerified=true → phát JWT (đăng nhập luôn).</summary>
+    Task<AuthResponse> VerifyPhoneAsync(string email, string firebaseToken, CancellationToken ct = default);
 
     /// <summary>Build Google Sign-In authorization URL + cache CSRF state.</summary>
     Task<GoogleAuthStartResponse> GoogleStartAsync(CancellationToken ct = default);

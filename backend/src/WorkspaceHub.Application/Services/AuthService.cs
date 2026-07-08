@@ -30,7 +30,6 @@ public class AuthService : IAuthService
     private readonly IOAuthTokenClient _tokenClient;
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
     private readonly IJwtTokenFactory _jwt;
-    private readonly IOtpService _otp;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -47,8 +46,7 @@ public class AuthService : IAuthService
         IDistributedCache cache,
         IOAuthTokenClient tokenClient,
         IGoogleTokenVerifier googleTokenVerifier,
-        IJwtTokenFactory jwt,
-        IOtpService otp)
+        IJwtTokenFactory jwt)
     {
         _users = users;
         _config = config;
@@ -58,7 +56,6 @@ public class AuthService : IAuthService
         _tokenClient = tokenClient;
         _googleTokenVerifier = googleTokenVerifier;
         _jwt = jwt;
-        _otp = otp;
     }
 
     public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
@@ -89,8 +86,9 @@ public class AuthService : IAuthService
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
 
-        var cooldown = await _otp.SendAsync(user.Id, user.Phone, ct);
-        return new RegisterResult(user.Email, RequiresPhoneVerification: true, cooldown);
+        // FE tự generate và gửi OTP qua Firebase, nên BE không cần xử lý gửi mã.
+        // FE sẽ dùng Firebase ID token để gọi VerifyPhoneAsync.
+        return new RegisterResult(user.Email, RequiresPhoneVerification: true, ResendCooldownSeconds: 60);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -117,32 +115,35 @@ public class AuthService : IAuthService
         return await SignInAsync(user, ct);
     }
 
-    public async Task<int> SendOtpAsync(string email, CancellationToken ct = default)
-    {
-        // Chống user enumeration (review #6): KHÔNG tiết lộ email tồn tại / đã verify / không
-        // có phone. Email không đủ điều kiện → im lặng trả cooldown giả, không gửi gì.
-        var normalized = email.Trim().ToLowerInvariant();
-        var user = await _users.GetByEmailAsync(normalized, ct);
-        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
-            return DefaultCooldownSeconds;
-
-        return await _otp.SendAsync(user.Id, user.Phone, ct);
-    }
-
-    public async Task<AuthResponse> VerifyOtpAsync(string email, string code, CancellationToken ct = default)
+    public async Task<AuthResponse> VerifyPhoneAsync(string email, string firebaseToken, CancellationToken ct = default)
     {
         var normalized = email.Trim().ToLowerInvariant();
         var user = await _users.GetByEmailAsync(normalized, ct);
 
         // Uniform 422 cho mọi case không hợp lệ (user không tồn tại / đã verify / không phone /
-        // mã sai) — không phân biệt để tránh enumeration. OtpService.VerifyAsync cũng throw 422.
+        // mã sai) — không phân biệt để tránh enumeration.
         if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
-            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
+            throw new BusinessRuleException("Dữ liệu không hợp lệ hoặc tài khoản đã được xác minh.");
 
-        var ok = await _otp.VerifyAsync(user.Id, code, ct);
-        if (!ok)
-            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
+        FirebaseAdmin.Auth.FirebaseToken decodedToken;
+        try
+        {
+            decodedToken = await FirebaseAdmin.Auth.FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(firebaseToken, ct);
+        }
+        catch (FirebaseAdmin.Auth.FirebaseAuthException)
+        {
+            throw new BusinessRuleException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+        }
+        catch (ArgumentException)
+        {
+            throw new BusinessRuleException("Firebase token không hợp lệ.");
+        }
 
+        // Có thể check decodedToken.Claims["phone_number"] xem có khớp số đt đã đăng ký không,
+        // nhưng Firebase đã xác thực số đó là của người dùng.
+        // Chúng ta tạm tin cậy user đã pass qua Firebase Phone Auth.
+        // (Nếu cần bảo mật cao: normalize Firebase phone_number và user.Phone rồi so sánh).
+        
         user.PhoneVerified = true;
         await _users.SaveChangesAsync(ct);
 

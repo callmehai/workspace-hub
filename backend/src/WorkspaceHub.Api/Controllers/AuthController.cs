@@ -34,26 +34,13 @@ public class AuthController : ApiControllerBase
     public async Task<ActionResult<RegisterResult>> Register(RegisterRequest request, CancellationToken ct)
         => StatusCode(201, await _auth.RegisterAsync(request, ct));
 
-    /// <summary>
-    /// POST /api/auth/send-otp — gửi lại OTP cho tài khoản chưa verify (SCRUM-64).
-    /// Luôn 200 (không tiết lộ email tồn tại/đã verify — chống enumeration).
-    /// </summary>
-    [HttpPost("send-otp")]
-    [AllowAnonymous]
-    [ProducesResponseType(200)]
-    public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request, CancellationToken ct)
-    {
-        var cooldown = await _auth.SendOtpAsync(request.Email, ct);
-        return Ok(new { resendCooldownSeconds = cooldown });
-    }
-
-    /// <summary>POST /api/auth/verify-otp — verify OTP → set cookie JWT (đăng nhập) (SCRUM-64).</summary>
-    [HttpPost("verify-otp")]
+    /// <summary>POST /api/auth/verify-phone — verify Firebase Phone Auth → set cookie JWT (đăng nhập) (SCRUM-64).</summary>
+    [HttpPost("verify-phone")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResultDto), 200)]
     [ProducesResponseType(422)]
-    public async Task<ActionResult<AuthResultDto>> VerifyOtp([FromBody] VerifyOtpRequest request, CancellationToken ct)
-        => Ok(await IssueCookiesAsync(await _auth.VerifyOtpAsync(request.Email, request.Code, ct), ct));
+    public async Task<ActionResult<AuthResultDto>> VerifyPhone([FromBody] VerifyPhoneRequest request, CancellationToken ct)
+        => Ok(await IssueCookiesAsync(await _auth.VerifyPhoneAsync(request.Email, request.FirebaseToken, ct), ct));
 
     /// <summary>POST /api/auth/login — đăng nhập; set cookie JWT.</summary>
     [HttpPost("login")]

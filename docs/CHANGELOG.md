@@ -2,6 +2,13 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-08] Chuyển SMS provider sang Firebase Phone Auth (SCRUM-64)
+
+- **Lý do:** Các nhà mạng SMS (Twilio, eSMS, SpeedSMS) đều gặp rào cản về việc đăng ký Brandname, giới hạn trial, hoặc không ổn định khi gửi mã OTP ở Việt Nam. Thay vì tự quản lý việc gửi OTP qua BE, chúng ta chuyển hoàn toàn sang **Firebase Phone Authentication**.
+- **Kiến trúc mới:** FE gọi Firebase (kèm reCAPTCHA) để lấy OTP, người dùng nhập OTP, FE gửi lại cho Firebase để lấy **Firebase ID Token**. FE gửi ID Token này lên BE. BE chỉ việc dùng `FirebaseAdmin` SDK (`VerifyIdTokenAsync`) để xác thực token và cập nhật trạng thái `PhoneVerified = true`.
+- **Lược bỏ BE:** Đã xoá toàn bộ `OtpService`, `ISmsSender`, các implement SMS và lưu trữ OTP trên Redis. `AuthController` bỏ endpoint `send-otp`, đổi `verify-otp` thành `verify-phone`.
+- **Config:** Thay thế các biến môi trường SMS (`Sms:Twilio:*`) thành `Firebase:ProjectId` (`FIREBASE_PROJECT_ID`).
+
 ## [2026-07-08] Google Contacts autocomplete (SCRUM-69)
 
 - **Sync read-only:** Mỗi lần sync Gmail (cron định kỳ SCRUM-72 ~60s, nút Đồng bộ, hoặc lazy khi mở list items) kéo `connections.list` + `otherContacts.list` (People API) vào `GoogleContacts` — full replace theo `ConnectionId`. Best-effort: lỗi contact không fail mail sync.

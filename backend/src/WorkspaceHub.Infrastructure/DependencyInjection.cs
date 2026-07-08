@@ -94,20 +94,16 @@ public static class DependencyInjection
 
         services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
-        services.AddScoped<IOtpService, OtpService>();
-
-        // SMS sender (SCRUM-64): dùng Twilio thật CHỈ khi đủ AccountSid + AuthToken + FromNumber.
-        // Thiếu bất kỳ cái nào (vd FromNumber trống vì Twilio trial chưa mua số) → LogSmsSender
-        // ghi OTP ra console cho dev/demo, KHÔNG gọi Twilio. Đăng ký HttpClient "Twilio" sẵn.
-        services.AddHttpClient("Twilio");
-        var twilioConfigured =
-            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]) &&
-            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AuthToken"]) &&
-            !string.IsNullOrWhiteSpace(config["Sms:Twilio:FromNumber"]);
-        if (twilioConfigured)
-            services.AddScoped<ISmsSender, TwilioSmsSender>();
-        else
-            services.AddScoped<ISmsSender, LogSmsSender>();
+        // Để sử dụng FirebaseAdmin SDK chỉ cho mục đích Verify ID Token, chúng ta có thể truyền
+        // một dummy credential để bypass lỗi "Credential must be set".
+        if (FirebaseAdmin.FirebaseApp.DefaultInstance == null)
+        {
+            FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
+            {
+                ProjectId = config["Firebase:ProjectId"] ?? "workspacehub",
+                Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromAccessToken("dummy-access-token")
+            });
+        }
 
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();

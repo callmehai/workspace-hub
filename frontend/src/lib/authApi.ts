@@ -30,15 +30,9 @@ export const authApi = {
     return res.data;
   },
 
-  /** SCRUM-64: gửi lại OTP cho email chưa verify → trả cooldown (giây). */
-  sendOtp: async (email: string): Promise<number> => {
-    const res = await api.post<{ resendCooldownSeconds: number }>('/auth/send-otp', { email });
-    return res.data.resendCooldownSeconds;
-  },
-
-  /** SCRUM-64: verify OTP → set cookie auth (đăng nhập); trả user. */
-  verifyOtp: async (email: string, code: string): Promise<AuthResultDto> => {
-    const res = await api.post<AuthResultDto>('/auth/verify-otp', { email, code });
+  /** SCRUM-64: gửi Firebase ID Token lên để BE verify. */
+  verifyPhone: async (email: string, firebaseToken: string): Promise<AuthResultDto> => {
+    const res = await api.post<AuthResultDto>('/auth/verify-phone', { email, firebaseToken });
     return res.data;
   },
 };
