@@ -235,29 +235,20 @@ public class SendEmailService : ISendEmailService
         return new SendInThreadResult(messageId, threadId, DateTime.UtcNow);
     }
 
-    public async Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(Guid userId, Guid itemId, string attachmentId, CancellationToken ct = default)
+    public async Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(
+        Guid userId, Guid itemId, string messageId, string attachmentId,
+        string? filename = null, string? mimeType = null, CancellationToken ct = default)
     {
-        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+        var (connection, _) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
 
-        // Lấy attachment metadata từ thread (cần payload detail để có filename/mimeType)
-        var threadId = GetMetadataString(item.MetadataJson, "threadId");
-        if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
-
-        var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
-
-        // Attachment có thể nằm ở BẤT KỲ message nào trong thread (vd file của email reply
-        // vừa gửi), không riêng message gốc của item — quét toàn thread và fetch bằng
-        // messageId của đúng message sở hữu (Gmail attachments.get yêu cầu messageId khớp).
-        foreach (var m in thread.Messages)
-        {
-            var attInfo = m.Attachments.FirstOrDefault(a => a.AttachmentId == attachmentId);
-            if (attInfo != null)
-            {
-                return await _gmail.GetAttachmentAsync(connection, m.MessageId, attachmentId, attInfo.Filename, attInfo.MimeType, ct);
-            }
-        }
-
-        throw new NotFoundException("Attachment", attachmentId);
+        // Gmail cấp attachmentId MỚI mỗi lần đọc message/thread, nhưng id cũ vẫn hợp lệ với
+        // attachments.get. Vì vậy KHÔNG re-fetch thread để so khớp id (id sẽ lệch → 404 giả);
+        // dùng thẳng messageId + attachmentId client gửi lên (id nó đã lấy khi mở thread).
+        // Quyền đọc bị giới hạn ở mailbox của chính user (connection "me") nên an toàn.
+        return await _gmail.GetAttachmentAsync(
+            connection, messageId, attachmentId,
+            string.IsNullOrWhiteSpace(filename) ? "attachment" : filename,
+            string.IsNullOrWhiteSpace(mimeType) ? "application/octet-stream" : mimeType, ct);
     }
 
     public async Task<byte[]> GetAttachmentsZipAsync(Guid userId, Guid itemId, string messageId, CancellationToken ct = default)

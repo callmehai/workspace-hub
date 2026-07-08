@@ -116,10 +116,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
   const [downloadingAllMsgId, setDownloadingAllMsgId] = useState<string | null>(null);
 
-  const downloadAttachment = async (_msgId: string, att: EmailAttachmentDto) => {
+  const downloadAttachment = async (msgId: string, att: EmailAttachmentDto) => {
     try {
       toast.loading(t('common.loading') || 'Downloading...', { id: `dl-${att.attachmentId}` });
-      await sendEmailApi.downloadAttachment(itemId, att.attachmentId, att.filename);
+      await sendEmailApi.downloadAttachment(itemId, msgId, att.attachmentId, att.filename, att.mimeType);
       toast.success(t('item.saved') || 'Downloaded', { id: `dl-${att.attachmentId}` });
     } catch {
       toast.error(t('item.loadError') || 'Failed to download', { id: `dl-${att.attachmentId}` });
@@ -232,6 +232,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                           <AttachmentCard
                             key={att.attachmentId}
                             itemId={itemId}
+                            messageId={msg.messageId}
                             att={att}
                             onDownload={(a) => downloadAttachment(msg.messageId, a)}
                           />

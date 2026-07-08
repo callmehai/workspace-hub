@@ -13,6 +13,7 @@ function formatSize(bytes: number): string {
 
 interface AttachmentCardProps {
   itemId: string;
+  messageId: string;
   att: EmailAttachmentDto;
   onDownload: (att: EmailAttachmentDto) => void;
 }
@@ -21,7 +22,7 @@ interface AttachmentCardProps {
  * Thẻ attachment mức C: ảnh hiển thị thumbnail + click phóng to (lightbox);
  * PDF có nút xem trước (iframe modal); loại khác chỉ tải. Luôn có nút tải xuống.
  */
-export function AttachmentCard({ itemId, att, onDownload }: AttachmentCardProps) {
+export function AttachmentCard({ itemId, messageId, att, onDownload }: AttachmentCardProps) {
   const { t } = useI18n();
   const isImage = att.mimeType.startsWith('image/');
   const isPdf = att.mimeType === 'application/pdf';
@@ -31,8 +32,8 @@ export function AttachmentCard({ itemId, att, onDownload }: AttachmentCardProps)
 
   // Ảnh: nạp thumbnail ngay. PDF: chỉ nạp binary khi mở preview (tiết kiệm băng thông).
   const { data: blob, isLoading } = useQuery({
-    queryKey: ['attachmentBlob', itemId, att.attachmentId],
-    queryFn: () => sendEmailApi.fetchAttachmentBlob(itemId, att.attachmentId),
+    queryKey: ['attachmentBlob', itemId, messageId, att.attachmentId],
+    queryFn: () => sendEmailApi.fetchAttachmentBlob(itemId, messageId, att.attachmentId, att.filename, att.mimeType),
     enabled: isImage || (isPdf && previewOpen),
     staleTime: 5 * 60 * 1000,
   });

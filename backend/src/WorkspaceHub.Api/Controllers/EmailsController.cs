@@ -93,10 +93,16 @@ public class EmailsController : ApiControllerBase
     /// Tải một file đính kèm trực tiếp từ Gmail thông qua Backend.
     /// Trả về file stream để tải về.
     /// </summary>
-    [HttpGet("{itemId}/attachments/{attachmentId}")]
-    public async Task<IActionResult> GetAttachment([FromRoute] Guid itemId, [FromRoute] string attachmentId, CancellationToken ct)
+    [HttpGet("{itemId}/messages/{messageId}/attachments/{attachmentId}")]
+    public async Task<IActionResult> GetAttachment(
+        [FromRoute] Guid itemId,
+        [FromRoute] string messageId,
+        [FromRoute] string attachmentId,
+        [FromQuery] string? filename,
+        [FromQuery] string? mimeType,
+        CancellationToken ct)
     {
-        var attachment = await _service.GetAttachmentAsync(CurrentUserId, itemId, attachmentId, ct);
+        var attachment = await _service.GetAttachmentAsync(CurrentUserId, itemId, messageId, attachmentId, filename, mimeType, ct);
         return File(attachment.Data, attachment.MimeType, attachment.Filename);
     }
 

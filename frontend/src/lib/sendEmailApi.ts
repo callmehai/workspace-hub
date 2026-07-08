@@ -163,9 +163,18 @@ export const sendEmailApi = {
     return response.data;
   },
 
-  /** Lấy binary 1 attachment dạng Blob (để preview inline hoặc download). */
-  fetchAttachmentBlob: async (itemId: string, attachmentId: string): Promise<Blob> => {
-    const response = await api.get(`/emails/${itemId}/attachments/${attachmentId}`, {
+  /**
+   * Lấy binary 1 attachment dạng Blob (để preview inline hoặc download).
+   * Truyền thẳng messageId + attachmentId (id client đã lấy khi mở thread) — backend
+   * gọi Gmail attachments.get trực tiếp, không re-fetch thread (id Gmail đổi mỗi lần đọc).
+   * filename/mimeType để backend set Content-Type/tên file tải về.
+   */
+  fetchAttachmentBlob: async (
+    itemId: string, messageId: string, attachmentId: string,
+    filename?: string, mimeType?: string,
+  ): Promise<Blob> => {
+    const response = await api.get(`/emails/${itemId}/messages/${messageId}/attachments/${attachmentId}`, {
+      params: { filename, mimeType },
       responseType: 'blob',
     });
     return response.data as Blob;
@@ -186,8 +195,10 @@ export const sendEmailApi = {
     window.URL.revokeObjectURL(url);
   },
 
-  downloadAttachment: async (itemId: string, attachmentId: string, filename: string): Promise<void> => {
-    const blob = await sendEmailApi.fetchAttachmentBlob(itemId, attachmentId);
+  downloadAttachment: async (
+    itemId: string, messageId: string, attachmentId: string, filename: string, mimeType?: string,
+  ): Promise<void> => {
+    const blob = await sendEmailApi.fetchAttachmentBlob(itemId, messageId, attachmentId, filename, mimeType);
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
