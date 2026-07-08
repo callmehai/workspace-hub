@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FolderPlus, FolderMinus, Tag, X } from 'lucide-react';
 import { foldersApi } from '../lib/itemsApi';
@@ -21,6 +21,37 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
   const [isAdding, setIsAdding] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const [isTagging, setIsTagging] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  // Hết selection (sau khi hành động xong / bấm X) → reset dropdown, tránh lần sau
+  // thanh hiện lại đã tự bung listbox vì component chỉ return null chứ không unmount.
+  // Điều chỉnh state khi prop đổi ngay trong render (guard prevCount) theo React docs
+  // — không dùng effect + setState (vi phạm rule react-hooks/set-state-in-effect).
+  const [prevCount, setPrevCount] = useState(selectedItemIds.size);
+  if (selectedItemIds.size !== prevCount) {
+    setPrevCount(selectedItemIds.size);
+    if (selectedItemIds.size === 0) {
+      setIsAdding(false);
+      setIsRemoving(false);
+      setIsTagging(false);
+    }
+  }
+
+  // Đóng mọi dropdown (thêm/gỡ thư mục, gắn tag) khi click ra ngoài thanh / nhấn Esc.
+  useEffect(() => {
+    if (!isAdding && !isRemoving && !isTagging) return;
+    const closeAll = () => { setIsAdding(false); setIsRemoving(false); setIsTagging(false); };
+    const onDocClick = (e: MouseEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) closeAll();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeAll(); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isAdding, isRemoving, isTagging]);
 
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
@@ -78,7 +109,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
   if (selectedItemIds.size === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-5 py-3 rounded-2xl shadow-[0_10px_35px_-5px_rgba(0,0,0,0.15)] flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-300">
+    <div ref={barRef} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-5 py-3 rounded-2xl shadow-[0_10px_35px_-5px_rgba(0,0,0,0.15)] flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-300">
       <div className="flex items-center gap-2.5">
         <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-brand-500/15 text-brand-700 dark:text-brand-300 font-bold text-[12.5px] tabular-nums">
           {selectedItemIds.size}

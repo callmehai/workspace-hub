@@ -48,6 +48,11 @@ export const router = createBrowserRouter([
             element: <Inbox />,
           },
           {
+            // Bấm thông báo (linkUrl BE: /inbox?item=...) → mở panel chi tiết item trên Inbox.
+            path: 'inbox',
+            element: <Inbox />,
+          },
+          {
             path: 'kanban',
             element: <KanbanBoard />,
           },

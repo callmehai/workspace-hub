@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scheduledEmailsApi, type CreateScheduledEmailRequest, type ScheduledEmailDto } from '../lib/scheduledEmailsApi';
+import type { ODataResponse } from '../lib/odata';
 import { connectionsApi } from '../lib/connectionsApi';
 import { Send, Clock, ChevronLeft, ChevronRight, AlertCircle, X, Mail, Users, Calendar, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -201,7 +202,7 @@ export const ScheduledEmails = () => {
 
   // Fetch scheduled emails
   const skip = (page - 1) * limit;
-  const { data: schedData, isLoading, isError, refetch } = useQuery({
+  const { data: schedData, isLoading, isError, refetch } = useQuery<ODataResponse<ScheduledEmailDto>>({
     queryKey: ['scheduled-emails', page, limit, statusFilter],
     queryFn: () => scheduledEmailsApi.getScheduledEmails(skip, limit, statusFilter),
     // Auto-cron đổi status phía server → poll để UI đồng bộ. Chỉ poll khi còn item "Chờ gửi"
