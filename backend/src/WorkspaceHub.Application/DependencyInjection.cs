@@ -54,6 +54,7 @@ public static class DependencyInjection
         // Tags (SCRUM-70)
         services.AddScoped<ITagService, TagService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
+        services.AddScoped<ISyncItemNotificationService, SyncItemNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();
 
         // Avatar upload (SCRUM-75)
