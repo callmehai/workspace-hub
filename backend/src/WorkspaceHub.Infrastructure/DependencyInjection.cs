@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<IConnectionRepository, ConnectionRepository>();
         services.AddScoped<IItemRepository, ItemRepository>();
         services.AddScoped<IImportantContactRepository, ImportantContactRepository>();
+        services.AddScoped<IGoogleContactRepository, GoogleContactRepository>();
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -114,6 +115,7 @@ public static class DependencyInjection
         
         // Gateways dùng cho luồng Writeback (Ghi/Cập nhật dữ liệu hai chiều)
         services.AddScoped<IGmailGateway, GmailGateway>();
+        services.AddScoped<IPeopleGateway, PeopleGateway>();
         services.AddScoped<ICalendarGateway, CalendarGateway>();
         services.AddScoped<IDriveGateway, DriveGateway>();
         

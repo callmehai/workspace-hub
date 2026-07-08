@@ -15,6 +15,7 @@ using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.DTOs.Notifications;
+using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.DTOs.ScheduledEmails;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Infrastructure;
@@ -26,6 +27,9 @@ var edmBuilder = new ODataConventionModelBuilder();
 edmBuilder.EnableLowerCamelCase(); // Force camelCase cho tất cả OData response
 edmBuilder.EntitySet<FolderResponse>("Folders");
 edmBuilder.EntitySet<ScheduledEmailDto>("ScheduledEmails");
+var contactSuggestionType = edmBuilder.EntityType<ContactSuggestionDto>();
+contactSuggestionType.HasKey(c => c.Email);
+edmBuilder.EntitySet<ContactSuggestionDto>("EmailContactSuggestions");
 edmBuilder.EntitySet<NotificationDto>("Notifications");
 
 // Controllers + serialize enum dạng string (khớp cách lưu DB) + OData.

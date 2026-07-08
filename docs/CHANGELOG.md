@@ -2,6 +2,14 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-08] Google Contacts autocomplete (SCRUM-69)
+
+- **Sync read-only:** Mỗi lần sync Gmail (cron định kỳ SCRUM-72 ~60s, nút Đồng bộ, hoặc lazy khi mở list items) kéo `connections.list` + `otherContacts.list` (People API) vào `GoogleContacts` — full replace theo `ConnectionId`. Best-effort: lỗi contact không fail mail sync.
+- **Scopes optional:** `contacts.readonly` + `contacts.other.readonly` request kèm Gmail connect; thiếu scope → sync/suggest rỗng, user vẫn nhập tay.
+- **Suggest từ cache DB:** `GET /api/emails/contacts/suggest?connectionId=` + OData in-memory (`$filter/$top/$orderby`). Không gọi Google lúc gõ. Cả `Contact` và `OtherContact`.
+- **FE:** `EmailChipsInput` debounce 300ms + dropdown; wire `SendEmail` + `ScheduledEmails`.
+- **Ticket sau:** write-back + trang `/contacts` — **SCRUM-76** (spec local `docs/CONTACTS_WRITEBACK.md`).
+
 ## [2026-07-07] UI polish + Theme Sáng/Tối + Song ngữ VI/EN + Trang Profile
 
 > Review UI phát hiện **lệch tông màu**: Login/Header dùng `brand`=blue-600 (#2563eb) trong khi Sidebar/Inbox/toolbar dùng indigo-600 (#4f46e5) — logo "W" + nút primary hai màu xanh khác nhau; Header nền `gray-50` lệch app nền `slate-50`; avatar Header (gradient) khác avatar Sidebar. Cùng lúc bổ sung theme + i18n + profile (chuẩn bị avatar/R2).
