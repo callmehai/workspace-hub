@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
+import { useNotificationHub } from '../hooks/useNotificationHub';
 
 export const MainLayout = () => {
+  useNotificationHub();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const location = useLocation();
 

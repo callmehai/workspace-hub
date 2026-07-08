@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 
         services.AddScoped<IGmailItemMapper, GmailItemMapper>();
+        services.AddScoped<IGoogleContactMapper, GoogleContactMapper>();
         services.AddScoped<IGmailSyncService, GmailSyncService>();
         services.AddScoped<IConnectionHealthChecker, ConnectionHealthChecker>();
 
@@ -53,6 +54,7 @@ public static class DependencyInjection
         // Tags (SCRUM-70)
         services.AddScoped<ITagService, TagService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }

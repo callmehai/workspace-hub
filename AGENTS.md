@@ -50,14 +50,16 @@ Status đầy đủ: `docs/SPRINTS.md`.
 - SCRUM-31 cron `process-scheduled` — To Do
 - SCRUM-26→29 hardening/tests — To Do
 - SCRUM-41→43 bắt đầu FE — To Do
+- SCRUM-69 Google Contacts suggest (sync cache + `GET /api/emails/contacts/suggest`) — **Done**
 
 **Sprint 4:** FE đầy đủ + deploy + nghiệm thu (SCRUM-44→53).
 
 ### Mô hình sync — đừng nhầm
 
-- **Đọc = on-demand/lazy.** Không cron pull, không webhook trong MVP.
+- **Đọc = cron định kỳ (SCRUM-72, ~60s)** quét connection Active + sync theo ServiceType; **bổ sung** lazy sync khi mở list items (`ConnectionHealthChecker`, debounce). Không webhook trong MVP.
+- **Contact cache (SCRUM-69):** kéo kèm mỗi lần sync Gmail — không gọi Google lúc gõ suggest.
 - **Ghi = write-back synchronous** khi user thao tác (SCRUM-37).
-- **Cron chỉ cho gửi scheduled email** (`POST /api/internal/process-scheduled`, SCRUM-31).
+- **Cron gửi scheduled email** (`POST /api/internal/process-scheduled`, SCRUM-31).
 
 ### NGOÀI scope — dừng và hỏi
 

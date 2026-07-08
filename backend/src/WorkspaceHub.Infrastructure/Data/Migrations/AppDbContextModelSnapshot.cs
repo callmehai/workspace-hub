@@ -164,6 +164,47 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.ToTable("FolderShares");
                 });
 
+            modelBuilder.Entity("WorkspaceHub.Domain.Entities.GoogleContact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConnectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("ExternalResourceName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("SyncedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectionId", "DisplayName")
+                        .HasDatabaseName("IX_GoogleContacts_ConnectionId_DisplayName");
+
+                    b.HasIndex("ConnectionId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("GoogleContacts");
+                });
+
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.ImportantContact", b =>
                 {
                     b.Property<Guid>("Id")
@@ -638,6 +679,17 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Navigation("SharedWithUser");
                 });
 
+            modelBuilder.Entity("WorkspaceHub.Domain.Entities.GoogleContact", b =>
+                {
+                    b.HasOne("WorkspaceHub.Domain.Entities.Connection", "Connection")
+                        .WithMany("GoogleContacts")
+                        .HasForeignKey("ConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Connection");
+                });
+
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.ImportantContact", b =>
                 {
                     b.HasOne("WorkspaceHub.Domain.Entities.User", "User")
@@ -748,6 +800,8 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Connection", b =>
                 {
+                    b.Navigation("GoogleContacts");
+
                     b.Navigation("Items");
 
                     b.Navigation("ScheduledEmails");

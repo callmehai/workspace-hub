@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<TagAssignment> TagAssignments => Set<TagAssignment>();
     public DbSet<ImportantContact> ImportantContacts => Set<ImportantContact>();
+    public DbSet<GoogleContact> GoogleContacts => Set<GoogleContact>();
     public DbSet<ScheduledEmail> ScheduledEmails => Set<ScheduledEmail>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
@@ -44,6 +45,7 @@ public class AppDbContext : DbContext
         cfg.Properties<SharePermission>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<ScheduledEmailStatus>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<ImportantContactType>().HaveConversion<string>().HaveMaxLength(20);
+        cfg.Properties<GoogleContactSource>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<NotificationType>().HaveConversion<string>().HaveMaxLength(30);
         cfg.Properties<AuthProvider>().HaveConversion<string>().HaveMaxLength(10);
 
@@ -217,6 +219,22 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.User)
                 .WithMany(u => u.ImportantContacts)
                 .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<GoogleContact>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            e.Property(x => x.DisplayName).HasMaxLength(256);
+            e.Property(x => x.ExternalResourceName).HasMaxLength(256);
+            e.HasIndex(x => new { x.ConnectionId, x.Email }).IsUnique();
+            e.HasIndex(x => new { x.ConnectionId, x.DisplayName })
+                .HasDatabaseName("IX_GoogleContacts_ConnectionId_DisplayName");
+
+            e.HasOne(x => x.Connection)
+                .WithMany(c => c.GoogleContacts)
+                .HasForeignKey(x => x.ConnectionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

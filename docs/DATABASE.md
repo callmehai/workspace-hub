@@ -12,6 +12,7 @@ Users 1──n Connections 1──n Items
 Users 1──n Folders 1──n ItemFolders n──1 Items
 Users 1──n Tags 1──n TagAssignments n──1 Items
 Users 1──n ImportantContacts
+Connections 1──n GoogleContacts
 Users 1──n ScheduledEmails ──n──1 Connections
 Users 1──n Notifications
 Integrations 1──n Connections
@@ -82,7 +83,7 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 | Status | enum string | Active / Disconnected / Error |
 | CursorType | enum string null | HistoryId / PageToken / SyncToken / **JqlUpdated** (Jira: cursor theo `fields.updated` lưu ISO-8601 UTC mốc max; JQL lần sau `updated >= cursor`. ✅ dùng ở `JiraSyncService` — SCRUM-55) |
 | CursorValue | string null | null = sync lần đầu |
-| LastSyncedAt | datetime null | cập nhật sau mỗi lần sync on-demand |
+| LastSyncedAt | datetime null | cập nhật sau mỗi lần sync connection (cron định kỳ / manual / lazy khi mở items) |
 | LastError | string null | |
 | CreatedAt | datetime | |
 
@@ -135,6 +136,7 @@ Không đổi cấu trúc.
 - Tags (UserId, Name không unique toàn hệ thống — **nhưng UNIQUE(UserId, Name)** qua unique index DB `IX_Tags_UserId_Name` (migration `AddTagUserNameUniqueIndex`, thay index FK `IX_Tags_UserId` — UserId là cột đầu nên vẫn cover FK); collation cột CI mặc định → chặn cả case khác nhau, khớp check case-insensitive ở service. Color). CRUD: `GET/POST /api/tags`, `PUT/DELETE /api/tags/{id}`. Cascade User→Tags→TagAssignments.
 - TagAssignments composite PK (TagId, ItemId). Gắn/gỡ: `POST /api/tags/{id}/items`, `DELETE /api/tags/{id}/items/{itemId}` (SCRUM-70). Item→TagAssignment NoAction (tránh 2 đường cascade từ User); xoá Tag cascade dọn junction, Item giữ nguyên.
 - ImportantContacts (Type: Email / **JiraAccount** — ✅ SCRUM-60, Identifier=email (Email) / accountId (JiraAccount); UNIQUE(UserId,Type,Identifier)). CRUD: `GET/POST /api/importantcontacts`, `DELETE /{id}`. Enum lưu string nên thêm JiraAccount KHÔNG cần migration.
+- **GoogleContacts** (✅ SCRUM-69) — cache contact Google theo Connection Gmail (gợi ý To/Cc/Bcc). Cột: `ConnectionId` FK→Connections **CASCADE**, `Email` (nvarchar 320, lưu lower-case), `DisplayName`, `Source` enum string (`Contact` / `OtherContact`), `ExternalResourceName`, `SyncedAt` UTC. UNIQUE(ConnectionId, Email). Sync **kèm mỗi lần sync Gmail** (`connections.list` + `otherContacts.list`); full replace mỗi lần. Nguồn kích sync: cron định kỳ (SCRUM-72, ~60s), `POST /api/connections/{id}/sync`, hoặc lazy khi GET items. Khác ImportantContacts — không user-managed.
 - Notifications (Type: share_invite/important_email/sync_error/schedule_sent; **phase Jira (SCRUM-60, optional) thêm type cho Jira** — vd jira_assigned/jira_mention; tương lai thêm friend_request/automation_triggered nếu làm).
 
 ## ScheduledEmails

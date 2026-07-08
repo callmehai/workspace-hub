@@ -57,7 +57,9 @@ Cho phép user tải ảnh đại diện, lưu trên **Cloudflare R2** (S3-compa
 
 ---
 
-## SCRUM-76 (đề xuất, tuỳ chọn) — FE: Theme Sáng/Tối (toggle, persist, no remount)
+## Theme Sáng/Tối (đề xuất — không dùng key Jira; gộp SCRUM-50)
+
+> **Lưu ý:** Số **SCRUM-76** đã chốt cho **Google Contacts write-back** (`docs/CONTACTS_WRITEBACK.md`). Theme không có ticket Jira riêng — track Done qua CHANGELOG [2026-07-07] / gộp SCRUM-50.
 
 - **Type:** Story · **Sprint:** Sprint 4 · **Labels:** frontend, theme
 - **Status gợi ý:** 🔄 In Progress (nền tảng + shell/core xong) — **hoặc** gộp vào SCRUM-50.
