@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
@@ -42,7 +42,7 @@ const COL_PAGE_SIZE = 30;
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
   const pollMs = usePollingInterval(45_000);
@@ -62,6 +62,21 @@ export const KanbanBoard = () => {
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [addingFolderItemId, setAddingFolderItemId] = useState<string | null>(null);
+
+  // Đóng dropdown "Thêm vào thư mục" trên card khi click ra ngoài / nhấn Esc.
+  useEffect(() => {
+    if (!addingFolderItemId) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-folder-menu]')) setAddingFolderItemId(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAddingFolderItemId(null); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [addingFolderItemId]);
 
   const [dragOverCol, setDragOverCol] = useState<ItemStatus | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -352,8 +367,8 @@ export const KanbanBoard = () => {
                                   : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'
                             }`}
                           >
-                            <div className="flex justify-between items-center mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex justify-between items-start gap-2 mb-2">
+                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                 <input
                                   type="checkbox"
                                   checked={selectedItemIds.has(item.id)}
@@ -365,25 +380,19 @@ export const KanbanBoard = () => {
                                     setSelectedItemIds(newSet);
                                   }}
                                   onChange={() => {}}
-                                  className={`w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600 ${selectedItemIds.has(item.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                                  className={`w-3.5 h-3.5 shrink-0 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600 ${selectedItemIds.has(item.id) ? 'inline-block' : 'hidden group-hover:inline-block'}`}
                                 />
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
                                   {typeIcon(item.type, 'w-3.5 h-3.5')}
                                   {t(typeLabelKey(item.type))}
                                 </span>
-                                {unread && (
-                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-blue-600 dark:text-blue-400" aria-label={t('status.unread')}>
-                                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                    {t('status.unread')}
-                                  </span>
-                                )}
                                 {item.folderIds?.map(fId => {
                                   const f = folders.find(fol => fol.id === fId);
                                   if (!f) return null;
                                   return <FolderChip key={f.id} name={f.name} color={f.color || '#94a3b8'} size="sm" />;
                                 })}
 
-                                <div className="relative" onClick={e => e.stopPropagation()}>
+                                <div className="relative" data-folder-menu onClick={e => e.stopPropagation()}>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -421,9 +430,17 @@ export const KanbanBoard = () => {
                                   )}
                                 </div>
                               </div>
-                              <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
-                                <GripVertical className="w-4 h-4" />
-                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {unread && (
+                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-blue-600 dark:text-blue-400" aria-label={t('status.unread')}>
+                                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                    {t('status.unread')}
+                                  </span>
+                                )}
+                                <span className="text-slate-300 cursor-grab active:cursor-grabbing hover:text-slate-400">
+                                  <GripVertical className="w-4 h-4" />
+                                </span>
+                              </div>
                             </div>
                             <h4 className={`text-[13.5px] leading-snug mb-2 line-clamp-2 ${
                               unread ? 'font-bold text-slate-900 dark:text-slate-100' : 'font-medium text-slate-600 dark:text-slate-400'
@@ -440,7 +457,7 @@ export const KanbanBoard = () => {
                             <div className="flex items-center justify-end gap-2 mt-auto pt-1">
                               <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
-                                {timeAgo(item.occurredAt)}
+                                {timeAgo(item.occurredAt, lang)}
                               </span>
                             </div>
                           </div>

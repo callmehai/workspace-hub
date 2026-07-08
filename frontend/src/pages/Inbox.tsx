@@ -131,7 +131,7 @@ export const Inbox = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
   const pollMs = usePollingInterval(45_000);
@@ -451,7 +451,7 @@ export const Inbox = () => {
               </div>
 
               <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                <span className={`text-[11.5px] ${v.time}`}>{timeAgo(item.occurredAt)}</span>
+                <span className={`text-[11.5px] ${v.time}`}>{timeAgo(item.occurredAt, lang)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item, unread)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item, unread)}`} />
                   {getStatusLabel(item, t, unread)}
