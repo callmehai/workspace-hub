@@ -45,9 +45,15 @@ export const Header = () => {
           to="/profile"
           aria-label={t('nav.profile')}
           title={t('nav.profile')}
-          className="h-8 w-8 rounded-full bg-brand-50 dark:bg-slate-800 flex items-center justify-center text-sm font-semibold text-brand-600 dark:text-brand-300 border border-brand-100 dark:border-slate-700 hover:ring-2 hover:ring-brand-200 dark:hover:ring-slate-600 transition-shadow"
+          className="h-8 w-8 rounded-full bg-brand-50 dark:bg-slate-800 flex items-center justify-center text-sm font-semibold text-brand-600 dark:text-brand-300 border border-brand-100 dark:border-slate-700 hover:ring-2 hover:ring-brand-200 dark:hover:ring-slate-600 transition-shadow overflow-hidden"
         >
-          {user?.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt={user.fullName} className="h-full w-full object-cover" />
+          ) : user?.fullName ? (
+            user.fullName.charAt(0).toUpperCase()
+          ) : (
+            'U'
+          )}
         </Link>
       </div>
     </header>

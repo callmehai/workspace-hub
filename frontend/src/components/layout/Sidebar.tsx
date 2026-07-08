@@ -292,8 +292,14 @@ export const Sidebar = () => {
               to="/profile"
               className="flex flex-1 min-w-0 items-center gap-2.5 rounded-lg p-1 -m-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
-              <div className="w-[34px] h-[34px] rounded-full bg-brand-50 text-brand-600 dark:bg-slate-800 dark:text-brand-300 flex items-center justify-center text-[13px] font-semibold shrink-0">
-                {user?.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
+              <div className="w-[34px] h-[34px] rounded-full bg-brand-50 text-brand-600 dark:bg-slate-800 dark:text-brand-300 flex items-center justify-center text-[13px] font-semibold shrink-0 overflow-hidden">
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.fullName} className="h-full w-full object-cover" />
+                ) : user?.fullName ? (
+                  user.fullName.charAt(0).toUpperCase()
+                ) : (
+                  'U'
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="truncate text-[13.5px] font-semibold text-slate-900 dark:text-slate-100">

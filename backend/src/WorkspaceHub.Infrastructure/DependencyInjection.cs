@@ -123,6 +123,9 @@ public static class DependencyInjection
         // (EF projection no-N+1 cho ConnectionCount/ItemCount — xem AdminService.cs).
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IProcessConnectionsSyncService, ProcessConnectionsSyncService>();
+
+        // Object storage (Cloudflare R2) — avatar (SCRUM-75), attachment ở phase sau.
+        services.AddScoped<Application.Abstractions.IFileStorageService, R2FileStorageService>();
         return services;
     }
 }

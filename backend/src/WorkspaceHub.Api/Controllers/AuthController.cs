@@ -105,7 +105,9 @@ public class AuthController : ApiControllerBase
         _cookies.IssueAccessCookie(Response, rotated.AccessToken, rotated.AccessExpiresInSeconds);
         _cookies.IssueRefreshCookie(Response, rotated.RefreshToken, rotated.RefreshExpiresInSeconds);
 
-        var user = new UserDto(rotated.User.Id, rotated.User.Email, rotated.User.FullName, rotated.User.Role);
+        // RotatedTokens.User (UserId) không mang AvatarUrl/AuthProvider — refresh chỉ dùng để cấp lại token,
+        // FE không dùng response này để cập nhật cache user (xem AuthContext.tsx, chỉ /auth/me mới ghi cache).
+        var user = new UserDto(rotated.User.Id, rotated.User.Email, rotated.User.FullName, rotated.User.Role, null, null);
         return Ok(new AuthResultDto(rotated.AccessExpiresInSeconds, user));
     }
     /// <summary>POST /api/auth/google/start — returns Google Sign-In authorization URL.</summary>

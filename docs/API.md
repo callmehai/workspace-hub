@@ -72,6 +72,14 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - `POST /api/auth/google/callback` — {code, state} → verify id_token, tìm/tạo/link user, set cookie auth (access + refresh). (400 CSRF, 401 token invalid / user khoá)
 > KHÔNG tạo Connection. Chỉ tạo/tìm User. Auto-link nếu email trùng.
 
+## Users — Hồ sơ cá nhân ⭐ SCRUM-75 (đổi tên, đổi mật khẩu, avatar Cloudflare R2)
+- `PATCH /api/users/me` — body `{ fullName }` → đổi họ tên. Trả `UserDto`. 400 validation (rỗng/quá 200 ký tự).
+- `POST /api/users/me/change-password` — body `{ currentPassword, newPassword }` → 204. Chỉ áp dụng user có mật khẩu (`AuthProvider` Local/Both) — Google-only → 422 `"Tài khoản đăng nhập qua Google, không có mật khẩu để đổi."`. Sai `currentPassword` → 422.
+- `POST /api/users/me/avatar` — multipart/form-data, field `file` (JPEG/PNG/WebP, tối đa 5MB). Upload lên R2 (key `avatars/{userId}.{ext}`, cùng định dạng thì ghi đè; đổi định dạng thì **xoá object cũ** để không rác), lưu `Users.AvatarUrl`. Trả `UserDto` (đã kèm `avatarUrl`). 422 sai định dạng/quá size.
+- `DELETE /api/users/me/avatar` — xoá object trên R2 + set `Users.AvatarUrl = null`. Trả `UserDto`.
+- `UserDto` nay có thêm `avatarUrl` + `authProvider` (`Local`/`Google`/`Both`) — FE dùng `authProvider` để ẩn form đổi mật khẩu với tài khoản Google-only.
+- Config R2 đọc từ section `R2` (`AccountId`, `BucketName`, `PublicUrl`, `AccessKeyId`, `SecretAccessKey`) — secret qua user-secrets (dev) / env `R2__*` (prod), không commit. Xem `docs/SETUP.md`.
+
 ## Admin — ✅ Implemented (SCRUM-49 2026-06-19)
 `GET /api/admin/users` — danh sách user phân trang + search, Admin only. **OData ⊕** (target — $filter/$orderby/$top/$skip/$count; Admin-only vẫn enforce trước).
 - Query: `?search=` (Email|FullName, case-insensitive, max 200 chars), `?page=1`, `?limit=20` (max 100).
