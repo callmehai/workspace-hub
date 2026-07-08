@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { connectionsApi } from '../../lib/connectionsApi';
+import { jiraApi } from '../../lib/jiraApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
@@ -86,6 +87,35 @@ export const WorkspaceToolbar = ({
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
+
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections
+  });
+
+  const jiraConns = connections.filter(
+    (c: any) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
+  );
+
+  const projectQueries = useQueries({
+    queries: jiraConns.map((c: any) => ({
+      queryKey: ['jira', 'projects', c.id],
+      queryFn: () => jiraApi.getProjects(c.id),
+      staleTime: 5 * 60_000,
+    }))
+  });
+
+  const availableProjects = useMemo(() => {
+    const map = new Map<string, string>();
+    projectQueries.forEach(q => {
+      if (q.data) {
+        q.data.forEach((p: any) => map.set(p.key, p.name));
+      }
+    });
+    return Array.from(map.entries())
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projectQueries]);
 
   const q = folderId ? `?folder=${folderId}` : '';
 
@@ -175,25 +205,26 @@ export const WorkspaceToolbar = ({
             </button>
           </div>
 
-          {/* Tạo nội dung — có ở CẢ 2 view */}
           <button
             onClick={() => setIsNoteOpen(true)}
             className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+            title={t('toolbar.noteTooltip')}
           >
             <Plus className="w-4 h-4" /> {t('toolbar.note')}
           </button>
           <button
             onClick={() => setIsEventOpen(true)}
             className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+            title={t('toolbar.eventTooltip')}
           >
             <Plus className="w-4 h-4" /> {t('toolbar.event')}
           </button>
           <button
             onClick={() => setIsTicketOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-[9px] shadow-sm hover:bg-violet-100 dark:text-violet-300 dark:bg-violet-500/10 dark:border-violet-500/30 dark:hover:bg-violet-500/20 transition-colors"
-            title="Jira"
+            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+            title={t('toolbar.ticketTooltip')}
           >
-            <Briefcase className="w-4 h-4" /> {t('type.ticket')}
+            <Plus className="w-4 h-4" /> {t('type.ticket')}
           </button>
         </div>
       </div>
@@ -255,15 +286,19 @@ export const WorkspaceToolbar = ({
           />
         </div>
         {onProjectKeyChange && (
-          <div className="relative w-40 shrink-0">
-            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
+          <div className="relative w-48 shrink-0">
+            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <select
               value={projectKeyFilter ?? ''}
               onChange={e => onProjectKeyChange(e.target.value)}
-              placeholder="Jira Project Key..."
-              className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-            />
+              className="w-full h-9 pl-9 pr-8 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 appearance-none cursor-pointer"
+            >
+              <option value="">{t('createTicket.selectProject')}...</option>
+              {availableProjects.map(p => (
+                <option key={p.key} value={p.key}>{p.name} ({p.key})</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
         )}
       </div>

@@ -382,4 +382,39 @@ public class AdminServiceTests : IDisposable
         var sumOfGroups = stats.ConnectionsByStatus.Values.Sum();
         Assert.Equal(stats.TotalConnections, sumOfGroups);
     }
+
+    [Fact]
+    public async Task ToggleUserActiveAsync_TogglesActiveState()
+    {
+        // Arrange
+        var user = CreateUser("toggle@test.com", isActive: true);
+        await _db.SaveChangesAsync();
+
+        // Act & Assert 1: Toggle from true to false
+        var result1 = await _sut.ToggleUserActiveAsync(user.Id);
+        Assert.False(result1.IsActive);
+
+        // Verify in DB
+        var userInDb1 = await _db.Users.FindAsync(user.Id);
+        Assert.False(userInDb1!.IsActive);
+
+        // Act & Assert 2: Toggle from false to true
+        var result2 = await _sut.ToggleUserActiveAsync(user.Id);
+        Assert.True(result2.IsActive);
+
+        // Verify in DB
+        var userInDb2 = await _db.Users.FindAsync(user.Id);
+        Assert.True(userInDb2!.IsActive);
+    }
+
+    [Fact]
+    public async Task ToggleUserActiveAsync_ThrowsNotFoundException_WhenUserDoesNotExist()
+    {
+        // Arrange
+        var nonExistentId = Guid.NewGuid();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.NotFoundException>(() =>
+            _sut.ToggleUserActiveAsync(nonExistentId));
+    }
 }

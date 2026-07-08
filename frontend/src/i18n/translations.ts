@@ -332,6 +332,10 @@ export const vi = {
   'admin.userLocked': 'Bị khoá',
   'admin.statsError': 'Không thể tải thống kê',
   'admin.usersLoadError': 'Không thể tải danh sách người dùng',
+  'admin.userStatusUpdated': 'Đã cập nhật trạng thái người dùng thành công!',
+  'admin.userStatusUpdateFail': 'Lỗi cập nhật trạng thái người dùng',
+  'admin.clickToLock': 'Nhấp để khoá tài khoản này',
+  'admin.clickToUnlock': 'Nhấp để mở khoá tài khoản này',
   'admin.pageLabel': 'Trang',
   'admin.usersCount': '({count} người dùng)',
 
@@ -473,7 +477,10 @@ export const vi = {
   'toolbar.list': 'Danh sách',
   'toolbar.board': 'Bảng',
   'toolbar.note': 'Ghi chú',
+  'toolbar.noteTooltip': 'Thêm ghi chú nội bộ vào ứng dụng',
   'toolbar.event': 'Sự kiện',
+  'toolbar.eventTooltip': 'Thêm sự kiện mới vào Google Calendar',
+  'toolbar.ticketTooltip': 'Tạo ticket mới trên dịch vụ Jira',
   'toolbar.important': 'Quan trọng',
   'toolbar.search': 'Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)',
 
@@ -879,6 +886,10 @@ export const en: Record<TranslationKey, string> = {
   'admin.userLocked': 'Locked',
   'admin.statsError': 'Failed to load stats',
   'admin.usersLoadError': 'Failed to load the user list',
+  'admin.userStatusUpdated': 'User status updated successfully!',
+  'admin.userStatusUpdateFail': 'Failed to update user status',
+  'admin.clickToLock': 'Click to lock this account',
+  'admin.clickToUnlock': 'Click to unlock this account',
   'admin.pageLabel': 'Page',
   'admin.usersCount': '({count} users)',
 
@@ -1020,7 +1031,10 @@ export const en: Record<TranslationKey, string> = {
   'toolbar.list': 'List',
   'toolbar.board': 'Board',
   'toolbar.note': 'Note',
+  'toolbar.noteTooltip': 'Add an internal note to the workspace',
   'toolbar.event': 'Event',
+  'toolbar.eventTooltip': 'Add a new event to Google Calendar',
+  'toolbar.ticketTooltip': 'Create a new ticket in Jira',
   'toolbar.important': 'Important',
   'toolbar.search': 'Search title, content… (no diacritics needed)',
 

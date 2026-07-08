@@ -4,13 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
   Trash2, Edit3, ExternalLink, Loader2, Tag,
-  AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
+  AlertCircle, Eye, EyeOff, Star, Check, Send, Plus, ChevronDown
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
 import { TagChip, FolderChip } from './tags/TagChip';
 import { TagManagerModal } from './tags/TagManagerModal';
 import { connectionsApi } from '../lib/connectionsApi';
+import { jiraApi } from '../lib/jiraApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import { getStatusLabel, isItemUnread } from '../lib/itemMeta';
@@ -167,13 +168,20 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       );
       return { prevItem, prevLists };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (updatedItem, variables) => {
       if (!variables._isAutoRead) {
         toast.success(t('item.saved'));
       }
       setIsEditing(false);
       setIsRenamingFile(false);
 
+      // Instant UI update
+      queryClient.setQueryData(['item', itemId], updatedItem);
+      queryClient.setQueriesData<PagedResult<ItemResponse>>({ queryKey: ['items'] }, (old) =>
+        old?.items ? { ...old, items: old.items.map((it) => it.id === itemId ? updatedItem : it) } : old
+      );
+
+      // Still invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
@@ -279,6 +287,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     try { return item?.metadataJson ? JSON.parse(item.metadataJson) : {}; }
     catch { return {}; }
   })();
+
+  const { data: transitions = [], isFetching: loadingTransitions } = useQuery({
+    queryKey: ['jira', 'transitions', item?.connectionId, itemId],
+    queryFn: () => jiraApi.getTransitions(item!.connectionId!, itemId),
+    enabled: !!item?.connectionId && !!itemId && item?.type === 'Ticket' && !isEditing,
+    staleTime: 5 * 60_000,
+  });
 
   const isUnread = item?.type === 'Email' && (
     metadata.isUnread !== undefined 
@@ -416,7 +431,36 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     if (metadata.priority)   rows.push({ label: t('item.priority'), value: metadata.priority });
     if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });
     if (metadata.reporter)   rows.push({ label: 'Reporter',   value: metadata.reporter });
-    if (metadata.status)     rows.push({ label: t('item.status'), value: metadata.status });
+    if (metadata.status) {
+      rows.push({ 
+        label: t('item.status'), 
+        value: (
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-slate-700 dark:text-slate-200">{metadata.status}</span>
+            {transitions.length > 0 && (
+              <div className="relative">
+                <select
+                  className="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 py-1 pl-2 pr-6 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) patchMutation.mutate({ statusTransition: e.target.value });
+                  }}
+                  disabled={patchMutation.isPending}
+                >
+                  <option value="">{t('ticket.selectTransition')}...</option>
+                  {transitions.map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name} {t.toStatus ? `(→ ${t.toStatus})` : ''}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+            {loadingTransitions && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+            {patchMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />}
+          </div>
+        )
+      });
+    }
     if (Array.isArray(metadata.labels) && metadata.labels.length) {
       rows.push({
         label: 'Labels',

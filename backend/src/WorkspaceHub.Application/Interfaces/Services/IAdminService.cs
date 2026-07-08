@@ -18,6 +18,8 @@ public interface IAdminService
         GetAdminUsersRequest request,
         CancellationToken ct = default);
 
+    Task<AdminUserDto> ToggleUserActiveAsync(Guid id, CancellationToken ct = default);
+
     /// <summary>
     /// Thống kê tổng quan hệ thống: tổng user, connection, item, và sync error trong 24h.
     /// </summary>
