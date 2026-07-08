@@ -9,6 +9,7 @@ namespace WorkspaceHub.Tests.Controllers;
 public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     public const string DefaultUserId = "11111111-1111-1111-1111-111111111111";
+    public const string User2Id = "22222222-2222-2222-2222-222222222222";
 
     public TestAuthHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options, 
@@ -33,7 +34,7 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
             }
             if (authHeader.ToString().StartsWith("Bearer TestToken_User2"))
             {
-                var claims = new[] { new Claim(ClaimTypes.NameIdentifier, "22222222-2222-2222-2222-222222222222") };
+                var claims = new[] { new Claim(ClaimTypes.NameIdentifier, User2Id) };
                 var identity = new ClaimsIdentity(claims, "Test");
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, "Test");

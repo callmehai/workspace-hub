@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { useI18n } from '../hooks/useI18n';
 import { handleApiError } from '../lib/errorUtils';
@@ -130,7 +130,8 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
 export const Inbox = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const location = useLocation();
+  const { t, lang } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
   const pollMs = usePollingInterval(45_000);
@@ -148,6 +149,18 @@ export const Inbox = () => {
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
   // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
   const selectedFolderId = searchParams.get('folder');
+  const itemFromUrl = searchParams.get('item');
+  const activeItemId = itemFromUrl ?? selectedId;
+
+  const closeItemDetail = () => {
+    setSelectedId(null);
+    if (itemFromUrl) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('item');
+      const q = next.toString();
+      navigate({ pathname: location.pathname, search: q ? `?${q}` : '' }, { replace: true });
+    }
+  };
 
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -393,7 +406,7 @@ export const Inbox = () => {
 
           {showList && items.map((item: ItemResponse) => {
             const unread = isItemUnread(item, seenSet);
-            const v = rowVisual(selectedId === item.id, selectedItemIds.has(item.id), unread);
+            const v = rowVisual(activeItemId === item.id, selectedItemIds.has(item.id), unread);
             return (
             <div
               key={item.id}
@@ -438,7 +451,7 @@ export const Inbox = () => {
               </div>
 
               <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                <span className={`text-[11.5px] ${v.time}`}>{timeAgo(item.occurredAt)}</span>
+                <span className={`text-[11.5px] ${v.time}`}>{timeAgo(item.occurredAt, lang)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item, unread)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item, unread)}`} />
                   {getStatusLabel(item, t, unread)}
@@ -514,11 +527,11 @@ export const Inbox = () => {
       </div>
 
       {/* ── Item Detail Drawer ── */}
-      {selectedId && (
+      {activeItemId && (
         <ItemDetail
-          itemId={selectedId}
-          onClose={() => setSelectedId(null)}
-          onDeleted={() => setSelectedId(null)}
+          itemId={activeItemId}
+          onClose={closeItemDetail}
+          onDeleted={closeItemDetail}
         />
       )}
 

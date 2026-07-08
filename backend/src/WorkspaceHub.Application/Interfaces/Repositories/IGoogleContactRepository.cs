@@ -1,3 +1,4 @@
+using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Domain.Entities;
 
 namespace WorkspaceHub.Application.Interfaces.Repositories;
@@ -10,5 +11,6 @@ public interface IGoogleContactRepository
     /// </summary>
     Task ReplaceAllForConnectionAsync(Guid connectionId, IReadOnlyList<GoogleContact> contacts, CancellationToken ct = default);
 
-    Task<IReadOnlyList<GoogleContact>> GetByConnectionAsync(Guid connectionId, CancellationToken ct = default);
+    /// <summary>OData list — dedupe theo email, projection sang ContactSuggestionDto (in-memory).</summary>
+    IQueryable<ContactSuggestionDto> GetByConnectionId(Guid connectionId);
 }

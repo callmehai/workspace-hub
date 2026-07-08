@@ -10,8 +10,8 @@ public interface ISendEmailService
     /// <summary>Lấy chữ ký Gmail của connection (null nếu chưa đặt / thiếu scope). Validate connection thuộc user + Gmail.</summary>
     Task<string?> GetSignatureAsync(Guid userId, Guid connectionId, CancellationToken ct = default);
 
-    /// <summary>Danh sách contact cache theo connection (Contact + OtherContact) — OData filter/sort/paging ở controller.</summary>
-    Task<IReadOnlyList<ContactSuggestionDto>> GetContactSuggestionsAsync(
+    /// <summary>OData list — validate connection Gmail rồi trả IQueryable in-memory.</summary>
+    Task<IQueryable<ContactSuggestionDto>> GetContactSuggestionsAsync(
         Guid userId, Guid connectionId, CancellationToken ct = default);
 
     Task<EmailThreadResponse> GetThreadAsync(

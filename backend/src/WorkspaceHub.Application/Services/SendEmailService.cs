@@ -5,7 +5,6 @@ using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
-using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Application.Services;
@@ -67,8 +66,14 @@ public class SendEmailService : ISendEmailService
         return await _gmail.GetSignatureAsync(connection, ct);
     }
 
-    public async Task<IReadOnlyList<ContactSuggestionDto>> GetContactSuggestionsAsync(
+    public async Task<IQueryable<ContactSuggestionDto>> GetContactSuggestionsAsync(
         Guid userId, Guid connectionId, CancellationToken ct = default)
+    {
+        await ValidateGmailConnectionAsync(userId, connectionId, ct);
+        return _googleContacts.GetByConnectionId(connectionId);
+    }
+
+    private async Task ValidateGmailConnectionAsync(Guid userId, Guid connectionId, CancellationToken ct)
     {
         var connection = await _connections.GetByIdAsync(connectionId, ct)
             ?? throw new NotFoundException("Connection", connectionId);
@@ -81,14 +86,6 @@ public class SendEmailService : ISendEmailService
 
         if (connection.Status != ConnectionStatus.Active)
             throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
-
-        var rows = await _googleContacts.GetByConnectionAsync(connectionId, ct);
-
-        return rows
-            .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .Select(_googleContactMapper.ToSuggestion)
-            .ToList();
     }
 
     public async Task<EmailThreadResponse> GetThreadAsync(Guid userId, Guid itemId, CancellationToken ct = default)

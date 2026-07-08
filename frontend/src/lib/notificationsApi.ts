@@ -1,13 +1,13 @@
 import api from './api';
 import type { NotificationDto } from '../types/notifications';
-import type { PaginatedResponse } from './scheduledEmailsApi';
+import type { ODataResponse } from './odata';
 
 export const notificationsApi = {
   getNotifications: async (
     skip = 0,
     top = 20,
     unreadOnly = false,
-  ): Promise<PaginatedResponse<NotificationDto>> => {
+  ): Promise<ODataResponse<NotificationDto>> => {
     let url = `/Notifications?$top=${top}&$skip=${skip}&$count=true&$orderby=CreatedAt desc`;
     if (unreadOnly) {
       url += '&$filter=IsRead eq false';
@@ -15,7 +15,7 @@ export const notificationsApi = {
     const response = await api.get(url);
     const data = response.data;
     if (data && typeof data === 'object' && Array.isArray(data.value)) {
-      return data as PaginatedResponse<NotificationDto>;
+      return data as ODataResponse<NotificationDto>;
     }
     if (Array.isArray(data)) {
       return { value: data, '@odata.count': data.length };
@@ -25,7 +25,14 @@ export const notificationsApi = {
 
   getUnreadCount: async (): Promise<number> => {
     const response = await api.get('/Notifications?$filter=IsRead eq false&$count=true&$top=0');
-    return response.data['@odata.count'] ?? 0;
+    const data = response.data;
+    if (typeof data?.['@odata.count'] === 'number') {
+      return data['@odata.count'];
+    }
+    if (Array.isArray(data?.value)) {
+      return data.value.length;
+    }
+    return 0;
   },
 
   markAsRead: async (id: string): Promise<void> => {

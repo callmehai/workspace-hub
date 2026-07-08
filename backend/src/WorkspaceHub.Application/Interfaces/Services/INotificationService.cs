@@ -5,7 +5,8 @@ namespace WorkspaceHub.Application.Interfaces.Services;
 
 public interface INotificationService
 {
-    Task<IReadOnlyList<NotificationDto>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
+    /// <summary>OData list — IQueryable EF, không materialize.</summary>
+    IQueryable<NotificationDto> GetByUserId(Guid userId);
 
     Task MarkAsReadAsync(Guid userId, Guid notificationId, CancellationToken ct = default);
 

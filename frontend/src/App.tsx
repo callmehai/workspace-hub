@@ -27,10 +27,10 @@ export default function App() {
           </AuthProvider>
           <Toaster
             position="top-right"
+            containerClassName="!top-20"
             toastOptions={{
-              // Toast portal dưới <body> (con của <html class="dark">) → biến `dark:` áp dụng bình thường.
               className:
-                '!bg-white dark:!bg-slate-800 !text-slate-800 dark:!text-slate-100 !border !border-slate-200 dark:!border-slate-700 !shadow-lg',
+                '!bg-white dark:!bg-slate-800 !text-slate-800 dark:!text-slate-100 !border !border-slate-200 dark:!border-slate-700 !shadow-lg !rounded-lg',
             }}
           />
         </I18nProvider>
