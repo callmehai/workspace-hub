@@ -14,7 +14,7 @@ public interface IItemRepository : IGenericRepository<Item>
     /// Trả về tuple: (danh sách items trong page, tổng số items khớp filter).
     /// Pagination thực hiện ở DB level (Skip/Take).
     /// </summary>
-    Task<(IReadOnlyList<Item> Items, int TotalCount)> GetPagedAsync(
+    Task<(IReadOnlyList<Item> Items, int TotalCount, IReadOnlyDictionary<string, int> ThreadCounts)> GetPagedAsync(
         Guid userId,
         Guid? folderId = null,
         IReadOnlyList<ItemStatus>? statuses = null,

@@ -70,7 +70,7 @@ public class ItemServiceTests
         _repoMock
             .Setup(r => r.GetPagedAsync(
                 _userId, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((items.AsReadOnly(), 2));
+            .ReturnsAsync((items.AsReadOnly(), 2, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest();
 
@@ -95,7 +95,7 @@ public class ItemServiceTests
                 _userId, null, null, null, null, null, null,
                 1, // clamp thành 1
                 20, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Item>().AsReadOnly(), 0));
+            .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest(Page: -5);
 
@@ -117,7 +117,7 @@ public class ItemServiceTests
             .Setup(r => r.GetPagedAsync(
                 _userId, null, null, null, null, null, null,
                 1, 100, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Item>().AsReadOnly(), 0));
+            .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest(Limit: 999);
 
@@ -139,7 +139,7 @@ public class ItemServiceTests
             .Setup(r => r.GetPagedAsync(
                 _userId, null, null, null, null, null, null,
                 1, 1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Item>().AsReadOnly(), 0));
+            .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest(Limit: 0);
 
@@ -159,7 +159,7 @@ public class ItemServiceTests
                 _userId, null, null, null, null,
                 "meeting", null, // trimmed
                 1, 20, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Item>().AsReadOnly(), 0));
+            .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest(Search: "  meeting  ");
 
@@ -188,7 +188,7 @@ public class ItemServiceTests
                 It.Is<IReadOnlyList<ItemStatus>>(s => s.SequenceEqual(new[] { ItemStatus.Doing })),
                 It.Is<IReadOnlyList<ItemType>>(ty => ty.SequenceEqual(new[] { ItemType.Email })),
                 true, "report", null, 2, 10, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Item>().AsReadOnly(), 0));
+            .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest(
             FolderId: folderId,
@@ -226,7 +226,7 @@ public class ItemServiceTests
         _repoMock
             .Setup(r => r.GetPagedAsync(
                 _userId, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Item> { item }.AsReadOnly(), 1));
+            .ReturnsAsync((new List<Item> { item }.AsReadOnly(), 1, new Dictionary<string, int>()));
 
         // Act
         var result = await _sut.GetItemsAsync(_userId, new GetItemsRequest());
@@ -250,7 +250,7 @@ public class ItemServiceTests
         _repoMock
             .Setup(r => r.GetPagedAsync(
                 _userId, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Item>().AsReadOnly(), 0));
+            .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         // Act
         var result = await _sut.GetItemsAsync(_userId, new GetItemsRequest());

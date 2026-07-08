@@ -99,7 +99,9 @@ public record ItemResponse(
     string? MetadataJson,
     List<Guid> FolderIds,
     List<ItemTag> Tags,
-    Guid? ConnectionId = null);
+    Guid? ConnectionId = null,
+    string? ThreadId = null,
+    int ThreadCount = 1);
 
 /// <summary>Tag đang gắn vào item (rút gọn để nhúng trong ItemResponse — SCRUM-71).</summary>
 public record ItemTag(

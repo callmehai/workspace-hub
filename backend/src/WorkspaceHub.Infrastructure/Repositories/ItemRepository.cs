@@ -16,7 +16,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     public ItemRepository(AppDbContext db) : base(db) { }
 
     /// <inheritdoc/>
-    public async Task<(IReadOnlyList<Item> Items, int TotalCount)> GetPagedAsync(
+    public async Task<(IReadOnlyList<Item> Items, int TotalCount, IReadOnlyDictionary<string, int> ThreadCounts)> GetPagedAsync(
         Guid userId,
         Guid? folderId = null,
         IReadOnlyList<ItemStatus>? statuses = null,
@@ -83,17 +83,39 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 EF.Functions.Like(EF.Functions.Collate(i.Snippet, "Latin1_General_100_CI_AI"), pattern));
         }
 
-        // ── Count total (trước khi paging) ──
-        var totalCount = await query.CountAsync(ct);
+        // ── Gộp thread (chỉ Email có ThreadId) ──
+        // Mỗi thread chỉ giữ message MỚI NHẤT (OccurredAt lớn nhất; tie-break ExternalId)
+        // trong tập đã lọc. Item không có ThreadId (non-Email / chưa có) giữ nguyên từng dòng.
+        var filtered = query;
+        var deduped = filtered.Where(i =>
+            i.ThreadId == null ||
+            !filtered.Any(o =>
+                o.ThreadId == i.ThreadId &&
+                (o.OccurredAt > i.OccurredAt ||
+                 (o.OccurredAt == i.OccurredAt && string.Compare(o.ExternalId, i.ExternalId) > 0))));
+
+        // ── Count total (sau khi gộp thread, trước khi paging) ──
+        var totalCount = await deduped.CountAsync(ct);
 
         // ── Sort + Paging (DB level) ──
-        var items = await query
+        var items = await deduped
             .OrderByDescending(i => i.OccurredAt)
             .Skip((page - 1) * limit)
             .Take(limit)
             .ToListAsync(ct);
 
-        return (items.AsReadOnly(), totalCount);
+        // ── Số message thật của mỗi thread xuất hiện trong trang (đếm toàn bộ của user,
+        //    không phụ thuộc filter — giống Gmail hiển thị tổng số thư trong thread). ──
+        var pageThreadIds = items.Where(i => i.ThreadId != null).Select(i => i.ThreadId!).Distinct().ToList();
+        var threadCounts = pageThreadIds.Count == 0
+            ? new Dictionary<string, int>()
+            : await Set.AsNoTracking()
+                .Where(i => i.UserId == userId && !i.IsArchived && i.ThreadId != null && pageThreadIds.Contains(i.ThreadId))
+                .GroupBy(i => i.ThreadId!)
+                .Select(g => new { ThreadId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.ThreadId, x => x.Count, ct);
+
+        return (items.AsReadOnly(), totalCount, threadCounts);
     }
 
     public async Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default)

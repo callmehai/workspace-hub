@@ -62,7 +62,7 @@ public class ItemService : IItemService
             }
         }
 
-        var (items, totalCount) = await _itemRepo.GetPagedAsync(
+        var (items, totalCount, threadCounts) = await _itemRepo.GetPagedAsync(
             userId,
             request.FolderId,
             request.Statuses,
@@ -74,8 +74,11 @@ public class ItemService : IItemService
             limit,
             ct);
 
-        // Map entities → DTOs
-        var dtos = items.Select(MapToResponse).ToList().AsReadOnly();
+        // Map entities → DTOs (kèm số message trong thread cho item Email đã gộp)
+        var dtos = items.Select(i => MapToResponse(
+            i,
+            i.ThreadId != null && threadCounts.TryGetValue(i.ThreadId, out var c) ? c : 1))
+            .ToList().AsReadOnly();
 
         return new PagedResult<ItemResponse>(dtos, totalCount, page, limit);
     }
@@ -171,7 +174,7 @@ public class ItemService : IItemService
     // ───────────────────────── Private helpers ─────────────────────────
 
     /// <summary>Map Item entity → ItemResponse DTO.</summary>
-    private static ItemResponse MapToResponse(Item item) => new(
+    private static ItemResponse MapToResponse(Item item, int threadCount = 1) => new(
         Id: item.Id,
         Type: item.Type,
         Title: item.Title,
@@ -187,5 +190,7 @@ public class ItemService : IItemService
             .Where(ta => ta.Tag != null)
             .Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color))
             .ToList(),
-        ConnectionId: item.ConnectionId);
+        ConnectionId: item.ConnectionId,
+        ThreadId: item.ThreadId,
+        ThreadCount: threadCount);
 }

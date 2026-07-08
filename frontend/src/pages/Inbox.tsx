@@ -432,6 +432,14 @@ export const Inbox = () => {
                   <div className={`text-[13.5px] truncate leading-snug ${v.title}`}>
                     {item.title}
                   </div>
+                  {(item.threadCount ?? 1) > 1 && (
+                    <span
+                      className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-semibold tabular-nums"
+                      title={t('inbox.threadCount', { n: item.threadCount ?? 1 })}
+                    >
+                      {item.threadCount}
+                    </span>
+                  )}
                 </div>
                 <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${v.snippet}`}>
                   {item.snippet}

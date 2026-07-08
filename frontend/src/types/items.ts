@@ -29,6 +29,9 @@ export interface ItemResponse {
   folderIds: string[];
   tags: ItemTag[];
   connectionId?: string | null;
+  threadId?: string | null;
+  /** Số message trong thread (Email gộp thread). 1 = thư đơn. */
+  threadCount?: number;
 }
 
 export interface UpdateItemStatusRequest {
