@@ -72,7 +72,7 @@ public class ProcessScheduledEmailsServiceTests
         result.Failed.Should().Be(0);
         _gmail.Verify(g => g.SendMessageAsync(It.IsAny<Connection>(), It.IsAny<IReadOnlyList<string>>(),
             It.IsAny<IReadOnlyList<string>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<string>(), It.IsAny<IReadOnlyList<GmailAttachmentData>?>(), It.IsAny<CancellationToken>()), Times.Never);
         _scheduledEmails.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -86,7 +86,7 @@ public class ProcessScheduledEmailsServiceTests
             .ReturnsAsync(MakeGmailConnection(connId));
         _gmail.Setup(g => g.SendMessageAsync(It.IsAny<Connection>(), It.IsAny<IReadOnlyList<string>>(),
                 It.IsAny<IReadOnlyList<string>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<IReadOnlyList<GmailAttachmentData>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("gmail-msg-id");
 
         var result = await _service.ProcessDueEmailsAsync();
@@ -110,7 +110,7 @@ public class ProcessScheduledEmailsServiceTests
             .ReturnsAsync(MakeGmailConnection(connId));
         _gmail.Setup(g => g.SendMessageAsync(It.IsAny<Connection>(), It.IsAny<IReadOnlyList<string>>(),
                 It.IsAny<IReadOnlyList<string>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<IReadOnlyList<GmailAttachmentData>?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("gmail down"));
 
         var result = await _service.ProcessDueEmailsAsync();
@@ -138,7 +138,7 @@ public class ProcessScheduledEmailsServiceTests
         email.Status.Should().Be(ScheduledEmailStatus.Failed);
         _gmail.Verify(g => g.SendMessageAsync(It.IsAny<Connection>(), It.IsAny<IReadOnlyList<string>>(),
             It.IsAny<IReadOnlyList<string>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<string>(), It.IsAny<IReadOnlyList<GmailAttachmentData>?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class ProcessScheduledEmailsServiceTests
         email.LastError.Should().Contain("not a Gmail");
         _gmail.Verify(g => g.SendMessageAsync(It.IsAny<Connection>(), It.IsAny<IReadOnlyList<string>>(),
             It.IsAny<IReadOnlyList<string>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<string>(), It.IsAny<IReadOnlyList<GmailAttachmentData>?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

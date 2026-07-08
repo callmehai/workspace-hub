@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Download, ChevronDown, ChevronRight, Reply, ReplyAll, Forward, Loader2, Send, X } from 'lucide-react';
-import { sendEmailApi, type EmailAttachmentDto } from '../../lib/sendEmailApi';
+import { sendEmailApi, fileToAttachmentUpload, MAX_ATTACHMENT_TOTAL_BYTES, type EmailAttachmentDto } from '../../lib/sendEmailApi';
 import { EmailChipsInput } from '../EmailChipsInput';
 import { RichTextEditor } from '../RichTextEditor';
+import { AttachmentPicker } from '../AttachmentPicker';
 import { useI18n } from '../../hooks/useI18n';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
@@ -18,7 +19,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
   const queryClient = useQueryClient();
 
-  const [expandedMsgs, setExpandedMsgs] = useState<Record<string, boolean>>({});
+  // undefined = chưa bấm → mặc định (thư mới nhất mở, còn lại thu gọn); true/false = user đã toggle.
+  const [expandedMsgs, setExpandedMsgs] = useState<Record<string, boolean | undefined>>({});
   const [replyMode, setReplyMode] = useState<'reply' | 'replyAll' | 'forward' | null>(null);
 
   const [to, setTo] = useState<string[]>([]);
@@ -26,22 +28,15 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   const [bcc, setBcc] = useState<string[]>([]);
   const [bodyHtml, setBodyHtml] = useState<string>('');
   const [includeAttachments, setIncludeAttachments] = useState(true);
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
 
   const { data: thread, isLoading, isError } = useQuery({
     queryKey: ['emailThread', itemId],
     queryFn: () => sendEmailApi.getThread(itemId),
   });
 
-  // Auto expand latest message
-  useEffect(() => {
-    if (thread?.messages && thread.messages.length > 0) {
-      const latest = thread.messages[thread.messages.length - 1];
-      setExpandedMsgs(prev => ({ ...prev, [latest.messageId]: true }));
-    }
-  }, [thread]);
-
-  const toggleMsg = (msgId: string) => {
-    setExpandedMsgs(prev => ({ ...prev, [msgId]: !prev[msgId] }));
+  const toggleMsg = (msgId: string, currentlyExpanded: boolean) => {
+    setExpandedMsgs(prev => ({ ...prev, [msgId]: !currentlyExpanded }));
   };
 
   const handleAction = (mode: 'reply' | 'replyAll' | 'forward') => {
@@ -51,7 +46,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     setCc([]);
     setBcc([]);
     setIncludeAttachments(true);
-    
+    setAttachFiles([]);
+
     // Cuộn xuống box
     setTimeout(() => {
       document.getElementById('reply-box')?.scrollIntoView({ behavior: 'smooth' });
@@ -60,6 +56,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
   const replyMutation = useMutation({
     mutationFn: async (mode: 'reply' | 'replyAll' | 'forward') => {
+      const attachments = attachFiles.length > 0
+        ? await Promise.all(attachFiles.map(fileToAttachmentUpload))
+        : undefined;
+
       if (mode === 'forward') {
         return sendEmailApi.forward({
           connectionId,
@@ -68,7 +68,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
           cc,
           bcc,
           bodyHtml,
-          includeAttachments
+          includeAttachments,
+          attachments
         });
       } else {
         return sendEmailApi.reply({
@@ -77,7 +78,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
           cc,
           bcc,
           bodyHtml,
-          replyAll: mode === 'replyAll'
+          replyAll: mode === 'replyAll',
+          attachments
         });
       }
     },
@@ -88,6 +90,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       setTo([]);
       setCc([]);
       setBcc([]);
+      setAttachFiles([]);
       queryClient.invalidateQueries({ queryKey: ['emailThread', itemId] });
     },
     onError: (err) => {
@@ -102,6 +105,11 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       toast.error(t('item.eventNeedFields') || 'To field is required for forward');
       return;
     }
+    const totalSize = attachFiles.reduce((s, f) => s + f.size, 0);
+    if (totalSize > MAX_ATTACHMENT_TOTAL_BYTES) {
+      toast.error(t('attach.tooLarge'));
+      return;
+    }
     replyMutation.mutate(replyMode);
   };
 
@@ -110,7 +118,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       toast.loading(t('common.loading') || 'Downloading...', { id: `dl-${att.attachmentId}` });
       await sendEmailApi.downloadAttachment(itemId, att.attachmentId, att.filename);
       toast.success(t('item.saved') || 'Downloaded', { id: `dl-${att.attachmentId}` });
-    } catch (err) {
+    } catch {
       toast.error(t('item.loadError') || 'Failed to download', { id: `dl-${att.attachmentId}` });
     }
   };
@@ -139,15 +147,16 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       
       <div className="space-y-3">
         {thread.messages.map((msg, index) => {
-          const isExpanded = !!expandedMsgs[msg.messageId];
           const isLatest = index === thread.messages.length - 1;
+          // Mặc định: thư mới nhất mở, thư cũ thu gọn — cho tới khi user tự toggle.
+          const isExpanded = expandedMsgs[msg.messageId] ?? isLatest;
           const fromName = msg.from ? msg.from.split('<')[0].trim() : 'Unknown';
 
           return (
             <div key={msg.messageId} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm transition-all">
               {/* Header của từng message */}
               <button
-                onClick={() => toggleMsg(msg.messageId)}
+                onClick={() => toggleMsg(msg.messageId, isExpanded)}
                 className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/80 transition-colors"
               >
                 <div className="flex items-center gap-3 overflow-hidden">
@@ -281,7 +290,9 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                 className="min-h-[200px]"
               />
             </div>
-            
+
+            <AttachmentPicker files={attachFiles} onChange={setAttachFiles} />
+
             <div className="flex justify-end pt-2">
               <button
                 onClick={sendAction}

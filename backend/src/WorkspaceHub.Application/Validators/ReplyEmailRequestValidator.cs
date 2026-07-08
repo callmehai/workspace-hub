@@ -23,5 +23,10 @@ public class ReplyEmailRequestValidator : AbstractValidator<ReplyEmailRequest>
         RuleForEach(x => x.Bcc)
             .NotEmpty().WithMessage("Địa chỉ email BCC không được để trống.")
             .EmailAddress().WithMessage("'{PropertyValue}' không phải địa chỉ email hợp lệ trong trường 'Bcc'.");
+
+        RuleForEach(x => x.Attachments).SetValidator(new AttachmentUploadValidator());
+        RuleFor(x => x.Attachments)
+            .Must(a => AttachmentRules.EstimateTotalBytes(a) <= AttachmentRules.MaxTotalBytes)
+            .WithMessage("Tổng dung lượng đính kèm vượt quá 25MB (giới hạn Gmail).");
     }
 }

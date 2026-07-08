@@ -30,8 +30,12 @@ public class EmailsController : ApiControllerBase
         _forwardValidator = forwardValidator;
     }
 
+    // ~40MB: đủ chứa attachment tối đa 25MB (đã decode) khi mã hoá base64 (~33MB) + overhead JSON.
+    private const int AttachmentRequestSizeLimit = 40 * 1024 * 1024;
+
     /// <summary>Gửi email trực tiếp (gửi ngay) qua Gmail. 200 + { messageId, sentAt }.</summary>
     [HttpPost("send")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
     public async Task<IActionResult> Send([FromBody] SendEmailRequest request, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAsync(request, ct);
@@ -64,6 +68,7 @@ public class EmailsController : ApiControllerBase
     /// Trả về messageId mới của Gmail.
     /// </summary>
     [HttpPost("reply")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
     public async Task<IActionResult> Reply([FromBody] ReplyEmailRequest request, CancellationToken ct)
     {
         await _replyValidator.ValidateAndThrowAsync(request, ct);
@@ -76,6 +81,7 @@ public class EmailsController : ApiControllerBase
     /// Trả về messageId mới của Gmail.
     /// </summary>
     [HttpPost("forward")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
     public async Task<IActionResult> Forward([FromBody] ForwardEmailRequest request, CancellationToken ct)
     {
         await _forwardValidator.ValidateAndThrowAsync(request, ct);

@@ -51,8 +51,11 @@ public class SendEmailService : ISendEmailService
         if (connection.Status != ConnectionStatus.Active)
             throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
 
+        var attachments = DecodeAttachments(request.Attachments);
+
         var messageId = await _gmail.SendMessageAsync(
-            connection, request.To, request.Cc, request.Bcc, request.Subject, request.BodyHtml, ct);
+            connection, request.To, request.Cc, request.Bcc, request.Subject, request.BodyHtml,
+            attachments.Count > 0 ? attachments : null, ct);
 
         return new SendEmailResult(messageId, DateTime.UtcNow);
     }
@@ -174,7 +177,10 @@ public class SendEmailService : ISendEmailService
             toList.Add(fromOriginal);
         }
 
-        var messageId = await _gmail.SendInThreadAsync(connection, threadId, inReplyTo, toList, ccList, bccList, subject, request.BodyHtml, null, ct);
+        var attachments = DecodeAttachments(request.Attachments);
+
+        var messageId = await _gmail.SendInThreadAsync(connection, threadId, inReplyTo, toList, ccList, bccList, subject, request.BodyHtml,
+            attachments.Count > 0 ? attachments : null, ct);
         
         return new SendInThreadResult(messageId, threadId, DateTime.UtcNow);
     }
@@ -220,7 +226,11 @@ public class SendEmailService : ISendEmailService
             }
         }
 
-        var messageId = await _gmail.SendInThreadAsync(connection, threadId, null, request.To, request.Cc, request.Bcc, subject, fwdBody, attachmentsData, ct);
+        // Thêm file user tự đính kèm (ngoài file gốc)
+        attachmentsData.AddRange(DecodeAttachments(request.Attachments));
+
+        var messageId = await _gmail.SendInThreadAsync(connection, threadId, null, request.To, request.Cc, request.Bcc, subject, fwdBody,
+            attachmentsData.Count > 0 ? attachmentsData : null, ct);
 
         return new SendInThreadResult(messageId, threadId, DateTime.UtcNow);
     }
@@ -244,6 +254,31 @@ public class SendEmailService : ISendEmailService
     }
 
     // ───────────────────────── Private Helpers ─────────────────────────
+
+    /// <summary>Decode danh sách file base64 (client upload) → GmailAttachmentData binary để gắn vào MIME.</summary>
+    private static IReadOnlyList<GmailAttachmentData> DecodeAttachments(IEnumerable<AttachmentUpload>? uploads)
+    {
+        var list = new List<GmailAttachmentData>();
+        if (uploads == null) return list;
+
+        foreach (var u in uploads)
+        {
+            byte[] data;
+            try
+            {
+                data = Convert.FromBase64String(u.ContentBase64);
+            }
+            catch (FormatException)
+            {
+                throw new BusinessRuleException($"Attachment '{u.Filename}' has invalid base64 content.");
+            }
+
+            var mime = string.IsNullOrWhiteSpace(u.MimeType) ? "application/octet-stream" : u.MimeType;
+            list.Add(new GmailAttachmentData(data, u.Filename, mime, data.Length));
+        }
+
+        return list;
+    }
 
     private async Task<(Connection connection, Domain.Entities.Item item)> GetAndValidateConnectionAndItemAsync(Guid userId, Guid? connectionId, Guid itemId, CancellationToken ct)
     {

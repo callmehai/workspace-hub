@@ -233,13 +233,14 @@ public class GmailGateway : IGmailGateway
         IReadOnlyList<string> bcc,
         string subject,
         string bodyHtml,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
         CancellationToken ct = default)
     {
         try
         {
             using var gmail = await BuildGmailServiceAsync(connection, ct);
 
-            var raw = BuildMimeMessage(connection.ProviderAccountId, to, cc, bcc, subject, bodyHtml);
+            var raw = BuildMimeMessage(connection.ProviderAccountId, to, cc, bcc, subject, bodyHtml, null, attachments);
             var message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw };
 
             var sent = await gmail.Users.Messages.Send(message, "me").ExecuteAsync(ct);

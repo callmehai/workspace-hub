@@ -19,4 +19,7 @@ public class ReplyEmailRequest
 
     /// <summary>BCC bổ sung.</summary>
     public List<string> Bcc { get; set; } = new();
+
+    /// <summary>File người dùng tự đính kèm vào reply (tùy chọn).</summary>
+    public List<AttachmentUpload> Attachments { get; set; } = new();
 }

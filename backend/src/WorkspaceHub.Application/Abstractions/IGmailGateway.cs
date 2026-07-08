@@ -25,6 +25,7 @@ public interface IGmailGateway
         IReadOnlyList<string> bcc,
         string subject,
         string bodyHtml,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
         CancellationToken ct = default);
 
     /// <summary>

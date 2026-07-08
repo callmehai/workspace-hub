@@ -1,5 +1,33 @@
 import api from './api';
 
+/** File người dùng tự đính kèm — nội dung base64 (không kèm prefix data URI). */
+export interface AttachmentUpload {
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+}
+
+/** Tổng dung lượng đính kèm tối đa (khớp giới hạn BE / Gmail ~25MB). */
+export const MAX_ATTACHMENT_TOTAL_BYTES = 25 * 1024 * 1024;
+
+/** Đọc 1 File thành AttachmentUpload (base64), tách bỏ prefix "data:...;base64,". */
+export function fileToAttachmentUpload(file: File): Promise<AttachmentUpload> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
+      resolve({
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        contentBase64: base64,
+      });
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export interface SendEmailRequest {
   connectionId: string;
   to: string[];
@@ -7,6 +35,7 @@ export interface SendEmailRequest {
   bcc: string[];
   subject: string;
   bodyHtml: string;
+  attachments?: AttachmentUpload[];
 }
 
 export interface SendEmailResult {
@@ -50,6 +79,7 @@ export interface ReplyEmailRequest {
   bcc?: string[];
   bodyHtml: string;
   replyAll: boolean;
+  attachments?: AttachmentUpload[];
 }
 
 export interface ForwardEmailRequest {
@@ -60,6 +90,7 @@ export interface ForwardEmailRequest {
   bcc?: string[];
   bodyHtml: string;
   includeAttachments: boolean;
+  attachments?: AttachmentUpload[];
 }
 
 export interface SendInThreadResult {
