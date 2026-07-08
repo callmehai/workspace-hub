@@ -5,8 +5,8 @@ import {
   Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { connectionsApi } from '../../lib/connectionsApi';
-import { jiraApi } from '../../lib/jiraApi';
+import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
+import { jiraApi, type JiraProject } from '../../lib/jiraApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
@@ -94,11 +94,11 @@ export const WorkspaceToolbar = ({
   });
 
   const jiraConns = connections.filter(
-    (c: any) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
+    (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
   );
 
   const projectQueries = useQueries({
-    queries: jiraConns.map((c: any) => ({
+    queries: jiraConns.map((c: ConnectionDto) => ({
       queryKey: ['jira', 'projects', c.id],
       queryFn: () => jiraApi.getProjects(c.id),
       staleTime: 5 * 60_000,
@@ -109,7 +109,7 @@ export const WorkspaceToolbar = ({
     const map = new Map<string, string>();
     projectQueries.forEach(q => {
       if (q.data) {
-        q.data.forEach((p: any) => map.set(p.key, p.name));
+        q.data.forEach((p: JiraProject) => map.set(p.key, p.name));
       }
     });
     return Array.from(map.entries())

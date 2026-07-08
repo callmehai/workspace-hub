@@ -47,6 +47,7 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
   const [debouncedAssigneeQuery, setDebouncedAssigneeQuery] = useState('');
 
   // Reset form when modal is closed
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!isOpen) {
       setConnectionId('');
@@ -63,6 +64,7 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
       setDebouncedAssigneeQuery('');
     }
   }, [isOpen]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Close assignee dropdown when clicking outside
   useEffect(() => {

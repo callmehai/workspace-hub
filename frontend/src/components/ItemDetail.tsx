@@ -11,7 +11,7 @@ import { tagsApi } from '../lib/tagsApi';
 import { TagChip, FolderChip } from './tags/TagChip';
 import { TagManagerModal } from './tags/TagManagerModal';
 import { connectionsApi } from '../lib/connectionsApi';
-import { jiraApi } from '../lib/jiraApi';
+import { jiraApi, type JiraTransition } from '../lib/jiraApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import { getStatusLabel, isItemUnread } from '../lib/itemMeta';
@@ -448,8 +448,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   disabled={patchMutation.isPending}
                 >
                   <option value="">{t('ticket.selectTransition')}...</option>
-                  {transitions.map((t: any) => (
-                    <option key={t.id} value={t.id}>{t.name} {t.toStatus ? `(→ ${t.toStatus})` : ''}</option>
+                  {transitions.map((t: JiraTransition) => (
+                    <option key={t.id} value={t.id}>{t.name} {t.toStatusName ? `(→ ${t.toStatusName})` : ''}</option>
                   ))}
                 </select>
                 <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
