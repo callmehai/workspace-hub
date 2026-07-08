@@ -10,7 +10,8 @@ import {
   Plus,
   MoreHorizontal,
   Pencil,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -21,7 +22,11 @@ import { FolderModal } from '../folders/FolderModal';
 import type { FolderResponse } from '../../types/items';
 import { handleApiError } from '../../lib/errorUtils';
 
-export const Sidebar = () => {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -80,13 +85,14 @@ export const Sidebar = () => {
 
   const handleFolderClick = (folderId: string | null) => {
     navigate(folderId ? `${viewPath}?folder=${folderId}` : viewPath);
+    onMobileClose?.();
   };
 
   const allItemsActive = isItemsView && !currentFolder;
   const isFolderActive = (id: string) => isItemsView && currentFolder === id;
 
   const assignItemMutation = useMutation({
-    mutationFn: ({ folderId, itemId }: { folderId: string; itemId: string }) => 
+    mutationFn: ({ folderId, itemId }: { folderId: string; itemId: string }) =>
       foldersApi.addItemToFolder(folderId, { itemId }),
     onSuccess: (_, variables) => {
       toast.success(t('sidebar.itemAssigned'));
@@ -99,7 +105,7 @@ export const Sidebar = () => {
   });
 
   const assignItemsBulkMutation = useMutation({
-    mutationFn: ({ folderId, itemIds }: { folderId: string; itemIds: string[] }) => 
+    mutationFn: ({ folderId, itemIds }: { folderId: string; itemIds: string[] }) =>
       foldersApi.addItemsToFolderBulk(folderId, itemIds),
     onSuccess: (_, variables) => {
       toast.success(`Đã gán ${variables.itemIds.length} mục vào thư mục`);
@@ -113,17 +119,16 @@ export const Sidebar = () => {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.currentTarget.classList.add('bg-indigo-50');
+    e.currentTarget.classList.add('bg-indigo-50', 'dark:bg-brand-500/10');
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.currentTarget.classList.remove('bg-indigo-50');
+ const handleDragLeave = (e: React.DragEvent) => {
+    e.currentTarget.classList.remove('bg-indigo-50', 'dark:bg-brand-500/10');
   };
-
   const handleDrop = (e: React.DragEvent, folderId: string) => {
     e.preventDefault();
-    e.currentTarget.classList.remove('bg-indigo-50');
-    
+    e.currentTarget.classList.remove('bg-indigo-50', 'dark:bg-brand-500/10');
+
     const itemIdsStr = e.dataTransfer.getData('itemIds');
     const itemId = e.dataTransfer.getData('itemId');
 
@@ -142,23 +147,40 @@ export const Sidebar = () => {
   };
 
   const navItemClass = (isActive: boolean) =>
-    `flex items-center gap-2.5 w-full px-[10px] py-[9px] rounded-lg border-none cursor-pointer text-[14px] font-inherit transition-colors ${
-      isActive
-        ? 'font-semibold bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300'
-        : 'font-medium bg-transparent text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+    `flex items-center gap-2.5 w-full px-[10px] py-[9px] rounded-lg border-none cursor-pointer text-[14px] font-inherit transition-colors ${isActive
+      ? 'font-semibold bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300'
+      : 'font-medium bg-transparent text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
     }`;
 
   return (
     <>
-      <aside className="w-[232px] bg-white border-r border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex flex-col h-full shrink-0 px-3 py-4">
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 w-[232px] shrink-0 flex flex-col h-full px-3 py-4
+          bg-white border-r border-slate-200 dark:bg-slate-900 dark:border-slate-800
+          transform transition-transform duration-200 ease-out
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:static lg:translate-x-0 lg:flex
+        `}
+      >
         {/* ── Top Branding ── */}
-        <div className="flex items-center gap-2.5 px-2 pt-1 pb-[18px]">
-          <div className="w-[30px] h-[30px] rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-[15px] shrink-0">
-            W
+        <div className="flex items-center justify-between gap-2 px-2 pt-1 pb-[18px]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-[30px] h-[30px] rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-[15px] shrink-0">
+              W
+            </div>
+            <span className="text-[15px] font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {t('common.appName')}
+            </span>
           </div>
-          <span className="text-[15px] font-semibold text-slate-900 dark:text-slate-100">
-            {t('common.appName')}
-          </span>
+          <button
+            type="button"
+            onClick={onMobileClose}
+            aria-label={t('nav.closeMenu')}
+            className="lg:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* ── Main Nav ── */}
@@ -169,23 +191,23 @@ export const Sidebar = () => {
             <span className="flex-1 text-left">{t('nav.allItems')}</span>
           </button>
 
-          <NavLink to="/integrations" className={({ isActive }) => navItemClass(isActive)}>
+          <NavLink to="/integrations" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
             <Plug className="w-[18px] h-[18px] shrink-0" />
             <span className="flex-1 text-left">{t('nav.integrations')}</span>
           </NavLink>
 
-          <NavLink to="/send-email" className={({ isActive }) => navItemClass(isActive)}>
+          <NavLink to="/send-email" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
             <Send className="w-[18px] h-[18px] shrink-0" />
             <span className="flex-1 text-left">{t('nav.sendEmail')}</span>
           </NavLink>
 
-          <NavLink to="/scheduled-emails" className={({ isActive }) => navItemClass(isActive)}>
+          <NavLink to="/scheduled-emails" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
             <Clock className="w-[18px] h-[18px] shrink-0" />
             <span className="flex-1 text-left">{t('nav.scheduledEmails')}</span>
           </NavLink>
 
           {user?.role === 'Admin' && (
-            <NavLink to="/admin" className={({ isActive }) => navItemClass(isActive)}>
+            <NavLink to="/admin" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
               <LayoutDashboard className="w-[18px] h-[18px] shrink-0" />
               <span className="flex-1 text-left">{t('nav.admin')}</span>
             </NavLink>
@@ -217,8 +239,8 @@ export const Sidebar = () => {
           )}
 
           {folders.map(folder => (
-            <div 
-              key={folder.id} 
+            <div
+              key={folder.id}
               className="relative group flex items-center rounded-lg"
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -237,12 +259,11 @@ export const Sidebar = () => {
                   {folder.itemCount}
                 </span>
               </button>
-              
+
               <button
                 data-folder-toggle
-                className={`absolute right-2 p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-slate-200 transition-colors ${
-                  activeMenuId === folder.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                }`}
+                className={`absolute right-2 p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-slate-200 transition-colors ${activeMenuId === folder.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  }`}
                 onClick={(e) => {
                   e.stopPropagation();
                   setActiveMenuId(activeMenuId === folder.id ? null : folder.id);
@@ -250,7 +271,7 @@ export const Sidebar = () => {
               >
                 <MoreHorizontal className="w-4 h-4" />
               </button>
-              
+
               {activeMenuId === folder.id && (
                 <div
                   ref={menuRef}
@@ -290,6 +311,7 @@ export const Sidebar = () => {
           <div className="flex items-center gap-2.5 px-1">
             <NavLink
               to="/profile"
+              onClick={() => onMobileClose?.()}
               className="flex flex-1 min-w-0 items-center gap-2.5 rounded-lg p-1 -m-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <div className="w-[34px] h-[34px] rounded-full bg-brand-50 text-brand-600 dark:bg-slate-800 dark:text-brand-300 flex items-center justify-center text-[13px] font-semibold shrink-0">
