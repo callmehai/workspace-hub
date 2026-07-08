@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkspaceHub.Application.DTOs.Notifications;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Infrastructure.Data;
@@ -16,6 +17,21 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
             .OrderByDescending(n => n.CreatedAt)
             .ToListAsync(ct);
     }
+
+    public IQueryable<NotificationDto> QueryByUserId(Guid userId) =>
+        Set
+            .AsNoTracking()
+            .Where(n => n.UserId == userId)
+            .Select(n => new NotificationDto
+            {
+                Id = n.Id,
+                Type = n.Type,
+                Title = n.Title,
+                Body = n.Body,
+                LinkUrl = n.LinkUrl,
+                IsRead = n.IsRead,
+                CreatedAt = n.CreatedAt
+            });
 
     public Task<Notification?> GetByIdForUserAsync(Guid userId, Guid notificationId, CancellationToken ct = default)
     {

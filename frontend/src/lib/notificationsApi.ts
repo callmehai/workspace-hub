@@ -8,7 +8,6 @@ export const notificationsApi = {
     top = 20,
     unreadOnly = false,
   ): Promise<PaginatedResponse<NotificationDto>> => {
-    // Pattern giống scheduled-emails: ODataIgnored controller + EnableQuery in-memory.
     let url = `/Notifications?$top=${top}&$skip=${skip}&$count=true&$orderby=createdAt desc`;
     if (unreadOnly) {
       url += '&$filter=isRead eq false';

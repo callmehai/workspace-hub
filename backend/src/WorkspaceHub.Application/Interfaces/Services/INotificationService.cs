@@ -7,6 +7,9 @@ public interface INotificationService
 {
     Task<IReadOnlyList<NotificationDto>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
 
+    /// <summary>OData list — IQueryable, không materialize.</summary>
+    IQueryable<NotificationDto> QueryByUserId(Guid userId);
+
     Task MarkAsReadAsync(Guid userId, Guid notificationId, CancellationToken ct = default);
 
     Task MarkAllAsReadAsync(Guid userId, CancellationToken ct = default);

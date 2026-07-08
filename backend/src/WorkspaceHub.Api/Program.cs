@@ -26,7 +26,8 @@ var builder = WebApplication.CreateBuilder(args);
 var edmBuilder = new ODataConventionModelBuilder();
 edmBuilder.EnableLowerCamelCase(); // Force camelCase cho tất cả OData response
 edmBuilder.EntitySet<FolderResponse>("Folders");
-edmBuilder.EntitySet<ScheduledEmailDto>("ScheduledEmails");
+var scheduledEmails = edmBuilder.EntitySet<ScheduledEmailDto>("ScheduledEmails");
+scheduledEmails.EntityType.HasKey(e => e.Id);
 var contactSuggestionType = edmBuilder.EntityType<ContactSuggestionDto>();
 contactSuggestionType.HasKey(c => c.Email);
 edmBuilder.EntitySet<ContactSuggestionDto>("EmailContactSuggestions");

@@ -1,6 +1,6 @@
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.ScheduledEmails;
 using WorkspaceHub.Domain.Entities;
-
 namespace WorkspaceHub.Application.Interfaces.Repositories;
 
 /// <summary>
@@ -8,6 +8,9 @@ namespace WorkspaceHub.Application.Interfaces.Repositories;
 /// </summary>
 public interface IScheduledEmailRepository : IGenericRepository<ScheduledEmail>
 {
+    /// <summary>OData list — scope userId server-side, map in-memory (JSON To/Cc/Bcc).</summary>
+    IQueryable<ScheduledEmailDto> QueryByUserId(Guid userId);
+
     /// <summary>
     /// Xoá tất cả ScheduledEmails trỏ vào connectionId (DB-level, không load vào memory).
     /// Dùng khi disconnect connection — tránh FK violation (NoAction ở DB).

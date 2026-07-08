@@ -24,6 +24,9 @@ public class NotificationService : INotificationService
         return items.Select(MapToDto).ToList().AsReadOnly();
     }
 
+    public IQueryable<NotificationDto> QueryByUserId(Guid userId) =>
+        _notifications.QueryByUserId(userId);
+
     public async Task MarkAsReadAsync(Guid userId, Guid notificationId, CancellationToken ct = default)
     {
         var notification = await _notifications.GetByIdForUserAsync(userId, notificationId, ct)
@@ -105,6 +108,14 @@ public class NotificationService : INotificationService
         return dtos.AsReadOnly();
     }
 
-    private static NotificationDto MapToDto(Notification n) =>
-        new(n.Id, n.Type, n.Title, n.Body, n.LinkUrl, n.IsRead, n.CreatedAt);
+    private static NotificationDto MapToDto(Notification n) => new()
+    {
+        Id = n.Id,
+        Type = n.Type,
+        Title = n.Title,
+        Body = n.Body,
+        LinkUrl = n.LinkUrl,
+        IsRead = n.IsRead,
+        CreatedAt = n.CreatedAt,
+    };
 }

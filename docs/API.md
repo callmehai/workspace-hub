@@ -23,6 +23,7 @@ Bật **OData query options** cho các endpoint **GET đọc collection trên `I
 | `GET /api/items` | ⊕ | status, type, isImportant, isArchived, connectionId | occurredAt, dueAt, title |
 | `GET /api/admin/users` | ⊕ | role, isActive, email, fullName | createdAt, lastLoginAt |
 | `GET /api/scheduled-emails` | ⊕ | Status | SendAt, CreatedAt |
+| `GET /api/Notifications` | ⊕ | isRead | createdAt |
 | `GET /api/emails/contacts/suggest` | ⊕ | Email, DisplayName, Source (contains) | DisplayName, Email |
 | `GET /api/folders` | ⊕ | isArchived, name | sortOrder, name |
 | `GET /api/tags` | ⊕ | name | name |
@@ -177,3 +178,10 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 - `POST /api/internal/process-sync` — header `X-Cron-Secret` (cùng `Cron:Secret` với `process-scheduled`). Không JWT. Quét mọi Connection Active + Integration enabled → debounce → refresh token nếu cần → `ConnectionSyncDispatcher.SyncAsync` (Gmail/GCal/Drive/Jira). Lỗi **auth bền** (401/403, refresh token fail) → `Status=Error`; lỗi tạm thời (network/5xx) giữ `Active` để cron lần sau retry — mỗi connection lỗi không chặn batch. Trả `200 ProcessSyncResult { totalConnections, successCount, skippedCount, errorCount, details? }`. ✅ SCRUM-72.
   - **Prod (mặc định):** `Cron:SyncAutoRun=true` trong `docker-compose.prod.yml` → `ConnectionSyncProcessorService` mỗi `Cron:SyncIntervalSeconds` (compose: 60s). Cùng pattern cron email — không cần cron-job.org. **Không** bật đồng thời với cron HTTP.
   - **HTTP cron (tuỳ chọn):** `POST /api/internal/process-sync` + `X-Cron-Secret` khi `SyncAutoRun=false` (test local hoặc thay BackgroundService).
+
+## Notifications
+- `GET /api/Notifications` — **OData ⊕** in-memory (`[ODataIgnored]` + `[EnableQuery]`). `$filter` (vd `isRead eq false`), `$orderby` (vd `createdAt desc`), `$top/$skip/$count`. Query OData **camelCase** (EDM `EnableLowerCamelCase`); JSON response camelCase. Response `{ "@odata.count"?, value: [...] }` hoặc array thuần tùy client. Badge unread: `GET /api/Notifications?$filter=isRead eq false&$count=true&$top=0`.
+- `PATCH /api/notifications/{id}/read` — đánh dấu đã đọc → 204.
+- `POST /api/notifications/read-all` — đánh dấu tất cả đã đọc → 204.
+- `POST /api/notifications/dev/seed` — (DEBUG/dev) tạo notification test → 200.
+- SignalR hub `/hubs/notifications` — event `ReceiveNotification` (toast + invalidate cache FE).

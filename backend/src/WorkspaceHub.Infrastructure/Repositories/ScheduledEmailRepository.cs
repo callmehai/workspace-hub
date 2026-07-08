@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using WorkspaceHub.Application.DTOs.ScheduledEmails;
 using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
 using WorkspaceHub.Infrastructure.Data;
@@ -10,6 +12,13 @@ namespace WorkspaceHub.Infrastructure.Repositories;
 public class ScheduledEmailRepository : GenericRepository<ScheduledEmail>, IScheduledEmailRepository
 {
     public ScheduledEmailRepository(AppDbContext db) : base(db) { }
+
+    public IQueryable<ScheduledEmailDto> QueryByUserId(Guid userId) =>
+        Set.AsNoTracking()
+            .Where(se => se.UserId == userId)
+            .AsEnumerable()
+            .Select(ScheduledEmailMapper.ToDto)
+            .AsQueryable();
 
     /// <inheritdoc/>
     public async Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
