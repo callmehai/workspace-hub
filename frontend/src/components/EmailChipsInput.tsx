@@ -53,9 +53,8 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
     (s) => !value.some((v) => v.toLowerCase() === s.email.toLowerCase())
   );
 
-  useEffect(() => {
-    setActiveIdx(0);
-  }, [debouncedQ, filtered.length]);
+  /** Index đang highlight trong dropdown — luôn nằm trong [0, filtered.length). */
+  const selectedIndex = filtered.length === 0 ? 0 : Math.min(activeIdx, filtered.length - 1);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -128,7 +127,7 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
       }
       if (e.key === 'Enter' && draft.trim()) {
         e.preventDefault();
-        pickSuggestion(filtered[activeIdx]);
+        pickSuggestion(filtered[selectedIndex]);
         return;
       }
     }
@@ -169,7 +168,7 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
         ))}
         <input
           value={draft}
-          onChange={(e) => { setDraft(e.target.value); setOpen(true); }}
+          onChange={(e) => { setDraft(e.target.value); setOpen(true); setActiveIdx(0); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -199,13 +198,13 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
           role="listbox"
         >
           {filtered.map((s, i) => (
-            <li key={s.email} role="option" aria-selected={i === activeIdx}>
+            <li key={s.email} role="option" aria-selected={i === selectedIndex}>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pickSuggestion(s)}
                 className={`w-full text-left px-3 py-2 text-sm flex flex-col gap-0.5 ${
-                  i === activeIdx
+                  i === selectedIndex
                     ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-800 dark:text-brand-300'
                     : 'text-slate-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/60'
                 }`}

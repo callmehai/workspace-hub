@@ -75,7 +75,7 @@ export function useNotificationHub() {
       connection.stop();
       connectionRef.current = null;
     };
-  }, [user]);
+  }, [user, queryClient]);
 }
 
 export { UNREAD_COUNT_KEY };
