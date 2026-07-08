@@ -244,13 +244,20 @@ public class SendEmailService : ISendEmailService
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
 
         var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
-        var msg = thread.Messages.FirstOrDefault(m => m.MessageId == item.ExternalId);
-        if (msg == null) throw new BusinessRuleException("Message not found in thread.");
-        
-        var attInfo = msg.Attachments.FirstOrDefault(a => a.AttachmentId == attachmentId);
-        if (attInfo == null) throw new NotFoundException("Attachment", attachmentId);
 
-        return await _gmail.GetAttachmentAsync(connection, item.ExternalId, attachmentId, attInfo.Filename, attInfo.MimeType, ct);
+        // Attachment có thể nằm ở BẤT KỲ message nào trong thread (vd file của email reply
+        // vừa gửi), không riêng message gốc của item — quét toàn thread và fetch bằng
+        // messageId của đúng message sở hữu (Gmail attachments.get yêu cầu messageId khớp).
+        foreach (var m in thread.Messages)
+        {
+            var attInfo = m.Attachments.FirstOrDefault(a => a.AttachmentId == attachmentId);
+            if (attInfo != null)
+            {
+                return await _gmail.GetAttachmentAsync(connection, m.MessageId, attachmentId, attInfo.Filename, attInfo.MimeType, ct);
+            }
+        }
+
+        throw new NotFoundException("Attachment", attachmentId);
     }
 
     public async Task<byte[]> GetAttachmentsZipAsync(Guid userId, Guid itemId, string messageId, CancellationToken ct = default)

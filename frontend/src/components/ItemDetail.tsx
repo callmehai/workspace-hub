@@ -497,7 +497,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
 
       {/* Drawer */}
-      <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col" style={{ animation: 'wh-slide-in .25s ease' }}>
+      <div className="relative w-full max-w-[560px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col rounded-l-2xl overflow-hidden" style={{ animation: 'wh-slide-in .25s ease' }}>
 
         {/* Header */}
         <div className="px-5 py-[18px] border-b border-slate-200 dark:border-slate-800 shrink-0">
@@ -716,11 +716,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           ) : (
             /* Metadata Rows */
             rows.length > 0 && (
-              <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] overflow-hidden mb-[18px]">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 px-4 py-3.5 mb-[18px] space-y-2.5">
                 {rows.map((row, i) => (
-                  <div key={i} className="flex gap-3 px-[13px] py-[9px] border-b border-slate-200 dark:border-slate-800 last:border-b-0">
-                    <span className="text-[12.5px] text-slate-400 dark:text-slate-500 w-[118px] shrink-0">{row.label}</span>
-                    <span className="text-[12.5px] text-slate-900 dark:text-slate-100 flex-1 break-words">{row.value}</span>
+                  <div key={i} className="flex gap-3">
+                    <span className="text-[13px] text-slate-400 dark:text-slate-500 w-[110px] shrink-0">{row.label}</span>
+                    <span className="text-[13px] font-medium text-slate-800 dark:text-slate-100 flex-1 break-words min-w-0">{row.value}</span>
                   </div>
                 ))}
               </div>

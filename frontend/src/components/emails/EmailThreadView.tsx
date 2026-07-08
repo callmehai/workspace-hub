@@ -283,12 +283,12 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
               </div>
             )}
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Cc</label>
                 <EmailChipsInput value={cc} onChange={setCc} placeholder="Add Cc..." connectionId={connectionId} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Bcc</label>
                 <EmailChipsInput value={bcc} onChange={setBcc} placeholder="Add Bcc..." connectionId={connectionId} />
               </div>
