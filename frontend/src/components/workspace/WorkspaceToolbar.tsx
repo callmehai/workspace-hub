@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { connectionsApi } from '../../lib/connectionsApi';
@@ -13,6 +13,7 @@ import { TYPE_FILTERS, STATUS_FILTERS, typeIcon } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
+import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
 
 /*
@@ -78,6 +79,7 @@ export const WorkspaceToolbar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
+  const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
@@ -183,6 +185,13 @@ export const WorkspaceToolbar = ({
           >
             <Plus className="w-4 h-4" /> {t('toolbar.event')}
           </button>
+          <button
+            onClick={() => setIsTicketOpen(true)}
+            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-[9px] shadow-sm hover:bg-violet-100 dark:text-violet-300 dark:bg-violet-500/10 dark:border-violet-500/30 dark:hover:bg-violet-500/20 transition-colors"
+            title="Jira"
+          >
+            <Briefcase className="w-4 h-4" /> {t('type.ticket')}
+          </button>
         </div>
       </div>
 
@@ -244,6 +253,7 @@ export const WorkspaceToolbar = ({
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
       <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
+      <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
     </>
   );

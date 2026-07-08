@@ -18,6 +18,7 @@ import { useSeenSet, markSeen, markUnseen } from '../lib/seenStore';
 import { typeLabelKey } from '../lib/itemVisuals';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
+import { TicketEditForm, type TicketFormState } from './jira/TicketEditForm';
 
 interface ItemDetailProps {
   itemId: string;
@@ -97,13 +98,24 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     };
   }, [isAddingTag]);
 
-  // Event form edit state
   const [eventForm, setEventForm] = useState({
     title: '',
     start: '',
     end: '',
     location: '',
     attendees: ''
+  });
+
+  // Ticket edit state (SCRUM-57)
+  const [ticketForm, setTicketForm] = useState<TicketFormState>({
+    summary: '',
+    description: '',
+    priority: '',
+    assigneeAccountId: '',
+    assigneeQuery: '',
+    labelsRaw: '',
+    statusTransitionId: '',
+    comment: '',
   });
 
   // File edit state
@@ -466,6 +478,44 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
+  // Ticket edit helpers
+  const startEditingTicket = () => {
+    const meta = metadata;
+    setTicketForm({
+      summary: item.title ?? '',
+      description: item.snippet ?? '',
+      priority: meta.priority ?? '',
+      assigneeAccountId: '',
+      assigneeQuery: meta.assignee ?? '',
+      labelsRaw: Array.isArray(meta.labels) ? meta.labels.join(',') : '',
+      statusTransitionId: '',
+      comment: '',
+    });
+    setIsEditing(true);
+  };
+
+  const handleSaveTicket = () => {
+    const rawLabels = ticketForm.labelsRaw
+      .split(',')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const badLabel = rawLabels.find((l) => /\s/.test(l));
+    if (badLabel) {
+      toast.error(t('ticket.labelNoSpaces'));
+      return;
+    }
+    const patch: PatchItemRequest = {};
+    if (ticketForm.summary.trim() && ticketForm.summary.trim() !== item.title)
+      patch.summary = ticketForm.summary.trim();
+    if (ticketForm.description.trim()) patch.description = ticketForm.description.trim();
+    if (ticketForm.priority) patch.priority = ticketForm.priority;
+    if (ticketForm.assigneeQuery.trim()) patch.assignee = ticketForm.assigneeQuery.trim();
+    if (rawLabels.length > 0) patch.labels = rawLabels;
+    if (ticketForm.statusTransitionId) patch.statusTransition = ticketForm.statusTransitionId;
+    if (ticketForm.comment.trim()) patch.comment = ticketForm.comment.trim();
+    patchMutation.mutate(patch);
+  };
+
   // File rename edits
   const startRenamingFile = () => {
     setFileName(item.title);
@@ -712,6 +762,18 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </button>
               </div>
             </div>
+          ) : isEditing && item.type === 'Ticket' ? (
+            /* ── Ticket edit form (SCRUM-57) ── */
+            <TicketEditForm
+              itemId={itemId}
+              connectionId={item.connectionId ?? ''}
+              form={ticketForm}
+              onChange={setTicketForm}
+              onSave={handleSaveTicket}
+              onCancel={() => setIsEditing(false)}
+              isPending={patchMutation.isPending}
+              t={t}
+            />
           ) : (
             /* Metadata Rows */
             rows.length > 0 && (
@@ -868,6 +930,41 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             >
               {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
+          )}
+
+          {/* ── Ticket actions (SCRUM-57) ── */}
+          {item.type === 'Ticket' && (
+            <>
+              {!isEditing && (
+                <button
+                  onClick={startEditingTicket}
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-violet-600 text-white hover:bg-violet-700 shadow-sm transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" /><span>{t('ticket.editBtn')}</span>
+                </button>
+              )}
+              {metadata.issueUrl && (
+                <a
+                  href={metadata.issueUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('ticket.openInJira')}</span>
+                </a>
+              )}
+              <button
+                onClick={() => {
+                  if (window.confirm(t('ticket.confirmDelete'))) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </button>
+            </>
           )}
         </div>
 
