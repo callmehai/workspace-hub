@@ -20,8 +20,10 @@ public class JiraItemMapper : IJiraItemMapper
         {
             issueKey = issue.Key,
             projectKey = issue.ProjectKey,
+            projectName = issue.ProjectName,
             status = issue.StatusName,
             assignee = issue.AssigneeDisplayName,
+            assigneeAccountId = issue.AssigneeAccountId,
             priority = issue.PriorityName,
             issueType = issue.IssueTypeName,
             issueUrl = issue.IssueUrl

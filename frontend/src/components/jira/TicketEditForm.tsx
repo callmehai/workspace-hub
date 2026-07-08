@@ -6,7 +6,8 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { jiraApi } from '../../lib/jiraApi';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { jiraApi, type JiraUser } from '../../lib/jiraApi';
 import type { TranslationKey } from '../../i18n/translations';
 
 type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
@@ -25,6 +26,7 @@ export interface TicketFormState {
 interface Props {
   itemId: string;
   connectionId: string;
+  projectKey: string;
   form: TicketFormState;
   onChange: (form: TicketFormState) => void;
   onSave: () => void;
@@ -37,10 +39,33 @@ const INPUT = 'w-full bg-white dark:bg-slate-800 border border-slate-200 dark:bo
 const LABEL = 'block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1';
 
 export const TicketEditForm = ({
-  itemId, connectionId, form, onChange, onSave, onCancel, isPending, t,
+  itemId, connectionId, projectKey, form, onChange, onSave, onCancel, isPending, t,
 }: Props) => {
   const set = (key: keyof TicketFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     onChange({ ...form, [key]: e.target.value });
+
+  const [assigneeDropOpen, setAssigneeDropOpen] = useState(false);
+  const assigneeRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedAssigneeQuery, setDebouncedAssigneeQuery] = useState(form.assigneeQuery);
+
+  useEffect(() => {
+    if (!assigneeDropOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (assigneeRef.current && !assigneeRef.current.contains(e.target as Node)) {
+        setAssigneeDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [assigneeDropOpen]);
+
+  const handleAssigneeQueryChange = useCallback((val: string) => {
+    onChange({ ...form, assigneeQuery: val });
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedAssigneeQuery(val), 300);
+  }, [form, onChange]);
+
 
   // ── Remote data ────────────────────────────────────────────────────────────
   const { data: priorities = [] } = useQuery({
@@ -56,6 +81,17 @@ export const TicketEditForm = ({
     enabled: !!connectionId && !!itemId,
     staleTime: 0,
   });
+
+  const { data: assignableUsers = [], isFetching: loadingAssignees } = useQuery({
+    queryKey: ['jira', 'assignableUsers', connectionId, projectKey, debouncedAssigneeQuery],
+    queryFn: () => jiraApi.getAssignableUsers(connectionId, projectKey, debouncedAssigneeQuery),
+    enabled: !!connectionId && !!projectKey && assigneeDropOpen,
+    staleTime: 0,
+  });
+
+  const selectedAssignee: JiraUser | undefined = assignableUsers.find(
+    (u) => u.accountId === form.assigneeAccountId,
+  );
 
   return (
     <div className="border border-violet-200 dark:border-violet-500/30 rounded-[10px] p-4 bg-violet-50/30 dark:bg-violet-500/5 space-y-4 mb-[18px]">
@@ -127,16 +163,49 @@ export const TicketEditForm = ({
         </div>
       </div>
 
-      {/* Assignee — simple text input for accountId (user can type display name; BE resolves) */}
+      {/* Assignee — search dropdown */}
       <div>
         <label className={LABEL}>{t('ticket.assigneeLabel')}</label>
-        <input
-          type="text"
-          value={form.assigneeQuery}
-          onChange={set('assigneeQuery')}
-          placeholder={t('createTicket.assigneePlaceholder')}
-          className={INPUT}
-        />
+        <div className="relative" ref={assigneeRef}>
+          <input
+            type="text"
+            value={form.assigneeQuery}
+            onChange={(e) => { handleAssigneeQueryChange(e.target.value); setAssigneeDropOpen(true); }}
+            onFocus={() => { if (projectKey) setAssigneeDropOpen(true); }}
+            placeholder={selectedAssignee ? selectedAssignee.displayName : t('createTicket.assigneePlaceholder')}
+            className={INPUT}
+          />
+          {assigneeDropOpen && projectKey && (
+            <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1 z-[70] max-h-48 overflow-y-auto">
+              {loadingAssignees ? (
+                <div className="flex items-center gap-2 px-3 py-2 text-[12px] text-slate-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />{t('createTicket.assigneePlaceholder')}
+                </div>
+              ) : assignableUsers.length === 0 ? (
+                <div className="px-3 py-2 text-[12px] text-slate-400">{t('common.noOptions')}</div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { onChange({ ...form, assigneeAccountId: '', assigneeQuery: '' }); setAssigneeDropOpen(false); }}
+                    className="w-full text-left px-3 py-1.5 text-[12.5px] text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    {t('createTicket.noAssignee')}
+                  </button>
+                  {assignableUsers.map((u) => (
+                    <button
+                      key={u.accountId}
+                      onClick={() => { onChange({ ...form, assigneeAccountId: u.accountId, assigneeQuery: u.displayName }); setAssigneeDropOpen(false); }}
+                      className="w-full text-left px-3 py-1.5 text-[12.5px] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      {u.displayName}
+                      {u.email && <span className="ml-1 text-slate-400 text-[11px]">({u.email})</span>}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Labels — comma-separated, validated on save for no whitespace */}

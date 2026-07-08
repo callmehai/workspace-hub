@@ -13,6 +13,7 @@ export interface GetItemsParams {
   isImportant?: boolean;
   search?: string;
   tagId?: string;
+  projectKey?: string;
   page?: number;
   limit?: number;
 }

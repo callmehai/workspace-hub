@@ -405,6 +405,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   } else if (item.type === 'Note') {
     rows.push({ label: t('item.created'), value: new Date(item.occurredAt).toLocaleString(dl) });
   } else if (item.type === 'Ticket') {
+    if (metadata.projectKey) {
+      const projDisplay = metadata.projectName 
+        ? `${metadata.projectName} (${metadata.projectKey})` 
+        : metadata.projectKey;
+      rows.push({ label: 'Project', value: projDisplay });
+    }
     if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
     if (metadata.issueType)  rows.push({ label: t('item.issueType'), value: metadata.issueType });
     if (metadata.priority)   rows.push({ label: t('item.priority'), value: metadata.priority });
@@ -485,7 +491,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       summary: item.title ?? '',
       description: item.snippet ?? '',
       priority: meta.priority ?? '',
-      assigneeAccountId: '',
+      assigneeAccountId: meta.assigneeAccountId ?? '',
       assigneeQuery: meta.assignee ?? '',
       labelsRaw: Array.isArray(meta.labels) ? meta.labels.join(',') : '',
       statusTransitionId: '',
@@ -509,7 +515,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       patch.summary = ticketForm.summary.trim();
     if (ticketForm.description.trim()) patch.description = ticketForm.description.trim();
     if (ticketForm.priority) patch.priority = ticketForm.priority;
-    if (ticketForm.assigneeQuery.trim()) patch.assignee = ticketForm.assigneeQuery.trim();
+    if (ticketForm.assigneeAccountId && ticketForm.assigneeAccountId !== metadata.assigneeAccountId) {
+      patch.assignee = ticketForm.assigneeAccountId;
+    } else if (ticketForm.assigneeQuery.trim() !== (metadata.assignee ?? '').trim()) {
+      patch.assignee = ticketForm.assigneeQuery.trim();
+    }
     if (rawLabels.length > 0) patch.labels = rawLabels;
     if (ticketForm.statusTransitionId) patch.statusTransition = ticketForm.statusTransitionId;
     if (ticketForm.comment.trim()) patch.comment = ticketForm.comment.trim();
@@ -767,6 +777,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             <TicketEditForm
               itemId={itemId}
               connectionId={item.connectionId ?? ''}
+              projectKey={metadata.projectKey ?? ''}
               form={ticketForm}
               onChange={setTicketForm}
               onSave={handleSaveTicket}

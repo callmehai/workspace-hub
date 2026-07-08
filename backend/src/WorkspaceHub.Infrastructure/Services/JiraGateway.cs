@@ -108,7 +108,7 @@ public class JiraGateway : IJiraGateway
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
             var detail = await SafeReadBodyAsync(response, ct);
-            throw new BusinessRuleException($"Jira từ chối tạo issue (field không hợp lệ): {detail}");
+            throw new BusinessRuleException($"Jira từ chối tạo issue: {ParseJiraErrorDetail(detail)}");
         }
 
         await EnsureSuccessAsync(response, ct);
@@ -374,7 +374,7 @@ public class JiraGateway : IJiraGateway
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
             var detail = await SafeReadBodyAsync(response, ct);
-            throw new BusinessRuleException($"Jira từ chối thao tác (field/transition không hợp lệ): {detail}");
+            throw new BusinessRuleException($"Jira từ chối thao tác: {ParseJiraErrorDetail(detail)}");
         }
 
         await EnsureSuccessAsync(response, ct);
@@ -395,13 +395,14 @@ public class JiraGateway : IJiraGateway
             return;
 
         var detail = await SafeReadBodyAsync(response, ct);
+        var parsedDetail = ParseJiraErrorDetail(detail);
 
         throw response.StatusCode switch
         {
             HttpStatusCode.Unauthorized => new ForbiddenException("Token Jira hết hạn hoặc thiếu quyền — cần kết nối lại."),
             HttpStatusCode.Forbidden    => new ForbiddenException("Thiếu quyền truy cập Jira — cần kết nối lại với quyền đầy đủ."),
-            HttpStatusCode.NotFound     => new NotFoundException("Jira resource", detail),
-            _ => new ProviderException($"Jira API error {(int)response.StatusCode}: {detail}", response.StatusCode)
+            HttpStatusCode.NotFound     => new NotFoundException($"Jira resource error: {parsedDetail}"),
+            _ => new ProviderException($"Jira API error {(int)response.StatusCode}: {parsedDetail}", response.StatusCode)
         };
     }
 
@@ -458,9 +459,11 @@ public class JiraGateway : IJiraGateway
         }
 
         string? assignee      = GetNestedString(fields, "assignee", "displayName");
+        string? assigneeAccountId = GetNestedString(fields, "assignee", "accountId");
         string? priorityName  = GetNestedString(fields, "priority", "name");
         string? issueTypeName = GetNestedString(fields, "issuetype", "name");
         string? projectKey    = GetNestedString(fields, "project", "key");
+        string? projectName   = GetNestedString(fields, "project", "name");
 
         DateTimeOffset? updated = null;
         var updatedStr = GetString(fields, "updated");
@@ -471,8 +474,8 @@ public class JiraGateway : IJiraGateway
         // cần TÊN SITE — không phải cloudId (UUID). Connection chỉ lưu cloudId nên chưa dựng được link đúng.
         // Để null thay vì emit link sai (api.atlassian.com/.../browse → API error khi click). Site URL: phase sau.
         return new JiraIssue(
-            id, key, projectKey, summary, description,
-            statusName, assignee, priorityName, issueTypeName, null, updated, statusCategoryKey);
+            id, key, projectKey, projectName, summary, description,
+            statusName, assignee, assigneeAccountId, priorityName, issueTypeName, null, updated, statusCategoryKey);
     }
 
     private static string? GetString(JsonElement el, string prop) =>
@@ -481,6 +484,47 @@ public class JiraGateway : IJiraGateway
         && p.ValueKind == JsonValueKind.String
             ? p.GetString()
             : null;
+
+    private static string ParseJiraErrorDetail(string detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return "unknown";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(detail);
+            var msgs = new List<string>();
+
+            if (doc.RootElement.TryGetProperty("errorMessages", out var errMsgs) && errMsgs.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var msg in errMsgs.EnumerateArray())
+                {
+                    if (msg.ValueKind == JsonValueKind.String)
+                        msgs.Add(msg.GetString()!);
+                }
+            }
+
+            if (doc.RootElement.TryGetProperty("errors", out var errorsObj) && errorsObj.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in errorsObj.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String)
+                    {
+                        msgs.Add($"{prop.Name}: {prop.Value.GetString()}");
+                    }
+                }
+            }
+
+            if (msgs.Count > 0)
+                return string.Join("; ", msgs);
+        }
+        catch
+        {
+            // Ignore parsing error, return raw detail
+        }
+
+        return detail;
+    }
 
     private static string? GetNestedString(JsonElement el, string prop, string childProp) =>
         el.ValueKind == JsonValueKind.Object

@@ -61,6 +61,8 @@ interface WorkspaceToolbarProps {
   onImportantToggle: () => void;
   tagFilter: string | null;
   onTagFilter: (id: string | null) => void;
+  projectKeyFilter?: string;
+  onProjectKeyChange?: (v: string) => void;
   searchInput: string;
   onSearchChange: (v: string) => void;
 }
@@ -71,6 +73,7 @@ export const WorkspaceToolbar = ({
   typeFilter, onToggleTypeFilter,
   importantOnly, onImportantToggle,
   tagFilter, onTagFilter,
+  projectKeyFilter, onProjectKeyChange,
   searchInput, onSearchChange,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
@@ -240,15 +243,29 @@ export const WorkspaceToolbar = ({
       </div>
 
       {/* ── Hàng 3: search full-width — vị trí + kích thước GIỐNG HỆT 2 view ── */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <input
-          type="text"
-          value={searchInput}
-          onChange={e => onSearchChange(e.target.value)}
-          placeholder={t('toolbar.search')}
-          className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-        />
+      <div className="flex gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => onSearchChange(e.target.value)}
+            placeholder={t('toolbar.search')}
+            className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+        </div>
+        {onProjectKeyChange && (
+          <div className="relative w-40 shrink-0">
+            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={projectKeyFilter ?? ''}
+              onChange={e => onProjectKeyChange(e.target.value)}
+              placeholder="Jira Project Key..."
+              className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
+          </div>
+        )}
       </div>
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
