@@ -1,13 +1,13 @@
 import api from './api';
 import type { NotificationDto } from '../types/notifications';
-import type { PaginatedResponse } from './scheduledEmailsApi';
+import type { ODataResponse } from './odata';
 
 export const notificationsApi = {
   getNotifications: async (
     skip = 0,
     top = 20,
     unreadOnly = false,
-  ): Promise<PaginatedResponse<NotificationDto>> => {
+  ): Promise<ODataResponse<NotificationDto>> => {
     let url = `/Notifications?$top=${top}&$skip=${skip}&$count=true&$orderby=CreatedAt desc`;
     if (unreadOnly) {
       url += '&$filter=IsRead eq false';
@@ -15,7 +15,7 @@ export const notificationsApi = {
     const response = await api.get(url);
     const data = response.data;
     if (data && typeof data === 'object' && Array.isArray(data.value)) {
-      return data as PaginatedResponse<NotificationDto>;
+      return data as ODataResponse<NotificationDto>;
     }
     if (Array.isArray(data)) {
       return { value: data, '@odata.count': data.length };

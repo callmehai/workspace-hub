@@ -185,5 +185,5 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 - `PATCH /api/notifications/{id}/read` — đánh dấu đã đọc → 204.
 - `POST /api/notifications/read-all` — đánh dấu tất cả đã đọc → 204.
 - `POST /api/notifications/dev/seed` — (DEBUG/dev) tạo notification test → 200.
-- SignalR hub `/hubs/notifications` — event `ReceiveNotification` (toast + invalidate cache FE).
+- SignalR hub `/hubs/notifications` — event `ReceiveNotification` (toast + invalidate cache FE). Auth: cookie JWT. **CSRF:** path `/hubs/*` exempt khỏi double-submit (negotiate POST; hub vẫn `[Authorize]`). FE gửi `X-CSRF-Token` khi có cookie và **rebuild hub** trước mỗi lần `start()` retry để header khớp `wh_csrf` sau refresh/BE restart. **Reconnect:** `withAutomaticReconnect` sau connect; start lần đầu retry backoff `0→2s→5s→10s→30s` (lặp); wake khi tab `visible` / `online`. Badge/list poll REST ~45s khi hub chưa kết nối.
 - **Copy:** `Title` = i18n key (`notifications.newEmailFrom`, …); `Body` = JSON `{ from?, itemTitle, preview }`. FE dịch title theo lang hệ thống; `preview` hiển thị làm subtitle (snippet email / tên item).

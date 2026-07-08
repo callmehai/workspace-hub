@@ -1,4 +1,4 @@
-import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { enUS, vi } from 'date-fns/locale';
 import { Bell, Loader2 } from 'lucide-react';
@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../../lib/notificationsApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { formatNotificationDisplay } from '../../lib/notificationDisplay';
+import type { ODataResponse } from '../../lib/odata';
 import { NOTIFICATIONS_LIST_KEY, UNREAD_COUNT_KEY } from '../../hooks/useNotificationHub';
 import { useI18n } from '../../hooks/useI18n';
 import type { NotificationDto } from '../../types/notifications';
@@ -22,7 +23,13 @@ export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) =
   const navigate = useNavigate();
   const dfLocale = lang === 'en' ? enUS : vi;
 
-  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery<
+    ODataResponse<NotificationDto>,
+    Error,
+    InfiniteData<ODataResponse<NotificationDto>>,
+    typeof NOTIFICATIONS_LIST_KEY,
+    number
+  >({
     queryKey: NOTIFICATIONS_LIST_KEY,
     queryFn: ({ pageParam }) => notificationsApi.getNotifications(pageParam, PAGE_SIZE),
     initialPageParam: 0,
