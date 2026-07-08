@@ -8,6 +8,7 @@ import { PageSizeSelect } from '../components/PageSizeSelect';
 import { format } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
 import { useI18n } from '../hooks/useI18n';
+import { useTheme } from '../hooks/useTheme';
 
 const COLORS = ['#10b981', '#ef4444', '#94a3b8']; // Active, Error, Disconnected
 
@@ -22,6 +23,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export const AdminDashboard = () => {
   const { t, lang } = useI18n();
+  const { theme } = useTheme();
   const dfLocale = lang === 'vi' ? vi : enUS;
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -52,11 +54,21 @@ export const AdminDashboard = () => {
     if (usersError) handleApiError(usersError, t('admin.usersLoadError'));
   }, [usersError, t]);
 
-  const pieData = stats ? [
-    { name: 'Active', value: stats.connectionsByStatus.Active ?? 0 },
-    { name: 'Error', value: stats.connectionsByStatus.Error ?? 0 },
-    { name: 'Disconnected', value: stats.connectionsByStatus.Disconnected ?? 0 },
+    const pieData = stats ? [
+    { name: t('integrations.statusActive'), value: stats.connectionsByStatus.Active ?? 0 },
+    { name: t('integrations.statusError'), value: stats.connectionsByStatus.Error ?? 0 },
+    { name: t('integrations.statusDisconnected'), value: stats.connectionsByStatus.Disconnected ?? 0 },
   ] : [];
+
+  const pieTotal = pieData.reduce((sum, d) => sum + d.value, 0);
+
+  const tooltipStyle = theme === 'dark'
+    ? { background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', color: '#e2e8f0', fontSize: '13px' }
+    : { background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', color: '#334155', fontSize: '13px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' };
+
+  const legendStyle = theme === 'dark'
+    ? { fontSize: '12px', color: '#94a3b8' }
+    : { fontSize: '12px', color: '#64748b' };
 
   return (
     <div className="p-5 md:p-8 max-w-7xl mx-auto text-slate-800 dark:text-slate-200">
@@ -65,7 +77,7 @@ export const AdminDashboard = () => {
         <p className="text-sm text-slate-500 dark:text-slate-400">{t('admin.subtitle')}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
         <StatCard title={t('admin.totalUsers')} value={stats?.totalUsers} icon={<Users className="w-5 h-5 text-indigo-600" />} isLoading={statsLoading} />
         <StatCard title={t('admin.activeUsers')} value={stats?.activeUsers} icon={<UserCheck className="w-5 h-5 text-emerald-600" />} isLoading={statsLoading} />
         <StatCard title={t('admin.lockedUsers')} value={stats?.lockedUsers} icon={<Lock className="w-5 h-5 text-rose-600" />} isLoading={statsLoading} />
@@ -82,6 +94,10 @@ export const AdminDashboard = () => {
           ) : statsError ? (
              <div className="h-48 flex items-center justify-center text-sm text-rose-500">
                 {t('admin.chartError')}
+             </div>
+          ) : pieTotal === 0 ? (
+             <div className="h-48 flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+                {t('admin.chartEmpty')}
              </div>
           ) : (
             <div className="h-48">
@@ -100,8 +116,11 @@ export const AdminDashboard = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', color: '#e2e8f0', fontSize: '13px' }} itemStyle={{ color: '#e2e8f0' }} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    itemStyle={{ color: theme === 'dark' ? '#e2e8f0' : '#334155' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={legendStyle} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -110,9 +129,9 @@ export const AdminDashboard = () => {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('admin.userList')}</h3>
-          <div className="relative w-64">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
@@ -189,7 +208,7 @@ export const AdminDashboard = () => {
         </div>
 
         {usersData && usersData.total > 0 && (
-          <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+          <div className="px-4 sm:px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <PageSizeSelect value={limit} onChange={(n) => { setLimit(n); setPage(1); }} />
               <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -221,13 +240,13 @@ export const AdminDashboard = () => {
 };
 
 const StatCard = ({ title, value, icon, isLoading }: { title: string; value?: number; icon: React.ReactNode; isLoading: boolean }) => (
-  <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-    <div className="w-10 h-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-800">
+  <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-3 sm:gap-4 min-w-0">
+    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-800">
       {icon}
     </div>
-    <div>
-      <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-0.5">{title}</div>
-      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+    <div className="min-w-0">
+      <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mb-0.5 truncate">{title}</div>
+      <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
         {isLoading ? <div className="w-12 h-8 bg-slate-200 dark:bg-slate-800 animate-pulse rounded"></div> : value ?? '-'}
       </div>
     </div>
