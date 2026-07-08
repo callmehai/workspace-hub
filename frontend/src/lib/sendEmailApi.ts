@@ -163,11 +163,32 @@ export const sendEmailApi = {
     return response.data;
   },
 
-  downloadAttachment: async (itemId: string, attachmentId: string, filename: string): Promise<void> => {
+  /** Lấy binary 1 attachment dạng Blob (để preview inline hoặc download). */
+  fetchAttachmentBlob: async (itemId: string, attachmentId: string): Promise<Blob> => {
     const response = await api.get(`/emails/${itemId}/attachments/${attachmentId}`, {
       responseType: 'blob',
     });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
+    return response.data as Blob;
+  },
+
+  /** Tải toàn bộ attachment của 1 message dưới dạng 1 file .zip. */
+  downloadAllAttachments: async (itemId: string, messageId: string): Promise<void> => {
+    const response = await api.get(`/emails/${itemId}/messages/${messageId}/attachments/zip`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(response.data as Blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'attachments.zip');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  downloadAttachment: async (itemId: string, attachmentId: string, filename: string): Promise<void> => {
+    const blob = await sendEmailApi.fetchAttachmentBlob(itemId, attachmentId);
+    const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', filename);

@@ -5,6 +5,7 @@ import { sendEmailApi, fileToAttachmentUpload, MAX_ATTACHMENT_TOTAL_BYTES, type 
 import { EmailChipsInput } from '../EmailChipsInput';
 import { RichTextEditor } from '../RichTextEditor';
 import { AttachmentPicker } from '../AttachmentPicker';
+import { AttachmentCard } from './AttachmentCard';
 import { useI18n } from '../../hooks/useI18n';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
@@ -113,6 +114,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     replyMutation.mutate(replyMode);
   };
 
+  const [downloadingAllMsgId, setDownloadingAllMsgId] = useState<string | null>(null);
+
   const downloadAttachment = async (_msgId: string, att: EmailAttachmentDto) => {
     try {
       toast.loading(t('common.loading') || 'Downloading...', { id: `dl-${att.attachmentId}` });
@@ -120,6 +123,17 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       toast.success(t('item.saved') || 'Downloaded', { id: `dl-${att.attachmentId}` });
     } catch {
       toast.error(t('item.loadError') || 'Failed to download', { id: `dl-${att.attachmentId}` });
+    }
+  };
+
+  const downloadAll = async (msgId: string) => {
+    setDownloadingAllMsgId(msgId);
+    try {
+      await sendEmailApi.downloadAllAttachments(itemId, msgId);
+    } catch {
+      toast.error(t('item.loadError') || 'Failed to download');
+    } finally {
+      setDownloadingAllMsgId(null);
     }
   };
 
@@ -196,20 +210,31 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                   {/* Attachments */}
                   {msg.attachments?.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/60">
-                      <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
-                        <Paperclip className="w-3.5 h-3.5" /> Attachments ({msg.attachments.length})
+                      <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Paperclip className="w-3.5 h-3.5" /> Attachments ({msg.attachments.length})
+                        </span>
+                        {msg.attachments.length > 1 && (
+                          <button
+                            onClick={() => downloadAll(msg.messageId)}
+                            disabled={downloadingAllMsgId === msg.messageId}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {downloadingAllMsgId === msg.messageId
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Download className="w-3.5 h-3.5" />}
+                            {t('attach.downloadAll')}
+                          </button>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {msg.attachments.map(att => (
-                          <div key={att.attachmentId} className="flex items-center gap-2 pl-3 pr-2 py-1.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-lg max-w-xs group cursor-pointer hover:border-brand-300 transition-colors" onClick={() => downloadAttachment(msg.messageId, att)}>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300 truncate">{att.filename}</span>
-                              <span className="text-[10px] text-slate-500">{Math.round(att.size / 1024)} KB</span>
-                            </div>
-                            <button className="w-6 h-6 flex items-center justify-center rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 group-hover:bg-brand-100 group-hover:text-brand-600 transition-colors shrink-0">
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <AttachmentCard
+                            key={att.attachmentId}
+                            itemId={itemId}
+                            att={att}
+                            onDownload={(a) => downloadAttachment(msg.messageId, a)}
+                          />
                         ))}
                       </div>
                     </div>

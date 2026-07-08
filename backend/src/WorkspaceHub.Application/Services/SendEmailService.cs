@@ -253,6 +253,54 @@ public class SendEmailService : ISendEmailService
         return await _gmail.GetAttachmentAsync(connection, item.ExternalId, attachmentId, attInfo.Filename, attInfo.MimeType, ct);
     }
 
+    public async Task<byte[]> GetAttachmentsZipAsync(Guid userId, Guid itemId, string messageId, CancellationToken ct = default)
+    {
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+
+        var threadId = GetMetadataString(item.MetadataJson, "threadId");
+        if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
+
+        var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
+        var msg = thread.Messages.FirstOrDefault(m => m.MessageId == messageId)
+            ?? throw new NotFoundException("Message", messageId);
+
+        if (msg.Attachments.Count == 0)
+            throw new BusinessRuleException("Message has no attachments.");
+
+        using var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var usedNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var attInfo in msg.Attachments)
+            {
+                var att = await _gmail.GetAttachmentAsync(connection, msg.MessageId, attInfo.AttachmentId, attInfo.Filename, attInfo.MimeType, ct);
+                var entryName = UniqueEntryName(string.IsNullOrWhiteSpace(attInfo.Filename) ? "attachment" : attInfo.Filename, usedNames);
+                var entry = zip.CreateEntry(entryName, System.IO.Compression.CompressionLevel.Fastest);
+                await using var es = entry.Open();
+                await es.WriteAsync(att.Data, ct);
+            }
+        }
+
+        return ms.ToArray();
+    }
+
+    /// <summary>Tránh trùng tên file trong zip: "a.pdf" → "a (1).pdf", "a (2).pdf"...</summary>
+    private static string UniqueEntryName(string filename, Dictionary<string, int> used)
+    {
+        if (!used.ContainsKey(filename))
+        {
+            used[filename] = 0;
+            return filename;
+        }
+
+        var count = ++used[filename];
+        var ext = Path.GetExtension(filename);
+        var stem = Path.GetFileNameWithoutExtension(filename);
+        var candidate = $"{stem} ({count}){ext}";
+        used[candidate] = 0;
+        return candidate;
+    }
+
     // ───────────────────────── Private Helpers ─────────────────────────
 
     /// <summary>Decode danh sách file base64 (client upload) → GmailAttachmentData binary để gắn vào MIME.</summary>

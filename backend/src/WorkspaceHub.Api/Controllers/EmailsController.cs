@@ -99,4 +99,14 @@ public class EmailsController : ApiControllerBase
         var attachment = await _service.GetAttachmentAsync(CurrentUserId, itemId, attachmentId, ct);
         return File(attachment.Data, attachment.MimeType, attachment.Filename);
     }
+
+    /// <summary>
+    /// Tải toàn bộ attachment của 1 message (trong thread) dưới dạng 1 file .zip.
+    /// </summary>
+    [HttpGet("{itemId}/messages/{messageId}/attachments/zip")]
+    public async Task<IActionResult> DownloadAllAttachments([FromRoute] Guid itemId, [FromRoute] string messageId, CancellationToken ct)
+    {
+        var zip = await _service.GetAttachmentsZipAsync(CurrentUserId, itemId, messageId, ct);
+        return File(zip, "application/zip", "attachments.zip");
+    }
 }
