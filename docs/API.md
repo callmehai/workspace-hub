@@ -131,7 +131,7 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
 > Notification type cho Jira (jira_assigned…): chưa làm — optional, chờ có nguồn sync-event Jira.
 
 ## Items (thêm write-back ⭐)
-- `GET /api/items?folderId&status&type&isImportant&search&page&limit` — envelope. Trả kèm ETag. **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
+- `GET /api/items?folderId&statuses&types&isImportant&tagId&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagId` ✅ **SCRUM-71** = lọc item gắn tag đó (join `TagAssignment`). Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
 - `POST /api/items/note` — tạo Note.
 - `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar.
@@ -172,3 +172,6 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 - `POST /api/internal/process-scheduled` — header `X-Cron-Secret` (so khớp `Cron:Secret`; thiếu/sai/secret chưa cấu hình → 401). Không JWT. Gửi mọi email Pending có `sendAt <= now` qua Gmail (token tự refresh từ Connection). Mỗi email lỗi → `Failed` (RetryCount++, LastError) chứ không chặn cả batch. Trả `200 { total, sent, failed }`. ✅ SCRUM-31.
   - **Cron ngoài** gọi endpoint này định kỳ (khuyến nghị 5 phút/lần) — thiết kế mặc định.
   - **Auto-cron nội bộ (tuỳ chọn):** `Cron:AutoRun=true` → BE tự chạy `ScheduledEmailProcessorService` (BackgroundService) quét/gửi mỗi `Cron:IntervalSeconds` (mặc định 300s), gọi thẳng service không qua HTTP/secret. Prod mặc định `false` (theo CLAUDE.md "BE không tự hẹn giờ"); Development mặc định `true` (interval 60s) để test.
+- `POST /api/internal/process-sync` — header `X-Cron-Secret` (cùng `Cron:Secret` với `process-scheduled`). Không JWT. Quét mọi Connection Active + Integration enabled → debounce → refresh token nếu cần → `ConnectionSyncDispatcher.SyncAsync` (Gmail/GCal/Drive/Jira). Lỗi **auth bền** (401/403, refresh token fail) → `Status=Error`; lỗi tạm thời (network/5xx) giữ `Active` để cron lần sau retry — mỗi connection lỗi không chặn batch. Trả `200 ProcessSyncResult { totalConnections, successCount, skippedCount, errorCount, details? }`. ✅ SCRUM-72.
+  - **Prod (mặc định):** `Cron:SyncAutoRun=true` trong `docker-compose.prod.yml` → `ConnectionSyncProcessorService` mỗi `Cron:SyncIntervalSeconds` (compose: 60s). Cùng pattern cron email — không cần cron-job.org. **Không** bật đồng thời với cron HTTP.
+  - **HTTP cron (tuỳ chọn):** `POST /api/internal/process-sync` + `X-Cron-Secret` khi `SyncAutoRun=false` (test local hoặc thay BackgroundService).

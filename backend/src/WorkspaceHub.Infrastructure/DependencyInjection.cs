@@ -123,7 +123,7 @@ public static class DependencyInjection
         // AdminService đặt tại Infrastructure vì cần inject AppDbContext trực tiếp
         // (EF projection no-N+1 cho ConnectionCount/ItemCount — xem AdminService.cs).
         services.AddScoped<IAdminService, AdminService>();
-
+        services.AddScoped<IProcessConnectionsSyncService, ProcessConnectionsSyncService>();
         return services;
     }
 }

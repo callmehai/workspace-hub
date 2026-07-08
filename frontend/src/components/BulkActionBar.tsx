@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FolderPlus, FolderMinus, X } from 'lucide-react';
+import { FolderPlus, FolderMinus, Tag, X } from 'lucide-react';
 import { foldersApi } from '../lib/itemsApi';
+import { tagsApi } from '../lib/tagsApi';
 import { handleApiError } from '../lib/errorUtils';
-import { type FolderResponse } from '../types/items';
+import { type FolderResponse, type TagResponse } from '../types/items';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../hooks/useI18n';
@@ -19,10 +20,33 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
   const { t } = useI18n();
   const [isAdding, setIsAdding] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isTagging, setIsTagging] = useState(false);
 
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
+  });
+
+  const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
+
+  const invalidateSelected = () => {
+    queryClient.invalidateQueries({ queryKey: ['items'] });
+    selectedItemIds.forEach(id => queryClient.invalidateQueries({ queryKey: ['item', id] }));
+    queryClient.invalidateQueries({ queryKey: ['tags'] });
+  };
+
+  // Gắn tag hàng loạt — BE chưa có endpoint bulk nên gọi assign từng item;
+  // allSettled để item đã gắn sẵn (409) không làm hỏng cả batch.
+  const tagBulkMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      await Promise.allSettled(Array.from(selectedItemIds).map(id => tagsApi.assignTag(tagId, id)));
+    },
+    onSuccess: () => {
+      toast.success(t('bulk.taggedN', { n: selectedItemIds.size }));
+      invalidateSelected();
+      onClearSelection();
+    },
+    onError: (err) => handleApiError(err, t('tag.assignFail'), { navigate })
   });
 
   const addBulkMutation = useMutation({
@@ -55,8 +79,8 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-5 py-3 rounded-2xl shadow-[0_10px_35px_-5px_rgba(0,0,0,0.15)] flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-300">
-      <div className="flex items-center gap-3">
-        <span className="flex items-center justify-center bg-indigo-600 text-white font-bold w-6 h-6 rounded-full text-xs">
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-brand-500/15 text-brand-700 dark:text-brand-300 font-bold text-[12.5px] tabular-nums">
           {selectedItemIds.size}
         </span>
         <span className="text-[13.5px] font-semibold text-slate-600 dark:text-slate-400">{t('bulk.selected')}</span>
@@ -133,6 +157,44 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
                     >
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: f.color || '#94a3b8' }}></span>
                       <span className="truncate">{f.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Gắn tag hàng loạt */}
+        <div className="relative">
+          <button
+            onClick={() => { setIsTagging(!isTagging); setIsAdding(false); setIsRemoving(false); }}
+            className={`flex items-center gap-2 text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-all ${
+              isTagging
+                ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100'
+            }`}
+          >
+            <Tag className="w-4 h-4" />
+            {t('bulk.tag')}
+          </button>
+
+          {isTagging && (
+            <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-xl py-1.5 text-slate-800 dark:text-slate-200">
+              <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{t('bulk.tag')}</div>
+              <div className="max-h-60 overflow-y-auto">
+                {tags.length === 0 ? (
+                  <div className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">{t('tag.noneAvailable')}</div>
+                ) : (
+                  tags.map((tg: TagResponse) => (
+                    <button
+                      key={tg.id}
+                      disabled={tagBulkMutation.isPending}
+                      onClick={() => tagBulkMutation.mutate(tg.id)}
+                      className="w-full text-left px-4 py-2 text-[13px] font-medium hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tg.color }}></span>
+                      <span className="truncate">{tg.name}</span>
                     </button>
                   ))
                 )}
