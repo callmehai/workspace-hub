@@ -314,7 +314,7 @@ public class AuthService : IAuthService
     }
 
     private static UserDto MapToDto(User user)
-        => new(user.Id, user.Email, user.FullName, user.Role.ToString());
+        => new(user.Id, user.Email, user.FullName, user.Role.ToString(), user.AvatarUrl, user.AuthProvider.ToString());
 
     /// <summary>Minimal token response for Google Sign-In (only need id_token).</summary>
     private class GoogleSignInTokenResponse

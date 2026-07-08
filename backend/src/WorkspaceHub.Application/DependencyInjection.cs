@@ -56,6 +56,9 @@ public static class DependencyInjection
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
         services.AddScoped<INotificationService, NotificationService>();
 
+        // Avatar upload (SCRUM-75)
+        services.AddScoped<IUserProfileService, UserProfileService>();
+
         return services;
     }
 }
