@@ -388,10 +388,11 @@ public class AdminServiceTests : IDisposable
     {
         // Arrange
         var user = CreateUser("toggle@test.com", isActive: true);
+        var adminId = Guid.NewGuid();
         await _db.SaveChangesAsync();
 
         // Act & Assert 1: Toggle from true to false
-        var result1 = await _sut.ToggleUserActiveAsync(user.Id);
+        var result1 = await _sut.ToggleUserActiveAsync(user.Id, adminId);
         Assert.False(result1.IsActive);
 
         // Verify in DB
@@ -399,7 +400,7 @@ public class AdminServiceTests : IDisposable
         Assert.False(userInDb1!.IsActive);
 
         // Act & Assert 2: Toggle from false to true
-        var result2 = await _sut.ToggleUserActiveAsync(user.Id);
+        var result2 = await _sut.ToggleUserActiveAsync(user.Id, adminId);
         Assert.True(result2.IsActive);
 
         // Verify in DB
@@ -408,13 +409,26 @@ public class AdminServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ToggleUserActiveAsync_ThrowsBusinessRuleException_WhenAdminTogglesSelf()
+    {
+        // Arrange
+        var admin = CreateUser("admin@test.com", isActive: true);
+        await _db.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.BusinessRuleException>(() =>
+            _sut.ToggleUserActiveAsync(admin.Id, admin.Id));
+    }
+
+    [Fact]
     public async Task ToggleUserActiveAsync_ThrowsNotFoundException_WhenUserDoesNotExist()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
 
         // Act & Assert
         await Assert.ThrowsAsync<WorkspaceHub.Application.Common.NotFoundException>(() =>
-            _sut.ToggleUserActiveAsync(nonExistentId));
+            _sut.ToggleUserActiveAsync(nonExistentId, adminId));
     }
 }

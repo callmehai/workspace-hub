@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { adminApi } from '../lib/adminApi';
 import { handleApiError } from '../lib/errorUtils';
+import type { AdminUserDto } from '../types/admin';
 import { Users, UserCheck, Lock, AlertCircle, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { PageSizeSelect } from '../components/PageSizeSelect';
@@ -58,6 +59,15 @@ export const AdminDashboard = () => {
     },
     onError: (err) => handleApiError(err, t('admin.userStatusUpdateFail')),
   });
+
+  const handleToggleActive = (user: AdminUserDto) => {
+    const confirmMessage = user.isActive
+      ? t('admin.confirmLock')
+      : t('admin.confirmUnlock');
+    if (window.confirm(confirmMessage)) {
+      toggleActiveMutation.mutate(user.id);
+    }
+  };
 
   useEffect(() => {
     if (statsError) handleApiError(statsError, t('admin.statsError'));
@@ -204,7 +214,7 @@ export const AdminDashboard = () => {
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
                         <button
-                          onClick={() => toggleActiveMutation.mutate(u.id)}
+                          onClick={() => handleToggleActive(u)}
                           disabled={toggleActiveMutation.isPending}
                           className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50
                             ${u.isActive ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}

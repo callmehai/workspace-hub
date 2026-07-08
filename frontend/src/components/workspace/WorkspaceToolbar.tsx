@@ -285,7 +285,7 @@ export const WorkspaceToolbar = ({
             className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
-        {onProjectKeyChange && (
+        {onProjectKeyChange && jiraConns.length > 0 && (
           <div className="relative w-48 shrink-0">
             <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <select

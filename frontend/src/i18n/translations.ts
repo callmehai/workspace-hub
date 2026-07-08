@@ -336,6 +336,8 @@ export const vi = {
   'admin.userStatusUpdateFail': 'Lỗi cập nhật trạng thái người dùng',
   'admin.clickToLock': 'Nhấp để khoá tài khoản này',
   'admin.clickToUnlock': 'Nhấp để mở khoá tài khoản này',
+  'admin.confirmLock': 'Bạn có chắc chắn muốn khoá tài khoản này?',
+  'admin.confirmUnlock': 'Bạn có chắc chắn muốn mở khoá tài khoản này?',
   'admin.pageLabel': 'Trang',
   'admin.usersCount': '({count} người dùng)',
 
@@ -890,6 +892,8 @@ export const en: Record<TranslationKey, string> = {
   'admin.userStatusUpdateFail': 'Failed to update user status',
   'admin.clickToLock': 'Click to lock this account',
   'admin.clickToUnlock': 'Click to unlock this account',
+  'admin.confirmLock': 'Are you sure you want to lock this account?',
+  'admin.confirmUnlock': 'Are you sure you want to unlock this account?',
   'admin.pageLabel': 'Page',
   'admin.usersCount': '({count} users)',
 

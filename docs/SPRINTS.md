@@ -86,7 +86,7 @@
 | SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ✅ Done — Hỗ trợ Email (star/read/label/trash), Event (CRUD), File (rename/trash), Ticket (assignee/priority/transition/comment) kèm ETag/version conflict resolution (Fix lỗi update assignee lần đầu tiên); Thêm Project filter và thông tin project vào Ticket. |
 | SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Khánh | ✅ Done — Giao diện 2 cột, validation client, OData filter/pagination, modal HTML. |
 | SCRUM-48 | FE: Loading/error/toast chuẩn | Khánh | ✅ Done |
-| SCRUM-49 | FE: Admin dashboard (users list + stats charts) | Huy | 🔄 In Progress |
+| SCRUM-49 | FE: Admin dashboard (users list + stats charts) + Lock/Unlock user | Huy | ✅ Done — Hoàn thành trang Admin Dashboard hiển thị thống kê tổng quan (biểu đồ tròn Connections) và danh sách User phân trang. Bổ sung tính năng Khóa / Mở khóa người dùng (User Lock/Unlock) qua API POST /api/admin/users/{id}/toggle-active kèm bảo vệ tự khóa tài khoản Admin. |
 | SCRUM-50 | FE: Responsive polish + dashboard chart + dark mode | Dũng | ⏳ To Do |
 | SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do (board) — **thực tế đã deploy** lên AWS Lightsail (`app.workspace-hub.space`, Docker Compose + CI/CD auto-deploy develop); còn lại: chốt OAuth redirect prod cho từng account, đóng ticket. Xem `docs/DEPLOY.md`. |
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |

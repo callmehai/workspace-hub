@@ -217,7 +217,15 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
               <select
                 id="createTicket-connection"
                 value={connectionId}
-                onChange={(e) => { setConnectionId(e.target.value); setProjectKey(''); setIssueType(''); }}
+                onChange={(e) => {
+                  setConnectionId(e.target.value);
+                  setProjectKey('');
+                  setIssueType('');
+                  setPriority('');
+                  setAssigneeAccountId('');
+                  setAssigneeQuery('');
+                  setDebouncedAssigneeQuery('');
+                }}
                 className={SELECT_CLS}
                 disabled={jiraConnections.length === 0}
               >

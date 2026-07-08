@@ -94,7 +94,11 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - `activeUsers + lockedUsers == totalUsers` (invariant).
 - Status: 200 · 401 · 403.
 
-`GET /api/admin/users/{id}`, `PATCH /users/{id}/lock`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
+`POST /api/admin/users/{id}/toggle-active` — toggle lock/unlock user, Admin only.
+- Response 200: `{ id, email, fullName, role, isActive, lastLoginAt, createdAt, connectionCount, itemCount }` (updated AdminUserDto).
+- Status: 200 · 400 (cannot lock self) · 401 · 403 · 404 (user not found).
+
+`GET /api/admin/users/{id}`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
 - `GET /api/integrations` — catalog cho user. **OData ⊕** (target — $filter isEnabled/provider, $orderby).

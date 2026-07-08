@@ -132,10 +132,13 @@ public class AdminService : IAdminService
             ConnectionsByStatus: connectionsByStatus,
             TotalItems:          totalItems,
             SyncErrorsLast24h:   syncErrorsLast24h);
-     }
+    }
 
-    public async Task<AdminUserDto> ToggleUserActiveAsync(Guid id, CancellationToken ct = default)
+    public async Task<AdminUserDto> ToggleUserActiveAsync(Guid id, Guid currentAdminId, CancellationToken ct = default)
     {
+        if (id == currentAdminId)
+            throw new BusinessRuleException("Bạn không thể tự khóa tài khoản của chính mình.");
+
         var user = await _db.Users.FindAsync(new object[] { id }, ct)
             ?? throw new NotFoundException("User", id);
 

@@ -557,14 +557,32 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     const patch: PatchItemRequest = {};
     if (ticketForm.summary.trim() && ticketForm.summary.trim() !== item.title)
       patch.summary = ticketForm.summary.trim();
-    if (ticketForm.description.trim()) patch.description = ticketForm.description.trim();
-    if (ticketForm.priority) patch.priority = ticketForm.priority;
+
+    const originalDesc = item.snippet ?? '';
+    const newDesc = ticketForm.description.trim();
+    if (newDesc !== originalDesc) {
+      patch.description = newDesc;
+    }
+
+    const originalPriority = metadata.priority ?? '';
+    if (ticketForm.priority !== originalPriority) {
+      patch.priority = ticketForm.priority;
+    }
+
     if (ticketForm.assigneeAccountId && ticketForm.assigneeAccountId !== metadata.assigneeAccountId) {
       patch.assignee = ticketForm.assigneeAccountId;
     } else if (ticketForm.assigneeQuery.trim() !== (metadata.assignee ?? '').trim()) {
       patch.assignee = ticketForm.assigneeQuery.trim();
     }
-    if (rawLabels.length > 0) patch.labels = rawLabels;
+
+    const originalLabels = Array.isArray(metadata.labels) ? [...metadata.labels].sort() : [];
+    const sortedRawLabels = [...rawLabels].sort();
+    const labelsChanged = originalLabels.length !== sortedRawLabels.length ||
+      originalLabels.some((l, i) => l !== sortedRawLabels[i]);
+    if (labelsChanged) {
+      patch.labels = rawLabels;
+    }
+
     if (ticketForm.statusTransitionId) patch.statusTransition = ticketForm.statusTransitionId;
     if (ticketForm.comment.trim()) patch.comment = ticketForm.comment.trim();
     patchMutation.mutate(patch);
