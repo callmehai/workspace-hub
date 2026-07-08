@@ -1,5 +1,8 @@
+using System.Net.Mail;
+using System.Text.Json;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
+using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Application.Services;
@@ -40,17 +43,67 @@ public class SyncItemNotificationService : ISyncItemNotificationService
                 ? NotificationType.ImportantEmail
                 : NotificationType.ItemSynced;
 
-            var title = item.Type switch
-            {
-                ItemType.Email => item.IsImportant ? $"Email quan trọng: {item.Title}" : $"Email mới: {item.Title}",
-                ItemType.Event => $"Sự kiện mới: {item.Title}",
-                ItemType.File => $"File mới: {item.Title}",
-                ItemType.Ticket => $"Ticket mới: {item.Title}",
-                _ => $"Mục mới: {item.Title}",
-            };
+            var (titleKey, body) = BuildPayload(item);
 
             await _notifications.CreateAndSendAsync(
-                userId, type, title, item.Snippet ?? string.Empty, $"/inbox?item={item.Id}", ct);
+                userId, type, titleKey, body, $"/inbox?item={item.Id}", ct);
+        }
+    }
+
+    private static (string TitleKey, string BodyJson) BuildPayload(Item item)
+    {
+        var preview = !string.IsNullOrWhiteSpace(item.Snippet) ? item.Snippet.Trim() : item.Title;
+        var payload = new Dictionary<string, string>
+        {
+            ["preview"] = preview,
+            ["itemTitle"] = item.Title,
+        };
+
+        var titleKey = item.Type switch
+        {
+            ItemType.Email when item.IsImportant => "notifications.importantEmailFrom",
+            ItemType.Email => "notifications.newEmailFrom",
+            ItemType.Event => "notifications.newEvent",
+            ItemType.File => "notifications.newFile",
+            ItemType.Ticket => "notifications.newTicket",
+            _ => "notifications.newItem",
+        };
+
+        if (item.Type == ItemType.Email)
+            payload["from"] = FormatEmailSender(TryGetMetadataString(item.MetadataJson, "from")) ?? item.Title;
+
+        return (titleKey, JsonSerializer.Serialize(payload));
+    }
+
+    private static string? TryGetMetadataString(string metadataJson, string property)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.TryGetProperty(property, out var prop))
+                return prop.GetString();
+        }
+        catch (JsonException)
+        {
+            // Metadata không hợp lệ — bỏ qua.
+        }
+
+        return null;
+    }
+
+    private static string FormatEmailSender(string? fromHeader)
+    {
+        if (string.IsNullOrWhiteSpace(fromHeader))
+            return "Unknown";
+
+        try
+        {
+            var addr = new MailAddress(fromHeader);
+            return string.IsNullOrWhiteSpace(addr.DisplayName) ? addr.Address : addr.DisplayName;
+        }
+        catch (FormatException)
+        {
+            return fromHeader.Trim();
         }
     }
 }

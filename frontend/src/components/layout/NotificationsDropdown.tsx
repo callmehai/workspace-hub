@@ -1,11 +1,13 @@
 import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { enUS, vi } from 'date-fns/locale';
 import { Bell, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../../lib/notificationsApi';
 import { handleApiError } from '../../lib/errorUtils';
+import { formatNotificationDisplay } from '../../lib/notificationDisplay';
 import { NOTIFICATIONS_LIST_KEY, UNREAD_COUNT_KEY } from '../../hooks/useNotificationHub';
+import { useI18n } from '../../hooks/useI18n';
 import type { NotificationDto } from '../../types/notifications';
 
 const PAGE_SIZE = 20;
@@ -15,8 +17,10 @@ interface NotificationsDropdownProps {
 }
 
 export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) => {
+  const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const dfLocale = lang === 'en' ? enUS : vi;
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: NOTIFICATIONS_LIST_KEY,
@@ -35,7 +39,7 @@ export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) =
       queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_LIST_KEY });
       queryClient.invalidateQueries({ queryKey: UNREAD_COUNT_KEY });
     },
-    onError: (err) => handleApiError(err, 'Không thể đánh dấu đã đọc'),
+    onError: (err) => handleApiError(err, t('notifications.updateFailed')),
   });
 
   const markAllAsRead = useMutation({
@@ -44,7 +48,7 @@ export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) =
       queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_LIST_KEY });
       queryClient.setQueryData(UNREAD_COUNT_KEY, 0);
     },
-    onError: (err) => handleApiError(err, 'Không thể đánh dấu tất cả đã đọc'),
+    onError: (err) => handleApiError(err, t('notifications.updateFailed')),
   });
 
   const items = data?.pages.flatMap((p) => p.value) ?? [];
@@ -65,7 +69,9 @@ export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) =
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
         <div className="flex items-center gap-2">
           <Bell className="h-4 w-4 text-brand-600 dark:text-brand-400" aria-hidden />
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Thông báo</h3>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {t('header.notifications')}
+          </h3>
           {totalCount > 0 && (
             <span className="text-xs text-slate-400 dark:text-slate-500">({totalCount})</span>
           )}
@@ -78,7 +84,7 @@ export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) =
             disabled={markAllAsRead.isPending}
             className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            Đánh dấu tất cả đã đọc
+            {t('notifications.markAllRead')}
           </button>
         )}
       </div>
@@ -97,42 +103,47 @@ export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) =
 
         {!isLoading && items.length === 0 && (
           <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-            Không có thông báo
+            {t('notifications.empty')}
           </p>
         )}
 
         {!isLoading &&
-          items.map((notification) => (
-            <button
-              key={notification.id}
-              id={`notification-${notification.id}`}
-              type="button"
-              onClick={() => handleItemClick(notification)}
-              className={`w-full border-b border-slate-50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/80 ${
-                !notification.isRead ? 'bg-brand-50/50 dark:bg-brand-500/10' : ''
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                {!notification.isRead && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500 dark:bg-brand-400" />
-                )}
-                <div className={notification.isRead ? 'pl-4' : ''}>
-                  <p className="line-clamp-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-                    {notification.title}
-                  </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-                    {notification.body}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                    {formatDistanceToNow(new Date(notification.createdAt), {
-                      addSuffix: true,
-                      locale: vi,
-                    })}
-                  </p>
+          items.map((notification) => {
+            const { title, subtitle } = formatNotificationDisplay(notification, t);
+            return (
+              <button
+                key={notification.id}
+                id={`notification-${notification.id}`}
+                type="button"
+                onClick={() => handleItemClick(notification)}
+                className={`w-full border-b border-slate-50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/80 ${
+                  !notification.isRead ? 'bg-brand-50/50 dark:bg-brand-500/10' : ''
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  {!notification.isRead && (
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500 dark:bg-brand-400" />
+                  )}
+                  <div className={notification.isRead ? 'pl-4' : ''}>
+                    <p className="line-clamp-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {title}
+                    </p>
+                    {subtitle ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                        {subtitle}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                      {formatDistanceToNow(new Date(notification.createdAt), {
+                        addSuffix: true,
+                        locale: dfLocale,
+                      })}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
 
         {hasNextPage && (
           <div className="border-t border-slate-100 px-4 py-2 dark:border-slate-800">
@@ -145,10 +156,10 @@ export const NotificationsDropdown = ({ onClose }: NotificationsDropdownProps) =
               {isFetchingNextPage ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  Đang tải...
+                  {t('notifications.loading')}
                 </>
               ) : (
-                `Tải thêm (${items.length}/${totalCount})`
+                t('notifications.loadMore', { loaded: items.length, total: totalCount })
               )}
             </button>
           </div>

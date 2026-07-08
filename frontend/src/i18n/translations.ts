@@ -44,6 +44,20 @@ export const vi = {
   'header.connect': 'Kết nối dịch vụ',
   'header.notifications': 'Thông báo',
 
+  // ── notifications (title keys lưu DB — FE dịch theo lang) ──
+  'notifications.newEmailFrom': 'Bạn có email mới từ {from}',
+  'notifications.importantEmailFrom': 'Bạn có email quan trọng từ {from}',
+  'notifications.newEvent': 'Bạn có sự kiện lịch mới: {itemTitle}',
+  'notifications.newFile': 'Bạn có file mới: {itemTitle}',
+  'notifications.newTicket': 'Bạn có ticket mới: {itemTitle}',
+  'notifications.newItem': 'Bạn có mục mới: {itemTitle}',
+  'notifications.devSeed': 'Bạn có mục mới',
+  'notifications.markAllRead': 'Đánh dấu tất cả đã đọc',
+  'notifications.empty': 'Không có thông báo',
+  'notifications.loadMore': 'Tải thêm ({loaded}/{total})',
+  'notifications.loading': 'Đang tải…',
+  'notifications.updateFailed': 'Không thể cập nhật thông báo',
+
   // ── theme / language ──
   'theme.toLight': 'Chuyển sang giao diện Sáng',
   'theme.toDark': 'Chuyển sang giao diện Tối',
@@ -508,6 +522,20 @@ export const en: Record<TranslationKey, string> = {
   'header.search': 'Search across tools…',
   'header.connect': 'Connect services',
   'header.notifications': 'Notifications',
+
+  // ── notifications (title keys stored in DB — FE translates by lang) ──
+  'notifications.newEmailFrom': 'You have a new email from {from}',
+  'notifications.importantEmailFrom': 'You have an important email from {from}',
+  'notifications.newEvent': 'You have a new calendar event: {itemTitle}',
+  'notifications.newFile': 'You have a new file: {itemTitle}',
+  'notifications.newTicket': 'You have a new ticket: {itemTitle}',
+  'notifications.newItem': 'You have a new item: {itemTitle}',
+  'notifications.devSeed': 'You have a new item',
+  'notifications.markAllRead': 'Mark all as read',
+  'notifications.empty': 'No notifications',
+  'notifications.loadMore': 'Load more ({loaded}/{total})',
+  'notifications.loading': 'Loading…',
+  'notifications.updateFailed': 'Could not update notification',
 
   // ── theme / language ──
   'theme.toLight': 'Switch to Light theme',

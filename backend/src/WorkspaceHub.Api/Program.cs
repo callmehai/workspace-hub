@@ -31,7 +31,8 @@ scheduledEmails.EntityType.HasKey(e => e.Id);
 var contactSuggestionType = edmBuilder.EntityType<ContactSuggestionDto>();
 contactSuggestionType.HasKey(c => c.Email);
 edmBuilder.EntitySet<ContactSuggestionDto>("EmailContactSuggestions");
-edmBuilder.EntitySet<NotificationDto>("Notifications");
+var notifications = edmBuilder.EntitySet<NotificationDto>("Notifications");
+notifications.EntityType.HasKey(n => n.Id);
 
 // Controllers + serialize enum dạng string (khớp cách lưu DB) + OData.
 builder.Services.AddControllers()

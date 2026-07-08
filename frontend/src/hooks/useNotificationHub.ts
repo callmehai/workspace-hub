@@ -8,6 +8,7 @@ import {
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { showNotificationToast } from '../components/NotificationToast';
+import { formatNotificationDisplay } from '../lib/notificationDisplay';
 import { useAuth } from './useAuth';
 import type { NotificationDto } from '../types/notifications';
 import type { PaginatedResponse } from '../lib/scheduledEmailsApi';
@@ -151,7 +152,8 @@ export function applyIncomingNotification(
 
   queryClient.invalidateQueries({ queryKey: ['items'] });
 
-  showNotificationToast(notification.title, notification.body, () => {
+  const { title, subtitle } = formatNotificationDisplay(notification);
+  showNotificationToast(title, subtitle, () => {
     if (notification.linkUrl) navigate(notification.linkUrl);
   });
 }

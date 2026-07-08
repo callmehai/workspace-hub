@@ -8,9 +8,9 @@ export const notificationsApi = {
     top = 20,
     unreadOnly = false,
   ): Promise<PaginatedResponse<NotificationDto>> => {
-    let url = `/Notifications?$top=${top}&$skip=${skip}&$count=true&$orderby=createdAt desc`;
+    let url = `/Notifications?$top=${top}&$skip=${skip}&$count=true&$orderby=CreatedAt desc`;
     if (unreadOnly) {
-      url += '&$filter=isRead eq false';
+      url += '&$filter=IsRead eq false';
     }
     const response = await api.get(url);
     const data = response.data;
@@ -24,7 +24,7 @@ export const notificationsApi = {
   },
 
   getUnreadCount: async (): Promise<number> => {
-    const response = await api.get('/Notifications?$filter=isRead eq false&$count=true&$top=0');
+    const response = await api.get('/Notifications?$filter=IsRead eq false&$count=true&$top=0');
     const data = response.data;
     if (typeof data?.['@odata.count'] === 'number') {
       return data['@odata.count'];

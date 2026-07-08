@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Infrastructure.Data;
@@ -35,4 +36,18 @@ public class GoogleContactRepository : IGoogleContactRepository
             .ThenBy(c => c.Email)
             .ToListAsync(ct);
     }
+
+    public IQueryable<ContactSuggestionDto> QueryByConnectionId(Guid connectionId) =>
+        _db.GoogleContacts.AsNoTracking()
+            .Where(c => c.ConnectionId == connectionId)
+            .AsEnumerable()
+            .GroupBy(c => c.Email, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .Select(c => new ContactSuggestionDto
+            {
+                Email = c.Email,
+                DisplayName = c.DisplayName,
+                Source = c.Source.ToString()
+            })
+            .AsQueryable();
 }

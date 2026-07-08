@@ -13,4 +13,8 @@ public interface ISendEmailService
     /// <summary>Danh sách contact cache theo connection (Contact + OtherContact) — OData filter/sort/paging ở controller.</summary>
     Task<IReadOnlyList<ContactSuggestionDto>> GetContactSuggestionsAsync(
         Guid userId, Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>OData list — IQueryable in-memory sau validate connection Gmail.</summary>
+    Task<IQueryable<ContactSuggestionDto>> QueryContactSuggestionsAsync(
+        Guid userId, Guid connectionId, CancellationToken ct = default);
 }

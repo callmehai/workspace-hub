@@ -13,7 +13,7 @@ using WorkspaceHub.Infrastructure.Data;
 
 namespace WorkspaceHub.Tests.Controllers;
 
-/// <summary>OData in-memory trên attribute route ([ODataIgnored]) — scheduled-emails, contacts, user-notifications.</summary>
+/// <summary>OData in-memory trên convention route — ScheduledEmails, EmailContactSuggestions, Notifications.</summary>
 public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> _factory;
@@ -202,7 +202,23 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Fact]
-    public async Task ContactsSuggest_Get_Filter_ReturnsAlice()
+    public async Task Notifications_Get_UnreadFilter_ReturnsOne()
+    {
+        await ResetAndSeedAsync();
+        var client = CreateAuthClient();
+
+        var response = await client.GetAsync(
+            "/api/Notifications?$filter=IsRead eq false&$count=true&$top=10&$orderby=CreatedAt desc");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var (items, total) = await ParseODataCollectionAsync(response);
+        items.Should().HaveCount(1);
+        total.Should().Be(1);
+        items[0].GetProperty("isRead").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task EmailContactSuggestions_Get_Filter_ReturnsAlice()
     {
         await ResetAndSeedAsync();
         using var scope = _factory.Services.CreateScope();
@@ -214,7 +230,7 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
         var client = CreateAuthClient();
         var filter = Uri.EscapeDataString("contains(Email,'alice')");
         var response = await client.GetAsync(
-            $"/api/emails/contacts/suggest?connectionId={connId}&$filter={filter}&$count=true&$top=10");
+            $"/api/EmailContactSuggestions?connectionId={connId}&$filter={filter}&$count=true&$top=10");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 

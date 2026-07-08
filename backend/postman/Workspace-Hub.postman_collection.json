@@ -1276,11 +1276,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/notifications?$top=20",
+              "raw": "{{baseUrl}}/api/Notifications?$top=20&$orderby=CreatedAt desc&$count=true",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "notifications"],
+              "path": ["api", "Notifications"],
               "query": [
-                { "key": "$top", "value": "20" }
+                { "key": "$top", "value": "20" },
+                { "key": "$orderby", "value": "CreatedAt desc" },
+                { "key": "$count", "value": "true" }
               ]
             }
           },
