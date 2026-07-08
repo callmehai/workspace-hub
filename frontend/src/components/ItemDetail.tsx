@@ -10,6 +10,7 @@ import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
 import { TagChip, FolderChip } from './tags/TagChip';
 import { TagManagerModal } from './tags/TagManagerModal';
+import { ConfirmDialog } from './ConfirmDialog';
 import { EmailThreadView } from './emails/EmailThreadView';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
@@ -17,6 +18,7 @@ import { handleApiError } from '../lib/errorUtils';
 import { getStatusLabel, isItemUnread } from '../lib/itemMeta';
 import { useSeenSet, markSeen, markUnseen } from '../lib/seenStore';
 import { typeLabelKey } from '../lib/itemVisuals';
+import type { TranslationKey } from '../i18n/translations';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
 
@@ -46,6 +48,14 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const STATUS_DOT: Record<string, string> = { Inbox: 'bg-slate-400', Doing: 'bg-blue-500', Done: 'bg-emerald-500' };
 
+/** i18n key cho câu hỏi xác nhận xoá theo loại item. */
+const DELETE_CONFIRM_KEY: Record<string, TranslationKey> = {
+  Email: 'item.confirmDeleteEmail',
+  Event: 'item.confirmDeleteEvent',
+  File: 'item.confirmDeleteFile',
+  Note: 'item.confirmDeleteNote',
+};
+
 const TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; bg: string }> = {
   Email:  { label: 'Email',    icon: <Mail className="w-5 h-5" />,      bg: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400' },
   Event:  { label: 'Sự kiện', icon: <Calendar className="w-5 h-5" />,   bg: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400' },
@@ -67,6 +77,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isAddingTag, setIsAddingTag] = useState(false);
   const addTagRef = useRef<HTMLDivElement>(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
@@ -786,11 +797,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 <Send className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>{t('item.composeNew')}</span>
               </button>
               <button
-                onClick={() => {
-                  if (window.confirm(t('item.confirmDeleteEmail'))) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
                 className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
@@ -820,11 +827,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </a>
               )}
               <button
-                onClick={() => {
-                  if (window.confirm(t('item.confirmDeleteEvent'))) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
                 className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
@@ -852,11 +855,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </a>
               )}
               <button
-                onClick={() => {
-                  if (window.confirm(t('item.confirmDeleteFile'))) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
                 className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
@@ -867,11 +866,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {item.type === 'Note' && (
             <button
-              onClick={() => {
-                if (window.confirm(t('item.confirmDeleteNote'))) {
-                  deleteMutation.mutate();
-                }
-              }}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleteMutation.isPending}
               className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
             >
@@ -888,6 +883,18 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       `}</style>
 
       <TagManagerModal isOpen={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        tone="danger"
+        message={t(DELETE_CONFIRM_KEY[item.type] ?? 'item.confirmDeleteNote')}
+        confirmLabel={t('common.delete')}
+        loading={deleteMutation.isPending}
+        onConfirm={() =>
+          deleteMutation.mutate(undefined, { onError: () => setDeleteConfirmOpen(false) })
+        }
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   );
 };

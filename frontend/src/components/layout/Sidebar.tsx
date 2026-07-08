@@ -19,6 +19,7 @@ import { useI18n } from '../../hooks/useI18n';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { foldersApi } from '../../lib/itemsApi';
 import { FolderModal } from '../folders/FolderModal';
+import { ConfirmDialog } from '../ConfirmDialog';
 import type { FolderResponse } from '../../types/items';
 import { handleApiError } from '../../lib/errorUtils';
 
@@ -44,6 +45,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<FolderResponse | undefined>();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [folderToDelete, setFolderToDelete] = useState<FolderResponse | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -291,9 +293,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                   <button
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
                     onClick={() => {
-                      if (window.confirm(t('sidebar.confirmDeleteFolder'))) {
-                        deleteMutation.mutate(folder.id);
-                      }
+                      setFolderToDelete(folder);
                       setActiveMenuId(null);
                     }}
                   >
@@ -348,6 +348,21 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
         isOpen={isFolderModalOpen}
         onClose={() => setIsFolderModalOpen(false)}
         folder={editingFolder}
+      />
+
+      <ConfirmDialog
+        open={folderToDelete !== null}
+        tone="danger"
+        title={folderToDelete?.name}
+        message={t('sidebar.confirmDeleteFolder')}
+        confirmLabel={t('common.delete')}
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (folderToDelete) {
+            deleteMutation.mutate(folderToDelete.id, { onSettled: () => setFolderToDelete(null) });
+          }
+        }}
+        onCancel={() => setFolderToDelete(null)}
       />
     </>
   );
