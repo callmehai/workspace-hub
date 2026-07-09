@@ -3,12 +3,13 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Send, Eye, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
-import { sendEmailApi, type SendEmailRequest } from '../lib/sendEmailApi';
+import { sendEmailApi, fileToAttachmentUpload, MAX_ATTACHMENT_TOTAL_BYTES, type SendEmailRequest } from '../lib/sendEmailApi';
 import { connectionsApi } from '../lib/connectionsApi';
 import { EMAIL_TEMPLATES } from '../lib/emailTemplates';
 import { handleApiError } from '../lib/errorUtils';
 import { EmailChipsInput } from '../components/EmailChipsInput';
 import { RichTextEditor } from '../components/RichTextEditor';
+import { AttachmentPicker } from '../components/AttachmentPicker';
 import { Select } from '../components/Select';
 import { useI18n } from '../hooks/useI18n';
 
@@ -22,6 +23,7 @@ export const SendEmail = () => {
   const [conn, setConn] = useState('');
   const [template, setTemplate] = useState('blank');
   const [includeSignature, setIncludeSignature] = useState(true);
+  const [files, setFiles] = useState<File[]>([]);
 
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
@@ -58,20 +60,26 @@ export const SendEmail = () => {
     mutationFn: sendEmailApi.send,
     onSuccess: () => {
       toast.success(t('sendEmail.sent'));
-      setTo([]); setCc([]); setBcc([]); setSubject(''); setBody(''); setTemplate('blank');
+      setTo([]); setCc([]); setBcc([]); setSubject(''); setBody(''); setTemplate('blank'); setFiles([]);
     },
     onError: (err) => handleApiError(err, t('sendEmail.sendFail')),
   });
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (to.length === 0) return toast.error(t('sendEmail.needTo'));
     if (!subject.trim()) return toast.error(t('sendEmail.needSubject'));
     if (!body.trim()) return toast.error(t('sendEmail.needBody'));
     if (!resolvedConn) return toast.error(t('sendEmail.needConn'));
 
+    const totalSize = files.reduce((s, f) => s + f.size, 0);
+    if (totalSize > MAX_ATTACHMENT_TOTAL_BYTES) return toast.error(t('attach.tooLarge'));
+
+    const attachments = files.length > 0 ? await Promise.all(files.map(fileToAttachmentUpload)) : undefined;
+
     const payload: SendEmailRequest = {
       connectionId: resolvedConn,
       to, cc, bcc, subject, bodyHtml: composedHtml,
+      attachments,
     };
     sendMutation.mutate(payload);
   };
@@ -128,6 +136,8 @@ export const SendEmail = () => {
 
           <label className={`${labelClass} shrink-0`}>{t('sendEmail.content')}</label>
           <RichTextEditor value={body} onChange={setBody} placeholder={t('sendEmail.contentPlaceholder')} className="mb-3 shrink-0" />
+
+          <AttachmentPicker files={files} onChange={setFiles} className="shrink-0 mb-4" />
 
           <div className="shrink-0 mb-4">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">

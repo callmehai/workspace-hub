@@ -13,7 +13,8 @@ public class CalendarItemMapper : ICalendarItemMapper
             end = ev.End,
             location = ev.Location,
             attendees = ev.Attendees,
-            meetUrl = ev.MeetUrl
+            meetUrl = ev.MeetUrl,
+            htmlLink = ev.HtmlLink
         };
         return new Item
         {

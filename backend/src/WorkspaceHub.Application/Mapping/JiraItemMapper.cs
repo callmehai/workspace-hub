@@ -9,12 +9,17 @@ public class JiraItemMapper : IJiraItemMapper
 {
     private const int SnippetMaxLength = 200;
 
-    public Item ToItem(JiraIssue issue, Guid userId, Guid connectionId)
+    public Item ToItem(JiraIssue issue, Guid userId, Guid connectionId, string? siteUrl = null)
     {
         var description = AdfConverter.ToPlainText(issue.Description);
         var snippet = description.Length > SnippetMaxLength
             ? description[..SnippetMaxLength]
             : description;
+
+        // Browse URL mở issue trên web: "{site}/browse/{KEY}" (site lấy từ accessible-resources).
+        var issueUrl = !string.IsNullOrWhiteSpace(siteUrl) && !string.IsNullOrWhiteSpace(issue.Key)
+            ? $"{siteUrl}/browse/{issue.Key}"
+            : issue.IssueUrl;
 
         var metadata = new
         {
@@ -26,7 +31,8 @@ public class JiraItemMapper : IJiraItemMapper
             assigneeAccountId = issue.AssigneeAccountId,
             priority = issue.PriorityName,
             issueType = issue.IssueTypeName,
-            issueUrl = issue.IssueUrl
+            description,           // description ĐẦY ĐỦ cho drawer (Snippet chỉ 200 ký tự cho list)
+            issueUrl
         };
 
         var mappedStatus = ItemStatus.Inbox;

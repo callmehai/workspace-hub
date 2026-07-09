@@ -62,7 +62,7 @@ public class ItemService : IItemService
             }
         }
 
-        var (items, totalCount) = await _itemRepo.GetPagedAsync(
+        var (items, totalCount, threadCounts) = await _itemRepo.GetPagedAsync(
             userId,
             request.FolderId,
             request.Statuses,
@@ -71,14 +71,30 @@ public class ItemService : IItemService
             request.Search?.Trim(),
             request.TagId,
             request.ProjectKey,
+            request.GmailLabel,
+            request.Assignee,
             page,
             limit,
             ct);
 
-        // Map entities → DTOs
-        var dtos = items.Select(MapToResponse).ToList().AsReadOnly();
+        // Map entities → DTOs (kèm số message trong thread cho item Email đã gộp)
+        var dtos = items.Select(i => MapToResponse(
+            i,
+            i.ThreadId != null && threadCounts.TryGetValue(i.ThreadId, out var c) ? c : 1))
+            .ToList().AsReadOnly();
 
         return new PagedResult<ItemResponse>(dtos, totalCount, page, limit);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<JiraAssigneeDto>> GetTicketAssigneesAsync(Guid userId, CancellationToken ct = default)
+    {
+        var rows = await _itemRepo.GetTicketAssigneesAsync(userId, ct);
+        return rows
+            .Where(r => r.AccountId != null)
+            .Select(r => new JiraAssigneeDto(r.AccountId!, r.DisplayName))
+            .ToList()
+            .AsReadOnly();
     }
 
     /// <inheritdoc/>
@@ -172,7 +188,7 @@ public class ItemService : IItemService
     // ───────────────────────── Private helpers ─────────────────────────
 
     /// <summary>Map Item entity → ItemResponse DTO.</summary>
-    private static ItemResponse MapToResponse(Item item) => new(
+    private static ItemResponse MapToResponse(Item item, int threadCount = 1) => new(
         Id: item.Id,
         Type: item.Type,
         Title: item.Title,
@@ -188,5 +204,7 @@ public class ItemService : IItemService
             .Where(ta => ta.Tag != null)
             .Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color))
             .ToList(),
-        ConnectionId: item.ConnectionId);
+        ConnectionId: item.ConnectionId,
+        ThreadId: item.ThreadId,
+        ThreadCount: threadCount);
 }

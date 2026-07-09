@@ -21,7 +21,7 @@ public class GmailItemMapperTests
     [Fact]
     public void ToItem_WithValidSubject_SetsTitleAndBasicFields()
     {
-        var msg = new GmailMessage("1", "t1", "My Subject", null, new List<string>(), null, new List<string>(), false, null);
+        var msg = new GmailMessage("1", "t1", "My Subject", null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null);
         var userId = Guid.NewGuid();
         var connId = Guid.NewGuid();
 
@@ -38,7 +38,7 @@ public class GmailItemMapperTests
     [Fact]
     public void ToItem_WithNullSubject_SetsDefaultTitle()
     {
-        var msg = new GmailMessage("1", "t1", null, null, new List<string>(), null, new List<string>(), false, null);
+        var msg = new GmailMessage("1", "t1", null, null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null);
         var item = _mapper.ToItem(msg, Guid.NewGuid(), Guid.NewGuid(), new HashSet<string>());
         item.Title.Should().Be("(Không có tiêu đề)");
     }
@@ -46,7 +46,7 @@ public class GmailItemMapperTests
     [Fact]
     public void ToItem_FromInImportantEmails_SetsIsImportantTrue()
     {
-        var msg = new GmailMessage("1", "t1", "Sub", "Boss <boss@x.com>", new List<string>(), null, new List<string>(), false, null);
+        var msg = new GmailMessage("1", "t1", "Sub", "Boss <boss@x.com>", new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null);
         var item = _mapper.ToItem(msg, Guid.NewGuid(), Guid.NewGuid(), new HashSet<string> { "boss@x.com" });
         item.IsImportant.Should().BeTrue();
     }
@@ -54,7 +54,7 @@ public class GmailItemMapperTests
     [Fact]
     public void ToItem_FromNotInImportantEmails_SetsIsImportantFalse()
     {
-        var msg = new GmailMessage("1", "t1", "Sub", "Boss <boss@x.com>", new List<string>(), null, new List<string>(), false, null);
+        var msg = new GmailMessage("1", "t1", "Sub", "Boss <boss@x.com>", new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null);
         var item = _mapper.ToItem(msg, Guid.NewGuid(), Guid.NewGuid(), new HashSet<string> { "other@x.com" });
         item.IsImportant.Should().BeFalse();
     }
@@ -62,7 +62,7 @@ public class GmailItemMapperTests
     [Fact]
     public void ToItem_InvalidFrom_DoesNotThrowAndSetsIsImportantFalse()
     {
-        var msg = new GmailMessage("1", "t1", "Sub", "invalid_email_format", new List<string>(), null, new List<string>(), false, null);
+        var msg = new GmailMessage("1", "t1", "Sub", "invalid_email_format", new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null);
         var item = _mapper.ToItem(msg, Guid.NewGuid(), Guid.NewGuid(), new HashSet<string> { "invalid_email_format" });
         item.IsImportant.Should().BeFalse();
     }
@@ -70,7 +70,7 @@ public class GmailItemMapperTests
     [Fact]
     public void ToItem_SerializesMetadataJsonCorrectly()
     {
-        var msg = new GmailMessage("123", "t1", "Sub", "A <a@b.com>", new List<string> { "c@d.com" }, null, new List<string> { "INBOX" }, true, null);
+        var msg = new GmailMessage("123", "t1", "Sub", "A <a@b.com>", new List<string> { "c@d.com" }, new List<string>(), new List<string>(), null, new List<string> { "INBOX" }, true, null);
         var item = _mapper.ToItem(msg, Guid.NewGuid(), Guid.NewGuid(), new HashSet<string>());
 
         var metadata = JsonDocument.Parse(item.MetadataJson).RootElement;
@@ -86,7 +86,7 @@ public class GmailItemMapperTests
     public void ToItem_WithOccurredAt_SetsUtcDateTime()
     {
         var dtoOffset = new DateTimeOffset(2025, 1, 1, 12, 0, 0, TimeSpan.FromHours(7));
-        var msg = new GmailMessage("1", "t1", "S", null, new List<string>(), null, new List<string>(), false, dtoOffset);
+        var msg = new GmailMessage("1", "t1", "S", null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, dtoOffset);
         
         var item = _mapper.ToItem(msg, Guid.NewGuid(), Guid.NewGuid(), new HashSet<string>());
         

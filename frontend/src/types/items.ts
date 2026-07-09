@@ -29,6 +29,9 @@ export interface ItemResponse {
   folderIds: string[];
   tags: ItemTag[];
   connectionId?: string | null;
+  threadId?: string | null;
+  /** Số message trong thread (Email gộp thread). 1 = thư đơn. */
+  threadCount?: number;
 }
 
 export interface UpdateItemStatusRequest {
@@ -99,6 +102,7 @@ export interface PatchItemRequest {
   priority?: string;           // priority name
   labels?: string[];           // replaces all labels (no spaces allowed per Jira)
   comment?: string;            // adds a new comment (separate operation)
+  issueType?: string;          // change issue type (Task/Bug/Story...) via PUT /issue
 }
 
 /**

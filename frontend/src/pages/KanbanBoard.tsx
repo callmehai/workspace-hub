@@ -5,7 +5,7 @@ import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
+import { typeIcon, typeLabelKey, parseSourceType } from '../lib/itemVisuals';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
 import { isItemUnread } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
@@ -49,6 +49,8 @@ export const KanbanBoard = () => {
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect, hết nháy header khi đổi view)
   const selectedFolderId = searchParams.get('folder');
+  // Nguồn (integration) chọn ở sidebar — scope bảng theo 1 loại. null = tab "Tất cả mục".
+  const sourceType = parseSourceType(searchParams.get('type'));
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
@@ -60,6 +62,7 @@ export const KanbanBoard = () => {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -117,18 +120,24 @@ export const KanbanBoard = () => {
    * (kiểu Jira/Trello) — load COL_PAGE_SIZE thẻ đầu, bấm "Tải thêm" ở đáy cột để lấy tiếp.
    * Số trên header cột = TỔNG THẬT từ server (total của envelope), không phải số đã load.
    */
+  // Scope theo nguồn: có tab ⟹ khoá 1 loại (bỏ qua chip loại); tab Jira mới áp project.
+  const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
+  const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
+  const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
+
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, projectKey: debouncedProjectKey, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
     queryFn: ({ pageParam }: { pageParam: number }) => itemsApi.getItems({
       statuses: [status],
       folderId: selectedFolderId || undefined,
-      types: typeFilter.length > 0 ? typeFilter : undefined,
+      types: effectiveTypes,
       isImportant: importantOnly || undefined,
       tagId: tagFilter || undefined,
-      projectKey: debouncedProjectKey || undefined,
+      projectKey: effectiveProjectKey,
+      assignee: effectiveAssignee,
       search: search || undefined,
       page: pageParam,
       limit: COL_PAGE_SIZE,
@@ -300,12 +309,15 @@ export const KanbanBoard = () => {
           onToggleStatusFilter={toggleStatusFilter}
           typeFilter={typeFilter}
           onToggleTypeFilter={toggleTypeFilter}
+          sourceType={sourceType}
           importantOnly={importantOnly}
           onImportantToggle={() => setImportantOnly(v => !v)}
           tagFilter={tagFilter}
           onTagFilter={setTagFilter}
           projectKeyFilter={projectKeyFilter}
           onProjectKeyChange={handleProjectKeyChange}
+          assigneeFilter={assigneeFilter}
+          onAssigneeChange={setAssigneeFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />

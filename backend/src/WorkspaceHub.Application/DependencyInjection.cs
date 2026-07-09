@@ -48,6 +48,8 @@ public static class DependencyInjection
         services.AddScoped<IJiraSyncService, JiraSyncService>();
         // Jira metadata helpers (SCRUM-59)
         services.AddScoped<IJiraMetadataService, JiraMetadataService>();
+        // Comment + attachment 2 chiều cho ticket Jira
+        services.AddScoped<IJiraTicketService, JiraTicketService>();
         // Important contacts (SCRUM-60)
         services.AddScoped<IImportantContactService, ImportantContactService>();
 

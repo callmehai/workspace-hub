@@ -63,12 +63,36 @@ public interface IJiraGateway
         string transitionId,
         CancellationToken ct = default);
 
-    /// <summary>Thêm comment (POST .../comment). body plain text → ADF.</summary>
-    Task AddCommentAsync(
+    /// <summary>Thêm comment (POST .../comment). body markdown subset → ADF; mediaIds → nhúng attachment. Trả comment vừa tạo.</summary>
+    Task<JiraComment> AddCommentAsync(
         Connection connection,
         string issueIdOrKey,
         string commentBody,
+        IEnumerable<string>? mediaIds = null,
         CancellationToken ct = default);
+
+    /// <summary>List comment của issue (GET .../comment). Body ADF → plain text.</summary>
+    Task<IReadOnlyList<JiraComment>> GetCommentsAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default);
+
+    /// <summary>Sửa comment (PUT .../comment/{id}). body plain text → ADF.</summary>
+    Task<JiraComment> UpdateCommentAsync(Connection connection, string issueIdOrKey, string commentId, string commentBody, CancellationToken ct = default);
+
+    /// <summary>Xoá comment (DELETE .../comment/{id}).</summary>
+    Task DeleteCommentAsync(Connection connection, string issueIdOrKey, string commentId, CancellationToken ct = default);
+
+    // ───────────────────── Attachment (2 chiều) ─────────────────────
+
+    /// <summary>List attachment metadata của issue (GET issue?fields=attachment).</summary>
+    Task<IReadOnlyList<JiraAttachment>> GetAttachmentsAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default);
+
+    /// <summary>Tải nội dung attachment (GET /attachment/content/{id}).</summary>
+    Task<JiraAttachmentContent> DownloadAttachmentAsync(Connection connection, string attachmentId, string filename, string mimeType, CancellationToken ct = default);
+
+    /// <summary>Upload attachment lên issue (POST issue/{key}/attachments, multipart, header X-Atlassian-Token).</summary>
+    Task<IReadOnlyList<JiraAttachment>> UploadAttachmentAsync(Connection connection, string issueIdOrKey, string filename, string mimeType, byte[] data, CancellationToken ct = default);
+
+    /// <summary>Xoá attachment (DELETE /attachment/{id}).</summary>
+    Task DeleteAttachmentAsync(Connection connection, string attachmentId, CancellationToken ct = default);
 
     /// <summary>Xoá issue (DELETE /rest/api/3/issue/{key}?deleteSubtasks=true). Thiếu quyền → Forbidden(403).</summary>
     Task DeleteIssueAsync(
@@ -89,4 +113,10 @@ public interface IJiraGateway
 
     /// <summary>User gán được cho 1 project (GET /rest/api/3/user/assignable/search), lọc theo query nếu có.</summary>
     Task<IReadOnlyList<JiraUser>> GetAssignableUsersAsync(Connection connection, string projectKey, string? query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Site URL (vd https://xxx.atlassian.net) của connection — tra từ accessible-resources theo cloudId.
+    /// Dùng để build browse URL "{site}/browse/{KEY}". Trả null nếu không lấy được (không throw).
+    /// </summary>
+    Task<string?> GetSiteUrlAsync(Connection connection, CancellationToken ct = default);
 }

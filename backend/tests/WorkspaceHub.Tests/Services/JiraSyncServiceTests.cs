@@ -31,12 +31,15 @@ public class JiraSyncServiceTests
         _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, Item>());
 
-        _mapperMock.Setup(m => m.ToItem(It.IsAny<JiraIssue>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
-            .Returns((JiraIssue i, Guid u, Guid c) => new Item
+        _mapperMock.Setup(m => m.ToItem(It.IsAny<JiraIssue>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string?>()))
+            .Returns((JiraIssue i, Guid u, Guid c, string? _) => new Item
             {
                 ExternalId = i.Id, ConnectionId = c, UserId = u,
                 Title = i.Summary ?? "", Snippet = "", MetadataJson = "{}"
             });
+
+        _gatewayMock.Setup(m => m.GetSiteUrlAsync(It.IsAny<Connection>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
     }
 
     private static Connection JiraConnection(string? cursor = null, CursorType? cursorType = null) =>
@@ -147,7 +150,7 @@ public class JiraSyncServiceTests
     }
 
     [Fact]
-    public async Task FirstSync_NoCursor_JqlHasNoUpdatedFilter()
+    public async Task FirstSync_NoCursor_UsesFloorAndNoCurrentUserRestriction()
     {
         var conn = JiraConnection();
 
@@ -158,7 +161,10 @@ public class JiraSyncServiceTests
 
         await _service.SyncConnectionAsync(conn);
 
-        capturedJql.Should().NotContain("updated >=");
+        // Full sync kéo TOÀN BỘ board: có mốc sàn (JQL không được unbounded) nhưng KHÔNG giới hạn currentUser.
+        capturedJql.Should().Contain("updated >=");
+        capturedJql.Should().Contain("ORDER BY updated ASC");
+        capturedJql.Should().NotContain("currentUser");
     }
 
     [Fact]

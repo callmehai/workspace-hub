@@ -15,6 +15,9 @@ public interface IItemService
     Task<PagedResult<ItemResponse>> GetItemsAsync(
         Guid userId, GetItemsRequest request, CancellationToken ct = default);
 
+    /// <summary>Danh sách người phụ trách (assignee) suy từ ticket Jira đã sync — cho filter theo user.</summary>
+    Task<IReadOnlyList<JiraAssigneeDto>> GetTicketAssigneesAsync(Guid userId, CancellationToken ct = default);
+
     /// <summary>
     /// Cập nhật trạng thái Kanban cho Item.
     /// </summary>
