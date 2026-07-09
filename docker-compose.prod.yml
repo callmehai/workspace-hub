@@ -74,6 +74,12 @@ services:
       Sms__Twilio__AccountSid: ${TWILIO_SID:-}
       Sms__Twilio__AuthToken: ${TWILIO_TOKEN:-}
       Sms__Twilio__FromNumber: ${TWILIO_FROM:-}
+      # Cloudflare R2 (SCRUM-75) — avatar upload.
+      R2__AccountId: ${R2_ACCOUNT_ID}
+      R2__BucketName: ${R2_BUCKET_NAME}
+      R2__PublicUrl: ${R2_PUBLIC_URL}
+      R2__AccessKeyId: ${R2_ACCESS_KEY_ID}
+      R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY}
     volumes:
       # Persist Data Protection keys — nếu mất, mọi token OAuth đã mã hoá trong DB không giải mã được.
       - dp-keys:/app/dp-keys

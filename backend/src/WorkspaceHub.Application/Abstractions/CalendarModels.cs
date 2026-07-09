@@ -10,6 +10,8 @@ public class CalendarEventDto
     public string? Location { get; set; }
     public List<string> Attendees { get; set; } = new();
     public string? MeetUrl { get; set; }
+    /// <summary>Link mở event trong Google Calendar (event.htmlLink) — cho nút "Mở trong Calendar".</summary>
+    public string? HtmlLink { get; set; }
     public DateTimeOffset? OccurredAt { get; set; }
 }
 

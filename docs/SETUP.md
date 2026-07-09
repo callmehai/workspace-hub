@@ -78,6 +78,8 @@ dotnet run --project src/WorkspaceHub.Api --launch-profile https
 | `ConnectionStrings:Redis` | Redis cho refresh token + OTP + OAuth state (SCRUM-63, vd `localhost:6379`) |
 | `Sms:Twilio:AccountSid` / `Sms:Twilio:AuthToken` / `Sms:Twilio:FromNumber` | Twilio SMS gửi OTP (SCRUM-64). Cần **đủ cả 3** mới gọi Twilio thật; thiếu bất kỳ cái nào (vd `FromNumber` trống) → fallback `LogSmsSender` ghi OTP ra console |
 | `Cors:AllowedOrigins` | (prod) origin FE cho cookie auth cross-site, vd `https://app.example.com` |
+| `R2:AccountId` / `R2:BucketName` / `R2:PublicUrl` | Cloudflare R2 (SCRUM-75) — avatar upload. `PublicUrl` = domain public bucket (`r2.dev` hoặc custom domain) |
+| `R2:AccessKeyId` / `R2:SecretAccessKey` | API token R2 (scope **Object Read & Write**, giới hạn đúng bucket) — secret, KHÔNG commit |
 
 > **Auth overhaul (SCRUM-62→64) — chưa merge, đang làm theo nhánh:** access token sẽ chuyển sang **HttpOnly cookie** (bỏ localStorage), refresh token lưu **Redis** với rotation, đăng ký thêm **OTP SMS qua Twilio**. Chi tiết quyết định: CHANGELOG.md mục [2026-06-30]. Khi các nhánh merge: cần chạy `docker compose up -d wh-redis`, set `ConnectionStrings:Redis` + `Sms:Twilio:*`, và chạy migration thêm cột `Users.Phone/PhoneVerified`.
 

@@ -326,14 +326,16 @@ public class ItemWriteBackService : IItemWriteBackService
         var providerEtag = current.Updated?.UtcDateTime.ToString("O");
         _guard.EnsureNoConflict(item.ETag, providerEtag);
 
-        // 2. Update field (summary/description/priority/labels) qua PUT /issue.
-        if (payload.Summary != null || payload.Description != null || payload.Priority != null || payload.Labels != null)
+        // 2. Update field (summary/description/priority/labels/issuetype) qua PUT /issue.
+        if (payload.Summary != null || payload.Description != null || payload.Priority != null ||
+            payload.Labels != null || payload.IssueType != null)
         {
             var updateReq = new UpdateJiraIssueRequest(
                 payload.Summary,
                 payload.Description,
                 payload.Priority,
-                payload.Labels);
+                payload.Labels,
+                payload.IssueType);
             await _jiraGateway.UpdateIssueAsync(conn, key, updateReq, ct);
         }
 
@@ -355,7 +357,7 @@ public class ItemWriteBackService : IItemWriteBackService
 
         // 5. Comment (thao tác riêng, không phải sửa field).
         if (!string.IsNullOrWhiteSpace(payload.Comment))
-            await _jiraGateway.AddCommentAsync(conn, key, payload.Comment, ct);
+            await _jiraGateway.AddCommentAsync(conn, key, payload.Comment, ct: ct);
 
         // 6. Fetch lại để remap (Jira tự tính status/updated mới) + cập nhật ETag.
         var refreshed = await _jiraGateway.GetIssueAsync(conn, key, ct);
@@ -377,6 +379,26 @@ public class ItemWriteBackService : IItemWriteBackService
         // Thiết kế: Xoá item không yêu cầu check ETag vì hành động xoá là dứt điểm, không quan tâm nội dung hiện tại
         var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
         if (item == null) throw new NotFoundException("Item", itemId);
+
+        // Email gộp thread: mỗi thư trong hội thoại là 1 Item row riêng (do sync tách theo message).
+        // Xoá "1 email" ở list = xoá CẢ thread — nếu chỉ trash/remove thư đại diện thì thread hiện lại
+        // ở list với thư mới-nhì, và trên Gmail thread vẫn còn. Trash cả thread + xoá mọi row cùng ThreadId.
+        // Trash cả thread bao gồm luôn trường hợp thread chỉ có 1 thư (kết quả giống trash 1 message).
+        if (item.Type == ItemType.Email && item.ThreadId != null)
+        {
+            if (item.ConnectionId != null)
+            {
+                var emailConn = await _connections.GetByIdAsync(item.ConnectionId.Value, ct);
+                if (emailConn != null)
+                {
+                    // Provider lỗi bay lên trước khi xoá DB → Item local giữ nguyên (không lệch).
+                    await _gmailGateway.TrashThreadAsync(emailConn, item.ThreadId, ct);
+                }
+            }
+
+            await _items.DeleteThreadAsync(userId, item.ThreadId, ct);
+            return;
+        }
 
         if (item.ExternalId != null && item.ConnectionId != null)
         {

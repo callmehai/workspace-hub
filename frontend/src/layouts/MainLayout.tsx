@@ -58,7 +58,9 @@ export const MainLayout = () => {
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header onMenuClick={() => setMobileSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        {/* scrollbar-gutter:stable → luôn chừa chỗ cho thanh cuộn dọc, tránh nội dung
+            (căn giữa mx-auto) bị dịch vài px khi đổi giữa view Danh sách (có cuộn) và Bảng (không cuộn). */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]">
           <Outlet />
         </main>
       </div>

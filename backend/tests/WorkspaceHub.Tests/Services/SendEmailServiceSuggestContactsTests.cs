@@ -1,9 +1,11 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.Services;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
@@ -15,11 +17,14 @@ public class SendEmailServiceSuggestContactsTests
     private readonly Mock<IConnectionRepository> _connections = new();
     private readonly Mock<IGmailGateway> _gmail = new();
     private readonly Mock<IGoogleContactRepository> _googleContacts = new();
+    private readonly Mock<IItemRepository> _items = new();
+    private readonly GoogleContactMapper _mapper = new();
+    private readonly Mock<ILogger<SendEmailService>> _logger = new();
     private readonly SendEmailService _service;
 
     public SendEmailServiceSuggestContactsTests()
     {
-        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object);
+        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object, _mapper, _items.Object, _logger.Object);
     }
 
     [Fact]

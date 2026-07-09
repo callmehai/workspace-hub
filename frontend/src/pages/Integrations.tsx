@@ -4,7 +4,7 @@ import { handleApiError } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
 import type { TranslationKey } from '../i18n/translations';
 import toast from 'react-hot-toast';
-import { Loader2, Lock, Plus, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
 import { usePollingInterval } from '../hooks/usePollingInterval';
@@ -110,14 +110,6 @@ export const Integrations = () => {
         <p className="text-sm text-gray-500 dark:text-slate-400">
           {t('integrations.subtitle')}
         </p>
-      </div>
-
-      <div className="flex items-start gap-3 bg-brand-50 border border-brand-100/50 rounded-xl p-3 mb-6 text-sm dark:bg-brand-500/10 dark:border-brand-500/20">
-        <Lock className="w-5 h-5 text-brand-600 dark:text-brand-400 flex-shrink-0 mt-0.5" />
-        <div className="text-brand-800/80 dark:text-brand-200/80 leading-relaxed">
-          <strong className="font-semibold text-brand-900 dark:text-brand-200">{t('integrations.bannerTitle')}</strong>{' '}
-          {t('integrations.bannerBody')}
-        </div>
       </div>
 
       {loading ? (

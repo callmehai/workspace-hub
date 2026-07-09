@@ -29,6 +29,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     queryClient.setQueryData(ME_QUERY_KEY, userData);
   };
 
+  const updateUser = (userData: UserDto) => {
+    queryClient.setQueryData(ME_QUERY_KEY, userData);
+  };
+
   const logout = () => {
     // Báo backend xoá cookie auth (SCRUM-62); best-effort, không chặn cleanup local nếu lỗi.
     void authApi.logout().catch(() => undefined);
@@ -44,6 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isLoading,
         login,
         logout,
+        updateUser,
       }}
     >
       {children}

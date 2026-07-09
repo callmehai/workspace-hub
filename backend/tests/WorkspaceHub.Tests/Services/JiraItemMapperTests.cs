@@ -25,8 +25,8 @@ public class JiraItemMapperTests
         string? statusCategoryKey = "indeterminate",
         string? statusName = "In Progress") =>
         new(
-            id, key, "SCRUM", summary, description,
-            statusName, "Loc Hoang", "High", "Task",
+            id, key, "SCRUM", "Scrum Project", summary, description,
+            statusName, "Loc Hoang", "account123", "High", "Task",
             "https://api.atlassian.com/ex/jira/cloud-1/browse/SCRUM-1",
             updated,
             statusCategoryKey);

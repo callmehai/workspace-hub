@@ -64,6 +64,7 @@ public class GoogleCalendarGateway : IGoogleCalendarGateway
                                 .Where(e => !string.IsNullOrEmpty(e))
                                 .ToList() ?? [],
                             MeetUrl = item.HangoutLink,
+                            HtmlLink = item.HtmlLink,
                             OccurredAt = item.UpdatedDateTimeOffset ?? DateTimeOffset.UtcNow
                         });
                     }
