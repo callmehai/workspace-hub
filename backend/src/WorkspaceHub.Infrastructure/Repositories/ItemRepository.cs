@@ -188,6 +188,25 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             .ExecuteDeleteAsync(ct);
     }
 
+    /// <inheritdoc/>
+    public async Task<int> DeleteThreadAsync(Guid userId, string threadId, CancellationToken ct = default)
+    {
+        // 1. ItemFolders của mọi item trong thread
+        await Db.ItemFolders
+            .Where(x => x.Item.UserId == userId && x.Item.ThreadId == threadId)
+            .ExecuteDeleteAsync(ct);
+
+        // 2. TagAssignments của mọi item trong thread
+        await Db.TagAssignments
+            .Where(x => x.Item.UserId == userId && x.Item.ThreadId == threadId)
+            .ExecuteDeleteAsync(ct);
+
+        // 3. Bản thân các Item cùng ThreadId
+        return await Set
+            .Where(i => i.UserId == userId && i.ThreadId == threadId)
+            .ExecuteDeleteAsync(ct);
+    }
+
     /// <summary>
     /// Escape ký tự wildcard của SQL LIKE (%, _, [) để chuỗi search được so theo nghĩa đen.
     /// EF.Functions.Like KHÔNG tự escape như string.Contains.

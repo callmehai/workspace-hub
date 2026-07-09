@@ -51,5 +51,12 @@ public interface IItemRepository : IGenericRepository<Item>
     /// Dùng khi disconnect connection để tránh vi phạm Unique Index (ConnectionId, ExternalId) do ConnectionId=NULL trùng lặp.
     /// </summary>
     Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Xóa toàn bộ Items (và liên kết ItemFolders/TagAssignments) cùng ThreadId của user — dùng khi
+    /// xoá 1 email gộp thread: mỗi thư trong thread là 1 row riêng nên phải xoá hết để thread biến mất.
+    /// Trả về số Item row đã xoá.
+    /// </summary>
+    Task<int> DeleteThreadAsync(Guid userId, string threadId, CancellationToken ct = default);
 }
 

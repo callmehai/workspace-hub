@@ -162,6 +162,7 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
 - `PATCH /api/items/{id}/status` — Kanban (local only).
 - `PATCH /api/items/{id}/archive` — local only.
 - `DELETE /api/items/{id}` ⭐ — trash/xoá trên provider + local. Type=Ticket ✅ **SCRUM-58:** xoá issue trên Jira (`DELETE /rest/api/3/issue/{key}?deleteSubtasks=true`) **rồi mới** xoá Item local — Jira lỗi (403 thiếu quyền / 502) thì Item local giữ nguyên (không xoá lệch). Owner check (không phải owner → 404). (403 thiếu quyền, 404 không tồn tại/không phải owner, 502 provider lỗi)
+  - **Type=Email gộp thread:** mỗi thư trong hội thoại là 1 Item row riêng (sync tách theo message). Xoá 1 email = **xoá CẢ thread** — `Users.Threads.Trash(threadId)` (trash cả thread trên Gmail) **rồi** xoá mọi Item row cùng `ThreadId` của user (`DeleteThreadAsync`). Nếu chỉ trash/remove thư đại diện thì thread hiện lại ở list với thư mới-nhì. Gmail lỗi → giữ nguyên row local. Email không có `ThreadId` (item cũ chưa backfill) → fallback trash 1 message + xoá 1 row. Là **Trash** (khôi phục được trong Gmail), KHÔNG hard-delete (`Messages.Delete`).
 
 ### Jira metadata helpers — ✅ SCRUM-59
 Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt buộc, ServiceType=Jira + Active). Trả dữ liệu live (KHÔNG OData). Cache nhẹ TTL 5' cho project/issue-type/priority; transitions + assignable-users không cache.

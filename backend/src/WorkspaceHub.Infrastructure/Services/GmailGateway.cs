@@ -196,6 +196,19 @@ public class GmailGateway : IGmailGateway
         }
     }
 
+    public async Task TrashThreadAsync(Connection connection, string threadId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            await gmail.Users.Threads.Trash("me", threadId).ExecuteAsync(ct);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Thread", threadId);
+        }
+    }
+
     public async Task<string?> UntrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
     {
         try

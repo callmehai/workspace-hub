@@ -378,6 +378,26 @@ public class ItemWriteBackService : IItemWriteBackService
         var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
         if (item == null) throw new NotFoundException("Item", itemId);
 
+        // Email gộp thread: mỗi thư trong hội thoại là 1 Item row riêng (do sync tách theo message).
+        // Xoá "1 email" ở list = xoá CẢ thread — nếu chỉ trash/remove thư đại diện thì thread hiện lại
+        // ở list với thư mới-nhì, và trên Gmail thread vẫn còn. Trash cả thread + xoá mọi row cùng ThreadId.
+        // Trash cả thread bao gồm luôn trường hợp thread chỉ có 1 thư (kết quả giống trash 1 message).
+        if (item.Type == ItemType.Email && item.ThreadId != null)
+        {
+            if (item.ConnectionId != null)
+            {
+                var emailConn = await _connections.GetByIdAsync(item.ConnectionId.Value, ct);
+                if (emailConn != null)
+                {
+                    // Provider lỗi bay lên trước khi xoá DB → Item local giữ nguyên (không lệch).
+                    await _gmailGateway.TrashThreadAsync(emailConn, item.ThreadId, ct);
+                }
+            }
+
+            await _items.DeleteThreadAsync(userId, item.ThreadId, ct);
+            return;
+        }
+
         if (item.ExternalId != null && item.ConnectionId != null)
         {
             var conn = await _connections.GetByIdAsync(item.ConnectionId.Value, ct);
