@@ -50,6 +50,8 @@ public class JiraSyncService : IJiraSyncService
         // Tracked existing items keyed theo ExternalId → cập nhật được item đã sync (issue đổi title/status...).
         var existingItems = await _items.GetTrackedByConnectionIdAsync(connection.Id, ct);
         var jql = BuildJql(connection);
+        // Site URL 1 lần/sync để build browse URL "{site}/browse/{KEY}" (best-effort, null → không có nút mở).
+        var siteUrl = await _gateway.GetSiteUrlAsync(connection, ct);
 
         var newItems = new List<Item>();
         int scanned = 0;
@@ -70,7 +72,7 @@ public class JiraSyncService : IJiraSyncService
                 if (issue.Updated.HasValue && (maxUpdated is null || issue.Updated > maxUpdated))
                     maxUpdated = issue.Updated;
 
-                var mapped = _mapper.ToItem(issue, connection.UserId, connection.Id);
+                var mapped = _mapper.ToItem(issue, connection.UserId, connection.Id, siteUrl);
 
                 if (existingItems.TryGetValue(issue.Id, out var existing))
                 {
@@ -154,18 +156,20 @@ public class JiraSyncService : IJiraSyncService
         return (created, skipped);
     }
 
+    // Jira /search/jql KHÔNG cho JQL "trống" (unbounded) → luôn cần 1 điều kiện. Full sync dùng
+    // mốc sàn rất cũ để coi như "tất cả" mà vẫn hợp lệ.
+    private const string FullSyncFloor = "2000/01/01 00:00";
+
     private static string BuildJql(Connection connection)
     {
-        const string baseJql = "(assignee = currentUser() OR reporter = currentUser())";
-
+        // Kéo TOÀN BỘ issue mà tài khoản Jira (của connection) nhìn thấy — không giới hạn
+        // assignee/reporter = currentUser nữa (để lọc theo user trong app, cần đủ ticket + đủ assignee).
         var cursor = ParseCursor(connection.CursorValue);
-        if (connection.CursorType == CursorType.JqlUpdated && cursor.HasValue)
-        {
-            var since = cursor.Value.UtcDateTime.Subtract(CursorSlack).ToString(JqlDateFormat, CultureInfo.InvariantCulture);
-            return $"{baseJql} AND updated >= \"{since}\" ORDER BY updated ASC";
-        }
+        var since = connection.CursorType == CursorType.JqlUpdated && cursor.HasValue
+            ? cursor.Value.UtcDateTime.Subtract(CursorSlack).ToString(JqlDateFormat, CultureInfo.InvariantCulture)
+            : FullSyncFloor;
 
-        return $"{baseJql} ORDER BY updated ASC";
+        return $"updated >= \"{since}\" ORDER BY updated ASC";
     }
 
     private static DateTimeOffset? ParseCursor(string? cursorValue)

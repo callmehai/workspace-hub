@@ -154,6 +154,7 @@ export const Inbox = () => {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -235,6 +236,7 @@ export const Inbox = () => {
   const gmailLabel = isEmailScope && mailbox && mailbox !== 'ALL' ? mailbox : undefined;
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
+  const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
 
   const params = {
     statuses: statusFilter.length > 0 ? statusFilter : undefined,
@@ -244,12 +246,13 @@ export const Inbox = () => {
     folderId: selectedFolderId || undefined,
     tagId: tagFilter ?? undefined,
     projectKey: effectiveProjectKey,
+    assignee: effectiveAssignee,
     gmailLabel,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, projectKey: params.projectKey, gmailLabel: params.gmailLabel, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -261,6 +264,7 @@ export const Inbox = () => {
     folderId: params.folderId,
     tagId: params.tagId,
     projectKey: params.projectKey,
+    assignee: params.assignee,
     gmailLabel: params.gmailLabel,
   });
 
@@ -345,6 +349,7 @@ export const Inbox = () => {
     setSearch('');
     setProjectKeyFilter('');
     setDebouncedProjectKey('');
+    setAssigneeFilter('');
     setPage(1);
   };
 
@@ -380,6 +385,8 @@ export const Inbox = () => {
           onTagFilter={(id) => { setTagFilter(id); setPage(1); }}
           projectKeyFilter={projectKeyFilter}
           onProjectKeyChange={handleProjectKeyChange}
+          assigneeFilter={assigneeFilter}
+          onAssigneeChange={(v) => { setAssigneeFilter(v); setPage(1); }}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />

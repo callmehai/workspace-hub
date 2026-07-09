@@ -62,6 +62,7 @@ export const KanbanBoard = () => {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -122,9 +123,10 @@ export const KanbanBoard = () => {
   // Scope theo nguồn: có tab ⟹ khoá 1 loại (bỏ qua chip loại); tab Jira mới áp project.
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
+  const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
 
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, projectKey: effectiveProjectKey, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -135,6 +137,7 @@ export const KanbanBoard = () => {
       isImportant: importantOnly || undefined,
       tagId: tagFilter || undefined,
       projectKey: effectiveProjectKey,
+      assignee: effectiveAssignee,
       search: search || undefined,
       page: pageParam,
       limit: COL_PAGE_SIZE,
@@ -313,6 +316,8 @@ export const KanbanBoard = () => {
           onTagFilter={setTagFilter}
           projectKeyFilter={projectKeyFilter}
           onProjectKeyChange={handleProjectKeyChange}
+          assigneeFilter={assigneeFilter}
+          onAssigneeChange={setAssigneeFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />

@@ -72,6 +72,7 @@ public class ItemService : IItemService
             request.TagId,
             request.ProjectKey,
             request.GmailLabel,
+            request.Assignee,
             page,
             limit,
             ct);
@@ -83,6 +84,17 @@ public class ItemService : IItemService
             .ToList().AsReadOnly();
 
         return new PagedResult<ItemResponse>(dtos, totalCount, page, limit);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<JiraAssigneeDto>> GetTicketAssigneesAsync(Guid userId, CancellationToken ct = default)
+    {
+        var rows = await _itemRepo.GetTicketAssigneesAsync(userId, ct);
+        return rows
+            .Where(r => r.AccountId != null)
+            .Select(r => new JiraAssigneeDto(r.AccountId!, r.DisplayName))
+            .ToList()
+            .AsReadOnly();
     }
 
     /// <inheritdoc/>

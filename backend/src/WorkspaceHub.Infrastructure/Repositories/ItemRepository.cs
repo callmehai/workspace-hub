@@ -26,6 +26,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         Guid? tagId = null,
         string? projectKey = null,
         string? gmailLabel = null,
+        string? assigneeAccountId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -95,6 +96,15 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains($"\"projectKey\":\"{pk}\""));
         }
 
+        // Assignee filter (Jira tickets) — "unassigned" = ticket chưa gán (assigneeAccountId null).
+        if (!string.IsNullOrWhiteSpace(assigneeAccountId))
+        {
+            var needle = assigneeAccountId.Trim() == "unassigned"
+                ? "\"assigneeAccountId\":null"
+                : $"\"assigneeAccountId\":\"{assigneeAccountId.Trim()}\"";
+            query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains(needle));
+        }
+
         // ── Search: Title hoặc Snippet ──
         // Ép collation Latin1_General_100_CI_AI ngay trong predicate:
         //   CI = case-insensitive, AI = ACCENT-insensitive → gõ "bao gia" khớp "Báo giá",
@@ -142,6 +152,47 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 .ToDictionaryAsync(x => x.ThreadId, x => x.Count, ct);
 
         return (items.AsReadOnly(), totalCount, threadCounts);
+    }
+
+    public async Task<IReadOnlyList<(string? AccountId, string DisplayName)>> GetTicketAssigneesAsync(Guid userId, CancellationToken ct = default)
+    {
+        // Lấy JSON metadata của mọi Ticket của user rồi trích assignee ở memory (board vài trăm item — rẻ).
+        var jsons = await Set.AsNoTracking()
+            .Where(i => i.UserId == userId && i.Type == ItemType.Ticket && !i.IsArchived && i.MetadataJson != null)
+            .Select(i => i.MetadataJson!)
+            .ToListAsync(ct);
+
+        var byId = new Dictionary<string, string>();   // accountId → displayName
+        var hasUnassigned = false;
+
+        foreach (var json in jsons)
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                var accId = root.TryGetProperty("assigneeAccountId", out var a) && a.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? a.GetString()
+                    : null;
+                var name = root.TryGetProperty("assignee", out var n) && n.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? n.GetString()
+                    : null;
+
+                if (string.IsNullOrEmpty(accId)) { hasUnassigned = true; continue; }
+                byId[accId] = string.IsNullOrWhiteSpace(name) ? accId : name!;
+            }
+            catch (System.Text.Json.JsonException) { /* metadata hỏng → bỏ qua */ }
+        }
+
+        var result = byId
+            .Select(kv => ((string?)kv.Key, kv.Value))
+            .OrderBy(x => x.Value, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        if (hasUnassigned)
+            result.Add(("unassigned", "Chưa gán"));
+
+        return result;
     }
 
     public async Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default)

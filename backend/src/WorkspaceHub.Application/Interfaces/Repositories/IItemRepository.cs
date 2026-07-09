@@ -24,9 +24,13 @@ public interface IItemRepository : IGenericRepository<Item>
         Guid? tagId = null,
         string? projectKey = null,
         string? gmailLabel = null,
+        string? assigneeAccountId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);
+
+    /// <summary>Danh sách assignee (accountId + tên) suy từ Ticket đã sync của user — cho filter theo người.</summary>
+    Task<IReadOnlyList<(string? AccountId, string DisplayName)>> GetTicketAssigneesAsync(Guid userId, CancellationToken ct = default);
 
     Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default);
     Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default);

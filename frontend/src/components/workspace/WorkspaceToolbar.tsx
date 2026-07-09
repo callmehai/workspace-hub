@@ -2,12 +2,13 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, Loader2,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, UserRound, Loader2,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { jiraApi, type JiraProject } from '../../lib/jiraApi';
+import { itemsApi } from '../../lib/itemsApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
@@ -67,6 +68,8 @@ interface WorkspaceToolbarProps {
   onTagFilter: (id: string | null) => void;
   projectKeyFilter?: string;
   onProjectKeyChange?: (v: string) => void;
+  assigneeFilter?: string;
+  onAssigneeChange?: (v: string) => void;
   searchInput: string;
   onSearchChange: (v: string) => void;
 }
@@ -79,6 +82,7 @@ export const WorkspaceToolbar = ({
   importantOnly, onImportantToggle,
   tagFilter, onTagFilter,
   projectKeyFilter, onProjectKeyChange,
+  assigneeFilter, onAssigneeChange,
   searchInput, onSearchChange,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
@@ -107,6 +111,14 @@ export const WorkspaceToolbar = ({
       queryFn: () => jiraApi.getProjects(c.id),
       staleTime: 5 * 60_000,
     }))
+  });
+
+  // Danh sách người phụ trách (assignee) cho filter tab Jira — suy từ ticket đã sync.
+  const { data: assignees = [] } = useQuery({
+    queryKey: ['jira', 'assignees'],
+    queryFn: itemsApi.getAssignees,
+    enabled: sourceType === 'Ticket',
+    staleTime: 60_000,
   });
 
   const availableProjects = useMemo(() => {
@@ -323,6 +335,22 @@ export const WorkspaceToolbar = ({
               options={[
                 { value: '', label: t('toolbar.allProjects') },
                 ...availableProjects.map(p => ({ value: p.key, label: `${p.name} (${p.key})` })),
+              ]}
+            />
+          </div>
+        )}
+        {/* Lọc theo người phụ trách (assignee) — CHỈ hiện khi đang ở tab Jira. */}
+        {onAssigneeChange && sourceType === 'Ticket' && jiraConns.length > 0 && (
+          <div className="w-52 shrink-0">
+            <Select
+              value={assigneeFilter ?? ''}
+              onChange={onAssigneeChange}
+              className="h-9 text-[13px]"
+              icon={<UserRound className="w-4 h-4" />}
+              placeholder={t('toolbar.allAssignees')}
+              options={[
+                { value: '', label: t('toolbar.allAssignees') },
+                ...assignees.map(a => ({ value: a.accountId, label: a.displayName })),
               ]}
             />
           </div>
