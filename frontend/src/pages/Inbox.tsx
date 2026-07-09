@@ -35,15 +35,15 @@ const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
 //  Spam/Trash chưa có vì sync bỏ qua (includeSpamTrash=false); Giao dịch/Hoá đơn Gmail không expose qua API.
 type MailboxValue = string | null;
 const MAILBOXES: { value: MailboxValue; labelKey: TranslationKey; Icon: LucideIcon }[] = [
-  { value: null, labelKey: 'mailbox.all', Icon: LayoutGrid },
   { value: 'INBOX', labelKey: 'mailbox.inbox', Icon: InboxIcon },
+  { value: 'STARRED', labelKey: 'mailbox.starred', Icon: Star },
   { value: 'SENT', labelKey: 'mailbox.sent', Icon: Send },
   { value: 'DRAFT', labelKey: 'mailbox.drafts', Icon: FileEdit },
-  { value: 'STARRED', labelKey: 'mailbox.starred', Icon: Star },
   { value: 'CATEGORY_PROMOTIONS', labelKey: 'mailbox.promotions', Icon: Megaphone },
   { value: 'CATEGORY_SOCIAL', labelKey: 'mailbox.social', Icon: Users },
   { value: 'CATEGORY_UPDATES', labelKey: 'mailbox.updates', Icon: Bell },
   { value: 'ALL', labelKey: 'mailbox.allMail', Icon: Mails },
+  { value: null, labelKey: 'mailbox.all', Icon: LayoutGrid },
 ];
 
 // Màu theo category Kanban (dùng cho Ticket & các loại khác ở Doing/Done): xám / xanh dương / xanh lá.
@@ -147,7 +147,7 @@ export const Inbox = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [typeFilter, setTypeFilter] = useState<ItemType[]>([]);
-  const [mailbox, setMailbox] = useState<MailboxValue>(null);
+  const [mailbox, setMailbox] = useState<MailboxValue>('INBOX'); // default = Hộp thư đến (như Gmail)
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
@@ -175,10 +175,12 @@ export const Inbox = () => {
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
-  // Đổi context → về trang 1
+  // Đổi context → về trang 1. Vào 1 folder thì bỏ lọc hộp thư (folder có thể chứa
+  // file/event/ticket, không nên kẹt ở INBOX) — hiện tất cả loại trong folder đó.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
+    if (selectedFolderId) setMailbox(null);
   }, [selectedFolderId]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
