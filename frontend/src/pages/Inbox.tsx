@@ -522,9 +522,9 @@ export const Inbox = () => {
                 />
               </button>
 
-              {/* avatar loại — đặc màu, icon trắng đậm */}
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass(item.type)}`}>
-                {typeIcon(item.type, 'w-[18px] h-[18px]', 2.25)}
+              {/* avatar loại — logo brand thật trên nền trắng (Note = notepad vàng) */}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass()}`}>
+                {typeIcon(item.type, 'w-[22px] h-[22px]')}
               </div>
 
               <div className="flex-1 min-w-0">
