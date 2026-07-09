@@ -13,6 +13,8 @@ public class ScheduledEmail
     public string BccJson { get; set; } = "[]";
     public string Subject { get; set; } = null!;
     public string BodyHtml { get; set; } = null!;
+    /// <summary>File đính kèm (base64) — JSON mảng AttachmentUpload. Cron gửi kèm khi tới hạn.</summary>
+    public string AttachmentsJson { get; set; } = "[]";
     public DateTime SendAt { get; set; }
     public ScheduledEmailStatus Status { get; set; } = ScheduledEmailStatus.Pending;
     public int RetryCount { get; set; }
