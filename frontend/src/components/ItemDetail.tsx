@@ -552,20 +552,22 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       {/* Backdrop */}
       <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
 
+      {/* Tay cầm resize — straddle đúng MÉP TRÁI drawer (đặt ngoài drawer để không bị overflow-hidden cắt) */}
+      <div
+        onMouseDown={startResize}
+        title={t('item.resizeHint')}
+        style={{ right: drawerWidth }}
+        className="group absolute inset-y-0 z-[60] w-3 translate-x-1/2 cursor-col-resize flex items-center justify-center"
+      >
+        {/* vạch thụt 1rem trên/dưới cho khớp góc bo rounded-l-2xl, bo tròn 2 đầu → không thò ra viền */}
+        <div className="h-[calc(100%-2rem)] w-[3px] rounded-full bg-transparent group-hover:bg-brand-400/70 transition-colors" />
+      </div>
+
       {/* Drawer — kéo cạnh trái để đổi độ rộng */}
       <div
         className="relative w-full max-w-[95vw] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col rounded-l-2xl overflow-hidden"
         style={{ width: drawerWidth, animation: 'wh-slide-in .25s ease' }}
       >
-
-        {/* Tay cầm resize — dải mảnh sát cạnh trái, hover hiện màu brand */}
-        <div
-          onMouseDown={startResize}
-          title={t('item.resizeHint')}
-          className="group absolute inset-y-0 left-0 z-20 w-2 cursor-col-resize flex items-center justify-center"
-        >
-          <div className="h-full w-[3px] bg-transparent group-hover:bg-brand-400/70 transition-colors" />
-        </div>
 
         {/* Header */}
         <div className="px-5 py-[18px] border-b border-slate-200 dark:border-slate-800 shrink-0">
