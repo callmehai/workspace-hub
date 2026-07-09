@@ -17,17 +17,20 @@ public class EmailsController : ApiControllerBase
     private readonly IValidator<SendEmailRequest> _validator;
     private readonly IValidator<ReplyEmailRequest> _replyValidator;
     private readonly IValidator<ForwardEmailRequest> _forwardValidator;
+    private readonly IValidator<SaveDraftRequest> _draftValidator;
 
     public EmailsController(
         ISendEmailService service, 
         IValidator<SendEmailRequest> validator,
         IValidator<ReplyEmailRequest> replyValidator,
-        IValidator<ForwardEmailRequest> forwardValidator)
+        IValidator<ForwardEmailRequest> forwardValidator,
+        IValidator<SaveDraftRequest> draftValidator)
     {
         _service = service;
         _validator = validator;
         _replyValidator = replyValidator;
         _forwardValidator = forwardValidator;
+        _draftValidator = draftValidator;
     }
 
     // ~40MB: đủ chứa attachment tối đa 25MB (đã decode) khi mã hoá base64 (~33MB) + overhead JSON.
@@ -114,5 +117,41 @@ public class EmailsController : ApiControllerBase
     {
         var zip = await _service.GetAttachmentsZipAsync(CurrentUserId, itemId, messageId, ct);
         return File(zip, "application/zip", "attachments.zip");
+    }
+
+    /// <summary>Tạo nháp mới. 200 + ItemResponse.</summary>
+    [HttpPost("drafts")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
+    public async Task<IActionResult> CreateDraft([FromBody] SaveDraftRequest request, CancellationToken ct)
+    {
+        await _draftValidator.ValidateAndThrowAsync(request, ct);
+        var result = await _service.SaveDraftAsync(CurrentUserId, request, null, ct);
+        return Ok(result);
+    }
+
+    /// <summary>Cập nhật nháp đã có. 200 + ItemResponse.</summary>
+    [HttpPut("drafts/{itemId:guid}")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
+    public async Task<IActionResult> UpdateDraft([FromRoute] Guid itemId, [FromBody] SaveDraftRequest request, CancellationToken ct)
+    {
+        await _draftValidator.ValidateAndThrowAsync(request, ct);
+        var result = await _service.SaveDraftAsync(CurrentUserId, request, itemId, ct);
+        return Ok(result);
+    }
+
+    /// <summary>Gửi nháp đã có. 200 + SendEmailResult.</summary>
+    [HttpPost("drafts/{itemId:guid}/send")]
+    public async Task<IActionResult> SendDraft([FromRoute] Guid itemId, CancellationToken ct)
+    {
+        var result = await _service.SendDraftAsync(CurrentUserId, itemId, ct);
+        return Ok(result);
+    }
+
+    /// <summary>Xoá nháp (chuyển message nháp vào thùng rác trên Gmail và xoá item local). 200 OK.</summary>
+    [HttpDelete("drafts/{itemId:guid}")]
+    public async Task<IActionResult> DiscardDraft([FromRoute] Guid itemId, CancellationToken ct)
+    {
+        await _service.DiscardDraftAsync(CurrentUserId, itemId, ct);
+        return NoContent();
     }
 }

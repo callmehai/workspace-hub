@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -410,4 +411,208 @@ public class SendEmailService : ISendEmailService
         }
         return trimmed;
     }
+
+    public async Task<ItemResponse> SaveDraftAsync(Guid userId, SaveDraftRequest request, Guid? existingItemId, CancellationToken ct = default)
+    {
+        var connection = await _connections.GetByIdTrackedAsync(request.ConnectionId, ct)
+            ?? throw new NotFoundException("Connection", request.ConnectionId);
+
+        if (connection.UserId != userId)
+            throw new NotFoundException("Connection", request.ConnectionId);
+
+        if (connection.ServiceType != ServiceType.Gmail)
+            throw new BusinessRuleException("Only Gmail connections can be used to save drafts.");
+
+        if (connection.Status != ConnectionStatus.Active)
+            throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
+
+        var attachments = DecodeAttachments(request.Attachments);
+
+        if (existingItemId == null)
+        {
+            // Create new draft
+            var draftResult = await _gmail.CreateDraftAsync(
+                connection, request.To, request.Cc, request.Bcc, request.Subject ?? "", request.BodyHtml ?? "", request.ThreadId, request.InReplyToMessageId,
+                attachments.Count > 0 ? attachments : null, ct);
+
+            // Construct new local Item
+            var metaDict = new Dictionary<string, object>
+            {
+                { "draftId", draftResult.DraftId },
+                { "labels", new List<string> { "DRAFT" } },
+                { "threadId", draftResult.ThreadId },
+                { "from", connection.ProviderAccountId },
+                { "to", request.To },
+                { "cc", request.Cc },
+                { "bcc", request.Bcc }
+            };
+            if (!string.IsNullOrEmpty(request.InReplyToMessageId))
+            {
+                metaDict["rfc822MessageId"] = request.InReplyToMessageId;
+            }
+
+            var item = new Item
+            {
+                UserId = userId,
+                ConnectionId = request.ConnectionId,
+                Type = ItemType.Email,
+                ExternalId = draftResult.MessageId,
+                ThreadId = draftResult.ThreadId,
+                Title = string.IsNullOrWhiteSpace(request.Subject) ? "No Subject" : request.Subject,
+                Snippet = string.IsNullOrWhiteSpace(request.BodyHtml) ? "" : (request.BodyHtml.Length > 200 ? request.BodyHtml[..200] : request.BodyHtml),
+                Status = ItemStatus.Inbox,
+                OccurredAt = DateTime.UtcNow,
+                MetadataJson = JsonSerializer.Serialize(metaDict)
+            };
+
+            await _items.AddAsync(item, ct);
+            await _items.SaveChangesAsync(ct);
+
+            var folders = item.ItemFolders?.Select(f => f.FolderId).ToList() ?? new List<Guid>();
+            var tags = item.TagAssignments?.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag!.Id, ta.Tag.Name, ta.Tag.Color)).ToList() ?? new List<ItemTag>();
+
+            return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, folders, tags, item.ConnectionId);
+        }
+        else
+        {
+            // Update existing draft
+            var item = await _items.GetByIdAsync(existingItemId.Value, ct)
+                ?? throw new NotFoundException("Item", existingItemId.Value);
+
+            if (item.UserId != userId)
+                throw new NotFoundException("Item", existingItemId.Value);
+
+            if (item.ConnectionId != request.ConnectionId)
+                throw new BusinessRuleException("Draft connection mismatch.");
+
+            var draftId = GetMetadataString(item.MetadataJson, "draftId");
+            if (string.IsNullOrEmpty(draftId))
+                throw new BusinessRuleException("Item has no draftId in metadata.");
+
+            var draftResult = await _gmail.UpdateDraftAsync(
+                connection, draftId, request.To, request.Cc, request.Bcc, request.Subject ?? "", request.BodyHtml ?? "", request.ThreadId, request.InReplyToMessageId,
+                attachments.Count > 0 ? attachments : null, ct);
+
+            // Update local Item
+            var metaDict = new Dictionary<string, object>
+            {
+                { "draftId", draftResult.DraftId },
+                { "labels", new List<string> { "DRAFT" } },
+                { "threadId", draftResult.ThreadId },
+                { "from", connection.ProviderAccountId },
+                { "to", request.To },
+                { "cc", request.Cc },
+                { "bcc", request.Bcc }
+            };
+            if (!string.IsNullOrEmpty(request.InReplyToMessageId))
+            {
+                metaDict["rfc822MessageId"] = request.InReplyToMessageId;
+            }
+
+            item.ExternalId = draftResult.MessageId;
+            item.ThreadId = draftResult.ThreadId;
+            item.Title = string.IsNullOrWhiteSpace(request.Subject) ? "No Subject" : request.Subject;
+            item.Snippet = string.IsNullOrWhiteSpace(request.BodyHtml) ? "" : (request.BodyHtml.Length > 200 ? request.BodyHtml[..200] : request.BodyHtml);
+            item.OccurredAt = DateTime.UtcNow;
+            item.MetadataJson = JsonSerializer.Serialize(metaDict);
+
+            _items.Update(item);
+            await _items.SaveChangesAsync(ct);
+
+            var folders = item.ItemFolders?.Select(f => f.FolderId).ToList() ?? new List<Guid>();
+            var tags = item.TagAssignments?.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag!.Id, ta.Tag.Name, ta.Tag.Color)).ToList() ?? new List<ItemTag>();
+
+            return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, folders, tags, item.ConnectionId);
+        }
+    }
+
+    public async Task<SendEmailResult> SendDraftAsync(Guid userId, Guid itemId, CancellationToken ct = default)
+    {
+        var item = await _items.GetByIdAsync(itemId, ct)
+            ?? throw new NotFoundException("Item", itemId);
+
+        if (item.UserId != userId)
+            throw new NotFoundException("Item", itemId);
+
+        if (item.ConnectionId == null)
+            throw new BusinessRuleException("Item is not associated with any connection.");
+
+        var connection = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct)
+            ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
+
+        if (connection.UserId != userId)
+            throw new NotFoundException("Connection", item.ConnectionId.Value);
+
+        if (connection.ServiceType != ServiceType.Gmail)
+            throw new BusinessRuleException("Connection is not for Gmail.");
+
+        if (connection.Status != ConnectionStatus.Active)
+            throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
+
+        var draftId = GetMetadataString(item.MetadataJson, "draftId");
+        if (string.IsNullOrEmpty(draftId))
+            throw new BusinessRuleException("Item has no draftId in metadata.");
+
+        var sentMessageId = await _gmail.SendDraftAsync(connection, draftId, ct);
+
+        // Update local database Item so it is no longer a draft and moves to sent.
+        // We will remove "DRAFT" label and add "SENT" label in metadata.
+        var metaDict = string.IsNullOrEmpty(item.MetadataJson) 
+            ? new Dictionary<string, object>() 
+            : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+
+        var labels = new List<string>();
+        if (metaDict.TryGetValue("labels", out var lv) && lv is JsonElement je && je.ValueKind == JsonValueKind.Array)
+        {
+            labels = je.EnumerateArray().Select(e => e.GetString() ?? string.Empty).Where(s => s.Length > 0).ToList();
+        }
+        labels.Remove("DRAFT");
+        if (!labels.Contains("SENT"))
+        {
+            labels.Add("SENT");
+        }
+        metaDict["labels"] = labels;
+        metaDict.Remove("draftId");
+
+        item.ExternalId = sentMessageId;
+        item.MetadataJson = JsonSerializer.Serialize(metaDict);
+        item.OccurredAt = DateTime.UtcNow;
+
+        _items.Update(item);
+        await _items.SaveChangesAsync(ct);
+
+        return new SendEmailResult(sentMessageId, DateTime.UtcNow);
+    }
+
+    public async Task DiscardDraftAsync(Guid userId, Guid itemId, CancellationToken ct = default)
+    {
+        var item = await _items.GetByIdAsync(itemId, ct)
+            ?? throw new NotFoundException("Item", itemId);
+
+        if (item.UserId != userId)
+            throw new NotFoundException("Item", itemId);
+
+        if (item.ConnectionId == null)
+            throw new BusinessRuleException("Item is not associated with any connection.");
+
+        var connection = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct)
+            ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
+
+        if (connection.UserId != userId)
+            throw new NotFoundException("Connection", item.ConnectionId.Value);
+
+        var draftId = GetMetadataString(item.MetadataJson, "draftId");
+        if (string.IsNullOrEmpty(draftId))
+            throw new BusinessRuleException("Item is not a draft (no draftId in metadata).");
+
+        if (item.ExternalId != null)
+        {
+            // Trash ONLY the draft message, NOT the entire thread!
+            await _gmail.TrashMessageAsync(connection, item.ExternalId, ct);
+        }
+
+        _items.Remove(item);
+        await _items.SaveChangesAsync(ct);
+    }
 }
+

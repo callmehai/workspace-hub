@@ -59,4 +59,32 @@ public interface IGmailGateway
         string bodyHtml,
         IReadOnlyList<GmailAttachmentData>? attachments = null,
         CancellationToken ct = default);
+
+    Task<GmailDraftResult> CreateDraftAsync(
+        Connection connection,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default);
+
+    Task<GmailDraftResult> UpdateDraftAsync(
+        Connection connection,
+        string draftId,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default);
+
+    Task<string> SendDraftAsync(Connection connection, string draftId, CancellationToken ct = default);
 }
+

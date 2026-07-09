@@ -98,19 +98,6 @@ public class GmailGateway : IGmailGateway
             : bccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
 
         var rfc822MessageId = headers?.FirstOrDefault(h => h.Name.Equals("Message-ID", StringComparison.OrdinalIgnoreCase))?.Value;
-
-        var ccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Cc", StringComparison.OrdinalIgnoreCase))?.Value;
-        var ccList = string.IsNullOrEmpty(ccHeader)
-            ? (IReadOnlyList<string>)new List<string>()
-            : ccHeader.Split(',').Select(x => x.Trim()).ToList();
-
-        var bccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Bcc", StringComparison.OrdinalIgnoreCase))?.Value;
-        var bccList = string.IsNullOrEmpty(bccHeader)
-            ? (IReadOnlyList<string>)new List<string>()
-            : bccHeader.Split(',').Select(x => x.Trim()).ToList();
-
-        var rfc822MessageId = headers?.FirstOrDefault(h => h.Name.Equals("Message-ID", StringComparison.OrdinalIgnoreCase))?.Value;
-
         bool hasAttachment = msg.Payload != null && CheckHasAttachment(msg.Payload);
 
         // Extract body HTML/plain for forwarding
@@ -417,6 +404,84 @@ public class GmailGateway : IGmailGateway
         catch (Google.GoogleApiException ex)
         {
             throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", "send_in_thread");
+        }
+    }
+
+    public async Task<GmailDraftResult> CreateDraftAsync(
+        Connection connection,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var raw = BuildMimeMessage(connection.ProviderAccountId, to, cc, bcc, subject ?? "", bodyHtml ?? "", inReplyToMessageId, attachments);
+            var message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw };
+            if (!string.IsNullOrEmpty(threadId))
+            {
+                message.ThreadId = threadId;
+            }
+            var draft = new Google.Apis.Gmail.v1.Data.Draft { Message = message };
+            var created = await gmail.Users.Drafts.Create(draft, "me").ExecuteAsync(ct);
+            return new GmailDraftResult(created.Id, created.Message.Id, created.Message.ThreadId);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", "create");
+        }
+    }
+
+    public async Task<GmailDraftResult> UpdateDraftAsync(
+        Connection connection,
+        string draftId,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var raw = BuildMimeMessage(connection.ProviderAccountId, to, cc, bcc, subject ?? "", bodyHtml ?? "", inReplyToMessageId, attachments);
+            var message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw };
+            if (!string.IsNullOrEmpty(threadId))
+            {
+                message.ThreadId = threadId;
+            }
+            var draft = new Google.Apis.Gmail.v1.Data.Draft { Message = message };
+            var updated = await gmail.Users.Drafts.Update(draft, "me", draftId).ExecuteAsync(ct);
+            return new GmailDraftResult(updated.Id, updated.Message.Id, updated.Message.ThreadId);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", draftId);
+        }
+    }
+
+    public async Task<string> SendDraftAsync(Connection connection, string draftId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var draft = new Google.Apis.Gmail.v1.Data.Draft { Id = draftId };
+            var sent = await gmail.Users.Drafts.Send(draft, "me").ExecuteAsync(ct);
+            return sent.Id;
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", draftId);
         }
     }
 
