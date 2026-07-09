@@ -25,6 +25,7 @@ public interface IItemRepository : IGenericRepository<Item>
         string? projectKey = null,
         string? gmailLabel = null,
         string? assigneeAccountId = null,
+        Guid? connectionId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);

@@ -12,6 +12,12 @@ public class GoogleDriveGateway : IGoogleDriveGateway
     private readonly ITokenService _tokenService;
     private readonly ILogger<GoogleDriveGateway> _logger;
     private const int InitialSyncPageSize = 100; // MVP: chỉ lấy N file mới nhất ở lần sync đầu tiên
+   
+    private const string SyncFileFields =
+    "id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId, parents";
+
+    private const string SyncChangeFields =
+        "nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId, parents), removed)";
 
     public GoogleDriveGateway(ITokenService tokenService, ILogger<GoogleDriveGateway> logger)
     {
@@ -42,7 +48,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             {
                 var listRequest = service.Files.List();
                 listRequest.PageSize = InitialSyncPageSize;
-                listRequest.Fields = "files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId)";
+                listRequest.Fields = $"files({SyncFileFields})";
                 listRequest.OrderBy = "modifiedTime desc";
 
                 var response = await listRequest.ExecuteAsync(ct);
@@ -68,7 +74,7 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             {
                 var changesRequest = service.Changes.List(pageToken);
                 changesRequest.PageSize = 1000;
-                changesRequest.Fields = "nextPageToken, newStartPageToken, changes(fileId, file(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId), removed)";
+                changesRequest.Fields = SyncChangeFields;
 
                 var response = await changesRequest.ExecuteAsync(ct);
 
@@ -105,22 +111,22 @@ public class GoogleDriveGateway : IGoogleDriveGateway
             return new DriveSyncResult(true, new List<DriveFileDto>(), null);
         }
     }
-
+    //Mục đích: Map Google.Apis.Drive.v3.Data.File → DriveFileDto (DTO dùng trong app)
     private DriveFileDto MapToDto(Google.Apis.Drive.v3.Data.File file)
     {
         return new DriveFileDto
         {
-            Id = file.Id,
-            Name = file.Name,
-            MimeType = file.MimeType,
+            Id = file.Id ?? string.Empty,
+            Name = file.Name ?? string.Empty,
+            MimeType = file.MimeType ?? string.Empty,
             Size = file.Size,
             WebViewLink = file.WebViewLink,
             IconLink = file.IconLink,
-            // Sửa lỗi cảnh báo: Dùng trực tiếp ModifiedTimeDateTimeOffset theo khuyến nghị của Google
             ModifiedTime = file.ModifiedTimeDateTimeOffset ?? DateTimeOffset.UtcNow,
             Trashed = file.Trashed ?? false,
             Version = file.Version,
-            HeadRevisionId = file.HeadRevisionId
+            HeadRevisionId = file.HeadRevisionId,
+            Parents = file.Parents
         };
     }
 }

@@ -18,6 +18,7 @@ export interface GetItemsParams {
   gmailLabel?: string;
   /** Lọc ticket Jira theo người phụ trách (accountId); "unassigned" = chưa gán. */
   assignee?: string;
+  connectionId?: string;
   page?: number;
   limit?: number;
 }

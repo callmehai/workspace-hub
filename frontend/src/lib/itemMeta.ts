@@ -77,3 +77,12 @@ export function getStatusLabel(item: ItemResponse, t: (k: TranslationKey) => str
   if (item.status === 'Inbox') return unread ? t('status.unread') : t('status.seen');
   return t(STATUS_KEY[item.status]);
 }
+
+/** Item File từ Drive có phải folder không — dùng dropdown parent + icon UI. */
+export function isDriveFolder(item: ItemResponse): boolean {
+  if (item.type !== 'File' || !item.metadataJson) return false;
+  const meta = parseMeta(item);
+  if (meta.isFolder === true) return true;
+  const mime = meta.mimeType ?? meta.MimeType;
+  return typeof mime === 'string' && mime === 'application/vnd.google-apps.folder';
+}

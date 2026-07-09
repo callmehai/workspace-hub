@@ -27,6 +27,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? projectKey = null,
         string? gmailLabel = null,
         string? assigneeAccountId = null,
+        Guid? connectionId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -103,6 +104,12 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 ? "\"assigneeAccountId\":null"
                 : $"\"assigneeAccountId\":\"{assigneeAccountId.Trim()}\"";
             query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains(needle));
+        }
+
+        // Connection filter — lọc item thuộc 1 connection cụ thể (Drive modal parent dropdown, v.v.)
+        if (connectionId.HasValue)
+        {
+            query = query.Where(i => i.ConnectionId == connectionId.Value);
         }
 
         // ── Search: Title hoặc Snippet ──
