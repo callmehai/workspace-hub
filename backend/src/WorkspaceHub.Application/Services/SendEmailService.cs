@@ -106,11 +106,18 @@ public class SendEmailService : ISendEmailService
 
         var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
         
-        var messageDtos = thread.Messages.Select(m => new EmailThreadMessageDto(
-            m.MessageId, m.From, m.To, m.Cc, m.Bcc, m.Subject, m.BodyHtml, m.BodyPlainText,
-            m.OccurredAt?.UtcDateTime ?? DateTime.UtcNow, m.IsUnread, m.IsStarred, m.HasAttachment,
-            m.Attachments.Select(a => new EmailAttachmentDto(a.AttachmentId, a.Filename, a.MimeType, a.Size)).ToList()
-        )).ToList();
+        var localItems = await _items.GetTrackedByConnectionIdAsync(connection.Id, ct);
+
+        var messageDtos = thread.Messages.Select(m => {
+            Guid? localId = localItems.TryGetValue(m.MessageId, out var localItem) ? localItem.Id : (Guid?)null;
+            return new EmailThreadMessageDto(
+                m.MessageId, m.From, m.To, m.Cc, m.Bcc, m.Subject, m.BodyHtml, m.BodyPlainText,
+                m.OccurredAt?.UtcDateTime ?? DateTime.UtcNow, m.IsUnread, m.IsStarred, m.HasAttachment,
+                m.Labels,
+                m.Attachments.Select(a => new EmailAttachmentDto(a.AttachmentId, a.Filename, a.MimeType, a.Size)).ToList(),
+                localId
+            );
+        }).ToList();
 
         return new EmailThreadResponse(thread.ThreadId, thread.Subject, messageDtos);
     }

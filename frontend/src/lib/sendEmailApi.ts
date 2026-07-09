@@ -1,10 +1,23 @@
 import api from './api';
+import type { ItemResponse } from '../types/items';
 
 /** File người dùng tự đính kèm — nội dung base64 (không kèm prefix data URI). */
 export interface AttachmentUpload {
   filename: string;
   mimeType: string;
   contentBase64: string;
+}
+
+export interface SaveDraftRequest {
+  connectionId: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  bodyHtml: string;
+  threadId?: string | null;
+  inReplyToMessageId?: string | null;
+  attachments?: AttachmentUpload[];
 }
 
 /** Tổng dung lượng đính kèm tối đa (khớp giới hạn BE / Gmail ~25MB). */
@@ -63,7 +76,9 @@ export interface EmailThreadMessageDto {
   isUnread: boolean;
   isStarred: boolean;
   hasAttachment: boolean;
+  labels: string[];
   attachments: EmailAttachmentDto[];
+  itemId?: string | null;
 }
 
 export interface EmailThreadResponse {
@@ -207,5 +222,24 @@ export const sendEmailApi = {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
+  },
+
+  createDraft: async (data: SaveDraftRequest): Promise<ItemResponse> => {
+    const response = await api.post('/emails/drafts', data);
+    return response.data;
+  },
+
+  updateDraft: async (itemId: string, data: SaveDraftRequest): Promise<ItemResponse> => {
+    const response = await api.put(`/emails/drafts/${itemId}`, data);
+    return response.data;
+  },
+
+  sendDraft: async (itemId: string): Promise<SendEmailResult> => {
+    const response = await api.post(`/emails/drafts/${itemId}/send`);
+    return response.data;
+  },
+
+  discardDraft: async (itemId: string): Promise<void> => {
+    await api.delete(`/emails/drafts/${itemId}`);
   },
 };

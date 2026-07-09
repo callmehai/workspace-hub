@@ -17,6 +17,19 @@ export function isEmailUnread(item: ItemResponse): boolean {
   }
 }
 
+/**
+ * Check if the email item is a draft.
+ */
+export function isDraftEmail(item: ItemResponse): boolean {
+  if (item.type !== 'Email' || !item.metadataJson) return false;
+  try {
+    const meta = JSON.parse(item.metadataJson);
+    return Array.isArray(meta.labels) && meta.labels.includes('DRAFT');
+  } catch {
+    return false;
+  }
+}
+
 // Key i18n cho 3 status Kanban (tái dùng nhãn cột kanban → list/board/drawer nhất quán).
 const STATUS_KEY: Record<ItemStatus, TranslationKey> = {
   Inbox: 'kanban.colInbox', Doing: 'kanban.colDoing', Done: 'kanban.colDone',

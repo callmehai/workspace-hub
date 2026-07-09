@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { useI18n } from '../hooks/useI18n';
 import { handleApiError } from '../lib/errorUtils';
-import { isItemUnread, getStatusLabel } from '../lib/itemMeta';
+import { isItemUnread, getStatusLabel, isDraftEmail } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
@@ -492,7 +492,13 @@ export const Inbox = () => {
             return (
             <div
               key={item.id}
-              onClick={() => setSelectedId(item.id)}
+              onClick={() => {
+                if (isDraftEmail(item)) {
+                  navigate(`/send-email?draftItemId=${item.id}`);
+                } else {
+                  setSelectedId(item.id);
+                }
+              }}
               className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
             >
               {/* checkbox */}
