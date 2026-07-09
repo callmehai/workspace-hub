@@ -14,7 +14,7 @@ import {
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
+import { typeIcon, typeLabelKey, typeSolidTileClass } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
@@ -27,17 +27,6 @@ import { usePollingInterval } from '../hooks/usePollingInterval';
 const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
   Inbox: 'kanban.colInbox', Doing: 'kanban.colDoing', Done: 'kanban.colDone',
 };
-
-function typeTileClass(t: ItemType): string {
-  const map: Record<ItemType, string> = {
-    Email: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',
-    Event: 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300',
-    File: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
-    Note: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300',
-    Ticket: 'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-300',
-  };
-  return map[t] ?? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300';
-}
 
 // Màu theo category Kanban (dùng cho Ticket & các loại khác ở Doing/Done): xám / xanh dương / xanh lá.
 const CHIP_BY_STATUS: Record<string, string> = {
@@ -430,27 +419,49 @@ export const Inbox = () => {
             <div
               key={item.id}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
+              className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
             >
+              {/* checkbox */}
               <input
                 type="checkbox"
                 checked={selectedItemIds.has(item.id)}
                 onClick={(e) => toggleSelection(item.id, e)}
                 onChange={() => {}} // handled by onClick
-                className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600 mr-1"
+                className="w-4 h-4 shrink-0 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600"
               />
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
-                {typeIcon(item.type)}
+
+              {/* sao (quan trọng) — đưa RA TRƯỚC như Gmail */}
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  toggleImportant({ id: item.id, isImportant: !item.isImportant });
+                }}
+                aria-label={t('inbox.markImportant')}
+                className="shrink-0 p-1 rounded-md hover:bg-amber-100/70 dark:hover:bg-amber-500/15 transition-colors"
+              >
+                <Star
+                  className={`w-[18px] h-[18px] transition-colors ${
+                    item.isImportant
+                      ? 'fill-amber-400 text-amber-400'
+                      : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500'
+                  }`}
+                />
+              </button>
+
+              {/* avatar loại — đặc màu, icon trắng đậm */}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass(item.type)}`}>
+                {typeIcon(item.type, 'w-[18px] h-[18px]', 2.25)}
               </div>
 
               <div className="flex-1 min-w-0">
+                {/* 1 dòng: chấm chưa đọc · tiêu đề (đậm) · badge thread — em-dash · snippet (mờ, ngắn) */}
                 <div className="flex items-center gap-1.5 min-w-0">
                   {v.unread && (
                     <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" aria-label={t('inbox.unreadAria')} />
                   )}
-                  <div className={`text-[13.5px] truncate leading-snug ${v.title}`}>
+                  <span className={`text-[13.5px] truncate max-w-[60%] shrink-0 leading-snug ${v.title}`}>
                     {item.title}
-                  </div>
+                  </span>
                   {(item.threadCount ?? 1) > 1 && (
                     <span
                       className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-semibold tabular-nums"
@@ -459,9 +470,11 @@ export const Inbox = () => {
                       {item.threadCount}
                     </span>
                   )}
-                </div>
-                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${v.snippet}`}>
-                  {item.snippet}
+                  {item.snippet && (
+                    <span className={`text-[12.5px] truncate min-w-0 flex-1 leading-snug ${v.snippet}`}>
+                      <span className="text-slate-300 dark:text-slate-600 mr-1">—</span>{item.snippet}
+                    </span>
+                  )}
                 </div>
                 {((item.folderIds && item.folderIds.length > 0) || (item.tags && item.tags.length > 0)) && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
@@ -477,24 +490,13 @@ export const Inbox = () => {
                 )}
               </div>
 
-              <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                <span className={`text-[11.5px] ${v.time}`}>{timeAgo(item.occurredAt, lang)}</span>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <span className={`text-[11.5px] whitespace-nowrap ${v.time}`}>{timeAgo(item.occurredAt, lang)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item, unread)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item, unread)}`} />
                   {getStatusLabel(item, t, unread)}
                 </span>
               </div>
-
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  toggleImportant({ id: item.id, isImportant: !item.isImportant });
-                }}
-                aria-label={t('inbox.markImportant')}
-                className="flex-shrink-0 p-1.5 rounded-md text-slate-300 hover:text-amber-400 hover:bg-amber-50 transition-colors"
-              >
-                <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
-              </button>
             </div>
             );
           })}

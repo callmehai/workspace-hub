@@ -1,4 +1,4 @@
-import { Mail, Calendar, FileText, StickyNote, Briefcase } from 'lucide-react';
+import { Mail, CalendarDays, FileText, StickyNote, Ticket } from 'lucide-react';
 import type { ItemType, ItemStatus } from '../types/items';
 import type { TranslationKey } from '../i18n/translations';
 
@@ -26,12 +26,26 @@ const TYPE_KEY: Record<ItemType, TranslationKey> = {
 };
 export const typeLabelKey = (type: ItemType): TranslationKey => TYPE_KEY[type] ?? 'type.note';
 
-export function typeIcon(t: ItemType, cls = 'w-4 h-4') {
+export function typeIcon(t: ItemType, cls = 'w-4 h-4', strokeWidth = 2) {
   switch (t) {
-    case 'Email': return <Mail className={cls} />;
-    case 'Event': return <Calendar className={cls} />;
-    case 'File': return <FileText className={cls} />;
-    case 'Note': return <StickyNote className={cls} />;
-    case 'Ticket': return <Briefcase className={cls} />;
+    case 'Email': return <Mail className={cls} strokeWidth={strokeWidth} />;
+    case 'Event': return <CalendarDays className={cls} strokeWidth={strokeWidth} />;
+    case 'File': return <FileText className={cls} strokeWidth={strokeWidth} />;
+    case 'Note': return <StickyNote className={cls} strokeWidth={strokeWidth} />;
+    case 'Ticket': return <Ticket className={cls} strokeWidth={strokeWidth} />;
   }
 }
+
+/**
+ * Tile "avatar" đặc màu (gradient) + icon trắng — dùng ở list/board cho nổi bật, chuyên nghiệp
+ * kiểu Gmail (thay tile pastel mờ). Mỗi loại 1 gam màu để nhận diện nhanh.
+ */
+const TYPE_SOLID: Record<ItemType, string> = {
+  Email: 'bg-gradient-to-br from-blue-500 to-blue-600 text-white',
+  Event: 'bg-gradient-to-br from-amber-500 to-orange-500 text-white',
+  File: 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white',
+  Note: 'bg-gradient-to-br from-slate-400 to-slate-500 text-white dark:from-slate-500 dark:to-slate-600',
+  Ticket: 'bg-gradient-to-br from-violet-500 to-purple-600 text-white',
+};
+export const typeSolidTileClass = (t: ItemType): string =>
+  TYPE_SOLID[t] ?? 'bg-gradient-to-br from-slate-400 to-slate-500 text-white';
