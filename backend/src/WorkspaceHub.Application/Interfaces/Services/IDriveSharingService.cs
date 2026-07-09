@@ -6,6 +6,7 @@ namespace WorkspaceHub.Application.Interfaces.Services;
 /// <summary>
 /// Business logic tạo folder Drive + chia sẻ permissions (SCRUM-79 — A3).
 /// Controller gọi service này; service validate ownership rồi ủy thác Google cho <see cref="Abstractions.IDriveGateway"/>.
+/// Giao tiếp với app
 /// </summary>
 public interface IDriveSharingService
 {

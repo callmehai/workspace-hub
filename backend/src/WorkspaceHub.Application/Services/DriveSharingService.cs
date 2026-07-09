@@ -97,7 +97,6 @@ public class DriveSharingService : IDriveSharingService
         var (item, conn) = await ResolveDriveItemAsync(itemId, userId, ct);
 
         var existing = await _gateway.ListPermissionsAsync(conn, item.ExternalId!, ct);
-        // Trùng email user → 409 (doc mục 7 — không gọi Google nếu đã share).
         if (existing.Any(p =>
                 string.Equals(p.Type, DrivePermissionTypes.User, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(p.EmailAddress, email.Trim(), StringComparison.OrdinalIgnoreCase)))
