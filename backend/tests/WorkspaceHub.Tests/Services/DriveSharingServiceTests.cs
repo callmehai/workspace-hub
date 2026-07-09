@@ -159,4 +159,139 @@ public class DriveSharingServiceTests
         await act.Should().ThrowAsync<ConflictException>()
             .WithMessage("*đã được chia sẻ*");
     }
+
+    private void SetupDriveItem(ConnectionStatus status = ConnectionStatus.Active)
+    {
+        SetupDriveConnection(status);
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem());
+    }
+
+    private void SetupOwnerPermissionList()
+    {
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new()
+                {
+                    Id = "perm-owner",
+                    Type = DrivePermissionTypes.User,
+                    Role = DrivePermissionRoles.Owner,
+                    IsOwner = true,
+                    EmailAddress = "owner@example.com"
+                }
+            });
+    }
+
+    [Fact]
+    public async Task UpdatePermission_Owner_ThrowsBusinessRule()
+    {
+        SetupDriveItem();
+        SetupOwnerPermissionList();
+
+        var act = () => _service.UpdatePermissionAsync(
+            _userId, _itemId, "perm-owner", DrivePermissionRole.Writer);
+
+        await act.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("*owner*");
+
+        _gateway.Verify(
+            m => m.UpdatePermissionAsync(
+                It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RemovePermission_Owner_ThrowsBusinessRule()
+    {
+        SetupDriveItem();
+        SetupOwnerPermissionList();
+
+        var act = () => _service.RemovePermissionAsync(_userId, _itemId, "perm-owner");
+
+        await act.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("*owner*");
+
+        _gateway.Verify(
+            m => m.DeletePermissionAsync(
+                It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task SetLinkSharing_Enable_ReturnsPermissionFromGateway()
+    {
+        SetupDriveItem();
+
+        var linkPerm = new DrivePermissionDto
+        {
+            Id = "link-1",
+            Type = DrivePermissionTypes.Anyone,
+            Role = DrivePermissionRoles.Reader,
+            IsLink = true
+        };
+
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", true, DrivePermissionRole.Reader, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(linkPerm);
+
+        var result = await _service.SetLinkSharingAsync(_userId, _itemId, true, DrivePermissionRole.Reader);
+
+        result.Should().NotBeNull();
+        result!.IsLink.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SetLinkSharing_Disable_ReturnsNull()
+    {
+        SetupDriveItem();
+
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DrivePermissionDto?)null);
+
+        var result = await _service.SetLinkSharingAsync(_userId, _itemId, false);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateFolder_InactiveConnection_ThrowsBusinessRule()
+    {
+        SetupDriveConnection(ConnectionStatus.Disconnected);
+
+        var act = () => _service.CreateFolderAsync(_userId, _connId, "New folder");
+
+        await act.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("*không active*");
+    }
+
+    [Fact]
+    public async Task ListPermissions_InactiveConnection_ThrowsBusinessRule()
+    {
+        SetupDriveItem(ConnectionStatus.Error);
+
+        var act = () => _service.ListPermissionsAsync(_userId, _itemId);
+
+        await act.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("*không active*");
+    }
+
+    [Fact]
+    public async Task CreateFolder_OtherUsersConnection_Throws404()
+    {
+        _connections.Setup(m => m.GetByIdAsync(_connId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Connection
+            {
+                Id = _connId,
+                UserId = Guid.NewGuid(),
+                ServiceType = ServiceType.Drive,
+                Status = ConnectionStatus.Active
+            });
+
+        var act = () => _service.CreateFolderAsync(_userId, _connId, "Folder");
+
+        await act.Should().ThrowAsync<NotFoundException>();
+    }
 }

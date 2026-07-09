@@ -135,8 +135,8 @@ public class DrivePermissionDto
     public string Role { get; set; } = string.Empty;
     public string? EmailAddress { get; set; }
     public string? DisplayName { get; set; }
-    //true nếu là owner, UI chỉ hiển thị khong xóa
+    //true nếu là owner, UI chỉ hiển thị không xóa
     public bool IsOwner { get; set; }
-    //true khi là link public, false nếu là link public (anyone)
+    //true khi type=anyone (link công khai); false với quyền user/domain/group
     public bool IsLink { get; set; }
 }

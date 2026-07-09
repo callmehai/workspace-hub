@@ -73,6 +73,7 @@ public class ItemService : IItemService
             request.ProjectKey,
             request.GmailLabel,
             request.Assignee,
+            request.ConnectionId,
             page,
             limit,
             ct);

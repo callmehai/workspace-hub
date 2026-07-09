@@ -14,7 +14,7 @@ namespace WorkspaceHub.Api.Controllers
     /// Controller mỏng: validate → gọi <see cref="IDriveSharingService"/> → trả kết quả.
     /// </summary>
     [Authorize]
-    public class DriveController :ApiControllerBase
+    public class DriveController : ApiControllerBase
     {
         private readonly IDriveSharingService _driveSharing;
         private readonly IValidator<CreateDriveFolderRequest> _createFolderValidator;

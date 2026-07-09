@@ -76,16 +76,19 @@ function CreateDriveFolderModalBody({
 
   const { data: itemsPage } = useQuery({
     queryKey: ['items', 'drive-folders', connectionId],
-    queryFn: () => itemsApi.getItems({ types: ['File'], limit: 100 }),
+    queryFn: () =>
+      itemsApi.getItems({
+        types: ['File'],
+        connectionId,
+        limit: 100,
+      }),
     enabled: !!connectionId,
   });
 
   const folderOptions = useMemo(() => {
     const items = itemsPage?.items ?? [];
-    return items.filter(
-      (it) => it.connectionId === connectionId && isDriveFolder(it),
-    );
-  }, [itemsPage, connectionId]);
+    return items.filter((it) => isDriveFolder(it));
+  }, [itemsPage]);
 
   const createMutation = useMutation({
     mutationFn: () =>
