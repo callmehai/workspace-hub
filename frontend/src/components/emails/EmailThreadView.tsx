@@ -51,7 +51,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     setCc([]);
     setBcc([]);
     setIncludeAttachments(true);
-    
+
     // Cuộn xuống box
     setTimeout(() => {
       document.getElementById('reply-box')?.scrollIntoView({ behavior: 'smooth' });
@@ -136,7 +136,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">
         {t('sendEmail.content') || 'Hội thoại'} ({thread.messages.length})
       </div>
-      
+
       <div className="space-y-3">
         {thread.messages.map((msg, index) => {
           const isExpanded = !!expandedMsgs[msg.messageId];
@@ -179,7 +179,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                   </div>
 
                   {/* HTML Body */}
-                  <div 
+                  <div
                     className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] break-words overflow-x-auto email-body-content"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.bodyHtml || msg.bodyPlainText?.replace(/\n/g, '<br/>') || '') }}
                   />
@@ -240,7 +240,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
               <X className="w-4 h-4" />
             </button>
           </div>
-          
+
           <div className="p-4 space-y-3">
             {replyMode === 'forward' && (
               <div>
@@ -248,7 +248,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                 <EmailChipsInput value={to} onChange={setTo} placeholder="Add recipient..." connectionId={connectionId} />
               </div>
             )}
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Cc</label>
@@ -262,10 +262,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
             {replyMode === 'forward' && (
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 py-1">
-                <input 
-                  type="checkbox" 
-                  checked={includeAttachments} 
-                  onChange={(e) => setIncludeAttachments(e.target.checked)} 
+                <input
+                  type="checkbox"
+                  checked={includeAttachments}
+                  onChange={(e) => setIncludeAttachments(e.target.checked)}
                   className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                 />
                 Include original attachments
@@ -281,7 +281,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                 className="min-h-[200px]"
               />
             </div>
-            
+
             <div className="flex justify-end pt-2">
               <button
                 onClick={sendAction}
