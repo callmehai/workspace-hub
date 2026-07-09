@@ -10,7 +10,7 @@ import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/i
 import {
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight,
-  Send, FileEdit, Megaphone, Users, Bell, Mails, LayoutGrid, Loader2, ShieldAlert, Trash2,
+  Send, FileEdit, Megaphone, Users, Bell, Mails, Loader2, ShieldAlert, Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
@@ -31,10 +31,11 @@ const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
 };
 
 // ── Hộp thư kiểu Gmail (lọc theo Gmail label — dữ liệu đã có trong metadata.labels) ──
-//  value: null = tất cả mục (mọi loại) · 'ALL' = tất cả thư (type=Email) · còn lại = 1 Gmail label.
-//  Spam/Trash chưa có vì sync bỏ qua (includeSpamTrash=false); Giao dịch/Hoá đơn Gmail không expose qua API.
+//  mailbox = null ⟺ KHÔNG ở chế độ email (ẩn nav, xem mọi loại item). Các value dưới đều là email.
+//  'ALL' = tất cả thư (type=Email, trừ Spam/Trash) · còn lại = 1 Gmail label.
+//  Giao dịch/Hoá đơn Gmail không expose qua API; 'Quan trọng' đã là filter sao (⭐).
 type MailboxValue = string | null;
-const MAILBOXES: { value: MailboxValue; labelKey: TranslationKey; Icon: LucideIcon }[] = [
+const MAILBOXES: { value: string; labelKey: TranslationKey; Icon: LucideIcon }[] = [
   { value: 'INBOX', labelKey: 'mailbox.inbox', Icon: InboxIcon },
   { value: 'STARRED', labelKey: 'mailbox.starred', Icon: Star },
   { value: 'SENT', labelKey: 'mailbox.sent', Icon: Send },
@@ -45,7 +46,6 @@ const MAILBOXES: { value: MailboxValue; labelKey: TranslationKey; Icon: LucideIc
   { value: 'CATEGORY_PROMOTIONS', labelKey: 'mailbox.promotions', Icon: Megaphone },
   { value: 'CATEGORY_SOCIAL', labelKey: 'mailbox.social', Icon: Users },
   { value: 'CATEGORY_UPDATES', labelKey: 'mailbox.updates', Icon: Bell },
-  { value: null, labelKey: 'mailbox.all', Icon: LayoutGrid },
 ];
 
 // Màu theo category Kanban (dùng cho Ticket & các loại khác ở Doing/Done): xám / xanh dương / xanh lá.
@@ -190,12 +190,19 @@ export const Inbox = () => {
     setPage(1);
   };
   const toggleTypeFilter = (ty: ItemType) => {
+    // "Email" = vào/ra CHẾ ĐỘ HỘP THƯ (hiện nav mailbox). Các loại khác = lọc type bình thường.
+    if (ty === 'Email') {
+      setMailbox(prev => (prev !== null ? null : 'INBOX')); // bấm lại để thoát về "tất cả mục"
+      setTypeFilter([]);
+      setPage(1);
+      return;
+    }
+    setMailbox(null); // rời chế độ email khi lọc loại khác → ẩn nav mailbox
     setTypeFilter(prev => prev.includes(ty) ? prev.filter(v => v !== ty) : [...prev, ty]);
-    setMailbox(null); // rời ngữ cảnh hộp thư khi lọc theo loại
     setPage(1);
   };
 
-  // Chọn hộp thư Gmail: label chi phối → xoá lọc loại cho khỏi mâu thuẫn (label vốn chỉ có ở Email).
+  // Chọn 1 hộp thư trong nav (đều là email) → label/type chi phối, xoá lọc loại cho khỏi mâu thuẫn.
   const selectMailbox = (value: MailboxValue) => {
     setMailbox(value);
     if (value !== null) setTypeFilter([]);
@@ -368,7 +375,7 @@ export const Inbox = () => {
           isBackgroundFetching={isFetching && !isLoading}
           statusFilter={statusFilter}
           onToggleStatusFilter={toggleStatusFilter}
-          typeFilter={typeFilter}
+          typeFilter={mailbox !== null ? ['Email'] : typeFilter}
           onToggleTypeFilter={toggleTypeFilter}
           importantOnly={importantOnly}
           onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
@@ -380,14 +387,15 @@ export const Inbox = () => {
           onSearchChange={handleSearchChange}
         />
 
-        {/* ── Hộp thư kiểu Gmail (lọc theo Gmail label) ── */}
+        {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở chế độ Email (nút "Email" đang bật) ── */}
+        {mailbox !== null && (
         <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {MAILBOXES.map(mb => {
             const active = mailbox === mb.value;
             const Icon = mb.Icon;
             return (
               <button
-                key={mb.value ?? '__all__'}
+                key={mb.value}
                 onClick={() => selectMailbox(mb.value)}
                 className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium border transition-colors ${
                   active
@@ -401,6 +409,7 @@ export const Inbox = () => {
             );
           })}
         </div>
+        )}
 
         {/* ── Active filter summary (KHÔNG gồm folder — folder là context, hiển thị ở header) ── */}
         {hasActiveFilters && (
