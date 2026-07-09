@@ -8,53 +8,57 @@ import { Loader2, Lock, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
 import { usePollingInterval } from '../hooks/usePollingInterval';
+import { useState } from 'react';
+import { CreateDriveFolderModal } from '../components/drive/CreateDriveFolderModal';
 
 const SERVICES: {
   integrationKey: string; provider: string; serviceType: string;
   name: string; descKey: TranslationKey; icon: string; bgColor: string;
 }[] = [
-  {
-    integrationKey: 'google',
-    provider: 'google',
-    serviceType: 'Gmail',
-    name: 'Google Gmail',
-    descKey: 'integrations.descGmail',
-    icon: '/icons/gmail.svg',
-    bgColor: 'bg-gray-50',
-  },
-  {
-    integrationKey: 'google',
-    provider: 'google',
-    serviceType: 'GCal',
-    name: 'Google Calendar',
-    descKey: 'integrations.descGCal',
-    icon: '/icons/gcal.svg',
-    bgColor: 'bg-gray-50',
-  },
-  {
-    integrationKey: 'google',
-    provider: 'google',
-    serviceType: 'Drive',
-    name: 'Google Drive',
-    descKey: 'integrations.descDrive',
-    icon: '/icons/drive.svg',
-    bgColor: 'bg-gray-50',
-  },
-  {
-    integrationKey: 'atlassian',
-    provider: 'atlassian',
-    serviceType: 'Jira',
-    name: 'Atlassian Jira',
-    descKey: 'integrations.descJira',
-    icon: '/icons/jira.svg',
-    bgColor: 'bg-gray-50',
-  },
-];
+    {
+      integrationKey: 'google',
+      provider: 'google',
+      serviceType: 'Gmail',
+      name: 'Google Gmail',
+      descKey: 'integrations.descGmail',
+      icon: '/icons/gmail.svg',
+      bgColor: 'bg-gray-50',
+    },
+    {
+      integrationKey: 'google',
+      provider: 'google',
+      serviceType: 'GCal',
+      name: 'Google Calendar',
+      descKey: 'integrations.descGCal',
+      icon: '/icons/gcal.svg',
+      bgColor: 'bg-gray-50',
+    },
+    {
+      integrationKey: 'google',
+      provider: 'google',
+      serviceType: 'Drive',
+      name: 'Google Drive',
+      descKey: 'integrations.descDrive',
+      icon: '/icons/drive.svg',
+      bgColor: 'bg-gray-50',
+    },
+    {
+      integrationKey: 'atlassian',
+      provider: 'atlassian',
+      serviceType: 'Jira',
+      name: 'Atlassian Jira',
+      descKey: 'integrations.descJira',
+      icon: '/icons/jira.svg',
+      bgColor: 'bg-gray-50',
+    },
+  ];
 
 export const Integrations = () => {
   const queryClient = useQueryClient();
   const pollMs = usePollingInterval(60_000);
   const { t, lang } = useI18n();
+  const [driveFolderModalOpen, setDriveFolderModalOpen] = useState(false);
+  const [driveFolderConnId, setDriveFolderConnId] = useState<string | undefined>();
   const dfLocale = lang === 'vi' ? vi : enUS;
 
   const { data: connections = [], isLoading: loading, isError, refetch, isFetching } = useQuery({
@@ -218,14 +222,29 @@ export const Integrations = () => {
                     {isConnected ? (
                       <>
                         {isActive && (
-                          <button
-                            onClick={() => syncMutation.mutate(connection.id)}
-                            disabled={isLoadingAction}
-                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 hover:border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending && syncMutation.variables === connection.id ? 'animate-spin' : ''}`} />
-                            <span>{t('toolbar.sync')}</span>
-                          </button>
+                          <>
+                            {service.serviceType === 'Drive' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDriveFolderConnId(connection.id);
+                                  setDriveFolderModalOpen(true);
+                                }}
+                                disabled={isLoadingAction}
+                                className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                              >
+                                <span>{t('integrations.createDriveFolder')}</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => syncMutation.mutate(connection.id)}
+                              disabled={isLoadingAction}
+                              className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 hover:border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending && syncMutation.variables === connection.id ? 'animate-spin' : ''}`} />
+                              <span>{t('toolbar.sync')}</span>
+                            </button>
+                          </>
                         )}
                         {(isActive || isConnectionError) && (
                           <button
@@ -258,12 +277,17 @@ export const Integrations = () => {
                     )}
                   </div>
                 </div>
-
               </div>
             );
           })}
         </div>
       )}
+
+      <CreateDriveFolderModal
+        isOpen={driveFolderModalOpen}
+        onClose={() => setDriveFolderModalOpen(false)}
+        defaultConnectionId={driveFolderConnId}
+      />
     </div>
   );
 };
