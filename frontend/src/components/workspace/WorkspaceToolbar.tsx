@@ -2,15 +2,16 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, ChevronDown, Loader2,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, Loader2,
 } from 'lucide-react';
+import { Select } from '../Select';
 import toast from 'react-hot-toast';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { jiraApi, type JiraProject } from '../../lib/jiraApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
-import { TYPE_FILTERS, STATUS_FILTERS, typeIcon } from '../../lib/itemVisuals';
+import { TYPE_FILTERS, STATUS_FILTERS, typeIcon, integrationLabelKey } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
@@ -58,6 +59,8 @@ interface WorkspaceToolbarProps {
   onToggleStatusFilter: (s: ItemStatus) => void;
   typeFilter: ItemType[];
   onToggleTypeFilter: (t: ItemType) => void;
+  /** Scope integration đang chọn (sidebar). Set ⟹ ẩn chip loại (loại cố định), tiêu đề = tên nguồn. */
+  sourceType?: ItemType | null;
   importantOnly: boolean;
   onImportantToggle: () => void;
   tagFilter: string | null;
@@ -72,6 +75,7 @@ export const WorkspaceToolbar = ({
   view, folder, folderId, subtitle, isBackgroundFetching = false,
   statusFilter, onToggleStatusFilter,
   typeFilter, onToggleTypeFilter,
+  sourceType = null,
   importantOnly, onImportantToggle,
   tagFilter, onTagFilter,
   projectKeyFilter, onProjectKeyChange,
@@ -117,7 +121,14 @@ export const WorkspaceToolbar = ({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [projectQueries]);
 
-  const q = folderId ? `?folder=${folderId}` : '';
+  // Giữ NGUYÊN context khi đổi view (Danh sách ↔ Bảng): cả folder LẪN nguồn (tab Email/Jira/…).
+  const q = (() => {
+    const p = new URLSearchParams();
+    if (folderId) p.set('folder', folderId);
+    if (sourceType) p.set('type', sourceType);
+    const s = p.toString();
+    return s ? `?${s}` : '';
+  })();
 
   const handleSyncAll = async () => {
     try {
@@ -158,7 +169,7 @@ export const WorkspaceToolbar = ({
               />
             )}
             <h1 className="text-[22px] font-semibold text-slate-900 dark:text-slate-100 leading-tight m-0">
-              {folderId ? (folder?.name ?? t('toolbar.folder')) : t('nav.allItems')}
+              {folderId ? (folder?.name ?? t('toolbar.folder')) : sourceType ? t(integrationLabelKey(sourceType)) : t('nav.allItems')}
             </h1>
             {isBackgroundFetching && (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400">
@@ -208,27 +219,35 @@ export const WorkspaceToolbar = ({
             </button>
           </div>
 
-          <button
-            onClick={() => setIsNoteOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-            title={t('toolbar.noteTooltip')}
-          >
-            <Plus className="w-4 h-4" /> {t('toolbar.note')}
-          </button>
-          <button
-            onClick={() => setIsEventOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-            title={t('toolbar.eventTooltip')}
-          >
-            <Plus className="w-4 h-4" /> {t('toolbar.event')}
-          </button>
-          <button
-            onClick={() => setIsTicketOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-            title={t('toolbar.ticketTooltip')}
-          >
-            <Plus className="w-4 h-4" /> {t('type.ticket')}
-          </button>
+          {/* Nút tạo nhanh — ở tab lẻ chỉ hiện nút hợp loại đó; "Tất cả mục" hiện đủ.
+              Ghi chú là loại nội bộ (không phải integration) → chỉ hiện ở "Tất cả mục". */}
+          {!sourceType && (
+            <button
+              onClick={() => setIsNoteOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+              title={t('toolbar.noteTooltip')}
+            >
+              <Plus className="w-4 h-4" /> {t('toolbar.note')}
+            </button>
+          )}
+          {(!sourceType || sourceType === 'Event') && (
+            <button
+              onClick={() => setIsEventOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+              title={t('toolbar.eventTooltip')}
+            >
+              <Plus className="w-4 h-4" /> {t('toolbar.event')}
+            </button>
+          )}
+          {(!sourceType || sourceType === 'Ticket') && (
+            <button
+              onClick={() => setIsTicketOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+              title={t('toolbar.ticketTooltip')}
+            >
+              <Plus className="w-4 h-4" /> {t('type.ticket')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -240,15 +259,19 @@ export const WorkspaceToolbar = ({
           </Chip>
         ))}
 
-        <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
-
-        {TYPE_FILTERS.map(f => (
-          <Chip key={f.value} active={typeFilter.includes(f.value)} onClick={() => onToggleTypeFilter(f.value)}>
-            <span className="inline-flex items-center gap-1">
-              {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
-            </span>
-          </Chip>
-        ))}
+        {/* Chip loại — CHỈ hiện ở tab "Tất cả mục". Vào 1 nguồn (Email/Jira/…) loại đã cố định. */}
+        {!sourceType && (
+          <>
+            <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
+            {TYPE_FILTERS.map(f => (
+              <Chip key={f.value} active={typeFilter.includes(f.value)} onClick={() => onToggleTypeFilter(f.value)}>
+                <span className="inline-flex items-center gap-1">
+                  {typeIcon(f.value, 'w-3.5 h-3.5')}{t(f.labelKey)}
+                </span>
+              </Chip>
+            ))}
+          </>
+        )}
 
         <div className="w-px h-[22px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
@@ -288,20 +311,20 @@ export const WorkspaceToolbar = ({
             className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
-        {onProjectKeyChange && jiraConns.length > 0 && (
-          <div className="relative w-48 shrink-0">
-            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <select
+        {/* Lọc theo space (project) Jira — CHỈ hiện khi đang ở tab Jira. */}
+        {onProjectKeyChange && sourceType === 'Ticket' && jiraConns.length > 0 && (
+          <div className="w-56 shrink-0">
+            <Select
               value={projectKeyFilter ?? ''}
-              onChange={e => onProjectKeyChange(e.target.value)}
-              className="w-full h-9 pl-9 pr-8 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 appearance-none cursor-pointer"
-            >
-              <option value="">{t('createTicket.selectProject')}...</option>
-              {availableProjects.map(p => (
-                <option key={p.key} value={p.key}>{p.name} ({p.key})</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              onChange={onProjectKeyChange}
+              className="h-9 text-[13px]"
+              icon={<Briefcase className="w-4 h-4" />}
+              placeholder={`${t('createTicket.selectProject')}...`}
+              options={[
+                { value: '', label: t('toolbar.allProjects') },
+                ...availableProjects.map(p => ({ value: p.key, label: `${p.name} (${p.key})` })),
+              ]}
+            />
           </div>
         )}
       </div>

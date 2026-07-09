@@ -1,4 +1,4 @@
-import { Mail, CalendarDays, FileText, StickyNote, Ticket } from 'lucide-react';
+import { Mail, CalendarDays, FileText, StickyNote, SquareCheckBig, type LucideIcon } from 'lucide-react';
 import type { ItemType, ItemStatus } from '../types/items';
 import type { TranslationKey } from '../i18n/translations';
 
@@ -13,6 +13,29 @@ export const TYPE_FILTERS: { labelKey: TranslationKey; value: ItemType }[] = [
   { labelKey: 'type.ticket', value: 'Ticket' },
   { labelKey: 'type.note', value: 'Note' },
 ];
+
+/**
+ * Tab "Nguồn" (integration) ở sidebar trái — mỗi tab = 1 integration, scope trang theo 1 loại.
+ * Chọn 1 tab: Inbox chỉ hiện item của loại đó + mở filter riêng (Email → label; Jira → space).
+ * "Tất cả mục" (không tab nào) = xem mọi loại, chip loại đa chọn như cũ. Note KHÔNG phải integration.
+ */
+export const INTEGRATION_TABS: { type: ItemType; labelKey: TranslationKey; Icon: LucideIcon }[] = [
+  { type: 'Email', labelKey: 'integration.email', Icon: Mail },
+  { type: 'Event', labelKey: 'integration.calendar', Icon: CalendarDays },
+  { type: 'File', labelKey: 'integration.drive', Icon: FileText },
+  { type: 'Ticket', labelKey: 'integration.jira', Icon: SquareCheckBig },
+];
+
+const INTEGRATION_TYPES = new Set<string>(INTEGRATION_TABS.map(t => t.type));
+
+/** Đọc scope integration từ URL (?type=…); trả null nếu không hợp lệ (= tab "Tất cả mục"). */
+export const parseSourceType = (v: string | null): ItemType | null =>
+  v && INTEGRATION_TYPES.has(v) ? (v as ItemType) : null;
+
+const INTEGRATION_KEY: Record<string, TranslationKey> = {
+  Email: 'integration.email', Event: 'integration.calendar', File: 'integration.drive', Ticket: 'integration.jira',
+};
+export const integrationLabelKey = (type: ItemType): TranslationKey => INTEGRATION_KEY[type] ?? typeLabelKey(type);
 
 export const STATUS_FILTERS: { labelKey: TranslationKey; value: ItemStatus }[] = [
   { labelKey: 'kanban.colInbox', value: 'Inbox' },
@@ -32,7 +55,7 @@ export function typeIcon(t: ItemType, cls = 'w-4 h-4', strokeWidth = 2) {
     case 'Event': return <CalendarDays className={cls} strokeWidth={strokeWidth} />;
     case 'File': return <FileText className={cls} strokeWidth={strokeWidth} />;
     case 'Note': return <StickyNote className={cls} strokeWidth={strokeWidth} />;
-    case 'Ticket': return <Ticket className={cls} strokeWidth={strokeWidth} />;
+    case 'Ticket': return <SquareCheckBig className={cls} strokeWidth={strokeWidth} />;
   }
 }
 

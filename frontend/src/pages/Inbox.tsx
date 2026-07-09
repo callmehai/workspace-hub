@@ -16,7 +16,7 @@ import {
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon, typeLabelKey, typeSolidTileClass } from '../lib/itemVisuals';
+import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
@@ -161,6 +161,8 @@ export const Inbox = () => {
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
   // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
   const selectedFolderId = searchParams.get('folder');
+  // Nguồn (integration) chọn ở sidebar — scope trang theo 1 loại. null = tab "Tất cả mục".
+  const sourceType = parseSourceType(searchParams.get('type'));
   const itemFromUrl = searchParams.get('item');
   const activeItemId = itemFromUrl ?? selectedId;
 
@@ -177,35 +179,25 @@ export const Inbox = () => {
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
-  // Đổi context → về trang 1. Vào 1 folder thì bỏ lọc hộp thư (folder có thể chứa
-  // file/event/ticket, không nên kẹt ở INBOX) — hiện tất cả loại trong folder đó.
+  // Đổi context (folder HOẶC nguồn) → về trang 1.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-    if (selectedFolderId) setMailbox(null);
-  }, [selectedFolderId]);
+  }, [selectedFolderId, sourceType]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
     setStatusFilter(prev => prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]);
     setPage(1);
   };
+  // Chip loại — CHỈ dùng ở tab "Tất cả mục" (đa chọn như cũ). Trong 1 nguồn, chip loại bị ẩn.
   const toggleTypeFilter = (ty: ItemType) => {
-    // "Email" = vào/ra CHẾ ĐỘ HỘP THƯ (hiện nav mailbox). Các loại khác = lọc type bình thường.
-    if (ty === 'Email') {
-      setMailbox(prev => (prev !== null ? null : 'INBOX')); // bấm lại để thoát về "tất cả mục"
-      setTypeFilter([]);
-      setPage(1);
-      return;
-    }
-    setMailbox(null); // rời chế độ email khi lọc loại khác → ẩn nav mailbox
     setTypeFilter(prev => prev.includes(ty) ? prev.filter(v => v !== ty) : [...prev, ty]);
     setPage(1);
   };
 
-  // Chọn 1 hộp thư trong nav (đều là email) → label/type chi phối, xoá lọc loại cho khỏi mâu thuẫn.
+  // Chọn 1 hộp thư trong nav (chỉ hiện ở tab Email) → đổi Gmail label đang lọc.
   const selectMailbox = (value: MailboxValue) => {
     setMailbox(value);
-    if (value !== null) setTypeFilter([]);
     setPage(1);
   };
 
@@ -235,10 +227,14 @@ export const Inbox = () => {
     queryFn: () => foldersApi.getFolders()
   });
 
-  // Hộp thư → suy ra type/label: 'ALL' = mọi Email; label = lọc theo Gmail label (chỉ Email).
-  const mailboxTypes: ItemType[] | undefined = mailbox === 'ALL' ? ['Email'] : undefined;
-  const gmailLabel = mailbox && mailbox !== 'ALL' ? mailbox : undefined;
-  const effectiveTypes = mailbox !== null ? mailboxTypes : (typeFilter.length > 0 ? typeFilter : undefined);
+  // Scope theo nguồn (sidebar):
+  //  · Email  → luôn types=['Email'] + lọc theo Gmail label ('ALL' = mọi thư, khác = 1 label).
+  //  · Jira/Event/File → types=[loại đó].
+  //  · null (tab Tất cả mục) → dùng chip loại đa chọn; KHÔNG label, KHÔNG project.
+  const isEmailScope = sourceType === 'Email';
+  const gmailLabel = isEmailScope && mailbox && mailbox !== 'ALL' ? mailbox : undefined;
+  const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
+  const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
 
   const params = {
     statuses: statusFilter.length > 0 ? statusFilter : undefined,
@@ -247,7 +243,7 @@ export const Inbox = () => {
     search: search || undefined,
     folderId: selectedFolderId || undefined,
     tagId: tagFilter ?? undefined,
-    projectKey: debouncedProjectKey || undefined,
+    projectKey: effectiveProjectKey,
     gmailLabel,
     page,
     limit,
@@ -355,7 +351,7 @@ export const Inbox = () => {
   const currentFolder = selectedFolderId
     ? folders.find(f => f.id === selectedFolderId) ?? null
     : null;
-  const hasActiveFilters = Boolean(statusFilter.length > 0 || typeFilter.length > 0 || importantOnly || tagFilter || search || debouncedProjectKey);
+  const hasActiveFilters = Boolean(statusFilter.length > 0 || (!sourceType && typeFilter.length > 0) || importantOnly || tagFilter || search || effectiveProjectKey);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
@@ -375,8 +371,9 @@ export const Inbox = () => {
           isBackgroundFetching={isFetching && !isLoading}
           statusFilter={statusFilter}
           onToggleStatusFilter={toggleStatusFilter}
-          typeFilter={mailbox !== null ? ['Email'] : typeFilter}
+          typeFilter={typeFilter}
           onToggleTypeFilter={toggleTypeFilter}
+          sourceType={sourceType}
           importantOnly={importantOnly}
           onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
           tagFilter={tagFilter}
@@ -387,8 +384,8 @@ export const Inbox = () => {
           onSearchChange={handleSearchChange}
         />
 
-        {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở chế độ Email (nút "Email" đang bật) ── */}
-        {mailbox !== null && (
+        {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở tab Email (sidebar) ── */}
+        {isEmailScope && (
         <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {MAILBOXES.map(mb => {
             const active = mailbox === mb.value;
@@ -418,12 +415,12 @@ export const Inbox = () => {
             {statusFilter.map(s => (
               <span key={s} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(STATUS_LABEL_KEY[s])}</span>
             ))}
-            {typeFilter.map(ty => (
+            {!sourceType && typeFilter.map(ty => (
               <span key={ty} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(typeLabelKey(ty))}</span>
             ))}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">⭐ {t('toolbar.important')}</span>}
             {search && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">"{search}"</span>}
-            {debouncedProjectKey && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">Project: {debouncedProjectKey}</span>}
+            {effectiveProjectKey && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">Project: {effectiveProjectKey}</span>}
             <button onClick={clearFilters} className="text-brand-600 dark:text-brand-400 hover:underline ml-1">{t('inbox.clearFilters')}</button>
           </div>
         )}

@@ -28,6 +28,11 @@ export const vi = {
 
   // ── nav / sidebar ──
   'nav.allItems': 'Tất cả mục',
+  'nav.sources': 'Nguồn',
+  'integration.email': 'Email',
+  'integration.calendar': 'Calendar',
+  'integration.drive': 'Drive',
+  'integration.jira': 'Jira',
   'nav.integrations': 'Kết nối dịch vụ',
   'nav.sendEmail': 'Gửi email',
   'nav.scheduledEmails': 'Email hẹn giờ',
@@ -364,6 +369,7 @@ export const vi = {
 
   // ── item detail (drawer) ──
   'item.loadingDetail': 'Đang tải chi tiết...',
+  'item.resizeHint': 'Kéo để đổi độ rộng',
   'item.loadError': 'Không thể tải thông tin chi tiết',
   'item.loadErrorHint': 'Vui lòng thử lại sau hoặc tải lại trang.',
   'item.reload': 'Tải lại',
@@ -505,6 +511,7 @@ export const vi = {
   'toolbar.eventTooltip': 'Thêm sự kiện mới vào Google Calendar',
   'toolbar.ticketTooltip': 'Tạo ticket mới trên dịch vụ Jira',
   'toolbar.important': 'Quan trọng',
+  'toolbar.allProjects': 'Tất cả dự án',
   'toolbar.search': 'Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)',
 
   // ── kanban ──
@@ -605,6 +612,11 @@ export const en: Record<TranslationKey, string> = {
 
   // ── nav / sidebar ──
   'nav.allItems': 'All items',
+  'nav.sources': 'Sources',
+  'integration.email': 'Email',
+  'integration.calendar': 'Calendar',
+  'integration.drive': 'Drive',
+  'integration.jira': 'Jira',
   'nav.integrations': 'Connect services',
   'nav.sendEmail': 'Send email',
   'nav.scheduledEmails': 'Scheduled emails',
@@ -941,6 +953,7 @@ export const en: Record<TranslationKey, string> = {
 
   // ── item detail (drawer) ──
   'item.loadingDetail': 'Loading details...',
+  'item.resizeHint': 'Drag to resize',
   'item.loadError': 'Could not load the details',
   'item.loadErrorHint': 'Please try again later or reload the page.',
   'item.reload': 'Reload',
@@ -1082,6 +1095,7 @@ export const en: Record<TranslationKey, string> = {
   'toolbar.eventTooltip': 'Add a new event to Google Calendar',
   'toolbar.ticketTooltip': 'Create a new ticket in Jira',
   'toolbar.important': 'Important',
+  'toolbar.allProjects': 'All projects',
   'toolbar.search': 'Search title, content… (no diacritics needed)',
 
   // ── kanban ──

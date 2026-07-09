@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { jiraApi, type JiraUser } from '../../lib/jiraApi';
+import { Select } from '../Select';
 import type { TranslationKey } from '../../i18n/translations';
 
 type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
@@ -129,16 +130,13 @@ export const TicketEditForm = ({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={LABEL}>{t('ticket.priorityLabel')}</label>
-          <select
+          <Select
             value={form.priority}
-            onChange={set('priority')}
-            className={INPUT + ' appearance-none cursor-pointer'}
-          >
-            <option value="">{t('createTicket.selectPriority')}</option>
-            {priorities.map((p) => (
-              <option key={p.id} value={p.name}>{p.name}</option>
-            ))}
-          </select>
+            onChange={(v) => onChange({ ...form, priority: v })}
+            className="py-2 text-[13px]"
+            placeholder={t('createTicket.selectPriority')}
+            options={priorities.map((p) => ({ value: p.name, label: p.name }))}
+          />
         </div>
         <div>
           <label className={LABEL}>{t('ticket.transitionLabel')}</label>
@@ -149,16 +147,13 @@ export const TicketEditForm = ({
           ) : transitions.length === 0 ? (
             <p className="text-[12px] text-slate-400 py-2">{t('ticket.noTransitions')}</p>
           ) : (
-            <select
+            <Select
               value={form.statusTransitionId}
-              onChange={set('statusTransitionId')}
-              className={INPUT + ' appearance-none cursor-pointer'}
-            >
-              <option value="">{t('ticket.selectTransition')}</option>
-              {transitions.map((tr) => (
-                <option key={tr.id} value={tr.id}>{tr.name}</option>
-              ))}
-            </select>
+              onChange={(v) => onChange({ ...form, statusTransitionId: v })}
+              className="py-2 text-[13px]"
+              placeholder={t('ticket.selectTransition')}
+              options={transitions.map((tr) => ({ value: tr.id, label: tr.name }))}
+            />
           )}
         </div>
       </div>

@@ -15,6 +15,26 @@ interface EmailThreadViewProps {
   connectionId: string;
 }
 
+// Gmail API không trả ảnh đại diện → dựng avatar chữ-cái-đầu, màu ổn định theo người gửi (kiểu Gmail).
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500',
+  'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-pink-500',
+];
+function avatarColor(key: string): string {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+/** Tách "Tên <email>" → tên hiển thị + email. Không có tên hiển thị thì dùng email làm tên. */
+function parseSender(from?: string | null): { name: string; email: string } {
+  if (!from) return { name: 'Unknown', email: '' };
+  const m = from.match(/<([^>]+)>/);
+  const email = (m ? m[1] : from).trim();
+  const name = from.split('<')[0].trim().replace(/^["']|["']$/g, '') || email || 'Unknown';
+  return { name, email };
+}
+
 export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connectionId }) => {
   const { t, lang } = useI18n();
   const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
@@ -164,7 +184,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
           const isLatest = index === thread.messages.length - 1;
           // Mặc định: thư mới nhất mở, thư cũ thu gọn — cho tới khi user tự toggle.
           const isExpanded = expandedMsgs[msg.messageId] ?? isLatest;
-          const fromName = msg.from ? msg.from.split('<')[0].trim() : 'Unknown';
+          const sender = parseSender(msg.from);
+          const initial = (sender.name || sender.email || '?').charAt(0).toUpperCase();
 
           return (
             <div key={msg.messageId} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm transition-all">
@@ -174,11 +195,11 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                 className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/80 transition-colors"
               >
                 <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 flex items-center justify-center font-bold text-sm shrink-0">
-                    {fromName.charAt(0).toUpperCase()}
+                  <div className={`w-8 h-8 rounded-full ${avatarColor(sender.email || sender.name)} text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm`}>
+                    {initial}
                   </div>
-                  <div className="flex flex-col items-start truncate">
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{fromName}</span>
+                  <div className="flex flex-col items-start min-w-0">
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-full" title={sender.email}>{sender.name}</span>
                     <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
                       {new Date(msg.occurredAt).toLocaleString(dl)}
                     </span>
