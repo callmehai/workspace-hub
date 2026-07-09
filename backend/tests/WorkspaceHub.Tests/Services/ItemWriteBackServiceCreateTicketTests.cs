@@ -52,7 +52,7 @@ public class ItemWriteBackServiceCreateTicketTests
         new(connId, "SCRUM", "Task", "Fix the bug", "Some description");
 
     private static JiraIssue CreatedIssue(string id, string key) =>
-        new(id, key, "SCRUM", "Fix the bug", null, "To Do", null, "High", "Task",
+        new(id, key, "SCRUM", "Scrum Project", "Fix the bug", null, "To Do", null, null, "High", "Task",
             $"https://api.atlassian.com/ex/jira/cloud-1/browse/{key}",
             new DateTimeOffset(2026, 6, 28, 0, 0, 0, TimeSpan.Zero));
 

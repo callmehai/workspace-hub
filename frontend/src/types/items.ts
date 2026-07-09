@@ -92,6 +92,28 @@ export interface PatchItemRequest {
   attendees?: string[];
   name?: string;
   statusTransition?: string;
+  // ── Jira (Type=Ticket) — SCRUM-57. Content is editable (unlike Email).
+  summary?: string;
+  description?: string;
+  assignee?: string;           // Jira accountId
+  priority?: string;           // priority name
+  labels?: string[];           // replaces all labels (no spaces allowed per Jira)
+  comment?: string;            // adds a new comment (separate operation)
+}
+
+/**
+ * POST /api/items/ticket — create a new Jira issue (SCRUM-56).
+ * connectionId must be a Jira connection. Labels must not contain spaces.
+ */
+export interface CreateTicketRequest {
+  connectionId: string;
+  projectKey: string;
+  issueType: string;
+  summary: string;
+  description?: string;
+  assignee?: string;   // Jira accountId
+  priority?: string;   // priority name
+  labels?: string[];   // no whitespace in any label
 }
 
 export interface CreateEventRequest {

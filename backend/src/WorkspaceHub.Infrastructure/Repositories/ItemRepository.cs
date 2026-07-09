@@ -24,6 +24,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         bool? isImportant = null,
         string? search = null,
         Guid? tagId = null,
+        string? projectKey = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -67,6 +68,14 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         if (isImportant.HasValue)
         {
             query = query.Where(i => i.IsImportant == isImportant.Value);
+        }
+
+        // Project filter (for Jira tickets)
+        if (!string.IsNullOrWhiteSpace(projectKey))
+        {
+            var pk = projectKey.Trim();
+            // Fallback for simple JSON search since EF.Functions.JsonValue may not be mapped
+            query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains($"\"projectKey\":\"{pk}\""));
         }
 
         // ── Search: Title hoặc Snippet ──

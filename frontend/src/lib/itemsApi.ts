@@ -2,7 +2,8 @@ import api from './api';
 import type { 
   PagedResult, ItemResponse, UpdateItemStatusRequest, CreateNoteRequest, 
   FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType,
-  PatchItemRequest, CreateEventRequest, CreateFolderRequest, UpdateFolderRequest
+  PatchItemRequest, CreateEventRequest, CreateFolderRequest, UpdateFolderRequest,
+  CreateTicketRequest
 } from '../types/items';
 
 export interface GetItemsParams {
@@ -12,6 +13,7 @@ export interface GetItemsParams {
   isImportant?: boolean;
   search?: string;
   tagId?: string;
+  projectKey?: string;
   page?: number;
   limit?: number;
 }
@@ -46,7 +48,10 @@ export const itemsApi = {
     return response.data;
   },
 
-
+  createTicket: async (request: CreateTicketRequest): Promise<ItemResponse> => {
+    const response = await api.post('/items/ticket', request);
+    return response.data;
+  },
 
   patchItem: async (id: string, request: PatchItemRequest): Promise<ItemResponse> => {
     const response = await api.patch(`/items/${id}`, request);

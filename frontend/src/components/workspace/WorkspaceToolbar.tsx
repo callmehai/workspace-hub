@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { connectionsApi } from '../../lib/connectionsApi';
+import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
+import { jiraApi, type JiraProject } from '../../lib/jiraApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
@@ -13,6 +14,7 @@ import { TYPE_FILTERS, STATUS_FILTERS, typeIcon } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
+import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
 
 /*
@@ -60,6 +62,8 @@ interface WorkspaceToolbarProps {
   onImportantToggle: () => void;
   tagFilter: string | null;
   onTagFilter: (id: string | null) => void;
+  projectKeyFilter?: string;
+  onProjectKeyChange?: (v: string) => void;
   searchInput: string;
   onSearchChange: (v: string) => void;
 }
@@ -70,6 +74,7 @@ export const WorkspaceToolbar = ({
   typeFilter, onToggleTypeFilter,
   importantOnly, onImportantToggle,
   tagFilter, onTagFilter,
+  projectKeyFilter, onProjectKeyChange,
   searchInput, onSearchChange,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
@@ -78,9 +83,39 @@ export const WorkspaceToolbar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
+  const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
+
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections
+  });
+
+  const jiraConns = connections.filter(
+    (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
+  );
+
+  const projectQueries = useQueries({
+    queries: jiraConns.map((c: ConnectionDto) => ({
+      queryKey: ['jira', 'projects', c.id],
+      queryFn: () => jiraApi.getProjects(c.id),
+      staleTime: 5 * 60_000,
+    }))
+  });
+
+  const availableProjects = useMemo(() => {
+    const map = new Map<string, string>();
+    projectQueries.forEach(q => {
+      if (q.data) {
+        q.data.forEach((p: JiraProject) => map.set(p.key, p.name));
+      }
+    });
+    return Array.from(map.entries())
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projectQueries]);
 
   const q = folderId ? `?folder=${folderId}` : '';
 
@@ -170,18 +205,26 @@ export const WorkspaceToolbar = ({
             </button>
           </div>
 
-          {/* Tạo nội dung — có ở CẢ 2 view */}
           <button
             onClick={() => setIsNoteOpen(true)}
             className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+            title={t('toolbar.noteTooltip')}
           >
             <Plus className="w-4 h-4" /> {t('toolbar.note')}
           </button>
           <button
             onClick={() => setIsEventOpen(true)}
             className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+            title={t('toolbar.eventTooltip')}
           >
             <Plus className="w-4 h-4" /> {t('toolbar.event')}
+          </button>
+          <button
+            onClick={() => setIsTicketOpen(true)}
+            className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+            title={t('toolbar.ticketTooltip')}
+          >
+            <Plus className="w-4 h-4" /> {t('type.ticket')}
           </button>
         </div>
       </div>
@@ -231,19 +274,38 @@ export const WorkspaceToolbar = ({
       </div>
 
       {/* ── Hàng 3: search full-width — vị trí + kích thước GIỐNG HỆT 2 view ── */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <input
-          type="text"
-          value={searchInput}
-          onChange={e => onSearchChange(e.target.value)}
-          placeholder={t('toolbar.search')}
-          className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-        />
+      <div className="flex gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => onSearchChange(e.target.value)}
+            placeholder={t('toolbar.search')}
+            className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+        </div>
+        {onProjectKeyChange && jiraConns.length > 0 && (
+          <div className="relative w-48 shrink-0">
+            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <select
+              value={projectKeyFilter ?? ''}
+              onChange={e => onProjectKeyChange(e.target.value)}
+              className="w-full h-9 pl-9 pr-8 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 appearance-none cursor-pointer"
+            >
+              <option value="">{t('createTicket.selectProject')}...</option>
+              {availableProjects.map(p => (
+                <option key={p.key} value={p.key}>{p.name} ({p.key})</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        )}
       </div>
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
       <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
+      <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
     </>
   );
