@@ -351,7 +351,9 @@ public class ConnectionsService : IConnectionsService
 
     // ───────────── Helpers ─────────────
 
-    private const int GmailDefaultBatchSize = 50;
+    // Global recent (chủ yếu INBOX + thư mới). FullSync còn list bổ sung từng mailbox
+    // (SENT/DRAFT/STARRED/CATEGORY_*) nên tổng thực tế cao hơn — xem GmailSyncService.
+    private const int GmailDefaultBatchSize = 100;
 
     public async Task<ManualSyncResult> TriggerManualSyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
     {

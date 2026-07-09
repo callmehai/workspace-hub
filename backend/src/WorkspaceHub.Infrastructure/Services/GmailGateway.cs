@@ -38,7 +38,7 @@ public class GmailGateway : IGmailGateway
             profile.ThreadsTotal);
     }
 
-    public async Task<GmailMessageList> ListMessageIdsAsync(Connection connection, string? pageToken, int maxResults, CancellationToken ct = default)
+    public async Task<GmailMessageList> ListMessageIdsAsync(Connection connection, string? pageToken, int maxResults, IReadOnlyList<string>? labelIds = null, CancellationToken ct = default)
     {
         using var gmail = await BuildGmailServiceAsync(connection, ct);
         var request = gmail.Users.Messages.List("me");
@@ -46,6 +46,10 @@ public class GmailGateway : IGmailGateway
         if (!string.IsNullOrEmpty(pageToken))
         {
             request.PageToken = pageToken;
+        }
+        if (labelIds is { Count: > 0 })
+        {
+            request.LabelIds = labelIds.ToList();
         }
 
         var response = await request.ExecuteAsync(ct);

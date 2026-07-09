@@ -67,7 +67,7 @@ public class GmailSyncService : IGmailSyncService
     public async Task<GmailSampleDto> GetSampleAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
     {
         var conn = await GetValidConnectionAsync(connectionId, userId, ct);
-        var list = await _gmailGateway.ListMessageIdsAsync(conn, null, 1, ct);
+        var list = await _gmailGateway.ListMessageIdsAsync(conn, null, 1, ct: ct);
         if (list.MessageIds.Count == 0)
         {
             throw new WorkspaceHub.Application.Common.NotFoundException("Hộp thư trống, không có email để map");
@@ -295,20 +295,44 @@ public class GmailSyncService : IGmailSyncService
         }
     }
 
+    // Các "hộp thư" bổ sung để mỗi mailbox (nav kiểu Gmail) đều có dữ liệu. Global recent
+    // (labelIds=null) chủ yếu là INBOX + thư mới; thư Nháp/Gắn sao/Đã gửi CŨ hơn top-recent
+    // sẽ không bao giờ được kéo nếu chỉ list toàn hộp thư → phải list riêng từng label.
+    // (SPAM/TRASH cố tình bỏ — includeSpamTrash=false; Purchases/Bills Gmail không expose.)
+    private static readonly string[] MailboxLabels =
+        { "SENT", "DRAFT", "STARRED", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES" };
+    private const int PerLabelBatch = 50;
+
     private async Task<(List<string> CollectedIds, string? NewCursor)> FullSyncAsync(Connection connection, int maxMessages, CancellationToken ct)
     {
         var profile = await _gmailGateway.GetProfileAsync(connection, ct);
         var newCursor = profile.HistoryId?.ToString();
 
+        // HashSet để dedupe: 1 message có thể mang nhiều label (INBOX + CATEGORY_*).
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+
+        // 1) Recent toàn hộp thư (INBOX + thư mới nhất) — tối đa maxMessages.
+        await CollectLabelAsync(connection, null, maxMessages, ids, ct);
+
+        // 2) Bổ sung recent theo từng hộp thư để mailbox nào cũng có dữ liệu.
+        foreach (var label in MailboxLabels)
+            await CollectLabelAsync(connection, new[] { label }, PerLabelBatch, ids, ct);
+
+        return (ids.ToList(), newCursor);
+    }
+
+    /// <summary>List message ID recent của 1 label (hoặc toàn hộp thư nếu labelIds=null), thêm vào set (dedupe).</summary>
+    private async Task CollectLabelAsync(Connection connection, IReadOnlyList<string>? labelIds, int max, HashSet<string> into, CancellationToken ct)
+    {
         string? pageToken = null;
-        var collectedIds = new List<string>();
+        var pulled = 0;
         do
         {
-            var page = await _gmailGateway.ListMessageIdsAsync(connection, pageToken, Math.Min(100, maxMessages - collectedIds.Count), ct);
-            collectedIds.AddRange(page.MessageIds);
+            var take = Math.Min(100, max - pulled);
+            if (take <= 0) break;
+            var page = await _gmailGateway.ListMessageIdsAsync(connection, pageToken, take, labelIds, ct);
+            foreach (var id in page.MessageIds) { into.Add(id); pulled++; }
             pageToken = page.NextPageToken;
-        } while (!string.IsNullOrEmpty(pageToken) && collectedIds.Count < maxMessages);
-
-        return (collectedIds, newCursor);
+        } while (!string.IsNullOrEmpty(pageToken) && pulled < max);
     }
 }

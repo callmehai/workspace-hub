@@ -17,7 +17,7 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
     private readonly IDriveSyncService _driveSync;
     private readonly IJiraSyncService _jiraSync;
 
-    private const int GmailDefaultBatchSize = 50;
+    private const int GmailDefaultBatchSize = 100;
     private const int JiraDefaultBatchSize = 50;
 
     public ConnectionSyncDispatcher(
