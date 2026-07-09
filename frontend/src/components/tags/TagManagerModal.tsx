@@ -6,6 +6,7 @@ import { type TagResponse } from '../../types/items';
 import { TAG_COLORS, DEFAULT_TAG_COLOR } from '../../lib/tagColors';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
+import { ConfirmDialog } from '../ConfirmDialog';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -21,6 +22,7 @@ export const TagManagerModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [name, setName] = useState('');
   const [color, setColor] = useState<string>(DEFAULT_TAG_COLOR);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [tagToDelete, setTagToDelete] = useState<TagResponse | null>(null);
 
   const { data: tags = [], isLoading } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
 
@@ -153,7 +155,7 @@ export const TagManagerModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     {editingId === tag.id ? <Check className="w-4 h-4 text-brand-600 dark:text-brand-400 opacity-100" /> : <Edit3 className="w-4 h-4" />}
                   </button>
                   <button
-                    onClick={() => { if (window.confirm(t('tag.confirmDelete', { name: tag.name }))) deleteMutation.mutate(tag.id); }}
+                    onClick={() => setTagToDelete(tag)}
                     disabled={deleteMutation.isPending}
                     className="p-1.5 rounded-md text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-all"
                     title={t('tag.delete')}
@@ -166,6 +168,21 @@ export const TagManagerModal: React.FC<Props> = ({ isOpen, onClose }) => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={tagToDelete !== null}
+        tone="danger"
+        title={tagToDelete?.name}
+        message={tagToDelete ? t('tag.confirmDelete', { name: tagToDelete.name }) : ''}
+        confirmLabel={t('common.delete')}
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (tagToDelete) {
+            deleteMutation.mutate(tagToDelete.id, { onSettled: () => setTagToDelete(null) });
+          }
+        }}
+        onCancel={() => setTagToDelete(null)}
+      />
     </div>
   );
 };

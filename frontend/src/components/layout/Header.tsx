@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Search, Bell, Plus, Menu } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../hooks/useI18n';
 import { Link } from 'react-router-dom';
 import { notificationsApi } from '../../lib/notificationsApi';
-import { UNREAD_COUNT_KEY } from '../../hooks/useNotificationHub';
+import { UNREAD_COUNT_KEY, NOTIFICATIONS_LIST_KEY } from '../../hooks/useNotificationHub';
 import { NotificationsDropdown } from './NotificationsDropdown';
 import { ThemeLangControls } from '../ThemeLangControls';
+import { usePollingInterval } from '../../hooks/usePollingInterval';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -16,15 +17,28 @@ interface HeaderProps {
 export const Header = ({ onMenuClick }: HeaderProps) => {
   const { user } = useAuth();
   const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const pollMs = usePollingInterval(45_000);
   const [isOpen, setIsOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: UNREAD_COUNT_KEY,
     queryFn: () => notificationsApi.getUnreadCount(),
-    staleTime: 30_000,
+    enabled: !!user,
+    staleTime: 15_000,
+    refetchInterval: pollMs,
     refetchOnWindowFocus: true,
   });
+
+  const handleBellClick = () => {
+    const nextOpen = !isOpen;
+    setIsOpen(nextOpen);
+    if (nextOpen) {
+      void queryClient.invalidateQueries({ queryKey: UNREAD_COUNT_KEY });
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_LIST_KEY });
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -75,7 +89,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
         <div className="relative" ref={bellRef}>
           <button
             type="button"
-            onClick={() => setIsOpen((prev) => !prev)}
+            onClick={handleBellClick}
             aria-label={t('header.notifications')}
             title={t('header.notifications')}
             className="relative flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors"

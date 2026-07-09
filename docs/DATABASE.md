@@ -111,6 +111,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 | Title | string | |
 | Snippet | string | ~200 ký tự |
 | ExternalId | string null | ID gốc provider; NULL cho Note |
+| ThreadId | string(512) null | Gmail threadId (Email) — gộp thread ở list; NULL cho loại khác |
 | **ConnectionId** | uuid FK→Connections null | thay ServiceConnectionId; SET NULL khi xoá connection |
 | **ETag** | string null | version provider, cho conflict (409) |
 | Status | enum string | Inbox / Doing / Done |
@@ -122,12 +123,14 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 
 **MetadataJson shape:**
 - Email: `{from, to[], threadId, labels[], hasAttachment, isUnread, isStarred, webUrl}`  ← thêm isUnread/isStarred cho 2 chiều
-- Event: `{start, end, location, attendees[], meetUrl}`
+- Event: `{start, end, location, attendees[], meetUrl, htmlLink}` (`htmlLink` = link mở event trong Google Calendar — nút "Mở trong Calendar")
 - File: `{mimeType, size, webViewLink, iconLink}`
 - Note: `{contentMarkdown}`
 - Ticket (Jira, ✅ SCRUM-55): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`. `ETag` = `fields.updated` (ISO-8601 UTC) làm version-token cho conflict (SCRUM-57). Description gốc là ADF → `AdfConverter.ToPlainText` lấy Snippet (đọc); ghi ngược (text→ADF) ở SCRUM-57. Xem CHANGELOG.
 
-**Constraint:** UNIQUE(ConnectionId, ExternalId). **Index:** (UserId, Status, OccurredAt DESC).
+**Constraint:** UNIQUE(ConnectionId, ExternalId). **Index:** (UserId, Status, OccurredAt DESC), (UserId, ThreadId) filter ThreadId NOT NULL.
+
+**Gộp thread (list):** query Items gộp Email theo `ThreadId` — mỗi thread chỉ trả message mới nhất (OccurredAt lớn nhất, tie-break ExternalId) trong tập đã lọc; item không có ThreadId giữ nguyên. `ItemResponse.threadCount` = tổng số message của thread thuộc user (migration `AddItemThreadId` backfill ThreadId từ MetadataJson cho item Email cũ).
 
 ---
 

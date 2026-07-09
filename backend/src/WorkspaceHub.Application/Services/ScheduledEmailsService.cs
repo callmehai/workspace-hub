@@ -3,6 +3,7 @@ using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.ScheduledEmails;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
+using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
 
@@ -20,6 +21,9 @@ public class ScheduledEmailsService : IScheduledEmailsService
         _scheduledEmails = scheduledEmails;
         _connections = connections;
     }
+
+    public IQueryable<ScheduledEmailDto> GetByUserId(Guid userId) =>
+        _scheduledEmails.GetByUserId(userId);
 
     public async Task<ScheduledEmailDto> CreateAsync(Guid userId, CreateScheduledEmailRequest request, CancellationToken ct = default)
     {
@@ -54,13 +58,7 @@ public class ScheduledEmailsService : IScheduledEmailsService
         await _scheduledEmails.AddAsync(email, ct);
         await _scheduledEmails.SaveChangesAsync(ct);
 
-        return MapToDto(email);
-    }
-
-    public async Task<IReadOnlyList<ScheduledEmailDto>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
-    {
-        var items = await _scheduledEmails.GetByUserIdAsync(userId, ct);
-        return items.Select(MapToDto).ToList().AsReadOnly();
+        return ScheduledEmailMapper.ToDto(email);
     }
 
     public async Task<ScheduledEmailDto> GetByIdAsync(Guid userId, Guid id, CancellationToken ct = default)
@@ -73,7 +71,7 @@ public class ScheduledEmailsService : IScheduledEmailsService
             throw new NotFoundException("ScheduledEmail", id);
         }
 
-        return MapToDto(email);
+        return ScheduledEmailMapper.ToDto(email);
     }
 
     public async Task<ScheduledEmailDto> CancelAsync(Guid userId, Guid id, CancellationToken ct = default)
@@ -93,33 +91,13 @@ public class ScheduledEmailsService : IScheduledEmailsService
 
         if (email.Status == ScheduledEmailStatus.Cancelled)
         {
-            return MapToDto(email);
+            return ScheduledEmailMapper.ToDto(email);
         }
 
         email.Status = ScheduledEmailStatus.Cancelled;
         _scheduledEmails.Update(email);
         await _scheduledEmails.SaveChangesAsync(ct);
 
-        return MapToDto(email);
-    }
-
-    private static ScheduledEmailDto MapToDto(ScheduledEmail email)
-    {
-        return new ScheduledEmailDto
-        {
-            Id = email.Id,
-            ConnectionId = email.ConnectionId,
-            To = string.IsNullOrEmpty(email.ToJson) ? new List<string>() : JsonSerializer.Deserialize<List<string>>(email.ToJson)!,
-            Cc = string.IsNullOrEmpty(email.CcJson) ? new List<string>() : JsonSerializer.Deserialize<List<string>>(email.CcJson)!,
-            Bcc = string.IsNullOrEmpty(email.BccJson) ? new List<string>() : JsonSerializer.Deserialize<List<string>>(email.BccJson)!,
-            Subject = email.Subject,
-            BodyHtml = email.BodyHtml,
-            SendAt = email.SendAt,
-            Status = email.Status.ToString(),
-            RetryCount = email.RetryCount,
-            LastError = email.LastError,
-            SentAt = email.SentAt,
-            CreatedAt = email.CreatedAt
-        };
+        return ScheduledEmailMapper.ToDto(email);
     }
 }

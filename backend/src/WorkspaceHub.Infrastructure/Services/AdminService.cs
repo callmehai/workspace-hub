@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.DTOs.Admin;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -131,5 +132,32 @@ public class AdminService : IAdminService
             ConnectionsByStatus: connectionsByStatus,
             TotalItems:          totalItems,
             SyncErrorsLast24h:   syncErrorsLast24h);
+    }
+
+    public async Task<AdminUserDto> ToggleUserActiveAsync(Guid id, Guid currentAdminId, CancellationToken ct = default)
+    {
+        if (id == currentAdminId)
+            throw new BusinessRuleException("Bạn không thể tự khóa tài khoản của chính mình.");
+
+        var user = await _db.Users.FindAsync(new object[] { id }, ct)
+            ?? throw new NotFoundException("User", id);
+
+        user.IsActive = !user.IsActive;
+        await _db.SaveChangesAsync(ct);
+
+        var connCount = await _db.Connections.CountAsync(c => c.UserId == id, ct);
+        var itemCount = await _db.Items.CountAsync(i => i.UserId == id, ct);
+
+        return new AdminUserDto(
+            Id:              user.Id,
+            Email:           user.Email,
+            FullName:        user.FullName,
+            Role:            user.Role.ToString(),
+            IsActive:        user.IsActive,
+            LastLoginAt:     user.LastLoginAt,
+            CreatedAt:       user.CreatedAt,
+            ConnectionCount: connCount,
+            ItemCount:       itemCount
+        );
     }
 }

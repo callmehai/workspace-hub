@@ -10,6 +10,13 @@
 - **Không làm v1:** cascade share từng item con trong app; quyền folder con do **kế thừa Google Drive** (hành vi provider), không logic riêng WH.
 - **Docs:** `docs/API.md`, `docs/SPRINTS.md`, spec `docs/DRIVE_FOLDER_SHARING.md`.
 
+## [2026-07-08] Notifications in-app + SignalR hub retry (SCRUM-68)
+
+- **Sync → notification:** Mọi sync (`ConnectionSyncDispatcher`) khi `Created > 0` gọi `SyncItemNotificationService` — tối đa 10 item/sync (ưu tiên `IsImportant` nếu vượt). Lưu DB + push SignalR `ReceiveNotification`.
+- **FE:** Chuông + badge unread (poll 45s) + dropdown OData phân trang + mark read/read-all + toast realtime + deep link `/inbox?item=`.
+- **Copy i18n:** `Title` = key (`notifications.newEmailFrom`, …); `Body` = JSON `{ from?, itemTitle, preview }` — FE dịch theo lang.
+- **SignalR resilience:** `useNotificationHub` — retry start vô hạn + backoff; rebuild hub (CSRF header mới) mỗi lần retry; BE exempt `/hubs/*` khỏi CSRF negotiate. `withAutomaticReconnect` sau connect.
+
 ## [2026-07-08] Google Contacts autocomplete (SCRUM-69)
 
 - **Sync read-only:** Mỗi lần sync Gmail (cron định kỳ SCRUM-72 ~60s, nút Đồng bộ, hoặc lazy khi mở list items) kéo `connections.list` + `otherContacts.list` (People API) vào `GoogleContacts` — full replace theo `ConnectionId`. Best-effort: lỗi contact không fail mail sync.
