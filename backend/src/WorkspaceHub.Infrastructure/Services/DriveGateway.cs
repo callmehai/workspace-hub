@@ -321,7 +321,8 @@ public class DriveGateway : IDriveGateway
             ModifiedTime = file.ModifiedTimeDateTimeOffset,
             Trashed = file.Trashed ?? false,
             Version = file.Version,
-            HeadRevisionId = file.HeadRevisionId
+            HeadRevisionId = file.HeadRevisionId,
+            Parents = file.Parents
         };
     }
 

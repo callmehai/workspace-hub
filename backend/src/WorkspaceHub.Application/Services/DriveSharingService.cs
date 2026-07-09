@@ -64,8 +64,6 @@ public class DriveSharingService : IDriveSharingService
         var driveFile = await _gateway.CreateFolderAsync(conn, name.Trim(), parentExternalId, ct);
 
         var item = _mapper.ToItem(driveFile, userId, connectionId);
-        // Bổ sung isFolder + parents — A6 sẽ gộp logic này vào DriveItemMapper khi sync.
-        item.MetadataJson = BuildFolderMetadataJson(driveFile, parentExternalId);
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
@@ -247,26 +245,6 @@ public class DriveSharingService : IDriveSharingService
         }
 
         return false;
-    }
-
-    /// <summary>Metadata JSON lưu vào Items.MetadataJson sau khi tạo folder.</summary>
-    private static string BuildFolderMetadataJson(DriveFileDto file, string? parentExternalId)
-    {
-        var meta = new Dictionary<string, object?>
-        {
-            ["mimeType"] = DriveMimeTypes.Folder,
-            ["isFolder"] = true,
-            ["webViewLink"] = file.WebViewLink,
-            ["iconLink"] = file.IconLink,
-        };
-
-        if (!string.IsNullOrEmpty(parentExternalId))
-            meta["parents"] = new[] { parentExternalId };
-
-        return JsonSerializer.Serialize(meta, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
     }
 
     private static ItemResponse MapToItemResponse(Item item) => new(

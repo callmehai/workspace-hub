@@ -12,6 +12,10 @@ public class DriveFileDto
     public bool Trashed { get; set; }
     public long? Version { get; set; }
     public string? HeadRevisionId { get; set; }
+
+    /// <summary>ID folder cha trên Google Drive (thường 1 phần tử). Rỗng = gốc My Drive.</summary>
+    public IList<string>? Parents { get; set; }
+
 }
 
 public class DriveSyncResult
