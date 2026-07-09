@@ -217,7 +217,7 @@ Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `I
 - `GET /api/emails/{itemId}/messages/{messageId}/attachments/zip` — [Authorize]. Tải **toàn bộ** attachment của 1 message trong thread, đóng gói `.zip` (server-side `ZipArchive`, tên trùng tự thêm hậu tố `" (n)"`). Trả `application/zip` (`attachments.zip`). (404 item/message, 422 message không có attachment)
 
 ## Scheduled Emails (đổi ConnectionId ⭐)
-- `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (404 connection, 422 connection không phải Gmail)
+- `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, attachments[]?, sendAt} → 201. `attachments[]` = `{ filename, mimeType, contentBase64 }` (file user tự đính kèm, base64; lưu `AttachmentsJson` → cron gửi kèm khi tới hạn; tổng ≤ 25MB). (404 connection, 422 connection không phải Gmail)
 - `GET /api/scheduled-emails/{id}` — chi tiết một email hẹn giờ.
 - `GET /api/ScheduledEmails` — **OData ⊕** convention route (`ScheduledEmailsController`): `$filter` (vd `Status eq 'Pending'`), `$orderby` (vd `SendAt`, `CreatedAt`), `$top/$skip/$count`. Query OData **PascalCase** tên property CLR; JSON response camelCase. Response `{ value, @odata.count? }`. **Lưu ý:** `$filter/$orderby` chạy **in-memory** sau khi load rows theo `CurrentUserId` (map DTO có parse JSON) — không SQL push-down như `GET /api/Notifications`.
 - `PATCH /api/scheduled-emails/{id}/cancel` — (422 đã gửi).
