@@ -71,6 +71,7 @@ public class ItemService : IItemService
             request.Search?.Trim(),
             request.TagId,
             request.ProjectKey,
+            request.GmailLabel,
             page,
             limit,
             ct);

@@ -10,8 +10,8 @@ export const TYPE_FILTERS: { labelKey: TranslationKey; value: ItemType }[] = [
   { labelKey: 'type.email', value: 'Email' },
   { labelKey: 'type.event', value: 'Event' },
   { labelKey: 'type.file', value: 'File' },
-  { labelKey: 'type.note', value: 'Note' },
   { labelKey: 'type.ticket', value: 'Ticket' },
+  { labelKey: 'type.note', value: 'Note' },
 ];
 
 export const STATUS_FILTERS: { labelKey: TranslationKey; value: ItemStatus }[] = [

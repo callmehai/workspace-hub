@@ -10,6 +10,8 @@ import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/i
 import {
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight,
+  Send, FileEdit, Megaphone, Users, Bell, Mails, LayoutGrid,
+  type LucideIcon,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
@@ -27,6 +29,22 @@ import { usePollingInterval } from '../hooks/usePollingInterval';
 const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
   Inbox: 'kanban.colInbox', Doing: 'kanban.colDoing', Done: 'kanban.colDone',
 };
+
+// ── Hộp thư kiểu Gmail (lọc theo Gmail label — dữ liệu đã có trong metadata.labels) ──
+//  value: null = tất cả mục (mọi loại) · 'ALL' = tất cả thư (type=Email) · còn lại = 1 Gmail label.
+//  Spam/Trash chưa có vì sync bỏ qua (includeSpamTrash=false); Giao dịch/Hoá đơn Gmail không expose qua API.
+type MailboxValue = string | null;
+const MAILBOXES: { value: MailboxValue; labelKey: TranslationKey; Icon: LucideIcon }[] = [
+  { value: null, labelKey: 'mailbox.all', Icon: LayoutGrid },
+  { value: 'INBOX', labelKey: 'mailbox.inbox', Icon: InboxIcon },
+  { value: 'SENT', labelKey: 'mailbox.sent', Icon: Send },
+  { value: 'DRAFT', labelKey: 'mailbox.drafts', Icon: FileEdit },
+  { value: 'STARRED', labelKey: 'mailbox.starred', Icon: Star },
+  { value: 'CATEGORY_PROMOTIONS', labelKey: 'mailbox.promotions', Icon: Megaphone },
+  { value: 'CATEGORY_SOCIAL', labelKey: 'mailbox.social', Icon: Users },
+  { value: 'CATEGORY_UPDATES', labelKey: 'mailbox.updates', Icon: Bell },
+  { value: 'ALL', labelKey: 'mailbox.allMail', Icon: Mails },
+];
 
 // Màu theo category Kanban (dùng cho Ticket & các loại khác ở Doing/Done): xám / xanh dương / xanh lá.
 const CHIP_BY_STATUS: Record<string, string> = {
@@ -129,6 +147,7 @@ export const Inbox = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [typeFilter, setTypeFilter] = useState<ItemType[]>([]);
+  const [mailbox, setMailbox] = useState<MailboxValue>(null);
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
@@ -168,6 +187,14 @@ export const Inbox = () => {
   };
   const toggleTypeFilter = (ty: ItemType) => {
     setTypeFilter(prev => prev.includes(ty) ? prev.filter(v => v !== ty) : [...prev, ty]);
+    setMailbox(null); // rời ngữ cảnh hộp thư khi lọc theo loại
+    setPage(1);
+  };
+
+  // Chọn hộp thư Gmail: label chi phối → xoá lọc loại cho khỏi mâu thuẫn (label vốn chỉ có ở Email).
+  const selectMailbox = (value: MailboxValue) => {
+    setMailbox(value);
+    if (value !== null) setTypeFilter([]);
     setPage(1);
   };
 
@@ -197,19 +224,25 @@ export const Inbox = () => {
     queryFn: () => foldersApi.getFolders()
   });
 
+  // Hộp thư → suy ra type/label: 'ALL' = mọi Email; label = lọc theo Gmail label (chỉ Email).
+  const mailboxTypes: ItemType[] | undefined = mailbox === 'ALL' ? ['Email'] : undefined;
+  const gmailLabel = mailbox && mailbox !== 'ALL' ? mailbox : undefined;
+  const effectiveTypes = mailbox !== null ? mailboxTypes : (typeFilter.length > 0 ? typeFilter : undefined);
+
   const params = {
     statuses: statusFilter.length > 0 ? statusFilter : undefined,
-    types: typeFilter.length > 0 ? typeFilter : undefined,
+    types: effectiveTypes,
     isImportant: importantOnly || undefined,
     search: search || undefined,
     folderId: selectedFolderId || undefined,
     tagId: tagFilter ?? undefined,
     projectKey: debouncedProjectKey || undefined,
+    gmailLabel,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, projectKey: params.projectKey, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, projectKey: params.projectKey, gmailLabel: params.gmailLabel, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -221,6 +254,7 @@ export const Inbox = () => {
     folderId: params.folderId,
     tagId: params.tagId,
     projectKey: params.projectKey,
+    gmailLabel: params.gmailLabel,
   });
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
@@ -275,7 +309,7 @@ export const Inbox = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
-  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilter, search, selectedFolderId]);
+  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilter, search, selectedFolderId, mailbox]);
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -341,6 +375,28 @@ export const Inbox = () => {
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
+
+        {/* ── Hộp thư kiểu Gmail (lọc theo Gmail label) ── */}
+        <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {MAILBOXES.map(mb => {
+            const active = mailbox === mb.value;
+            const Icon = mb.Icon;
+            return (
+              <button
+                key={mb.value ?? '__all__'}
+                onClick={() => selectMailbox(mb.value)}
+                className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium border transition-colors ${
+                  active
+                    ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${active ? '' : 'text-slate-400 dark:text-slate-500'}`} strokeWidth={2.25} />
+                {t(mb.labelKey)}
+              </button>
+            );
+          })}
+        </div>
 
         {/* ── Active filter summary (KHÔNG gồm folder — folder là context, hiển thị ở header) ── */}
         {hasActiveFilters && (

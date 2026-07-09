@@ -23,6 +23,7 @@ public interface IItemRepository : IGenericRepository<Item>
         string? search = null,
         Guid? tagId = null,
         string? projectKey = null,
+        string? gmailLabel = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);

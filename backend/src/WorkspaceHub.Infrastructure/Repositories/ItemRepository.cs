@@ -25,6 +25,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? search = null,
         Guid? tagId = null,
         string? projectKey = null,
+        string? gmailLabel = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -68,6 +69,15 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         if (isImportant.HasValue)
         {
             query = query.Where(i => i.IsImportant == isImportant.Value);
+        }
+
+        // Gmail label filter (Email): metadata.labels là JSON array, vd ["INBOX","UNREAD",...].
+        // Match token đã bọc ngoặc kép để không dính substring nhầm (INBOX/SENT/DRAFT/STARRED/
+        // IMPORTANT/CATEGORY_*). Chỉ Email mới có labels nên loại khác tự loại khỏi kết quả.
+        if (!string.IsNullOrWhiteSpace(gmailLabel))
+        {
+            var lbl = $"\"{gmailLabel.Trim()}\"";
+            query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains(lbl));
         }
 
         // Project filter (for Jira tickets)

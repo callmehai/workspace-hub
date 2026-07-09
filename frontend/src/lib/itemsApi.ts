@@ -14,6 +14,8 @@ export interface GetItemsParams {
   search?: string;
   tagId?: string;
   projectKey?: string;
+  /** Lọc theo Gmail label (INBOX/SENT/DRAFT/STARRED/IMPORTANT/CATEGORY_*) — chỉ áp cho Email. */
+  gmailLabel?: string;
   page?: number;
   limit?: number;
 }

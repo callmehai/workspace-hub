@@ -16,6 +16,7 @@ public record GetItemsRequest(
     string? Search = null,
     Guid? TagId = null,
     string? ProjectKey = null,
+    string? GmailLabel = null,
     int Page = 1,
     int Limit = 20);
 
