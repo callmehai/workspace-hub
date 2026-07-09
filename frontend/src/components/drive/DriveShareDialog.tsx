@@ -131,13 +131,14 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
           <span className="text-[12px] text-slate-500 shrink-0">{t(roleLabelKey(perm.role as DrivePermissionRole))}</span>
         ) : (
           <>
-            <div className="w-[120px] shrink-0">
+            <div className="w-[152px] shrink-0">
               <Select
                 value={perm.role}
                 onChange={(v) => updateRoleMutation.mutate({ permId: perm.id, role: v as DrivePermissionRole })}
                 options={roleSelectOptions}
                 disabled={isBusy || !ROLE_OPTIONS.includes(perm.role as DrivePermissionRole)}
                 className="h-8 text-[12px]"
+                dropUp
               />
             </div>
             <button
@@ -160,19 +161,19 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-start gap-3">
-          <div>
+      <div className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-xl shadow-xl flex flex-col max-h-[min(90vh,720px)]">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-start gap-3 shrink-0">
+          <div className="min-w-0">
             <h2 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100">{t('drive.share.title')}</h2>
             {itemTitle && (
-              <p className="text-[12px] text-slate-500 mt-0.5 truncate max-w-[280px]">{itemTitle}</p>
+              <p className="text-[12px] text-slate-500 mt-0.5 truncate max-w-[360px]">{itemTitle}</p>
             )}
           </div>
           <button type="button" onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-5 space-y-5 overflow-y-auto">
+        <div className="p-5 pb-8 space-y-5 overflow-y-auto flex-1 min-h-0">
           {/* Mời email */}
           <div className="space-y-2">
             <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-200">{t('drive.share.invite')}</label>
@@ -184,7 +185,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
                 placeholder={t('drive.share.emailPlaceholder')}
                 className="flex-1 min-w-[160px] h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px]"
               />
-              <div className="w-[130px]">
+              <div className="w-[152px]">
                 <Select value={inviteRole} onChange={(v) => setInviteRole(v as DrivePermissionRole)} options={roleSelectOptions} className="h-9" />
               </div>
               <button
@@ -220,7 +221,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
             </div>
             <p className="text-[11px] text-slate-500">{t('drive.share.linkSharingHint')}</p>
             {linkEnabled && (
-              <div className="w-[140px]">
+              <div className="w-[152px]">
                 <Select value={linkRole} onChange={handleLinkRoleChange} options={roleSelectOptions} className="h-8" disabled={linkMutation.isPending} />
               </div>
             )}
@@ -239,7 +240,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
             )}
           </div>
         </div>
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex justify-end">
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 rounded-b-xl flex justify-end shrink-0">
           <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-slate-600">{t('common.close')}</button>
         </div>
       </div>

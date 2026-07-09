@@ -115,11 +115,11 @@ function CreateDriveFolderModalBody({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-lg shadow-xl overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-xl shadow-xl flex flex-col">
         <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
           <h2 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100">{t('drive.createFolder.title')}</h2>
         </div>
-        <div className="p-5 space-y-4">
+        <div className="p-5 pb-8 space-y-4">
           {driveConnections.length > 1 && (
             <div>
               <label className="block text-[13px] font-medium mb-1.5">{t('drive.createFolder.connection')}</label>
@@ -149,6 +149,7 @@ function CreateDriveFolderModalBody({
             <Select
               value={parentItemId}
               onChange={setUserParentItemId}
+              dropUp
               options={[
                 { value: '', label: t('drive.createFolder.parentRoot') },
                 ...folderOptions.map((f) => ({ value: f.id, label: f.title })),
@@ -157,7 +158,7 @@ function CreateDriveFolderModalBody({
             />
           </div>
         </div>
-        <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex justify-end gap-2">
+        <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 rounded-b-xl flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-slate-600">{t('common.cancel')}</button>
           <button
             type="button"

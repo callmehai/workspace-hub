@@ -60,7 +60,7 @@ export function Select({ value, onChange, options, placeholder, className = '', 
       </button>
 
       {open && (
-        <div className={`absolute z-30 w-full min-w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
+        <div className={`absolute z-[70] w-full min-w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
           dropUp ? 'bottom-full mb-1.5' : 'mt-1.5'
         }`}>
           {options.length === 0 ? (
