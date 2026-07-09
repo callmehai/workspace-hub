@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, UserRound, Loader2,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
+  FolderPlus, Briefcase, UserRound, Loader2,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
@@ -18,6 +19,7 @@ import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
 import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
+import { CreateDriveFolderModal } from '../drive/CreateDriveFolderModal';
 
 /*
  * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
@@ -93,13 +95,16 @@ export const WorkspaceToolbar = ({
   const [isEventOpen, setIsEventOpen] = useState(false);
   const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [isDriveFolderOpen, setIsDriveFolderOpen] = useState(false);
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
-
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
-    queryFn: connectionsApi.getConnections
+    queryFn: connectionsApi.getConnections,
   });
+  const hasActiveDrive = connections.some(
+    (c) => c.serviceType === 'Drive' && c.status === 'Active',
+  );
 
   const jiraConns = connections.filter(
     (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
@@ -209,22 +214,20 @@ export const WorkspaceToolbar = ({
           <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px] dark:bg-slate-800 dark:border-slate-700">
             <button
               onClick={() => view !== 'list' && navigate(`/${q}`)}
-              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${
-                view === 'list'
+              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${view === 'list'
                   ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
                   : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
-              }`}
+                }`}
             >
               <List className="w-4 h-4" />
               <span>{t('toolbar.list')}</span>
             </button>
             <button
               onClick={() => view !== 'board' && navigate(`/kanban${q}`)}
-              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${
-                view === 'board'
+              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${view === 'board'
                   ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
                   : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
-              }`}
+                }`}
             >
               <LayoutGrid className="w-4 h-4" />
               <span>{t('toolbar.board')}</span>
@@ -258,6 +261,16 @@ export const WorkspaceToolbar = ({
               title={t('toolbar.ticketTooltip')}
             >
               <Plus className="w-4 h-4" /> {t('type.ticket')}
+            </button>
+          )}
+          {hasActiveDrive && (!sourceType || sourceType === 'File') && (
+            <button
+              type="button"
+              onClick={() => setIsDriveFolderOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+            >
+              <FolderPlus className="w-4 h-4" />
+              <span>{t('toolbar.driveFolder')}</span>
             </button>
           )}
         </div>
@@ -361,6 +374,7 @@ export const WorkspaceToolbar = ({
       <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
       <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
+      <CreateDriveFolderModal isOpen={isDriveFolderOpen} onClose={() => setIsDriveFolderOpen(false)} />
     </>
   );
 };
