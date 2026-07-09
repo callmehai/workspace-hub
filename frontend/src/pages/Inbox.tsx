@@ -10,7 +10,7 @@ import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/i
 import {
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight,
-  Send, FileEdit, Megaphone, Users, Bell, Mails, LayoutGrid,
+  Send, FileEdit, Megaphone, Users, Bell, Mails, LayoutGrid, Loader2,
   type LucideIcon,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
@@ -257,7 +257,7 @@ export const Inbox = () => {
     gmailLabel: params.gmailLabel,
   });
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching, isPlaceholderData } = useQuery({
     queryKey,
     queryFn: () => itemsApi.getItems(params),
     placeholderData: (prev) => prev,
@@ -416,7 +416,8 @@ export const Inbox = () => {
         )}
 
         {/* ── Content ── */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="relative">
+        <div className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-opacity ${isPlaceholderData ? 'opacity-50 pointer-events-none' : ''}`}>
 
           {isLoading && Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}
 
@@ -556,6 +557,17 @@ export const Inbox = () => {
             </div>
             );
           })}
+        </div>
+
+          {/* Overlay khi đang tải bộ lọc/trang mới (data cũ vẫn hiện mờ để đỡ nháy) */}
+          {isPlaceholderData && (
+            <div className="absolute inset-0 flex items-start justify-center pt-16 pointer-events-none">
+              <span className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 dark:bg-slate-800/95 shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 text-[12.5px] font-medium text-slate-600 dark:text-slate-300">
+                <Loader2 className="w-4 h-4 animate-spin text-brand-600 dark:text-brand-400" />
+                {t('common.loading')}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Pagination ── */}

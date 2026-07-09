@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, ChevronDown,
+  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2, Briefcase, ChevronDown, Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
@@ -161,7 +161,10 @@ export const WorkspaceToolbar = ({
               {folderId ? (folder?.name ?? t('toolbar.folder')) : t('nav.allItems')}
             </h1>
             {isBackgroundFetching && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">{t('common.updating')}</span>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                {t('common.updating')}
+              </span>
             )}
           </div>
           <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
