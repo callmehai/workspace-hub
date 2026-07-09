@@ -69,7 +69,7 @@ public class ItemServiceTests
 
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
+                _userId, null, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((items.AsReadOnly(), 2, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest();
@@ -92,7 +92,7 @@ public class ItemServiceTests
         // Arrange — page = -5 phải được clamp thành 1
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null,
+                _userId, null, null, null, null, null, null, null,
                 1, // clamp thành 1
                 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
@@ -105,7 +105,7 @@ public class ItemServiceTests
         // Assert
         Assert.Equal(1, result.Page);
         _repoMock.Verify(r => r.GetPagedAsync(
-            _userId, null, null, null, null, null, null,
+            _userId, null, null, null, null, null, null, null,
             1, 20, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -115,7 +115,7 @@ public class ItemServiceTests
         // Arrange — limit = 999 phải được clamp thành 100
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null,
+                _userId, null, null, null, null, null, null, null,
                 1, 100, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
@@ -127,7 +127,7 @@ public class ItemServiceTests
         // Assert
         Assert.Equal(100, result.Limit);
         _repoMock.Verify(r => r.GetPagedAsync(
-            _userId, null, null, null, null, null, null,
+            _userId, null, null, null, null, null, null, null,
             1, 100, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -137,7 +137,7 @@ public class ItemServiceTests
         // Arrange — limit = 0 phải được clamp thành 1
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null,
+                _userId, null, null, null, null, null, null, null,
                 1, 1, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
@@ -157,7 +157,7 @@ public class ItemServiceTests
         _repoMock
             .Setup(r => r.GetPagedAsync(
                 _userId, null, null, null, null,
-                "meeting", null, // trimmed
+                "meeting", null, null, // trimmed
                 1, 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
@@ -169,7 +169,7 @@ public class ItemServiceTests
         // Assert
         _repoMock.Verify(r => r.GetPagedAsync(
             _userId, null, null, null, null,
-            "meeting", null, 1, 20, It.IsAny<CancellationToken>()), Times.Once);
+            "meeting", null, null, 1, 20, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public class ItemServiceTests
                 _userId, folderId,
                 It.Is<IReadOnlyList<ItemStatus>>(s => s.SequenceEqual(new[] { ItemStatus.Doing })),
                 It.Is<IReadOnlyList<ItemType>>(ty => ty.SequenceEqual(new[] { ItemType.Email })),
-                true, "report", null, 2, 10, It.IsAny<CancellationToken>()))
+                true, "report", null, null, 2, 10, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest(
@@ -207,7 +207,7 @@ public class ItemServiceTests
             _userId, folderId,
             It.Is<IReadOnlyList<ItemStatus>>(s => s.SequenceEqual(new[] { ItemStatus.Doing })),
             It.Is<IReadOnlyList<ItemType>>(ty => ty.SequenceEqual(new[] { ItemType.Email })),
-            true, "report", null, 2, 10, It.IsAny<CancellationToken>()), Times.Once);
+            true, "report", null, null, 2, 10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public class ItemServiceTests
 
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
+                _userId, null, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item> { item }.AsReadOnly(), 1, new Dictionary<string, int>()));
 
         // Act
@@ -249,7 +249,7 @@ public class ItemServiceTests
         // Arrange
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
+                _userId, null, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         // Act
@@ -280,7 +280,7 @@ public class ItemServiceTests
         Assert.Equal(0, result.Total);
         _repoMock.Verify(r => r.GetPagedAsync(
             It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<IReadOnlyList<ItemStatus>?>(),
-            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
+            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -304,7 +304,7 @@ public class ItemServiceTests
         Assert.Equal(0, result.Total);
         _repoMock.Verify(r => r.GetPagedAsync(
             It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<IReadOnlyList<ItemStatus>?>(),
-            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
+            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

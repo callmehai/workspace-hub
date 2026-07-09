@@ -142,6 +142,8 @@ export const Inbox = () => {
   const [typeFilter, setTypeFilter] = useState<ItemType[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
+  const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -191,6 +193,16 @@ export const Inbox = () => {
     }, 350);
   }, []);
 
+  const projectKeyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleProjectKeyChange = useCallback((val: string) => {
+    setProjectKeyFilter(val);
+    if (projectKeyDebounceRef.current) clearTimeout(projectKeyDebounceRef.current);
+    projectKeyDebounceRef.current = setTimeout(() => {
+      setDebouncedProjectKey(val.trim());
+      setPage(1);
+    }, 350);
+  }, []);
+
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
@@ -203,11 +215,12 @@ export const Inbox = () => {
     search: search || undefined,
     folderId: selectedFolderId || undefined,
     tagId: tagFilter ?? undefined,
+    projectKey: debouncedProjectKey || undefined,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, projectKey: params.projectKey, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -218,6 +231,7 @@ export const Inbox = () => {
     search: params.search,
     folderId: params.folderId,
     tagId: params.tagId,
+    projectKey: params.projectKey,
   });
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
@@ -299,13 +313,15 @@ export const Inbox = () => {
     setImportantOnly(false);
     setSearchInput('');
     setSearch('');
+    setProjectKeyFilter('');
+    setDebouncedProjectKey('');
     setPage(1);
   };
 
   const currentFolder = selectedFolderId
     ? folders.find(f => f.id === selectedFolderId) ?? null
     : null;
-  const hasActiveFilters = Boolean(statusFilter.length > 0 || typeFilter.length > 0 || importantOnly || tagFilter || search);
+  const hasActiveFilters = Boolean(statusFilter.length > 0 || typeFilter.length > 0 || importantOnly || tagFilter || search || debouncedProjectKey);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
@@ -331,6 +347,8 @@ export const Inbox = () => {
           onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
           tagFilter={tagFilter}
           onTagFilter={(id) => { setTagFilter(id); setPage(1); }}
+          projectKeyFilter={projectKeyFilter}
+          onProjectKeyChange={handleProjectKeyChange}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
@@ -347,6 +365,7 @@ export const Inbox = () => {
             ))}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">⭐ {t('toolbar.important')}</span>}
             {search && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">"{search}"</span>}
+            {debouncedProjectKey && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">Project: {debouncedProjectKey}</span>}
             <button onClick={clearFilters} className="text-brand-600 dark:text-brand-400 hover:underline ml-1">{t('inbox.clearFilters')}</button>
           </div>
         )}

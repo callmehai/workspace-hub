@@ -51,7 +51,7 @@ public class JiraSyncServiceTests
         };
 
     private static JiraIssue Issue(string id, DateTimeOffset? updated = null) =>
-        new(id, $"K-{id}", "K", $"Summary {id}", null, "To Do", null, null, "Task", null, updated);
+        new(id, $"K-{id}", "K", "Scrum Project", $"Summary {id}", null, "To Do", null, null, null, "Task", null, updated);
 
     [Fact]
     public async Task NonJiraConnection_Throws()

@@ -70,6 +70,7 @@ public class ItemService : IItemService
             request.IsImportant,
             request.Search?.Trim(),
             request.TagId,
+            request.ProjectKey,
             page,
             limit,
             ct);

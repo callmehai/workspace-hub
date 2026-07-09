@@ -15,6 +15,7 @@ public record GetItemsRequest(
     bool? IsImportant = null,
     string? Search = null,
     Guid? TagId = null,
+    string? ProjectKey = null,
     int Page = 1,
     int Limit = 20);
 

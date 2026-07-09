@@ -49,7 +49,7 @@ public class ItemWriteBackServicePatchTicketTests
         new() { Id = Guid.NewGuid(), UserId = _userId, ConnectionId = _connId, Type = ItemType.Ticket, ExternalId = "SCRUM-1", ETag = etag, Title = "old", Snippet = "old" };
 
     private JiraIssue LiveIssue(DateTimeOffset? updated, string summary = "old") =>
-        new("10001", "SCRUM-1", "SCRUM", summary, null, "To Do", null, "High", "Task",
+        new("10001", "SCRUM-1", "SCRUM", "Scrum Project", summary, null, "To Do", null, null, "High", "Task",
             "https://api.atlassian.com/ex/jira/cloud-1/browse/SCRUM-1", updated);
 
     private void SetupItemAndConn(Item item, Connection conn)
