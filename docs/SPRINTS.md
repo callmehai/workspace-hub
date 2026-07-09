@@ -83,7 +83,8 @@
 |---|---|---|---|
 | SCRUM-44 | FE: Inbox/Items view (list + filter + search + pagination) | Huy | ✅ Done — `frontend/src/pages/Inbox.tsx` rebuild hoàn toàn theo `docs/prototype/` (design system slate-50/indigo-600, Inter font); TanStack Query `useQuery` key `['items', {status,type,isImportant,search,page,limit}]` gọi `itemsApi.getItems(params)`; filter chips Status (Inbox/Doing/Done) + Type (Email/Event/File/Note) + Important toggle; debounce search 350ms; numbered pagination + Prev/Next (reset page khi đổi filter); skeleton loading / empty-state / error-state; type icon tile màu (blue/amber/emerald/slate); status chip màu; `selectedId` local state cho active row; build TypeScript clean + eslint Inbox clean. |
 | SCRUM-45 | FE: Kanban 3 cột (drag-drop) + Folder sidebar | Huy | ✅ Done — rebuild `frontend/src/pages/KanbanBoard.tsx` theo prototype (Light mode slate-50/indigo-600); implement HTML5 Drag & Drop với `onMutate` optimistic cache update; tích hợp Folder sidebar filter (sync URL query `?folder=`); fix TS errors. |
-| SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ✅ Done — Hỗ trợ Email (star/read/label/trash, **kèm giao diện Thread View + Reply/Forward/Download Attachments**), Event (CRUD), File (rename/trash), Ticket (assignee/priority/transition/comment) kèm ETag/version conflict resolution (Fix lỗi update assignee lần đầu tiên); Thêm Project filter và thông tin project vào Ticket. |
+| SCRUM-46 | FE: Write-back actions + xử lý 409 conflict | Vũ | ✅ Done — Hỗ trợ Email (star/read/label/trash), Event (CRUD), File (rename/trash), Ticket (assignee/priority/transition/comment) kèm ETag/version conflict resolution (Fix lỗi update assignee lần đầu tiên); Thêm Project filter và thông tin project vào Ticket. |
+| SCRUM-73 | BE + FE: Thêm reply, draft và Hiển thị theo luồng hội thoại (Email Threads) | Vũ | ✅ Done — Giao diện Thread View + Reply/Forward/Download Attachments (Tích hợp BE APIs) |
 | SCRUM-47 | FE: Scheduled email UI (compose/list/cancel) | Khánh | ✅ Done — Giao diện 2 cột, validation client, OData filter/pagination, modal HTML. |
 | SCRUM-48 | FE: Loading/error/toast chuẩn | Khánh | ✅ Done |
 | SCRUM-49 | FE: Admin dashboard (users list + stats charts) + Lock/Unlock user | Huy | ✅ Done — Hoàn thành trang Admin Dashboard hiển thị thống kê tổng quan (biểu đồ tròn Connections) và danh sách User phân trang. Bổ sung tính năng Khóa / Mở khóa người dùng (User Lock/Unlock) qua API POST /api/admin/users/{id}/toggle-active kèm bảo vệ tự khóa tài khoản Admin. |
@@ -137,13 +138,13 @@
 
 ---
 
-## UI polish + Theme + i18n + Profile (đề xuất — CHƯA có trên Jira, số tạm SCRUM-73→75)
+## UI polish + Theme + i18n + Profile (đề xuất — CHƯA có trên Jira, số tạm SCRUM-81, 74, 75)
 
 > Phát sinh từ owner 2026-07-07: review UI (fix lệch tông màu brand blue↔indigo, Header nền, avatar) + **theme Sáng/Tối**, **song ngữ VI/EN** (đổi KHÔNG remount), **trang Profile** (chuẩn bị avatar/R2). 4 task này **chưa có trên board** — draft đầy đủ + CSV import ở `docs/tickets-ui-i18n-theme-profile.md`; quyết định kỹ thuật: `docs/CHANGELOG.md` [2026-07-07]. **Theme Done** gộp theo CHANGELOG / SCRUM-50 — **không dùng SCRUM-76** (số 76 chốt cho Contacts write-back).
 
 | Ticket (tạm) | Việc | Labels | Status |
 |---|---|---|---|
-| SCRUM-73 | FE: Song ngữ VI/EN (i18n tự viết, `useI18n().t()`, đổi lang KHÔNG remount) | frontend, i18n | 🔄 In Progress — hạ tầng + shell/auth/profile/toolbar + nhãn chính Inbox/Kanban/Integrations xong; ScheduledEmails/SendEmail/Admin/ItemDetail/modals mở rộng dần |
+| SCRUM-81 | FE: Song ngữ VI/EN (i18n tự viết, `useI18n().t()`, đổi lang KHÔNG remount) | frontend, i18n | 🔄 In Progress — hạ tầng + shell/auth/profile/toolbar + nhãn chính Inbox/Kanban/Integrations xong; ScheduledEmails/SendEmail/Admin/ItemDetail/modals mở rộng dần |
 | SCRUM-74 | FE: Trang Hồ sơ người dùng `/profile` (info + tuỳ chọn theme/ngôn ngữ; link Header+Sidebar) | frontend, profile | ✅ Done — vùng avatar chừa chỗ cho SCRUM-75 |
 | SCRUM-75 | Profile CRUD đầy đủ: avatar upload/xoá + lưu trữ **Cloudflare R2**, đổi họ tên, đổi mật khẩu | backend, frontend, storage, r2 | ✅ Done — `IFileStorageService`/`R2FileStorageService` (AWSSDK.S3, S3-compatible; đã vá 2 lỗi tương thích SigV4 streaming/checksum trailer riêng của R2), `UserProfileService` (avatar validate JPEG/PNG/WebP ≤5MB; `UpdateProfileAsync` đổi FullName; `ChangePasswordAsync` verify BCrypt, chặn tài khoản Google-only), `UsersController` (`PATCH /api/users/me`, `POST /api/users/me/change-password`, `POST/DELETE /api/users/me/avatar`). `UserDto` thêm `avatarUrl` + `authProvider`. FE: `usersApi` đủ 4 action, ProfilePage sửa tên inline + đổi mật khẩu (ẩn nếu Google-only) + lightbox xem avatar cỡ lớn (click ảnh, Esc/click nền để đóng), Header/Sidebar hiện avatar. `Users.AvatarUrl` đã có sẵn từ InitialCreate — KHÔNG cần migration mới. |
 | *(Theme Sáng/Tối)* | FE: Theme (toggle, persist `wh-theme`, class `.dark`, no remount, chống FOUC) | frontend, theme | ✅ Done — xem CHANGELOG [2026-07-07]; **gộp SCRUM-50**, không dùng key Jira riêng |
