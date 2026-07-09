@@ -1,8 +1,8 @@
 # Google Drive — Tạo folder & Chia sẻ (SCRUM-79)
 
 > **Ticket:** SCRUM-79  
-> **Trạng thái:** Spec — chưa code  
-> **Đọc file này khi:** bắt đầu implement tính năng Drive folder + sharing
+> **Trạng thái:** ✅ **Đã implement** (BE + FE, nhánh `Google_Drive_Folder_create_Sharing`)  
+> **Đọc file này khi:** tra cứu spec / QA checklist Drive folder + sharing
 
 ---
 
@@ -573,8 +573,9 @@ npm run build && npm run lint
 ### PHẦN C — Kết thúc ticket
 
 1. Chạy checklist mục 9 bên dưới.
-2. Cập nhật `SPRINTS.md`: SCRUM-79 → Done.
-3. Tạo PR vào `develop`, gắn SCRUM-79.
+2. ~~Cập nhật `SPRINTS.md`: SCRUM-79 → Done.~~ ✅ (2026-07-09)
+3. ~~Cập nhật `API.md` mục `/api/drive/*`.~~ ✅ (2026-07-09)
+4. Tạo PR vào `develop`, gắn SCRUM-79.
 
 ---
 

@@ -2,6 +2,14 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-09] Google Drive — tạo folder & chia sẻ (SCRUM-79)
+
+- **Phạm vi:** `ServiceType=Drive` — tạo folder trên Google (`POST /api/drive/folders`) + chia sẻ permissions + link anyone-with-link qua `/api/drive/items/{id}/*`. Write-back synchronous; **không** bảng DB permissions; **không** ETag conflict (khác write-back Items).
+- **Entry UI:** Integrations + toolbar Inbox/Kanban + ItemDetail (Chia sẻ mọi File Drive; Tạo folder con khi `isFolder`).
+- **Sync metadata:** `DriveItemMapper` set `metadataJson.isFolder` + `parents` khi sync đọc Drive — hỗ trợ parent dropdown và nhận diện folder.
+- **Không làm v1:** cascade share từng item con trong app; quyền folder con do **kế thừa Google Drive** (hành vi provider), không logic riêng WH.
+- **Docs:** `docs/API.md`, `docs/SPRINTS.md`, spec `docs/DRIVE_FOLDER_SHARING.md`.
+
 ## [2026-07-08] Google Contacts autocomplete (SCRUM-69)
 
 - **Sync read-only:** Mỗi lần sync Gmail (cron định kỳ SCRUM-72 ~60s, nút Đồng bộ, hoặc lazy khi mở list items) kéo `connections.list` + `otherContacts.list` (People API) vào `GoogleContacts` — full replace theo `ConnectionId`. Best-effort: lỗi contact không fail mail sync.

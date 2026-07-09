@@ -167,6 +167,21 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 - `GET /api/jira/priorities?connectionId=` — danh sách priority (`{id, name}`).
 - (404 connection (cả của user khác), 422 connection không phải Jira / không active / projectKey thiếu, 502 provider lỗi)
 
+## Google Drive — tạo folder & chia sẻ ⭐ SCRUM-79 ✅
+
+Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `IDriveGateway` (Google Drive API permissions). **Không** lưu quyền trong DB — hỏi Google mỗi lần list/share. Áp dụng mọi Item `Type=File` có `connectionId` Drive (file lẫn folder). Share **không** qua `PATCH /api/items/{id}`, **không** dùng ETag conflict.
+
+**Sync metadata (A6):** Item File từ Drive sync kèm `metadataJson.isFolder` + `parents` (Google folder id) — FE `isDriveFolder()` dùng dropdown parent + icon.
+
+- `POST /api/drive/folders` — [Authorize]. Body `{ connectionId, name, parentItemId? }`. Tạo folder trên Google Drive + Item local ngay (không chờ cron). `parentItemId` null = gốc My Drive; nếu có → phải là folder Drive cùng connection. Trả **201** `ItemResponse` + `Location: GET /api/items/{id}`. (400 validation, 404 connection/item, 422 tên rỗng/quá dài / parent không phải folder / khác connection / parent đã trash, 403 thiếu scope Drive, 502 provider)
+- `GET /api/drive/items/{itemId}/permissions` — [Authorize]. Trả **200** `{ items: DrivePermissionDto[] }`. Mỗi dòng: `{ id, type, role, emailAddress?, displayName?, isOwner, isLink }`. `role`: reader | commenter | writer | owner. `isLink=true` khi type=anyone. (404 item không thuộc user / không phải File Drive, 502 provider)
+- `POST /api/drive/items/{itemId}/permissions` — [Authorize]. Body `{ email, role, notify? }` (`role`: reader|commenter|writer; `notify` default true). Mời user qua email. Trả **201** `DrivePermissionDto`. (400 validation, 404, 409 email đã có quyền, 422 business rule, 502)
+- `PATCH /api/drive/items/{itemId}/permissions/{permissionId}` — [Authorize]. Body `{ role }`. Đổi role (không áp dụng owner). Trả **200** `DrivePermissionDto`. (404 permission/item, 422 không sửa owner, 502)
+- `DELETE /api/drive/items/{itemId}/permissions/{permissionId}` — [Authorize]. Gỡ quyền. Trả **204**. (404, 422 owner, 502)
+- `PUT /api/drive/items/{itemId}/link-sharing` — [Authorize]. Body `{ enabled, role? }`. `enabled=true` → bật anyone-with-link (`role` bắt buộc: reader|commenter|writer); `enabled=false` → tắt link. Trả **200** `DrivePermissionDto` hoặc `null` khi tắt. (400 validation, 404, 502)
+
+**FE (SCRUM-79):** `DriveShareDialog`, `CreateDriveFolderModal`, `driveApi`; entry: ItemDetail (Chia sẻ + folder con), Integrations (Tạo folder), WorkspaceToolbar (Folder Drive). i18n `drive.*`.
+
 ## Item-Folder — không đổi
 `POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.
 
