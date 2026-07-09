@@ -38,7 +38,7 @@ public class GmailGateway : IGmailGateway
             profile.ThreadsTotal);
     }
 
-    public async Task<GmailMessageList> ListMessageIdsAsync(Connection connection, string? pageToken, int maxResults, IReadOnlyList<string>? labelIds = null, CancellationToken ct = default)
+    public async Task<GmailMessageList> ListMessageIdsAsync(Connection connection, string? pageToken, int maxResults, IReadOnlyList<string>? labelIds = null, string? query = null, CancellationToken ct = default)
     {
         using var gmail = await BuildGmailServiceAsync(connection, ct);
         var request = gmail.Users.Messages.List("me");
@@ -50,9 +50,16 @@ public class GmailGateway : IGmailGateway
         if (labelIds is { Count: > 0 })
         {
             request.LabelIds = labelIds.ToList();
-            // messages.list mặc định LOẠI Spam/Trash — phải bật cờ này khi lọc riêng 2 hộp đó.
-            if (labelIds.Any(l => l == "SPAM" || l == "TRASH"))
-                request.IncludeSpamTrash = true;
+        }
+        if (!string.IsNullOrEmpty(query))
+        {
+            request.Q = query;
+        }
+        // messages.list mặc định LOẠI Spam/Trash — bật cờ khi truy vấn 2 hộp đó (qua label hoặc q=in:spam/in:trash).
+        if ((labelIds?.Any(l => l == "SPAM" || l == "TRASH") == true)
+            || (query != null && (query.Contains("in:spam") || query.Contains("in:trash") || query.Contains("in:anywhere"))))
+        {
+            request.IncludeSpamTrash = true;
         }
 
         var response = await request.ExecuteAsync(ct);

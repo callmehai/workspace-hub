@@ -98,61 +98,53 @@ public class GmailSyncService : IGmailSyncService
         int skipped = 0;
         string? newCursor = null;
 
-        if (string.IsNullOrEmpty(connection.CursorValue) || connection.CursorType != CursorType.HistoryId)
-        {
-            var fullResult = await FullSyncAsync(connection, maxMessages, ct);
-            scanned = fullResult.CollectedIds.Count;
-            newCursor = fullResult.NewCursor;
+        // discoveryIds: từ listing (global recent + các hộp thư) — chỉ fetch cái CHƯA có (khám phá thư mới).
+        var discoveryIds = new HashSet<string>(StringComparer.Ordinal);
+        // changedIds: từ incremental history — luôn re-fetch để cập nhật (đổi label/đã đọc/ETag).
+        var changedIds = new List<string>();
 
-            var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existingItems, newItems, ct);
-            created = processResult.Created;
-            skipped = processResult.Skipped;
-        }
-        else
+        bool needFull = string.IsNullOrEmpty(connection.CursorValue) || connection.CursorType != CursorType.HistoryId;
+
+        if (!needFull)
         {
             string? pageToken = null;
             string? latestHistoryId = null;
             bool expired = false;
-            var affectedIds = new List<string>();
 
             do
             {
-                var h = await _gmailGateway.ListHistoryAsync(connection, connection.CursorValue, pageToken, ct);
-                if (h.Expired)
-                {
-                    expired = true;
-                    break;
-                }
-
-                affectedIds.AddRange(h.AffectedMessageIds);
-                if (h.LatestHistoryId != null)
-                {
-                    latestHistoryId = h.LatestHistoryId;
-                }
+                var h = await _gmailGateway.ListHistoryAsync(connection, connection.CursorValue!, pageToken, ct);
+                if (h.Expired) { expired = true; break; }
+                changedIds.AddRange(h.AffectedMessageIds);
+                if (h.LatestHistoryId != null) latestHistoryId = h.LatestHistoryId;
                 pageToken = h.NextPageToken;
-
             } while (!string.IsNullOrEmpty(pageToken));
 
-            if (expired)
-            {
-                var fullResult = await FullSyncAsync(connection, maxMessages, ct);
-                scanned = fullResult.CollectedIds.Count;
-                newCursor = fullResult.NewCursor;
-
-                var processResult = await ProcessMessageIdsAsync(connection, fullResult.CollectedIds, importantSet, existingItems, newItems, ct);
-                created = processResult.Created;
-                skipped = processResult.Skipped;
-            }
-            else
-            {
-                scanned = affectedIds.Count;
-                newCursor = latestHistoryId ?? connection.CursorValue;
-
-                var processResult = await ProcessMessageIdsAsync(connection, affectedIds, importantSet, existingItems, newItems, ct);
-                created = processResult.Created;
-                skipped = processResult.Skipped;
-            }
+            if (expired) needFull = true;
+            else newCursor = latestHistoryId ?? connection.CursorValue;
         }
+
+        if (needFull)
+        {
+            var full = await FullSyncAsync(connection, maxMessages, ct);
+            discoveryIds.UnionWith(full.CollectedIds);
+            newCursor = full.NewCursor;
+        }
+
+        // LUÔN quét recent từng hộp thư (SENT/DRAFT/STARRED/CATEGORY_*/SPAM/TRASH) — kể cả sync incremental.
+        // Gmail history KHÔNG báo tin spam/trash mới → nếu chỉ dựa history thì spam/trash chỉ vào khi user
+        // tương tác. Quét chủ động ở đây để chúng xuất hiện tự động; chỉ fetch id CHƯA có nên vẫn nhẹ.
+        await CollectMailboxesAsync(connection, discoveryIds, ct);
+
+        var idsToProcess = changedIds
+            .Concat(discoveryIds.Where(id => !existingItems.ContainsKey(id)))
+            .Distinct()
+            .ToList();
+        scanned = idsToProcess.Count;
+
+        var processResult = await ProcessMessageIdsAsync(connection, idsToProcess, importantSet, existingItems, newItems, ct);
+        created = processResult.Created;
+        skipped = processResult.Skipped;
 
         if (newItems.Count > 0)
         {
@@ -295,44 +287,52 @@ public class GmailSyncService : IGmailSyncService
         }
     }
 
-    // Các "hộp thư" bổ sung để mỗi mailbox (nav kiểu Gmail) đều có dữ liệu. Global recent
-    // (labelIds=null) chủ yếu là INBOX + thư mới; thư Nháp/Gắn sao/Đã gửi CŨ hơn top-recent
-    // sẽ không bao giờ được kéo nếu chỉ list toàn hộp thư → phải list riêng từng label.
-    // (SPAM/TRASH cố tình bỏ — includeSpamTrash=false; Purchases/Bills Gmail không expose.)
+    // Hộp thư kéo theo LABEL (messages.list labelIds) — recent mỗi hộp để mailbox nào cũng có dữ liệu.
     private static readonly string[] MailboxLabels =
-        { "SENT", "DRAFT", "STARRED", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "SPAM", "TRASH" };
+        { "SENT", "DRAFT", "STARRED", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES" };
+    // Hộp thư kéo theo QUERY (q=in:spam/in:trash). labelIds+includeSpamTrash KHÔNG kéo được Spam/Trash
+    // ổn định (thực nghiệm: trả 0), dùng toán tử `in:` mới đáng tin.
+    private static readonly string[] MailboxQueries = { "in:spam", "in:trash" };
     private const int PerLabelBatch = 50;
 
+    /// <summary>Full sync = chỉ quét recent TOÀN hộp thư (INBOX + thư mới). Mailbox phụ do CollectMailboxesAsync lo.</summary>
     private async Task<(List<string> CollectedIds, string? NewCursor)> FullSyncAsync(Connection connection, int maxMessages, CancellationToken ct)
     {
         var profile = await _gmailGateway.GetProfileAsync(connection, ct);
         var newCursor = profile.HistoryId?.ToString();
 
-        // HashSet để dedupe: 1 message có thể mang nhiều label (INBOX + CATEGORY_*).
-        var ids = new HashSet<string>(StringComparer.Ordinal);
-
-        // 1) Recent toàn hộp thư (INBOX + thư mới nhất) — tối đa maxMessages.
-        await CollectLabelAsync(connection, null, maxMessages, ids, ct);
-
-        // 2) Bổ sung recent theo từng hộp thư để mailbox nào cũng có dữ liệu.
-        foreach (var label in MailboxLabels)
-            await CollectLabelAsync(connection, new[] { label }, PerLabelBatch, ids, ct);
-
-        return (ids.ToList(), newCursor);
+        var ids = await CollectListAsync(connection, null, null, maxMessages, ct);
+        return (ids, newCursor);
     }
 
-    /// <summary>List message ID recent của 1 label (hoặc toàn hộp thư nếu labelIds=null), thêm vào set (dedupe).</summary>
-    private async Task CollectLabelAsync(Connection connection, IReadOnlyList<string>? labelIds, int max, HashSet<string> into, CancellationToken ct)
+    /// <summary>Quét recent MỌI hộp thư phụ (label + query) SONG SONG, gộp vào set (dedupe). Chạy mỗi lần sync.</summary>
+    private async Task CollectMailboxesAsync(Connection connection, HashSet<string> into, CancellationToken ct)
     {
+        var tasks = new List<Task<List<string>>>();
+        foreach (var label in MailboxLabels)
+            tasks.Add(CollectListAsync(connection, new[] { label }, null, PerLabelBatch, ct));
+        foreach (var q in MailboxQueries)
+            tasks.Add(CollectListAsync(connection, null, q, PerLabelBatch, ct));
+
+        var results = await Task.WhenAll(tasks);
+        foreach (var list in results)
+            foreach (var id in list) into.Add(id);
+    }
+
+    /// <summary>List recent message-id theo label HOẶC query (q), tối đa <paramref name="max"/>. Trả list (chạy song song được).</summary>
+    private async Task<List<string>> CollectListAsync(Connection connection, IReadOnlyList<string>? labelIds, string? query, int max, CancellationToken ct)
+    {
+        var result = new List<string>();
         string? pageToken = null;
         var pulled = 0;
         do
         {
             var take = Math.Min(100, max - pulled);
             if (take <= 0) break;
-            var page = await _gmailGateway.ListMessageIdsAsync(connection, pageToken, take, labelIds, ct);
-            foreach (var id in page.MessageIds) { into.Add(id); pulled++; }
+            var page = await _gmailGateway.ListMessageIdsAsync(connection, pageToken, take, labelIds, query, ct);
+            foreach (var id in page.MessageIds) { result.Add(id); pulled++; }
             pageToken = page.NextPageToken;
         } while (!string.IsNullOrEmpty(pageToken) && pulled < max);
+        return result;
     }
 }
