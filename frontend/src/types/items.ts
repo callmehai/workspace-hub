@@ -102,6 +102,7 @@ export interface PatchItemRequest {
   priority?: string;           // priority name
   labels?: string[];           // replaces all labels (no spaces allowed per Jira)
   comment?: string;            // adds a new comment (separate operation)
+  issueType?: string;          // change issue type (Task/Bug/Story...) via PUT /issue
 }
 
 /**

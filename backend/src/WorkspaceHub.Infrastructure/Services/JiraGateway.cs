@@ -162,6 +162,9 @@ public class JiraGateway : IJiraGateway
         if (request.Labels != null)
             fields["labels"] = request.Labels;
 
+        if (request.IssueTypeName != null)
+            fields["issuetype"] = new { name = request.IssueTypeName };
+
         if (fields.Count == 0)
             return;
 
@@ -220,11 +223,110 @@ public class JiraGateway : IJiraGateway
         await SendWriteAsync(connection, HttpMethod.Post, url, new { transition = new { id = transitionId } }, ct);
     }
 
-    public async Task AddCommentAsync(Connection connection, string issueIdOrKey, string commentBody, CancellationToken ct = default)
+    public async Task<JiraComment> AddCommentAsync(Connection connection, string issueIdOrKey, string commentBody, IEnumerable<string>? mediaIds = null, CancellationToken ct = default)
     {
         var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/comment";
-        var body = new { body = AdfConverter.FromPlainText(commentBody) };
-        await SendWriteAsync(connection, HttpMethod.Post, url, body, ct);
+        // Body markdown subset → ADF; mediaIds → nhúng attachment (media node) vào cuối comment.
+        var body = new { body = AdfConverter.FromMarkdown(commentBody, mediaIds) };
+        var doc = await SendWriteReadAsync(connection, HttpMethod.Post, url, body, ct);
+        return ParseComment(doc);
+    }
+
+    public async Task<IReadOnlyList<JiraComment>> GetCommentsAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default)
+    {
+        // orderBy=created để mới nhất ở cuối; lấy tối đa 100 (đủ cho đồ án).
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/comment?maxResults=100&orderBy=created";
+        var doc = await GetJsonAsync(connection, url, ct);
+
+        var list = new List<JiraComment>();
+        if (doc.TryGetProperty("comments", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            foreach (var c in arr.EnumerateArray())
+                list.Add(ParseComment(c));
+        return list;
+    }
+
+    public async Task<JiraComment> UpdateCommentAsync(Connection connection, string issueIdOrKey, string commentId, string commentBody, CancellationToken ct = default)
+    {
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/comment/{Uri.EscapeDataString(commentId)}";
+        var body = new { body = AdfConverter.FromMarkdown(commentBody) };
+        var doc = await SendWriteReadAsync(connection, HttpMethod.Put, url, body, ct);
+        return ParseComment(doc);
+    }
+
+    public async Task DeleteCommentAsync(Connection connection, string issueIdOrKey, string commentId, CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/comment/{Uri.EscapeDataString(commentId)}";
+        HttpResponseMessage response;
+        try { response = await http.DeleteAsync(url, ct); }
+        catch (HttpRequestException ex) { throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex); }
+        await EnsureSuccessAsync(response, ct);
+    }
+
+    // ───────────────────── Attachment ─────────────────────
+
+    public async Task<IReadOnlyList<JiraAttachment>> GetAttachmentsAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default)
+    {
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}?fields=attachment";
+        var doc = await GetJsonAsync(connection, url, ct);
+
+        var list = new List<JiraAttachment>();
+        if (doc.TryGetProperty("fields", out var fields) && fields.ValueKind == JsonValueKind.Object
+            && fields.TryGetProperty("attachment", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            foreach (var a in arr.EnumerateArray())
+                list.Add(ParseAttachment(a));
+        return list;
+    }
+
+    public async Task<JiraAttachmentContent> DownloadAttachmentAsync(Connection connection, string attachmentId, string filename, string mimeType, CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var url = $"{ApiBase(connection)}/attachment/content/{Uri.EscapeDataString(attachmentId)}";
+        HttpResponseMessage response;
+        try { response = await http.GetAsync(url, ct); }
+        catch (HttpRequestException ex) { throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex); }
+        await EnsureSuccessAsync(response, ct);
+
+        var data = await response.Content.ReadAsByteArrayAsync(ct);
+        var mime = response.Content.Headers.ContentType?.MediaType ?? (string.IsNullOrWhiteSpace(mimeType) ? "application/octet-stream" : mimeType);
+        return new JiraAttachmentContent(data, mime, filename);
+    }
+
+    public async Task<IReadOnlyList<JiraAttachment>> UploadAttachmentAsync(Connection connection, string issueIdOrKey, string filename, string mimeType, byte[] data, CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var url = $"{ApiBase(connection)}/issue/{Uri.EscapeDataString(issueIdOrKey)}/attachments";
+
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(data);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+            string.IsNullOrWhiteSpace(mimeType) ? "application/octet-stream" : mimeType);
+        form.Add(fileContent, "file", filename);
+
+        using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = form };
+        msg.Headers.Add("X-Atlassian-Token", "no-check"); // BẮT BUỘC cho upload attachment Jira
+
+        HttpResponseMessage response;
+        try { response = await http.SendAsync(msg, ct); }
+        catch (HttpRequestException ex) { throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex); }
+        await EnsureSuccessAsync(response, ct);
+
+        var doc = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        var list = new List<JiraAttachment>();
+        if (doc.ValueKind == JsonValueKind.Array)
+            foreach (var a in doc.EnumerateArray())
+                list.Add(ParseAttachment(a));
+        return list;
+    }
+
+    public async Task DeleteAttachmentAsync(Connection connection, string attachmentId, CancellationToken ct = default)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        var url = $"{ApiBase(connection)}/attachment/{Uri.EscapeDataString(attachmentId)}";
+        HttpResponseMessage response;
+        try { response = await http.DeleteAsync(url, ct); }
+        catch (HttpRequestException ex) { throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex); }
+        await EnsureSuccessAsync(response, ct);
     }
 
     public async Task DeleteIssueAsync(Connection connection, string issueIdOrKey, CancellationToken ct = default)
@@ -331,6 +433,31 @@ public class JiraGateway : IJiraGateway
         return list;
     }
 
+    public async Task<string?> GetSiteUrlAsync(Connection connection, CancellationToken ct = default)
+    {
+        // GET accessible-resources (URL tuyệt đối, KHÔNG qua cloudId) → tìm site khớp cloudId (ProviderAccountId).
+        try
+        {
+            var doc = await GetJsonAsync(connection, "https://api.atlassian.com/oauth/token/accessible-resources", ct);
+            if (doc.ValueKind != JsonValueKind.Array) return null;
+
+            string? firstUrl = null;
+            foreach (var site in doc.EnumerateArray())
+            {
+                var url = GetString(site, "url");
+                if (url is null) continue;
+                firstUrl ??= url;
+                if (GetString(site, "id") == connection.ProviderAccountId)
+                    return url.TrimEnd('/');
+            }
+            return firstUrl?.TrimEnd('/'); // fallback: site đầu tiên nếu không khớp cloudId
+        }
+        catch
+        {
+            return null; // best-effort — thiếu site URL chỉ làm mất nút "Mở trong Jira", không hỏng sync
+        }
+    }
+
     /// <summary>GET JSON từ Jira + map status code chuẩn (403/404/502).</summary>
     private async Task<JsonElement> GetJsonAsync(Connection connection, string url, CancellationToken ct)
     {
@@ -378,6 +505,57 @@ public class JiraGateway : IJiraGateway
         }
 
         await EnsureSuccessAsync(response, ct);
+    }
+
+    /// <summary>Như SendWriteAsync nhưng đọc + trả JSON body (dùng cho create/update comment cần lấy lại object).</summary>
+    private async Task<JsonElement> SendWriteReadAsync(Connection connection, HttpMethod method, string url, object body, CancellationToken ct)
+    {
+        var http = await BuildClientAsync(connection, ct);
+        using var msg = new HttpRequestMessage(method, url) { Content = JsonContent.Create(body) };
+
+        HttpResponseMessage response;
+        try { response = await http.SendAsync(msg, ct); }
+        catch (HttpRequestException ex) { throw new ProviderException($"Jira API lỗi kết nối: {ex.Message}", ex); }
+
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var detail = await SafeReadBodyAsync(response, ct);
+            throw new BusinessRuleException($"Jira từ chối thao tác: {ParseJiraErrorDetail(detail)}");
+        }
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+    }
+
+    private static JiraComment ParseComment(JsonElement c)
+    {
+        var id = GetString(c, "id") ?? string.Empty;
+        JsonElement? body = c.ValueKind == JsonValueKind.Object && c.TryGetProperty("body", out var b) && b.ValueKind == JsonValueKind.Object ? b : null;
+        return new JiraComment(
+            id,
+            AdfConverter.ToMarkdown(body),
+            GetNestedString(c, "author", "displayName") ?? "Unknown",
+            GetNestedString(c, "author", "accountId"),
+            ParseDate(c, "created"),
+            ParseDate(c, "updated"));
+    }
+
+    private static JiraAttachment ParseAttachment(JsonElement a)
+    {
+        long size = a.ValueKind == JsonValueKind.Object && a.TryGetProperty("size", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetInt64() : 0;
+        return new JiraAttachment(
+            GetString(a, "id") ?? string.Empty,
+            GetString(a, "filename") ?? "attachment",
+            GetString(a, "mimeType"),
+            size,
+            GetNestedString(a, "author", "displayName"),
+            ParseDate(a, "created"),
+            GetString(a, "content"));
+    }
+
+    private static DateTimeOffset? ParseDate(JsonElement el, string prop)
+    {
+        var s = GetString(el, prop);
+        return !string.IsNullOrEmpty(s) && DateTimeOffset.TryParse(s, out var d) ? d : null;
     }
 
     private async Task<HttpClient> BuildClientAsync(Connection connection, CancellationToken ct)

@@ -4,9 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
   Trash2, Edit3, ExternalLink, Loader2, Tag,
-  AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
+  AlertCircle, Eye, EyeOff, Star, Check, Plus
 } from 'lucide-react';
-import { Select } from './Select';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
 import { TagChip, FolderChip } from './tags/TagChip';
@@ -14,7 +13,6 @@ import { TagManagerModal } from './tags/TagManagerModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { EmailThreadView } from './emails/EmailThreadView';
 import { connectionsApi } from '../lib/connectionsApi';
-import { jiraApi, type JiraTransition } from '../lib/jiraApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import { getStatusLabel, isItemUnread } from '../lib/itemMeta';
@@ -23,7 +21,7 @@ import { typeLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
-import { TicketEditForm, type TicketFormState } from './jira/TicketEditForm';
+import { JiraTicketPanel } from './jira/JiraTicketPanel';
 
 interface ItemDetailProps {
   itemId: string;
@@ -147,18 +145,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   };
-
-  // Ticket edit state (SCRUM-57)
-  const [ticketForm, setTicketForm] = useState<TicketFormState>({
-    summary: '',
-    description: '',
-    priority: '',
-    assigneeAccountId: '',
-    assigneeQuery: '',
-    labelsRaw: '',
-    statusTransitionId: '',
-    comment: '',
-  });
 
   // File edit state
   const [fileName, setFileName] = useState('');
@@ -329,13 +315,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     catch { return {}; }
   })();
 
-  const { data: transitions = [], isFetching: loadingTransitions } = useQuery({
-    queryKey: ['jira', 'transitions', item?.connectionId, itemId],
-    queryFn: () => jiraApi.getTransitions(item!.connectionId!, itemId),
-    enabled: !!item?.connectionId && !!itemId && item?.type === 'Ticket' && !isEditing,
-    staleTime: 5 * 60_000,
-  });
-
   const isUnread = item?.type === 'Email' && (
     metadata.isUnread !== undefined 
       ? metadata.isUnread === true 
@@ -460,61 +439,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     }
   } else if (item.type === 'Note') {
     rows.push({ label: t('item.created'), value: new Date(item.occurredAt).toLocaleString(dl) });
-  } else if (item.type === 'Ticket') {
-    if (metadata.projectKey) {
-      const projDisplay = metadata.projectName 
-        ? `${metadata.projectName} (${metadata.projectKey})` 
-        : metadata.projectKey;
-      rows.push({ label: 'Project', value: projDisplay });
-    }
-    if (metadata.issueKey)   rows.push({ label: 'Issue Key',  value: metadata.issueKey });
-    if (metadata.issueType)  rows.push({ label: t('item.issueType'), value: metadata.issueType });
-    if (metadata.priority)   rows.push({ label: t('item.priority'), value: metadata.priority });
-    if (metadata.assignee)   rows.push({ label: 'Assignee',   value: metadata.assignee });
-    if (metadata.reporter)   rows.push({ label: 'Reporter',   value: metadata.reporter });
-    if (metadata.status) {
-      rows.push({ 
-        label: t('item.status'), 
-        value: (
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-700 dark:text-slate-200">{metadata.status}</span>
-            {transitions.length > 0 && (
-              <div className="w-44">
-                <Select
-                  value=""
-                  onChange={(v) => { if (v) patchMutation.mutate({ statusTransition: v }); }}
-                  disabled={patchMutation.isPending}
-                  className="h-7 text-[11px]"
-                  placeholder={`${t('ticket.selectTransition')}...`}
-                  options={transitions.map((tr: JiraTransition) => ({
-                    value: tr.id,
-                    label: `${tr.name}${tr.toStatusName ? ` (→ ${tr.toStatusName})` : ''}`,
-                  }))}
-                />
-              </div>
-            )}
-            {loadingTransitions && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
-            {patchMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />}
-          </div>
-        )
-      });
-    }
-    if (Array.isArray(metadata.labels) && metadata.labels.length) {
-      rows.push({
-        label: 'Labels',
-        value: (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {metadata.labels.map((l: string) => (
-              <span key={l} className="px-2 py-0.5 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-500/20 rounded text-[11px]">
-                {l}
-              </span>
-            ))}
-          </div>
-        )
-      });
-    }
-    if (item.dueAt) rows.push({ label: 'Due date', value: new Date(item.dueAt).toLocaleString(dl) });
   }
+  // Ticket: render qua <JiraTicketPanel/> (inline edit + comment + attachment), không dùng rows.
 
   // Event form edits
   const startEditingEvent = () => {
@@ -566,65 +492,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
-  // Ticket edit helpers
-  const startEditingTicket = () => {
-    const meta = metadata;
-    setTicketForm({
-      summary: item.title ?? '',
-      description: item.snippet ?? '',
-      priority: meta.priority ?? '',
-      assigneeAccountId: meta.assigneeAccountId ?? '',
-      assigneeQuery: meta.assignee ?? '',
-      labelsRaw: Array.isArray(meta.labels) ? meta.labels.join(',') : '',
-      statusTransitionId: '',
-      comment: '',
-    });
-    setIsEditing(true);
-  };
-
-  const handleSaveTicket = () => {
-    const rawLabels = ticketForm.labelsRaw
-      .split(',')
-      .map((l) => l.trim())
-      .filter(Boolean);
-    const badLabel = rawLabels.find((l) => /\s/.test(l));
-    if (badLabel) {
-      toast.error(t('ticket.labelNoSpaces'));
-      return;
-    }
-    const patch: PatchItemRequest = {};
-    if (ticketForm.summary.trim() && ticketForm.summary.trim() !== item.title)
-      patch.summary = ticketForm.summary.trim();
-
-    const originalDesc = item.snippet ?? '';
-    const newDesc = ticketForm.description.trim();
-    if (newDesc !== originalDesc) {
-      patch.description = newDesc;
-    }
-
-    const originalPriority = metadata.priority ?? '';
-    if (ticketForm.priority !== originalPriority) {
-      patch.priority = ticketForm.priority;
-    }
-
-    if (ticketForm.assigneeAccountId && ticketForm.assigneeAccountId !== metadata.assigneeAccountId) {
-      patch.assignee = ticketForm.assigneeAccountId;
-    } else if (ticketForm.assigneeQuery.trim() !== (metadata.assignee ?? '').trim()) {
-      patch.assignee = ticketForm.assigneeQuery.trim();
-    }
-
-    const originalLabels = Array.isArray(metadata.labels) ? [...metadata.labels].sort() : [];
-    const sortedRawLabels = [...rawLabels].sort();
-    const labelsChanged = originalLabels.length !== sortedRawLabels.length ||
-      originalLabels.some((l, i) => l !== sortedRawLabels[i]);
-    if (labelsChanged) {
-      patch.labels = rawLabels;
-    }
-
-    if (ticketForm.statusTransitionId) patch.statusTransition = ticketForm.statusTransitionId;
-    if (ticketForm.comment.trim()) patch.comment = ticketForm.comment.trim();
-    patchMutation.mutate(patch);
-  };
+  // Ticket: patch 2 chiều cho panel inline (mutateAsync để panel biết khi xong → đóng editor).
+  const patchTicketField = (patch: PatchItemRequest) => patchMutation.mutateAsync(patch);
 
   // File rename edits
   const startRenamingFile = () => {
@@ -884,18 +753,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </button>
               </div>
             </div>
-          ) : isEditing && item.type === 'Ticket' ? (
-            /* ── Ticket edit form (SCRUM-57) ── */
-            <TicketEditForm
-              itemId={itemId}
-              connectionId={item.connectionId ?? ''}
-              projectKey={metadata.projectKey ?? ''}
-              form={ticketForm}
-              onChange={setTicketForm}
-              onSave={handleSaveTicket}
-              onCancel={() => setIsEditing(false)}
-              isPending={patchMutation.isPending}
-              t={t}
+          ) : item.type === 'Ticket' ? (
+            /* ── Ticket: inline edit từng field + comment + attachment ── */
+            <JiraTicketPanel
+              item={item}
+              metadata={metadata}
+              onPatch={patchTicketField}
+              isPatching={patchMutation.isPending}
             />
           ) : (
             /* Metadata Rows */
@@ -911,12 +775,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             )
           )}
 
-          {/* Body Content */}
+          {/* Body Content — Ticket tự render nội dung/description trong JiraTicketPanel nên loại trừ ở đây */}
           {item.type === 'Email' && item.connectionId ? (
             <div className="mt-4">
               <EmailThreadView itemId={item.id} connectionId={item.connectionId} />
             </div>
-          ) : (
+          ) : item.type !== 'Ticket' && (
             <>
               <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('sendEmail.content')}</div>
               <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
@@ -963,12 +827,16 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {item.type === 'Email' && (
             <>
-              <button
-                onClick={() => navigate('/scheduled')}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <Send className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>{t('item.composeNew')}</span>
-              </button>
+              {metadata.threadId && (
+                <a
+                  href={`https://mail.google.com/mail/u/0/#all/${metadata.threadId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInGmail')}</span>
+                </a>
+              )}
               <button
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
@@ -988,6 +856,16 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 >
                   <Edit3 className="w-4 h-4" /><span>{t('item.editEventBtn')}</span>
                 </button>
+              )}
+              {metadata.htmlLink && (
+                <a
+                  href={metadata.htmlLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInCalendar')}</span>
+                </a>
               )}
               {metadata.meetUrl && (
                 <a
@@ -1047,17 +925,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             </button>
           )}
 
-          {/* ── Ticket actions (SCRUM-57) ── */}
+          {/* ── Ticket actions — sửa ngay tại field trong panel, footer chỉ còn Mở-Jira + xoá ── */}
           {item.type === 'Ticket' && (
             <>
-              {!isEditing && (
-                <button
-                  onClick={startEditingTicket}
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-violet-600 text-white hover:bg-violet-700 shadow-sm transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" /><span>{t('ticket.editBtn')}</span>
-                </button>
-              )}
               {metadata.issueUrl && (
                 <a
                   href={metadata.issueUrl}

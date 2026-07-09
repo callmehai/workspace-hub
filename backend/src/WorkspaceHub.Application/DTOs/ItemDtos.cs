@@ -17,6 +17,7 @@ public record GetItemsRequest(
     Guid? TagId = null,
     string? ProjectKey = null,
     string? GmailLabel = null,
+    string? Assignee = null,      // Jira accountId; "unassigned" = ticket chưa gán người
     int Page = 1,
     int Limit = 20);
 
@@ -55,7 +56,8 @@ public record PatchItemRequest(
     string? Priority = null,            // tên priority
     string? StatusTransition = null,    // id hoặc tên transition (đổi status qua transition)
     List<string>? Labels = null,        // set toàn bộ labels (thay vì add/remove)
-    string? Comment = null              // thêm comment (thao tác riêng, không sửa field)
+    string? Comment = null,             // thêm comment (thao tác riêng, không sửa field)
+    string? IssueType = null            // đổi loại issue (Task/Bug/Story...) qua PUT /issue
 );
 
 public record CreateEventRequest(
@@ -81,6 +83,18 @@ public record CreateTicketRequest(
     string? Priority = null,
     List<string>? Labels = null
 );
+
+/// <summary>1 người phụ trách (assignee) cho filter Jira. AccountId = "unassigned" khi ticket chưa gán.</summary>
+public record JiraAssigneeDto(string AccountId, string DisplayName);
+
+/// <summary>1 comment của ticket Jira (trả về FE).</summary>
+public record JiraCommentDto(string Id, string Body, string AuthorName, string? AuthorAccountId, DateTimeOffset? Created, DateTimeOffset? Updated);
+
+/// <summary>Body tạo/sửa comment. Body = markdown subset. MediaIds = attachment id nhúng vào comment (chỉ dùng khi tạo).</summary>
+public record TicketCommentBody(string Body, List<string>? MediaIds = null);
+
+/// <summary>1 attachment của ticket Jira (metadata trả về FE).</summary>
+public record JiraAttachmentDto(string Id, string Filename, string? MimeType, long Size, string? AuthorName, DateTimeOffset? Created);
 
 // ───────────────────────── Response DTO ─────────────────────────
 

@@ -268,4 +268,71 @@ public class AdfConverterTests
         result.Should().NotContain("introitem1");
         result.Should().NotContain("item1outro");
     }
+
+    // ── Markdown subset ⇄ ADF (comment rich) ──
+    private static string RoundTrip(string md, params string[] media)
+    {
+        var adf = AdfConverter.FromMarkdown(md, media.Length == 0 ? null : media);
+        var json = JsonSerializer.Serialize(adf);
+        return AdfConverter.ToMarkdown(Parse(json));
+    }
+
+    [Theory]
+    [InlineData("**bold**")]
+    [InlineData("*italic*")]
+    [InlineData("~~strike~~")]
+    [InlineData("plain text line")]
+    public void Markdown_InlineMarks_RoundTrip(string md)
+    {
+        RoundTrip(md).Should().Be(md);
+    }
+
+    [Fact]
+    public void Markdown_Underscore_Italic_NormalizesToStar()
+    {
+        // _x_ và *x* đều là em → ToMarkdown chuẩn hoá về *x*.
+        RoundTrip("_italic_").Should().Be("*italic*");
+    }
+
+    [Fact]
+    public void Markdown_Link_RoundTrip()
+    {
+        RoundTrip("[Google](https://google.com)").Should().Be("[Google](https://google.com)");
+    }
+
+    [Fact]
+    public void Markdown_BulletList_RoundTrip()
+    {
+        RoundTrip("- one\n- two").Should().Be("- one\n- two");
+    }
+
+    [Fact]
+    public void Markdown_OrderedList_RoundTrip()
+    {
+        RoundTrip("1. one\n2. two").Should().Be("1. one\n1. two"); // ToMarkdown luôn phát "1. "
+    }
+
+    [Fact]
+    public void Markdown_MediaIds_EmitAttachMarker()
+    {
+        var result = RoundTrip("see file", "att-123");
+        result.Should().Contain("see file");
+        result.Should().Contain("[[attach:att-123]]");
+    }
+
+    [Fact]
+    public void Markdown_AttachMarkerInText_StaysAsText()
+    {
+        // Marker [[attach:ID]] được giữ nguyên dạng text (không convert media node) → round-trip ổn định.
+        var result = RoundTrip("hello [[attach:xyz]] world");
+        result.Should().Contain("hello");
+        result.Should().Contain("world");
+        result.Should().Contain("[[attach:xyz]]");
+    }
+
+    [Fact]
+    public void Markdown_Empty_ProducesEmptyDoc()
+    {
+        RoundTrip("").Should().BeEmpty();
+    }
 }
