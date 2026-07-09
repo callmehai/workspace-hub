@@ -30,9 +30,12 @@ public class GmailItemMapper : IGmailItemMapper
         {
             from = message.From,
             to = message.To,
+            cc = message.Cc,
+            bcc = message.Bcc,
             threadId = message.ThreadId,
             labels = message.LabelIds,
             hasAttachment = message.HasAttachment,
+            rfc822MessageId = message.Rfc822MessageId,
             webUrl = $"https://mail.google.com/mail/u/0/#all/{message.Id}",
             isUnread = message.LabelIds != null && message.LabelIds.Contains("UNREAD")
         };
@@ -45,6 +48,7 @@ public class GmailItemMapper : IGmailItemMapper
             Title = message.Subject ?? "(Không có tiêu đề)",
             Snippet = message.Snippet ?? string.Empty,
             ExternalId = message.Id,
+            ThreadId = message.ThreadId,
             ConnectionId = connectionId,
             Status = ItemStatus.Inbox,
             OccurredAt = message.OccurredAt?.UtcDateTime ?? DateTime.UtcNow,

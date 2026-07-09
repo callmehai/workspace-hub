@@ -47,7 +47,7 @@ Code → PR vào develop → CI (build/test) → merge → CD tự deploy lên L
 ## 3. Cấu hình & secret
 
 Secret prod nằm ở **`.env` trên server** (gitignored, KHÔNG commit) — xem `deploy/.env.prod.example` để biết các key:
-`SITE_ADDRESS`, `MSSQL_SA_PASSWORD`, `JWT_SECRET`, `CRON_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, (Twilio tuỳ chọn).
+`SITE_ADDRESS`, `MSSQL_SA_PASSWORD`, `JWT_SECRET`, `CRON_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, (Twilio tuỳ chọn), `R2_*` (SCRUM-75 — avatar, xem dưới).
 
 Env quan trọng (set trong compose, đọc từ `.env`):
 - `Db__AutoMigrate=true` — api tự áp migration lúc khởi động (single-instance).
@@ -55,6 +55,32 @@ Env quan trọng (set trong compose, đọc từ `.env`):
 - `Cron__SyncAutoRun=true` + `Cron__SyncIntervalSeconds=60` — BackgroundService sync connections (Gmail/GCal/Drive/Jira) mỗi 60s. **Không** cần cron-job.org cho sync; **không** bật đồng thời với job HTTP `POST /api/internal/process-sync`.
 - `Auth__CrossSiteCookies=false` — same-origin ⇒ cookie SameSite=Lax.
 - Twilio để trống ⇒ OTP đăng ký **log ra console** thay vì gửi SMS: `docker compose -f docker-compose.prod.yml logs api | grep -i otp`.
+
+### Cập nhật `.env` cho R2 (SCRUM-75) trên server đang chạy
+
+Server track `develop` (mục 2) đã tự pull code mới (kèm code đọc `R2:*`), nhưng biến môi trường trong `.env` phải **tự set tay** (không có trong git). Trên Lightsail:
+
+```bash
+ssh <user>@<lightsail-ip>
+cd ~/workspace-hub   # hoặc APP_DIR đã cấu hình trong secret DEPLOY_APP_DIR
+
+# Thêm 5 dòng vào cuối .env (thay giá trị thật — bucket/token lấy từ Cloudflare Dashboard → R2)
+cat >> .env << 'EOF'
+R2_ACCOUNT_ID=4993758e52af95eea355e1b6484a554f
+R2_BUCKET_NAME=workspace-hub-assets
+R2_PUBLIC_URL=https://pub-xxxxxxxx.r2.dev
+R2_ACCESS_KEY_ID=xxxxxxxx
+R2_SECRET_ACCESS_KEY=xxxxxxxx
+EOF
+
+# Áp dụng: recreate container api để đọc .env mới (không cần rebuild image)
+docker compose -f docker-compose.prod.yml up -d api
+
+# Kiểm tra container thấy đúng biến
+docker compose -f docker-compose.prod.yml exec api printenv | grep R2__
+```
+
+Không cần build lại image vì code đã có sẵn (merge `develop` là xong) — chỉ cần container mới đọc `.env` mới. Nếu deploy tiếp theo qua CI/CD (`git reset --hard` + `up -d --build`) chạy bình thường, `.env` trên server **không bị ghi đè** (file này không nằm trong git).
 
 ## 4. Google OAuth (prod)
 

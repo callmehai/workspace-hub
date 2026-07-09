@@ -1,10 +1,13 @@
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
-using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Domain.Enums;
+using WorkspaceHub.Application.Mapping;
 
 namespace WorkspaceHub.Application.Services;
 
@@ -15,17 +18,23 @@ public class SendEmailService : ISendEmailService
     private readonly IGmailGateway _gmail;
     private readonly IGoogleContactRepository _googleContacts;
     private readonly IGoogleContactMapper _googleContactMapper;
+    private readonly IItemRepository _items;
+    private readonly ILogger<SendEmailService> _logger;
 
     public SendEmailService(
         IConnectionRepository connections,
         IGmailGateway gmail,
         IGoogleContactRepository googleContacts,
-        IGoogleContactMapper googleContactMapper)
+        IGoogleContactMapper googleContactMapper,
+        IItemRepository items,
+        ILogger<SendEmailService> logger)
     {
         _connections = connections;
         _gmail = gmail;
         _googleContacts = googleContacts;
         _googleContactMapper = googleContactMapper;
+        _items = items;
+        _logger = logger;
     }
 
     public async Task<SendEmailResult> SendAsync(Guid userId, SendEmailRequest request, CancellationToken ct = default)
@@ -42,8 +51,11 @@ public class SendEmailService : ISendEmailService
         if (connection.Status != ConnectionStatus.Active)
             throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
 
+        var attachments = DecodeAttachments(request.Attachments);
+
         var messageId = await _gmail.SendMessageAsync(
-            connection, request.To, request.Cc, request.Bcc, request.Subject, request.BodyHtml, ct);
+            connection, request.To, request.Cc, request.Bcc, request.Subject, request.BodyHtml,
+            attachments.Count > 0 ? attachments : null, ct);
 
         return new SendEmailResult(messageId, DateTime.UtcNow);
     }
@@ -62,8 +74,14 @@ public class SendEmailService : ISendEmailService
         return await _gmail.GetSignatureAsync(connection, ct);
     }
 
-    public async Task<IReadOnlyList<ContactSuggestionDto>> GetContactSuggestionsAsync(
+    public async Task<IQueryable<ContactSuggestionDto>> GetContactSuggestionsAsync(
         Guid userId, Guid connectionId, CancellationToken ct = default)
+    {
+        await ValidateGmailConnectionAsync(userId, connectionId, ct);
+        return _googleContacts.GetByConnectionId(connectionId);
+    }
+
+    private async Task ValidateGmailConnectionAsync(Guid userId, Guid connectionId, CancellationToken ct)
     {
         var connection = await _connections.GetByIdAsync(connectionId, ct)
             ?? throw new NotFoundException("Connection", connectionId);
@@ -76,13 +94,320 @@ public class SendEmailService : ISendEmailService
 
         if (connection.Status != ConnectionStatus.Active)
             throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
+    }
 
-        var rows = await _googleContacts.GetByConnectionAsync(connectionId, ct);
+    public async Task<EmailThreadResponse> GetThreadAsync(Guid userId, Guid itemId, CancellationToken ct = default)
+    {
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
 
-        return rows
-            .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .Select(_googleContactMapper.ToSuggestion)
-            .ToList();
+        var threadId = GetMetadataString(item.MetadataJson, "threadId");
+        if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
+
+        var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
+        
+        var messageDtos = thread.Messages.Select(m => new EmailThreadMessageDto(
+            m.MessageId, m.From, m.To, m.Cc, m.Bcc, m.Subject, m.BodyHtml, m.BodyPlainText,
+            m.OccurredAt?.UtcDateTime ?? DateTime.UtcNow, m.IsUnread, m.IsStarred, m.HasAttachment,
+            m.Attachments.Select(a => new EmailAttachmentDto(a.AttachmentId, a.Filename, a.MimeType, a.Size)).ToList()
+        )).ToList();
+
+        return new EmailThreadResponse(thread.ThreadId, thread.Subject, messageDtos);
+    }
+
+    public async Task<SendInThreadResult> ReplyAsync(Guid userId, ReplyEmailRequest request, CancellationToken ct = default)
+    {
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, request.ConnectionId, request.ItemId, ct);
+
+        var threadId = GetMetadataString(item.MetadataJson, "threadId");
+        if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
+
+        // Lấy RFC 5322 Message-ID header thật (dạng <xxx@mail.gmail.com>) để In-Reply-To/References chuẩn
+        var inReplyTo = GetMetadataString(item.MetadataJson, "rfc822MessageId") ?? item.ExternalId;
+        var subject = item.Title;
+        if (!subject.StartsWith("Re: ", StringComparison.OrdinalIgnoreCase))
+        {
+            subject = "Re: " + subject;
+        }
+
+        var toList = new List<string>();
+        var ccList = new List<string>();
+
+        var fromOriginal = GetMetadataString(item.MetadataJson, "from");
+        if (!string.IsNullOrEmpty(fromOriginal))
+        {
+            toList.Add(fromOriginal);
+        }
+
+        if (request.ReplyAll)
+        {
+            var originalTo = GetMetadataStringArray(item.MetadataJson, "to");
+            var originalCc = GetMetadataStringArray(item.MetadataJson, "cc");
+            
+            var me = connection.ProviderAccountId;
+            
+            var allTo = originalTo.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase));
+            var allCc = originalCc.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase));
+            
+            toList.AddRange(allTo);
+            ccList.AddRange(allCc);
+        }
+
+        if (request.Cc != null) ccList.AddRange(request.Cc);
+        var bccList = request.Bcc ?? new List<string>();
+
+        // Lấy Cc live từ Gmail API nếu email cũ chưa lưu Cc trong metadata (Cách A đã chốt)
+        if (request.ReplyAll && !item.MetadataJson.Contains("\"cc\""))
+        {
+             var liveMsg = await _gmail.GetMessageAsync(connection, item.ExternalId, ct);
+             var me = connection.ProviderAccountId;
+             ccList.AddRange(liveMsg.Cc.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase)));
+             toList.AddRange(liveMsg.To.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase) && !toList.Any(t => ExtractEmail(t).Equals(ExtractEmail(x), StringComparison.OrdinalIgnoreCase))));
+        }
+
+        // Loại bỏ trùng lặp và loại trừ tài khoản của mình khỏi danh sách nhận nếu bị dính
+        var myEmail = connection.ProviderAccountId;
+        toList = toList.Where(x => !ExtractEmail(x).Equals(myEmail, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(x => ExtractEmail(x), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+        ccList = ccList.Where(x => !ExtractEmail(x).Equals(myEmail, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(x => ExtractEmail(x), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+
+        // Nếu gửi cho chính mình từ một luồng mà không có ai khác
+        if (toList.Count == 0 && !string.IsNullOrEmpty(fromOriginal))
+        {
+            toList.Add(fromOriginal);
+        }
+
+        var attachments = DecodeAttachments(request.Attachments);
+
+        var messageId = await _gmail.SendInThreadAsync(connection, threadId, inReplyTo, toList, ccList, bccList, subject, request.BodyHtml,
+            attachments.Count > 0 ? attachments : null, ct);
+        
+        return new SendInThreadResult(messageId, threadId, DateTime.UtcNow);
+    }
+
+    public async Task<SendInThreadResult> ForwardAsync(Guid userId, ForwardEmailRequest request, CancellationToken ct = default)
+    {
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, request.ConnectionId, request.ItemId, ct);
+
+        var threadId = GetMetadataString(item.MetadataJson, "threadId");
+        if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
+
+        var subject = item.Title;
+        if (!subject.StartsWith("Fwd: ", StringComparison.OrdinalIgnoreCase))
+        {
+            subject = "Fwd: " + subject;
+        }
+
+        // Lấy live message gốc (chỉ 1 message, không cần cả thread)
+        var liveMsg = await _gmail.GetMessageAsync(connection, item.ExternalId, ct);
+
+        var bodyGoc = liveMsg.BodyHtml ?? liveMsg.BodyPlain?.Replace("\n", "<br/>") ?? "";
+
+        var fwdBody = request.BodyHtml + "<br/><br/>---------- Forwarded message ----------<br/>" + 
+            $"From: {liveMsg.From}<br/>" +
+            $"Date: {liveMsg.OccurredAt?.ToString("f")}<br/>" +
+            $"Subject: {liveMsg.Subject}<br/>" +
+            $"To: {string.Join(", ", liveMsg.To)}<br/><br/>" +
+            bodyGoc;
+
+        var attachmentsData = new List<Application.Abstractions.GmailAttachmentData>();
+        if (request.IncludeAttachments && liveMsg.HasAttachment)
+        {
+            // Lấy attachment metadata từ thread (cần payload detail) để có attachmentId
+            var liveThread = await _gmail.GetThreadAsync(connection, threadId, ct);
+            var threadMsg = liveThread.Messages.FirstOrDefault(m => m.MessageId == item.ExternalId);
+            if (threadMsg != null)
+            {
+                foreach (var attInfo in threadMsg.Attachments)
+                {
+                    var attData = await _gmail.GetAttachmentAsync(connection, threadMsg.MessageId, attInfo.AttachmentId, attInfo.Filename, attInfo.MimeType, ct);
+                    attachmentsData.Add(attData);
+                }
+            }
+        }
+
+        // Thêm file user tự đính kèm (ngoài file gốc)
+        attachmentsData.AddRange(DecodeAttachments(request.Attachments));
+
+        var messageId = await _gmail.SendInThreadAsync(connection, threadId, null, request.To, request.Cc, request.Bcc, subject, fwdBody,
+            attachmentsData.Count > 0 ? attachmentsData : null, ct);
+
+        return new SendInThreadResult(messageId, threadId, DateTime.UtcNow);
+    }
+
+    public async Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(
+        Guid userId, Guid itemId, string messageId, string attachmentId,
+        string? filename = null, string? mimeType = null, CancellationToken ct = default)
+    {
+        var (connection, _) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+
+        // Gmail cấp attachmentId MỚI mỗi lần đọc message/thread, nhưng id cũ vẫn hợp lệ với
+        // attachments.get. Vì vậy KHÔNG re-fetch thread để so khớp id (id sẽ lệch → 404 giả);
+        // dùng thẳng messageId + attachmentId client gửi lên (id nó đã lấy khi mở thread).
+        // Quyền đọc bị giới hạn ở mailbox của chính user (connection "me") nên an toàn.
+        return await _gmail.GetAttachmentAsync(
+            connection, messageId, attachmentId,
+            string.IsNullOrWhiteSpace(filename) ? "attachment" : filename,
+            string.IsNullOrWhiteSpace(mimeType) ? "application/octet-stream" : mimeType, ct);
+    }
+
+    public async Task<byte[]> GetAttachmentsZipAsync(Guid userId, Guid itemId, string messageId, CancellationToken ct = default)
+    {
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+
+        var threadId = GetMetadataString(item.MetadataJson, "threadId");
+        if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
+
+        var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
+        var msg = thread.Messages.FirstOrDefault(m => m.MessageId == messageId)
+            ?? throw new NotFoundException("Message", messageId);
+
+        if (msg.Attachments.Count == 0)
+            throw new BusinessRuleException("Message has no attachments.");
+
+        using var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var usedNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var attInfo in msg.Attachments)
+            {
+                var att = await _gmail.GetAttachmentAsync(connection, msg.MessageId, attInfo.AttachmentId, attInfo.Filename, attInfo.MimeType, ct);
+                var entryName = UniqueEntryName(string.IsNullOrWhiteSpace(attInfo.Filename) ? "attachment" : attInfo.Filename, usedNames);
+                var entry = zip.CreateEntry(entryName, System.IO.Compression.CompressionLevel.Fastest);
+                await using var es = entry.Open();
+                await es.WriteAsync(att.Data, ct);
+            }
+        }
+
+        return ms.ToArray();
+    }
+
+    /// <summary>Tránh trùng tên file trong zip: "a.pdf" → "a (1).pdf", "a (2).pdf"...</summary>
+    private static string UniqueEntryName(string filename, Dictionary<string, int> used)
+    {
+        if (!used.ContainsKey(filename))
+        {
+            used[filename] = 0;
+            return filename;
+        }
+
+        var count = ++used[filename];
+        var ext = Path.GetExtension(filename);
+        var stem = Path.GetFileNameWithoutExtension(filename);
+        var candidate = $"{stem} ({count}){ext}";
+        used[candidate] = 0;
+        return candidate;
+    }
+
+    // ───────────────────────── Private Helpers ─────────────────────────
+
+    /// <summary>Decode danh sách file base64 (client upload) → GmailAttachmentData binary để gắn vào MIME.</summary>
+    private static IReadOnlyList<GmailAttachmentData> DecodeAttachments(IEnumerable<AttachmentUpload>? uploads)
+    {
+        var list = new List<GmailAttachmentData>();
+        if (uploads == null) return list;
+
+        foreach (var u in uploads)
+        {
+            byte[] data;
+            try
+            {
+                data = Convert.FromBase64String(u.ContentBase64);
+            }
+            catch (FormatException)
+            {
+                throw new BusinessRuleException($"Attachment '{u.Filename}' has invalid base64 content.");
+            }
+
+            var mime = string.IsNullOrWhiteSpace(u.MimeType) ? "application/octet-stream" : u.MimeType;
+            list.Add(new GmailAttachmentData(data, u.Filename, mime, data.Length));
+        }
+
+        return list;
+    }
+
+    private async Task<(Connection connection, Domain.Entities.Item item)> GetAndValidateConnectionAndItemAsync(Guid userId, Guid? connectionId, Guid itemId, CancellationToken ct)
+    {
+        var item = await _items.GetByIdAsync(itemId, ct)
+            ?? throw new NotFoundException("Item", itemId);
+
+        if (item.UserId != userId)
+            throw new NotFoundException("Item", itemId);
+            
+        if (item.ConnectionId == null)
+            throw new BusinessRuleException("Item has no connection.");
+
+        if (connectionId.HasValue && item.ConnectionId != connectionId)
+            throw new BusinessRuleException("Item does not belong to the specified connection.");
+
+        var connection = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct)
+            ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
+
+        if (connection.UserId != userId)
+            throw new NotFoundException("Connection", item.ConnectionId.Value);
+
+        if (connection.ServiceType != ServiceType.Gmail)
+            throw new BusinessRuleException("Only Gmail connections can be used.");
+
+        if (connection.Status != ConnectionStatus.Active)
+            throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
+
+        return (connection, item);
+    }
+
+    private string? GetMetadataString(string? metadataJson, string propertyName)
+    {
+        if (string.IsNullOrEmpty(metadataJson)) return null;
+        try
+        {
+            var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.TryGetProperty(propertyName, out var prop))
+            {
+                return prop.GetString();
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse MetadataJson for property '{Property}'", propertyName);
+        }
+        return null;
+    }
+
+    private List<string> GetMetadataStringArray(string? metadataJson, string propertyName)
+    {
+        if (string.IsNullOrEmpty(metadataJson)) return new List<string>();
+        try
+        {
+            var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var item in prop.EnumerateArray())
+                {
+                    var val = item.GetString();
+                    if (!string.IsNullOrEmpty(val)) list.Add(val);
+                }
+                return list;
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse MetadataJson array for property '{Property}'", propertyName);
+        }
+        return new List<string>();
+    }
+
+    /// <summary>Trích xuất phần email thuần từ chuỗi dạng "Display Name &lt;email@domain.com&gt;" hoặc "email@domain.com".</summary>
+    private static string ExtractEmail(string emailOrHeader)
+    {
+        if (string.IsNullOrWhiteSpace(emailOrHeader)) return emailOrHeader;
+        var trimmed = emailOrHeader.Trim();
+        var ltIdx = trimmed.LastIndexOf('<');
+        var gtIdx = trimmed.LastIndexOf('>');
+        if (ltIdx >= 0 && gtIdx > ltIdx)
+        {
+            return trimmed[(ltIdx + 1)..gtIdx].Trim();
+        }
+        return trimmed;
     }
 }

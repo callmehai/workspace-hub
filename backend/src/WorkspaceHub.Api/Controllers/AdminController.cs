@@ -54,4 +54,9 @@ public class AdminController : ApiControllerBase
     [HttpGet("stats")]
     public async Task<ActionResult<AdminStatsDto>> GetStats(CancellationToken ct)
         => Ok(await _adminService.GetStatsAsync(ct));
+
+    /// <summary>POST /api/admin/users/{id}/toggle-active — toggle lock/unlock user, Admin only.</summary>
+    [HttpPost("users/{id:guid}/toggle-active")]
+    public async Task<ActionResult<AdminUserDto>> ToggleUserActive(Guid id, CancellationToken ct)
+        => Ok(await _adminService.ToggleUserActiveAsync(id, CurrentUserId, ct));
 }

@@ -48,13 +48,19 @@ public static class DependencyInjection
         services.AddScoped<IJiraSyncService, JiraSyncService>();
         // Jira metadata helpers (SCRUM-59)
         services.AddScoped<IJiraMetadataService, JiraMetadataService>();
+        // Comment + attachment 2 chiều cho ticket Jira
+        services.AddScoped<IJiraTicketService, JiraTicketService>();
         // Important contacts (SCRUM-60)
         services.AddScoped<IImportantContactService, ImportantContactService>();
 
         // Tags (SCRUM-70)
         services.AddScoped<ITagService, TagService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
+        services.AddScoped<ISyncItemNotificationService, SyncItemNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();
+
+        // Avatar upload (SCRUM-75)
+        services.AddScoped<IUserProfileService, UserProfileService>();
 
         return services;
     }

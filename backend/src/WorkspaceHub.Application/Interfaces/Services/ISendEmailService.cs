@@ -10,7 +10,24 @@ public interface ISendEmailService
     /// <summary>Lấy chữ ký Gmail của connection (null nếu chưa đặt / thiếu scope). Validate connection thuộc user + Gmail.</summary>
     Task<string?> GetSignatureAsync(Guid userId, Guid connectionId, CancellationToken ct = default);
 
-    /// <summary>Danh sách contact cache theo connection (Contact + OtherContact) — OData filter/sort/paging ở controller.</summary>
-    Task<IReadOnlyList<ContactSuggestionDto>> GetContactSuggestionsAsync(
+    /// <summary>OData list — validate connection Gmail rồi trả IQueryable in-memory.</summary>
+    Task<IQueryable<ContactSuggestionDto>> GetContactSuggestionsAsync(
         Guid userId, Guid connectionId, CancellationToken ct = default);
+
+    Task<EmailThreadResponse> GetThreadAsync(
+        Guid userId, Guid itemId, CancellationToken ct = default);
+
+    Task<SendInThreadResult> ReplyAsync(
+        Guid userId, ReplyEmailRequest request, CancellationToken ct = default);
+
+    Task<SendInThreadResult> ForwardAsync(
+        Guid userId, ForwardEmailRequest request, CancellationToken ct = default);
+
+    Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(
+        Guid userId, Guid itemId, string messageId, string attachmentId,
+        string? filename = null, string? mimeType = null, CancellationToken ct = default);
+
+    /// <summary>Tải toàn bộ attachment của 1 message trong thread, đóng gói thành .zip (bytes).</summary>
+    Task<byte[]> GetAttachmentsZipAsync(
+        Guid userId, Guid itemId, string messageId, CancellationToken ct = default);
 }

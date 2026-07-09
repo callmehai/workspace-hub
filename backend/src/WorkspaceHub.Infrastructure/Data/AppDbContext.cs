@@ -106,8 +106,14 @@ public class AppDbContext : DbContext
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.ExternalId).HasMaxLength(512);
+            e.Property(x => x.ThreadId).HasMaxLength(512); // Gmail threadId — gộp thread ở list
             e.Property(x => x.ETag).HasMaxLength(512);    // version provider cho write-back conflict
             e.Property(x => x.MetadataJson).IsRequired(); // nvarchar(max) (không set length)
+
+            // Gộp thread ở list: lọc theo user + thread, chọn message mới nhất.
+            e.HasIndex(x => new { x.UserId, x.ThreadId })
+                .HasDatabaseName("IX_Items_User_ThreadId")
+                .HasFilter("[ThreadId] IS NOT NULL");
 
             // Chống duplicate khi re-sync. Lọc NULL vì Note không có ExternalId.
             e.HasIndex(x => new { x.ConnectionId, x.ExternalId })

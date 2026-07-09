@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { adminApi } from '../lib/adminApi';
 import { handleApiError } from '../lib/errorUtils';
+import type { AdminUserDto } from '../types/admin';
 import { Users, UserCheck, Lock, AlertCircle, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { PageSizeSelect } from '../components/PageSizeSelect';
@@ -45,6 +47,27 @@ export const AdminDashboard = () => {
     queryFn: () => adminApi.getUsers({ page, limit, search: debouncedSearch }),
     placeholderData: (prev) => prev,
   });
+
+  const queryClient = useQueryClient();
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.toggleUserActive(userId),
+    onSuccess: () => {
+      toast.success(t('admin.userStatusUpdated'));
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => handleApiError(err, t('admin.userStatusUpdateFail')),
+  });
+
+  const handleToggleActive = (user: AdminUserDto) => {
+    const confirmMessage = user.isActive
+      ? t('admin.confirmLock')
+      : t('admin.confirmUnlock');
+    if (window.confirm(confirmMessage)) {
+      toggleActiveMutation.mutate(user.id);
+    }
+  };
 
   useEffect(() => {
     if (statsError) handleApiError(statsError, t('admin.statsError'));
@@ -189,10 +212,23 @@ export const AdminDashboard = () => {
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${u.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                        {u.isActive ? t('admin.userActive') : t('admin.userLocked')}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleToggleActive(u)}
+                          disabled={toggleActiveMutation.isPending}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50
+                            ${u.isActive ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                          title={u.isActive ? t('admin.clickToLock') : t('admin.clickToUnlock')}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
+                              ${u.isActive ? 'translate-x-4' : 'translate-x-0'}`}
+                          />
+                        </button>
+                        <span className={`text-[11px] font-medium ${u.isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                          {u.isActive ? t('admin.userActive') : t('admin.userLocked')}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
                       {u.connectionCount}

@@ -3,6 +3,8 @@ export interface UserDto {
   email: string;
   fullName: string;
   role: string;
+  avatarUrl?: string | null;
+  authProvider?: string | null;
 }
 
 /**

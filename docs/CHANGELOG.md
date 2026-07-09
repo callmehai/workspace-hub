@@ -2,11 +2,18 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-08] Notifications in-app + SignalR hub retry (SCRUM-68)
+
+- **Sync → notification:** Mọi sync (`ConnectionSyncDispatcher`) khi `Created > 0` gọi `SyncItemNotificationService` — tối đa 10 item/sync (ưu tiên `IsImportant` nếu vượt). Lưu DB + push SignalR `ReceiveNotification`.
+- **FE:** Chuông + badge unread (poll 45s) + dropdown OData phân trang + mark read/read-all + toast realtime + deep link `/inbox?item=`.
+- **Copy i18n:** `Title` = key (`notifications.newEmailFrom`, …); `Body` = JSON `{ from?, itemTitle, preview }` — FE dịch theo lang.
+- **SignalR resilience:** `useNotificationHub` — retry start vô hạn + backoff; rebuild hub (CSRF header mới) mỗi lần retry; BE exempt `/hubs/*` khỏi CSRF negotiate. `withAutomaticReconnect` sau connect.
+
 ## [2026-07-08] Google Contacts autocomplete (SCRUM-69)
 
 - **Sync read-only:** Mỗi lần sync Gmail (cron định kỳ SCRUM-72 ~60s, nút Đồng bộ, hoặc lazy khi mở list items) kéo `connections.list` + `otherContacts.list` (People API) vào `GoogleContacts` — full replace theo `ConnectionId`. Best-effort: lỗi contact không fail mail sync.
 - **Scopes optional:** `contacts.readonly` + `contacts.other.readonly` request kèm Gmail connect; thiếu scope → sync/suggest rỗng, user vẫn nhập tay.
-- **Suggest từ cache DB:** `GET /api/emails/contacts/suggest?connectionId=` + OData in-memory (`$filter/$top/$orderby`). Không gọi Google lúc gõ. Cả `Contact` và `OtherContact`.
+- **Suggest từ cache DB:** `GET /api/EmailContactSuggestions?connectionId=` + OData convention route (`$filter/$top/$orderby`). Không gọi Google lúc gõ. Cả `Contact` và `OtherContact`.
 - **FE:** `EmailChipsInput` debounce 300ms + dropdown; wire `SendEmail` + `ScheduledEmails`.
 - **Ticket sau:** write-back + trang `/contacts` — **SCRUM-76** (spec local `docs/CONTACTS_WRITEBACK.md`).
 ## [2026-07-07] Cron sync connections + FE auto-refresh (SCRUM-72)

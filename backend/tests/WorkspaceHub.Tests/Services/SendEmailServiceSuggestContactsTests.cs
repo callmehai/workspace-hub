@@ -1,9 +1,11 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using WorkspaceHub.Application.Abstractions;
-using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.Interfaces.Repositories;
+using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.Services;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
@@ -15,12 +17,14 @@ public class SendEmailServiceSuggestContactsTests
     private readonly Mock<IConnectionRepository> _connections = new();
     private readonly Mock<IGmailGateway> _gmail = new();
     private readonly Mock<IGoogleContactRepository> _googleContacts = new();
+    private readonly Mock<IItemRepository> _items = new();
     private readonly GoogleContactMapper _mapper = new();
+    private readonly Mock<ILogger<SendEmailService>> _logger = new();
     private readonly SendEmailService _service;
 
     public SendEmailServiceSuggestContactsTests()
     {
-        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object, _mapper);
+        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object, _mapper, _items.Object, _logger.Object);
     }
 
     [Fact]
@@ -30,14 +34,15 @@ public class SendEmailServiceSuggestContactsTests
         var connId = Guid.NewGuid();
         SetupGmailConnection(userId, connId);
 
-        _googleContacts.Setup(m => m.GetByConnectionAsync(connId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<GoogleContact>
+        _googleContacts.Setup(m => m.GetByConnectionId(connId))
+            .Returns(new List<ContactSuggestionDto>
             {
-                new() { Email = "alice@example.com", DisplayName = "Alice", Source = GoogleContactSource.Contact },
-                new() { Email = "alex@example.com", DisplayName = "Alex", Source = GoogleContactSource.OtherContact },
-            });
+                new() { Email = "alice@example.com", DisplayName = "Alice", Source = "Contact" },
+                new() { Email = "alex@example.com", DisplayName = "Alex", Source = "OtherContact" },
+            }.AsQueryable());
 
-        var result = await _service.GetContactSuggestionsAsync(userId, connId);
+        var query = await _service.GetContactSuggestionsAsync(userId, connId);
+        var result = query.ToList();
 
         result.Should().HaveCount(2);
         result.Should().Contain(x => x.Email == "alice@example.com" && x.Source == "Contact");
@@ -51,14 +56,14 @@ public class SendEmailServiceSuggestContactsTests
         var connId = Guid.NewGuid();
         SetupGmailConnection(userId, connId);
 
-        _googleContacts.Setup(m => m.GetByConnectionAsync(connId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<GoogleContact>
+        _googleContacts.Setup(m => m.GetByConnectionId(connId))
+            .Returns(new List<ContactSuggestionDto>
             {
-                new() { Email = "alice@example.com", DisplayName = "Alice", Source = GoogleContactSource.Contact },
-                new() { Email = "alice@example.com", DisplayName = "Alice 2", Source = GoogleContactSource.OtherContact },
-            });
+                new() { Email = "alice@example.com", DisplayName = "Alice", Source = "Contact" },
+            }.AsQueryable());
 
-        var result = await _service.GetContactSuggestionsAsync(userId, connId);
+        var query = await _service.GetContactSuggestionsAsync(userId, connId);
+        var result = query.ToList();
 
         result.Should().HaveCount(1);
         result[0].Email.Should().Be("alice@example.com");

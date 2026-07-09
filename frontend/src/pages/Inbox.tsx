@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { useI18n } from '../hooks/useI18n';
 import { handleApiError } from '../lib/errorUtils';
@@ -10,11 +10,13 @@ import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/i
 import {
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight,
+  Send, FileEdit, Megaphone, Users, Bell, Mails, Loader2, ShieldAlert, Trash2,
+  type LucideIcon,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
+import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
@@ -28,16 +30,23 @@ const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
   Inbox: 'kanban.colInbox', Doing: 'kanban.colDoing', Done: 'kanban.colDone',
 };
 
-function typeTileClass(t: ItemType): string {
-  const map: Record<ItemType, string> = {
-    Email: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',
-    Event: 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300',
-    File: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
-    Note: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300',
-    Ticket: 'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-300',
-  };
-  return map[t] ?? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300';
-}
+// ── Hộp thư kiểu Gmail (lọc theo Gmail label — dữ liệu đã có trong metadata.labels) ──
+//  mailbox = null ⟺ KHÔNG ở chế độ email (ẩn nav, xem mọi loại item). Các value dưới đều là email.
+//  'ALL' = tất cả thư (type=Email, trừ Spam/Trash) · còn lại = 1 Gmail label.
+//  Giao dịch/Hoá đơn Gmail không expose qua API; 'Quan trọng' đã là filter sao (⭐).
+type MailboxValue = string | null;
+const MAILBOXES: { value: string; labelKey: TranslationKey; Icon: LucideIcon }[] = [
+  { value: 'INBOX', labelKey: 'mailbox.inbox', Icon: InboxIcon },
+  { value: 'STARRED', labelKey: 'mailbox.starred', Icon: Star },
+  { value: 'SENT', labelKey: 'mailbox.sent', Icon: Send },
+  { value: 'DRAFT', labelKey: 'mailbox.drafts', Icon: FileEdit },
+  { value: 'ALL', labelKey: 'mailbox.allMail', Icon: Mails },
+  { value: 'SPAM', labelKey: 'mailbox.spam', Icon: ShieldAlert },
+  { value: 'TRASH', labelKey: 'mailbox.trash', Icon: Trash2 },
+  { value: 'CATEGORY_PROMOTIONS', labelKey: 'mailbox.promotions', Icon: Megaphone },
+  { value: 'CATEGORY_SOCIAL', labelKey: 'mailbox.social', Icon: Users },
+  { value: 'CATEGORY_UPDATES', labelKey: 'mailbox.updates', Icon: Bell },
+];
 
 // Màu theo category Kanban (dùng cho Ticket & các loại khác ở Doing/Done): xám / xanh dương / xanh lá.
 const CHIP_BY_STATUS: Record<string, string> = {
@@ -130,7 +139,8 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
 export const Inbox = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const location = useLocation();
+  const { t, lang } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
   const pollMs = usePollingInterval(45_000);
@@ -139,8 +149,12 @@ export const Inbox = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [typeFilter, setTypeFilter] = useState<ItemType[]>([]);
+  const [mailbox, setMailbox] = useState<MailboxValue>('INBOX'); // default = Hộp thư đến (như Gmail)
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
+  const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -148,22 +162,43 @@ export const Inbox = () => {
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
   // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
   const selectedFolderId = searchParams.get('folder');
+  // Nguồn (integration) chọn ở sidebar — scope trang theo 1 loại. null = tab "Tất cả mục".
+  const sourceType = parseSourceType(searchParams.get('type'));
+  const itemFromUrl = searchParams.get('item');
+  const activeItemId = itemFromUrl ?? selectedId;
+
+  const closeItemDetail = () => {
+    setSelectedId(null);
+    if (itemFromUrl) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('item');
+      const q = next.toString();
+      navigate({ pathname: location.pathname, search: q ? `?${q}` : '' }, { replace: true });
+    }
+  };
 
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
-  // Đổi context → về trang 1
+  // Đổi context (folder HOẶC nguồn) → về trang 1.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-  }, [selectedFolderId]);
+  }, [selectedFolderId, sourceType]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
     setStatusFilter(prev => prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]);
     setPage(1);
   };
+  // Chip loại — CHỈ dùng ở tab "Tất cả mục" (đa chọn như cũ). Trong 1 nguồn, chip loại bị ẩn.
   const toggleTypeFilter = (ty: ItemType) => {
     setTypeFilter(prev => prev.includes(ty) ? prev.filter(v => v !== ty) : [...prev, ty]);
+    setPage(1);
+  };
+
+  // Chọn 1 hộp thư trong nav (chỉ hiện ở tab Email) → đổi Gmail label đang lọc.
+  const selectMailbox = (value: MailboxValue) => {
+    setMailbox(value);
     setPage(1);
   };
 
@@ -178,23 +213,46 @@ export const Inbox = () => {
     }, 350);
   }, []);
 
+  const projectKeyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleProjectKeyChange = useCallback((val: string) => {
+    setProjectKeyFilter(val);
+    if (projectKeyDebounceRef.current) clearTimeout(projectKeyDebounceRef.current);
+    projectKeyDebounceRef.current = setTimeout(() => {
+      setDebouncedProjectKey(val.trim());
+      setPage(1);
+    }, 350);
+  }, []);
+
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
   });
 
+  // Scope theo nguồn (sidebar):
+  //  · Email  → luôn types=['Email'] + lọc theo Gmail label ('ALL' = mọi thư, khác = 1 label).
+  //  · Jira/Event/File → types=[loại đó].
+  //  · null (tab Tất cả mục) → dùng chip loại đa chọn; KHÔNG label, KHÔNG project.
+  const isEmailScope = sourceType === 'Email';
+  const gmailLabel = isEmailScope && mailbox && mailbox !== 'ALL' ? mailbox : undefined;
+  const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
+  const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
+  const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
+
   const params = {
     statuses: statusFilter.length > 0 ? statusFilter : undefined,
-    types: typeFilter.length > 0 ? typeFilter : undefined,
+    types: effectiveTypes,
     isImportant: importantOnly || undefined,
     search: search || undefined,
     folderId: selectedFolderId || undefined,
     tagId: tagFilter ?? undefined,
+    projectKey: effectiveProjectKey,
+    assignee: effectiveAssignee,
+    gmailLabel,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -205,9 +263,12 @@ export const Inbox = () => {
     search: params.search,
     folderId: params.folderId,
     tagId: params.tagId,
+    projectKey: params.projectKey,
+    assignee: params.assignee,
+    gmailLabel: params.gmailLabel,
   });
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching, isPlaceholderData } = useQuery({
     queryKey,
     queryFn: () => itemsApi.getItems(params),
     placeholderData: (prev) => prev,
@@ -259,7 +320,7 @@ export const Inbox = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
-  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilter, search, selectedFolderId]);
+  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilter, search, selectedFolderId, mailbox]);
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -286,13 +347,16 @@ export const Inbox = () => {
     setImportantOnly(false);
     setSearchInput('');
     setSearch('');
+    setProjectKeyFilter('');
+    setDebouncedProjectKey('');
+    setAssigneeFilter('');
     setPage(1);
   };
 
   const currentFolder = selectedFolderId
     ? folders.find(f => f.id === selectedFolderId) ?? null
     : null;
-  const hasActiveFilters = Boolean(statusFilter.length > 0 || typeFilter.length > 0 || importantOnly || tagFilter || search);
+  const hasActiveFilters = Boolean(statusFilter.length > 0 || (!sourceType && typeFilter.length > 0) || importantOnly || tagFilter || search || effectiveProjectKey);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
@@ -314,13 +378,42 @@ export const Inbox = () => {
           onToggleStatusFilter={toggleStatusFilter}
           typeFilter={typeFilter}
           onToggleTypeFilter={toggleTypeFilter}
+          sourceType={sourceType}
           importantOnly={importantOnly}
           onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
           tagFilter={tagFilter}
           onTagFilter={(id) => { setTagFilter(id); setPage(1); }}
+          projectKeyFilter={projectKeyFilter}
+          onProjectKeyChange={handleProjectKeyChange}
+          assigneeFilter={assigneeFilter}
+          onAssigneeChange={(v) => { setAssigneeFilter(v); setPage(1); }}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
+
+        {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở tab Email (sidebar) ── */}
+        {isEmailScope && (
+        <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {MAILBOXES.map(mb => {
+            const active = mailbox === mb.value;
+            const Icon = mb.Icon;
+            return (
+              <button
+                key={mb.value}
+                onClick={() => selectMailbox(mb.value)}
+                className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium border transition-colors ${
+                  active
+                    ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${active ? '' : 'text-slate-400 dark:text-slate-500'}`} strokeWidth={2.25} />
+                {t(mb.labelKey)}
+              </button>
+            );
+          })}
+        </div>
+        )}
 
         {/* ── Active filter summary (KHÔNG gồm folder — folder là context, hiển thị ở header) ── */}
         {hasActiveFilters && (
@@ -329,17 +422,19 @@ export const Inbox = () => {
             {statusFilter.map(s => (
               <span key={s} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(STATUS_LABEL_KEY[s])}</span>
             ))}
-            {typeFilter.map(ty => (
+            {!sourceType && typeFilter.map(ty => (
               <span key={ty} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{t(typeLabelKey(ty))}</span>
             ))}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">⭐ {t('toolbar.important')}</span>}
             {search && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">"{search}"</span>}
+            {effectiveProjectKey && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">Project: {effectiveProjectKey}</span>}
             <button onClick={clearFilters} className="text-brand-600 dark:text-brand-400 hover:underline ml-1">{t('inbox.clearFilters')}</button>
           </div>
         )}
 
         {/* ── Content ── */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="relative">
+        <div className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-opacity ${isPlaceholderData ? 'opacity-50 pointer-events-none' : ''}`}>
 
           {isLoading && Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}
 
@@ -393,35 +488,67 @@ export const Inbox = () => {
 
           {showList && items.map((item: ItemResponse) => {
             const unread = isItemUnread(item, seenSet);
-            const v = rowVisual(selectedId === item.id, selectedItemIds.has(item.id), unread);
+            const v = rowVisual(activeItemId === item.id, selectedItemIds.has(item.id), unread);
             return (
             <div
               key={item.id}
               onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-3 px-4 py-[13px] border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
+              className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
             >
+              {/* checkbox */}
               <input
                 type="checkbox"
                 checked={selectedItemIds.has(item.id)}
                 onClick={(e) => toggleSelection(item.id, e)}
                 onChange={() => {}} // handled by onClick
-                className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600 mr-1"
+                className="w-4 h-4 shrink-0 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600"
               />
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${typeTileClass(item.type)}`}>
-                {typeIcon(item.type)}
+
+              {/* sao (quan trọng) — đưa RA TRƯỚC như Gmail */}
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  toggleImportant({ id: item.id, isImportant: !item.isImportant });
+                }}
+                aria-label={t('inbox.markImportant')}
+                className="shrink-0 p-1 rounded-md hover:bg-amber-100/70 dark:hover:bg-amber-500/15 transition-colors"
+              >
+                <Star
+                  className={`w-[18px] h-[18px] transition-colors ${
+                    item.isImportant
+                      ? 'fill-amber-400 text-amber-400'
+                      : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500'
+                  }`}
+                />
+              </button>
+
+              {/* avatar loại — đặc màu, icon trắng đậm */}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass(item.type)}`}>
+                {typeIcon(item.type, 'w-[18px] h-[18px]', 2.25)}
               </div>
 
               <div className="flex-1 min-w-0">
+                {/* 1 dòng: chấm chưa đọc · tiêu đề (đậm) · badge thread — em-dash · snippet (mờ, ngắn) */}
                 <div className="flex items-center gap-1.5 min-w-0">
                   {v.unread && (
                     <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" aria-label={t('inbox.unreadAria')} />
                   )}
-                  <div className={`text-[13.5px] truncate leading-snug ${v.title}`}>
+                  <span className={`text-[13.5px] truncate max-w-[60%] shrink-0 leading-snug ${v.title}`}>
                     {item.title}
-                  </div>
-                </div>
-                <div className={`text-[12.5px] truncate mt-0.5 leading-snug ${v.snippet}`}>
-                  {item.snippet}
+                  </span>
+                  {(item.threadCount ?? 1) > 1 && (
+                    <span
+                      className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-semibold tabular-nums"
+                      title={t('inbox.threadCount', { n: item.threadCount ?? 1 })}
+                    >
+                      {item.threadCount}
+                    </span>
+                  )}
+                  {item.snippet && (
+                    <span className={`text-[12.5px] truncate min-w-0 flex-1 leading-snug ${v.snippet}`}>
+                      <span className="text-slate-300 dark:text-slate-600 mr-1">—</span>{item.snippet}
+                    </span>
+                  )}
                 </div>
                 {((item.folderIds && item.folderIds.length > 0) || (item.tags && item.tags.length > 0)) && (
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
@@ -437,27 +564,27 @@ export const Inbox = () => {
                 )}
               </div>
 
-              <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                <span className={`text-[11.5px] ${v.time}`}>{timeAgo(item.occurredAt)}</span>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <span className={`text-[11.5px] whitespace-nowrap ${v.time}`}>{timeAgo(item.occurredAt, lang)}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item, unread)}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item, unread)}`} />
                   {getStatusLabel(item, t, unread)}
                 </span>
               </div>
-
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  toggleImportant({ id: item.id, isImportant: !item.isImportant });
-                }}
-                aria-label={t('inbox.markImportant')}
-                className="flex-shrink-0 p-1.5 rounded-md text-slate-300 hover:text-amber-400 hover:bg-amber-50 transition-colors"
-              >
-                <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : ''}`} />
-              </button>
             </div>
             );
           })}
+        </div>
+
+          {/* Overlay khi đang tải bộ lọc/trang mới (data cũ vẫn hiện mờ để đỡ nháy) */}
+          {isPlaceholderData && (
+            <div className="absolute inset-0 flex items-start justify-center pt-16 pointer-events-none">
+              <span className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 dark:bg-slate-800/95 shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 text-[12.5px] font-medium text-slate-600 dark:text-slate-300">
+                <Loader2 className="w-4 h-4 animate-spin text-brand-600 dark:text-brand-400" />
+                {t('common.loading')}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Pagination ── */}
@@ -514,11 +641,11 @@ export const Inbox = () => {
       </div>
 
       {/* ── Item Detail Drawer ── */}
-      {selectedId && (
+      {activeItemId && (
         <ItemDetail
-          itemId={selectedId}
-          onClose={() => setSelectedId(null)}
-          onDeleted={() => setSelectedId(null)}
+          itemId={activeItemId}
+          onClose={closeItemDetail}
+          onDeleted={closeItemDetail}
         />
       )}
 
