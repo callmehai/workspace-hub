@@ -30,8 +30,12 @@ public class EmailsController : ApiControllerBase
         _forwardValidator = forwardValidator;
     }
 
+    // ~40MB: đủ chứa attachment tối đa 25MB (đã decode) khi mã hoá base64 (~33MB) + overhead JSON.
+    private const int AttachmentRequestSizeLimit = 40 * 1024 * 1024;
+
     /// <summary>Gửi email trực tiếp (gửi ngay) qua Gmail. 200 + { messageId, sentAt }.</summary>
     [HttpPost("send")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
     public async Task<IActionResult> Send([FromBody] SendEmailRequest request, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAsync(request, ct);
@@ -64,6 +68,7 @@ public class EmailsController : ApiControllerBase
     /// Trả về messageId mới của Gmail.
     /// </summary>
     [HttpPost("reply")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
     public async Task<IActionResult> Reply([FromBody] ReplyEmailRequest request, CancellationToken ct)
     {
         await _replyValidator.ValidateAndThrowAsync(request, ct);
@@ -76,6 +81,7 @@ public class EmailsController : ApiControllerBase
     /// Trả về messageId mới của Gmail.
     /// </summary>
     [HttpPost("forward")]
+    [RequestSizeLimit(AttachmentRequestSizeLimit)]
     public async Task<IActionResult> Forward([FromBody] ForwardEmailRequest request, CancellationToken ct)
     {
         await _forwardValidator.ValidateAndThrowAsync(request, ct);
@@ -87,10 +93,26 @@ public class EmailsController : ApiControllerBase
     /// Tải một file đính kèm trực tiếp từ Gmail thông qua Backend.
     /// Trả về file stream để tải về.
     /// </summary>
-    [HttpGet("{itemId}/attachments/{attachmentId}")]
-    public async Task<IActionResult> GetAttachment([FromRoute] Guid itemId, [FromRoute] string attachmentId, CancellationToken ct)
+    [HttpGet("{itemId}/messages/{messageId}/attachments/{attachmentId}")]
+    public async Task<IActionResult> GetAttachment(
+        [FromRoute] Guid itemId,
+        [FromRoute] string messageId,
+        [FromRoute] string attachmentId,
+        [FromQuery] string? filename,
+        [FromQuery] string? mimeType,
+        CancellationToken ct)
     {
-        var attachment = await _service.GetAttachmentAsync(CurrentUserId, itemId, attachmentId, ct);
+        var attachment = await _service.GetAttachmentAsync(CurrentUserId, itemId, messageId, attachmentId, filename, mimeType, ct);
         return File(attachment.Data, attachment.MimeType, attachment.Filename);
+    }
+
+    /// <summary>
+    /// Tải toàn bộ attachment của 1 message (trong thread) dưới dạng 1 file .zip.
+    /// </summary>
+    [HttpGet("{itemId}/messages/{messageId}/attachments/zip")]
+    public async Task<IActionResult> DownloadAllAttachments([FromRoute] Guid itemId, [FromRoute] string messageId, CancellationToken ct)
+    {
+        var zip = await _service.GetAttachmentsZipAsync(CurrentUserId, itemId, messageId, ct);
+        return File(zip, "application/zip", "attachments.zip");
     }
 }

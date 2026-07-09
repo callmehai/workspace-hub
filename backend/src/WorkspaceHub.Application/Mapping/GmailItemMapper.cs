@@ -48,6 +48,7 @@ public class GmailItemMapper : IGmailItemMapper
             Title = message.Subject ?? "(Không có tiêu đề)",
             Snippet = message.Snippet ?? string.Empty,
             ExternalId = message.Id,
+            ThreadId = message.ThreadId,
             ConnectionId = connectionId,
             Status = ItemStatus.Inbox,
             OccurredAt = message.OccurredAt?.UtcDateTime ?? DateTime.UtcNow,

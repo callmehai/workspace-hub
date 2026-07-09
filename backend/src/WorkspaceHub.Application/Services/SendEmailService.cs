@@ -51,8 +51,11 @@ public class SendEmailService : ISendEmailService
         if (connection.Status != ConnectionStatus.Active)
             throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
 
+        var attachments = DecodeAttachments(request.Attachments);
+
         var messageId = await _gmail.SendMessageAsync(
-            connection, request.To, request.Cc, request.Bcc, request.Subject, request.BodyHtml, ct);
+            connection, request.To, request.Cc, request.Bcc, request.Subject, request.BodyHtml,
+            attachments.Count > 0 ? attachments : null, ct);
 
         return new SendEmailResult(messageId, DateTime.UtcNow);
     }
@@ -174,7 +177,10 @@ public class SendEmailService : ISendEmailService
             toList.Add(fromOriginal);
         }
 
-        var messageId = await _gmail.SendInThreadAsync(connection, threadId, inReplyTo, toList, ccList, bccList, subject, request.BodyHtml, null, ct);
+        var attachments = DecodeAttachments(request.Attachments);
+
+        var messageId = await _gmail.SendInThreadAsync(connection, threadId, inReplyTo, toList, ccList, bccList, subject, request.BodyHtml,
+            attachments.Count > 0 ? attachments : null, ct);
         
         return new SendInThreadResult(messageId, threadId, DateTime.UtcNow);
     }
@@ -220,30 +226,105 @@ public class SendEmailService : ISendEmailService
             }
         }
 
-        var messageId = await _gmail.SendInThreadAsync(connection, threadId, null, request.To, request.Cc, request.Bcc, subject, fwdBody, attachmentsData, ct);
+        // Thêm file user tự đính kèm (ngoài file gốc)
+        attachmentsData.AddRange(DecodeAttachments(request.Attachments));
+
+        var messageId = await _gmail.SendInThreadAsync(connection, threadId, null, request.To, request.Cc, request.Bcc, subject, fwdBody,
+            attachmentsData.Count > 0 ? attachmentsData : null, ct);
 
         return new SendInThreadResult(messageId, threadId, DateTime.UtcNow);
     }
 
-    public async Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(Guid userId, Guid itemId, string attachmentId, CancellationToken ct = default)
+    public async Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(
+        Guid userId, Guid itemId, string messageId, string attachmentId,
+        string? filename = null, string? mimeType = null, CancellationToken ct = default)
+    {
+        var (connection, _) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+
+        // Gmail cấp attachmentId MỚI mỗi lần đọc message/thread, nhưng id cũ vẫn hợp lệ với
+        // attachments.get. Vì vậy KHÔNG re-fetch thread để so khớp id (id sẽ lệch → 404 giả);
+        // dùng thẳng messageId + attachmentId client gửi lên (id nó đã lấy khi mở thread).
+        // Quyền đọc bị giới hạn ở mailbox của chính user (connection "me") nên an toàn.
+        return await _gmail.GetAttachmentAsync(
+            connection, messageId, attachmentId,
+            string.IsNullOrWhiteSpace(filename) ? "attachment" : filename,
+            string.IsNullOrWhiteSpace(mimeType) ? "application/octet-stream" : mimeType, ct);
+    }
+
+    public async Task<byte[]> GetAttachmentsZipAsync(Guid userId, Guid itemId, string messageId, CancellationToken ct = default)
     {
         var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
 
-        // Lấy attachment metadata từ thread (cần payload detail để có filename/mimeType)
         var threadId = GetMetadataString(item.MetadataJson, "threadId");
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
 
         var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
-        var msg = thread.Messages.FirstOrDefault(m => m.MessageId == item.ExternalId);
-        if (msg == null) throw new BusinessRuleException("Message not found in thread.");
-        
-        var attInfo = msg.Attachments.FirstOrDefault(a => a.AttachmentId == attachmentId);
-        if (attInfo == null) throw new NotFoundException("Attachment", attachmentId);
+        var msg = thread.Messages.FirstOrDefault(m => m.MessageId == messageId)
+            ?? throw new NotFoundException("Message", messageId);
 
-        return await _gmail.GetAttachmentAsync(connection, item.ExternalId, attachmentId, attInfo.Filename, attInfo.MimeType, ct);
+        if (msg.Attachments.Count == 0)
+            throw new BusinessRuleException("Message has no attachments.");
+
+        using var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var usedNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var attInfo in msg.Attachments)
+            {
+                var att = await _gmail.GetAttachmentAsync(connection, msg.MessageId, attInfo.AttachmentId, attInfo.Filename, attInfo.MimeType, ct);
+                var entryName = UniqueEntryName(string.IsNullOrWhiteSpace(attInfo.Filename) ? "attachment" : attInfo.Filename, usedNames);
+                var entry = zip.CreateEntry(entryName, System.IO.Compression.CompressionLevel.Fastest);
+                await using var es = entry.Open();
+                await es.WriteAsync(att.Data, ct);
+            }
+        }
+
+        return ms.ToArray();
+    }
+
+    /// <summary>Tránh trùng tên file trong zip: "a.pdf" → "a (1).pdf", "a (2).pdf"...</summary>
+    private static string UniqueEntryName(string filename, Dictionary<string, int> used)
+    {
+        if (!used.ContainsKey(filename))
+        {
+            used[filename] = 0;
+            return filename;
+        }
+
+        var count = ++used[filename];
+        var ext = Path.GetExtension(filename);
+        var stem = Path.GetFileNameWithoutExtension(filename);
+        var candidate = $"{stem} ({count}){ext}";
+        used[candidate] = 0;
+        return candidate;
     }
 
     // ───────────────────────── Private Helpers ─────────────────────────
+
+    /// <summary>Decode danh sách file base64 (client upload) → GmailAttachmentData binary để gắn vào MIME.</summary>
+    private static IReadOnlyList<GmailAttachmentData> DecodeAttachments(IEnumerable<AttachmentUpload>? uploads)
+    {
+        var list = new List<GmailAttachmentData>();
+        if (uploads == null) return list;
+
+        foreach (var u in uploads)
+        {
+            byte[] data;
+            try
+            {
+                data = Convert.FromBase64String(u.ContentBase64);
+            }
+            catch (FormatException)
+            {
+                throw new BusinessRuleException($"Attachment '{u.Filename}' has invalid base64 content.");
+            }
+
+            var mime = string.IsNullOrWhiteSpace(u.MimeType) ? "application/octet-stream" : u.MimeType;
+            list.Add(new GmailAttachmentData(data, u.Filename, mime, data.Length));
+        }
+
+        return list;
+    }
 
     private async Task<(Connection connection, Domain.Entities.Item item)> GetAndValidateConnectionAndItemAsync(Guid userId, Guid? connectionId, Guid itemId, CancellationToken ct)
     {

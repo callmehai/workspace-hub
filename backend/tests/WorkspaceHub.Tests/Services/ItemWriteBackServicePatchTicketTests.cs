@@ -163,7 +163,7 @@ public class ItemWriteBackServicePatchTicketTests
 
         await _service.PatchItemAsync(item.Id, _userId, new PatchItemRequest(Comment: "looks good"));
 
-        _jira.Verify(m => m.AddCommentAsync(It.IsAny<Connection>(), "SCRUM-1", "looks good", It.IsAny<CancellationToken>()), Times.Once);
+        _jira.Verify(m => m.AddCommentAsync(It.IsAny<Connection>(), "SCRUM-1", "looks good", It.IsAny<IEnumerable<string>?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

@@ -24,5 +24,10 @@ public interface ISendEmailService
         Guid userId, ForwardEmailRequest request, CancellationToken ct = default);
 
     Task<Application.Abstractions.GmailAttachmentData> GetAttachmentAsync(
-        Guid userId, Guid itemId, string attachmentId, CancellationToken ct = default);
+        Guid userId, Guid itemId, string messageId, string attachmentId,
+        string? filename = null, string? mimeType = null, CancellationToken ct = default);
+
+    /// <summary>Tải toàn bộ attachment của 1 message trong thread, đóng gói thành .zip (bytes).</summary>
+    Task<byte[]> GetAttachmentsZipAsync(
+        Guid userId, Guid itemId, string messageId, CancellationToken ct = default);
 }

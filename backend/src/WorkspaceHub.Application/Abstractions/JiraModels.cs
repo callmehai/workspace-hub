@@ -56,7 +56,8 @@ public record UpdateJiraIssueRequest(
     string? Summary = null,
     string? Description = null,
     string? PriorityName = null,
-    IReadOnlyList<string>? Labels = null);
+    IReadOnlyList<string>? Labels = null,
+    string? IssueTypeName = null);
 
 /// <summary>1 transition khả dụng của issue (đổi status). Id dùng để POST transition.</summary>
 public record JiraTransition(string Id, string Name, string? ToStatusName);
@@ -74,3 +75,27 @@ public record JiraPriority(string Id, string Name);
 
 /// <summary>1 user gán được cho issue/project (cho dropdown assignee). AccountId dùng khi assign.</summary>
 public record JiraUser(string AccountId, string DisplayName, string? Email, bool Active);
+
+// ───────────────────── Comment + Attachment (2 chiều) ─────────────────────
+
+/// <summary>1 comment của issue. Body = plain text (đã convert từ ADF). CanEdit/CanDelete: là tác giả.</summary>
+public record JiraComment(
+    string Id,
+    string BodyText,
+    string AuthorName,
+    string? AuthorAccountId,
+    DateTimeOffset? Created,
+    DateTimeOffset? Updated);
+
+/// <summary>1 attachment của issue (metadata). Content tải qua DownloadAttachmentAsync theo Id.</summary>
+public record JiraAttachment(
+    string Id,
+    string Filename,
+    string? MimeType,
+    long Size,
+    string? AuthorName,
+    DateTimeOffset? Created,
+    string? ContentUrl = null);
+
+/// <summary>Nội dung 1 attachment đã tải về (binary).</summary>
+public record JiraAttachmentContent(byte[] Data, string MimeType, string Filename);

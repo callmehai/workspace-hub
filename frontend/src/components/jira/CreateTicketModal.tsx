@@ -1,13 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, X, ChevronDown, Ticket } from 'lucide-react';
+import { Loader2, X, SquareCheckBig } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { itemsApi } from '../../lib/itemsApi';
 import { jiraApi, type JiraUser } from '../../lib/jiraApi';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
+import { Select } from '../Select';
 
 interface Props {
   isOpen: boolean;
@@ -16,7 +17,7 @@ interface Props {
 
 const INPUT_CLS =
   'w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg py-2 px-3 text-[13px] text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-shadow';
-const SELECT_CLS = INPUT_CLS + ' appearance-none cursor-pointer';
+const SELECT_CLS = 'py-2 text-[13px]'; // class cho <Select> custom (chiều cao khớp input)
 const LABEL_CLS = 'block text-[13px] font-medium text-slate-700 dark:text-slate-200 mb-1.5';
 
 /** Validates a single label — no whitespace allowed (mirrors CreateTicketRequestValidator.cs) */
@@ -186,7 +187,7 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
         <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
-              <Ticket className="w-4 h-4" />
+              <SquareCheckBig className="w-4 h-4" />
             </div>
             <h2 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100">
               {t('createTicket.title')}
@@ -213,58 +214,42 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
           {/* Jira connection */}
           <div>
             <label className={LABEL_CLS}>{t('createTicket.account')}</label>
-            <div className="relative">
-              <select
-                id="createTicket-connection"
-                value={connectionId}
-                onChange={(e) => {
-                  setConnectionId(e.target.value);
-                  setProjectKey('');
-                  setIssueType('');
-                  setPriority('');
-                  setAssigneeAccountId('');
-                  setAssigneeQuery('');
-                  setDebouncedAssigneeQuery('');
-                }}
-                className={SELECT_CLS}
-                disabled={jiraConnections.length === 0}
-              >
-                <option value="">{t('createTicket.selectAccount')}</option>
-                {jiraConnections.map((c) => (
-                  <option key={c.id} value={c.id}>{c.providerAccountId || c.id}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
+            <Select
+              value={connectionId}
+              onChange={(v) => {
+                setConnectionId(v);
+                setProjectKey('');
+                setIssueType('');
+                setPriority('');
+                setAssigneeAccountId('');
+                setAssigneeQuery('');
+                setDebouncedAssigneeQuery('');
+              }}
+              className={SELECT_CLS}
+              disabled={jiraConnections.length === 0}
+              placeholder={t('createTicket.selectAccount')}
+              options={jiraConnections.map((c) => ({ value: c.id, label: c.providerAccountId || c.id }))}
+            />
           </div>
 
           {/* Project */}
           {connectionId && (
             <div>
               <label className={LABEL_CLS}>{t('createTicket.project')}</label>
-              <div className="relative">
-                {loadingProjects ? (
-                  <div className="flex items-center gap-2 text-[13px] text-slate-500 dark:text-slate-400 py-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('createTicket.loadingProjects')}
-                  </div>
-                ) : (
-                  <>
-                    <select
-                      id="createTicket-project"
-                      value={projectKey}
-                      onChange={(e) => { setProjectKey(e.target.value); setIssueType(''); setAssigneeAccountId(''); setAssigneeQuery(''); }}
-                      className={SELECT_CLS}
-                    >
-                      <option value="">{t('createTicket.selectProject')}</option>
-                      {projects.map((p) => (
-                        <option key={p.key} value={p.key}>{p.name} ({p.key})</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </>
-                )}
-              </div>
+              {loadingProjects ? (
+                <div className="flex items-center gap-2 text-[13px] text-slate-500 dark:text-slate-400 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {t('createTicket.loadingProjects')}
+                </div>
+              ) : (
+                <Select
+                  value={projectKey}
+                  onChange={(v) => { setProjectKey(v); setIssueType(''); setAssigneeAccountId(''); setAssigneeQuery(''); }}
+                  className={SELECT_CLS}
+                  placeholder={t('createTicket.selectProject')}
+                  options={projects.map((p) => ({ value: p.key, label: `${p.name} (${p.key})` }))}
+                />
+              )}
             </div>
           )}
 
@@ -272,20 +257,13 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
           {projectKey && (
             <div>
               <label className={LABEL_CLS}>{t('createTicket.issueType')}</label>
-              <div className="relative">
-                <select
-                  id="createTicket-issueType"
-                  value={issueType}
-                  onChange={(e) => setIssueType(e.target.value)}
-                  className={SELECT_CLS}
-                >
-                  <option value="">{t('createTicket.selectIssueType')}</option>
-                  {issueTypes.filter((it) => !it.subtask).map((it) => (
-                    <option key={it.id} value={it.name}>{it.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
+              <Select
+                value={issueType}
+                onChange={setIssueType}
+                className={SELECT_CLS}
+                placeholder={t('createTicket.selectIssueType')}
+                options={issueTypes.filter((it) => !it.subtask).map((it) => ({ value: it.name, label: it.name }))}
+              />
             </div>
           )}
 
@@ -324,21 +302,14 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
             {/* Priority */}
             <div>
               <label className={LABEL_CLS}>{t('createTicket.priority')}</label>
-              <div className="relative">
-                <select
-                  id="createTicket-priority"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className={SELECT_CLS}
-                  disabled={!connectionId}
-                >
-                  <option value="">{t('createTicket.selectPriority')}</option>
-                  {priorities.map((p) => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
+              <Select
+                value={priority}
+                onChange={setPriority}
+                className={SELECT_CLS}
+                disabled={!connectionId}
+                placeholder={t('createTicket.selectPriority')}
+                options={priorities.map((p) => ({ value: p.name, label: p.name }))}
+              />
             </div>
 
             {/* Assignee */}

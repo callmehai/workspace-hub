@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Download, ChevronDown, ChevronRight, Reply, ReplyAll, Forward, Loader2, Send, X } from 'lucide-react';
-import { sendEmailApi, type EmailAttachmentDto } from '../../lib/sendEmailApi';
+import { sendEmailApi, fileToAttachmentUpload, MAX_ATTACHMENT_TOTAL_BYTES, type EmailAttachmentDto } from '../../lib/sendEmailApi';
 import { EmailChipsInput } from '../EmailChipsInput';
 import { RichTextEditor } from '../RichTextEditor';
+import { AttachmentPicker } from '../AttachmentPicker';
+import { AttachmentCard } from './AttachmentCard';
 import { useI18n } from '../../hooks/useI18n';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
@@ -13,12 +15,33 @@ interface EmailThreadViewProps {
   connectionId: string;
 }
 
+// Gmail API không trả ảnh đại diện → dựng avatar chữ-cái-đầu, màu ổn định theo người gửi (kiểu Gmail).
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500',
+  'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-pink-500',
+];
+function avatarColor(key: string): string {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+/** Tách "Tên <email>" → tên hiển thị + email. Không có tên hiển thị thì dùng email làm tên. */
+function parseSender(from?: string | null): { name: string; email: string } {
+  if (!from) return { name: 'Unknown', email: '' };
+  const m = from.match(/<([^>]+)>/);
+  const email = (m ? m[1] : from).trim();
+  const name = from.split('<')[0].trim().replace(/^["']|["']$/g, '') || email || 'Unknown';
+  return { name, email };
+}
+
 export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connectionId }) => {
   const { t, lang } = useI18n();
   const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
   const queryClient = useQueryClient();
 
-  const [expandedMsgs, setExpandedMsgs] = useState<Record<string, boolean>>({});
+  // undefined = chưa bấm → mặc định (thư mới nhất mở, còn lại thu gọn); true/false = user đã toggle.
+  const [expandedMsgs, setExpandedMsgs] = useState<Record<string, boolean | undefined>>({});
   const [replyMode, setReplyMode] = useState<'reply' | 'replyAll' | 'forward' | null>(null);
 
   const [to, setTo] = useState<string[]>([]);
@@ -26,22 +49,15 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   const [bcc, setBcc] = useState<string[]>([]);
   const [bodyHtml, setBodyHtml] = useState<string>('');
   const [includeAttachments, setIncludeAttachments] = useState(true);
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
 
   const { data: thread, isLoading, isError } = useQuery({
     queryKey: ['emailThread', itemId],
     queryFn: () => sendEmailApi.getThread(itemId),
   });
 
-  // Auto expand latest message
-  useEffect(() => {
-    if (thread?.messages && thread.messages.length > 0) {
-      const latest = thread.messages[thread.messages.length - 1];
-      setExpandedMsgs(prev => ({ ...prev, [latest.messageId]: true }));
-    }
-  }, [thread]);
-
-  const toggleMsg = (msgId: string) => {
-    setExpandedMsgs(prev => ({ ...prev, [msgId]: !prev[msgId] }));
+  const toggleMsg = (msgId: string, currentlyExpanded: boolean) => {
+    setExpandedMsgs(prev => ({ ...prev, [msgId]: !currentlyExpanded }));
   };
 
   const handleAction = (mode: 'reply' | 'replyAll' | 'forward') => {
@@ -51,6 +67,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     setCc([]);
     setBcc([]);
     setIncludeAttachments(true);
+    setAttachFiles([]);
 
     // Cuộn xuống box
     setTimeout(() => {
@@ -60,6 +77,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
   const replyMutation = useMutation({
     mutationFn: async (mode: 'reply' | 'replyAll' | 'forward') => {
+      const attachments = attachFiles.length > 0
+        ? await Promise.all(attachFiles.map(fileToAttachmentUpload))
+        : undefined;
+
       if (mode === 'forward') {
         return sendEmailApi.forward({
           connectionId,
@@ -68,7 +89,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
           cc,
           bcc,
           bodyHtml,
-          includeAttachments
+          includeAttachments,
+          attachments
         });
       } else {
         return sendEmailApi.reply({
@@ -77,7 +99,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
           cc,
           bcc,
           bodyHtml,
-          replyAll: mode === 'replyAll'
+          replyAll: mode === 'replyAll',
+          attachments
         });
       }
     },
@@ -88,6 +111,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       setTo([]);
       setCc([]);
       setBcc([]);
+      setAttachFiles([]);
       queryClient.invalidateQueries({ queryKey: ['emailThread', itemId] });
     },
     onError: (err) => {
@@ -102,16 +126,34 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       toast.error(t('item.eventNeedFields') || 'To field is required for forward');
       return;
     }
+    const totalSize = attachFiles.reduce((s, f) => s + f.size, 0);
+    if (totalSize > MAX_ATTACHMENT_TOTAL_BYTES) {
+      toast.error(t('attach.tooLarge'));
+      return;
+    }
     replyMutation.mutate(replyMode);
   };
 
-  const downloadAttachment = async (_msgId: string, att: EmailAttachmentDto) => {
+  const [downloadingAllMsgId, setDownloadingAllMsgId] = useState<string | null>(null);
+
+  const downloadAttachment = async (msgId: string, att: EmailAttachmentDto) => {
     try {
       toast.loading(t('common.loading') || 'Downloading...', { id: `dl-${att.attachmentId}` });
-      await sendEmailApi.downloadAttachment(itemId, att.attachmentId, att.filename);
+      await sendEmailApi.downloadAttachment(itemId, msgId, att.attachmentId, att.filename, att.mimeType);
       toast.success(t('item.saved') || 'Downloaded', { id: `dl-${att.attachmentId}` });
-    } catch (err) {
+    } catch {
       toast.error(t('item.loadError') || 'Failed to download', { id: `dl-${att.attachmentId}` });
+    }
+  };
+
+  const downloadAll = async (msgId: string) => {
+    setDownloadingAllMsgId(msgId);
+    try {
+      await sendEmailApi.downloadAllAttachments(itemId, msgId);
+    } catch {
+      toast.error(t('item.loadError') || 'Failed to download');
+    } finally {
+      setDownloadingAllMsgId(null);
     }
   };
 
@@ -136,26 +178,28 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">
         {t('sendEmail.content') || 'Hội thoại'} ({thread.messages.length})
       </div>
-
+      
       <div className="space-y-3">
         {thread.messages.map((msg, index) => {
-          const isExpanded = !!expandedMsgs[msg.messageId];
           const isLatest = index === thread.messages.length - 1;
-          const fromName = msg.from ? msg.from.split('<')[0].trim() : 'Unknown';
+          // Mặc định: thư mới nhất mở, thư cũ thu gọn — cho tới khi user tự toggle.
+          const isExpanded = expandedMsgs[msg.messageId] ?? isLatest;
+          const sender = parseSender(msg.from);
+          const initial = (sender.name || sender.email || '?').charAt(0).toUpperCase();
 
           return (
             <div key={msg.messageId} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm transition-all">
               {/* Header của từng message */}
               <button
-                onClick={() => toggleMsg(msg.messageId)}
+                onClick={() => toggleMsg(msg.messageId, isExpanded)}
                 className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/80 transition-colors"
               >
                 <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 flex items-center justify-center font-bold text-sm shrink-0">
-                    {fromName.charAt(0).toUpperCase()}
+                  <div className={`w-8 h-8 rounded-full ${avatarColor(sender.email || sender.name)} text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm`}>
+                    {initial}
                   </div>
-                  <div className="flex flex-col items-start truncate">
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{fromName}</span>
+                  <div className="flex flex-col items-start min-w-0">
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-full" title={sender.email}>{sender.name}</span>
                     <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
                       {new Date(msg.occurredAt).toLocaleString(dl)}
                     </span>
@@ -179,7 +223,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                   </div>
 
                   {/* HTML Body */}
-                  <div
+                  <div 
                     className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] break-words overflow-x-auto email-body-content"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.bodyHtml || msg.bodyPlainText?.replace(/\n/g, '<br/>') || '') }}
                   />
@@ -187,20 +231,32 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                   {/* Attachments */}
                   {msg.attachments?.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/60">
-                      <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
-                        <Paperclip className="w-3.5 h-3.5" /> Attachments ({msg.attachments.length})
+                      <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Paperclip className="w-3.5 h-3.5" /> Attachments ({msg.attachments.length})
+                        </span>
+                        {msg.attachments.length > 1 && (
+                          <button
+                            onClick={() => downloadAll(msg.messageId)}
+                            disabled={downloadingAllMsgId === msg.messageId}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {downloadingAllMsgId === msg.messageId
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Download className="w-3.5 h-3.5" />}
+                            {t('attach.downloadAll')}
+                          </button>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {msg.attachments.map(att => (
-                          <div key={att.attachmentId} className="flex items-center gap-2 pl-3 pr-2 py-1.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-lg max-w-xs group cursor-pointer hover:border-brand-300 transition-colors" onClick={() => downloadAttachment(msg.messageId, att)}>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300 truncate">{att.filename}</span>
-                              <span className="text-[10px] text-slate-500">{Math.round(att.size / 1024)} KB</span>
-                            </div>
-                            <button className="w-6 h-6 flex items-center justify-center rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 group-hover:bg-brand-100 group-hover:text-brand-600 transition-colors shrink-0">
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <AttachmentCard
+                            key={att.attachmentId}
+                            itemId={itemId}
+                            messageId={msg.messageId}
+                            att={att}
+                            onDownload={(a) => downloadAttachment(msg.messageId, a)}
+                          />
                         ))}
                       </div>
                     </div>
@@ -240,7 +296,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
               <X className="w-4 h-4" />
             </button>
           </div>
-
+          
           <div className="p-4 space-y-3">
             {replyMode === 'forward' && (
               <div>
@@ -248,13 +304,13 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                 <EmailChipsInput value={to} onChange={setTo} placeholder="Add recipient..." connectionId={connectionId} />
               </div>
             )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Cc</label>
                 <EmailChipsInput value={cc} onChange={setCc} placeholder="Add Cc..." connectionId={connectionId} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Bcc</label>
                 <EmailChipsInput value={bcc} onChange={setBcc} placeholder="Add Bcc..." connectionId={connectionId} />
               </div>
@@ -262,10 +318,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
             {replyMode === 'forward' && (
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 py-1">
-                <input
-                  type="checkbox"
-                  checked={includeAttachments}
-                  onChange={(e) => setIncludeAttachments(e.target.checked)}
+                <input 
+                  type="checkbox" 
+                  checked={includeAttachments} 
+                  onChange={(e) => setIncludeAttachments(e.target.checked)} 
                   className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                 />
                 Include original attachments
@@ -281,6 +337,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                 className="min-h-[200px]"
               />
             </div>
+
+            <AttachmentPicker files={attachFiles} onChange={setAttachFiles} />
 
             <div className="flex justify-end pt-2">
               <button

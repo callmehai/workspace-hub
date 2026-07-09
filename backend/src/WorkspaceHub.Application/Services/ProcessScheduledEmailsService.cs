@@ -83,7 +83,7 @@ public class ProcessScheduledEmailsService : IProcessScheduledEmailsService
                     Deserialize(email.BccJson),
                     email.Subject,
                     email.BodyHtml,
-                    ct);
+                    ct: ct);
 
                 email.Status = ScheduledEmailStatus.Sent;
                 email.SentAt = DateTime.UtcNow;

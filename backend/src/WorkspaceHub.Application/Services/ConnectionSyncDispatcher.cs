@@ -17,8 +17,9 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
     private readonly IDriveSyncService _driveSync;
     private readonly IJiraSyncService _jiraSync;
 
-    private const int GmailDefaultBatchSize = 50;
-    private const int JiraDefaultBatchSize = 50;
+    private const int GmailDefaultBatchSize = 100;
+    // Kéo toàn bộ board (không chỉ việc của mình) → nâng trần để không cụt danh sách ticket.
+    private const int JiraDefaultBatchSize = 250;
 
     public ConnectionSyncDispatcher(
         IConnectionRepository connections,

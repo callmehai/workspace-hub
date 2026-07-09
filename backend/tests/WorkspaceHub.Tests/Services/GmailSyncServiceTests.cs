@@ -84,7 +84,7 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.GetProfileAsync(connection, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailProfile("a", 100, 10, 10));
 
-        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string> { "1", "2", "3" }, null));
 
         _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
@@ -117,7 +117,7 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.GetProfileAsync(connection, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailProfile("a", 100, 10, 10));
 
-        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string> { "1", "2", "3" }, null));
 
         _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
@@ -132,8 +132,10 @@ public class GmailSyncServiceTests
 
         var result = await _service.SyncConnectionAsync(connection);
 
+        // Discovery (listing) chỉ fetch id CHƯA có → id "2" đã tồn tại bị bỏ QUA TRƯỚC khi fetch (không
+        // tính "skipped" nữa, để nhẹ). Chỉ "1","3" được fetch → Created=2, Skipped=0.
         result.Created.Should().Be(2);
-        result.Skipped.Should().Be(1);
+        result.Skipped.Should().Be(0);
     }
 
     [Fact]
@@ -147,8 +149,12 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.ListHistoryAsync(connection, "50", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailHistory(false, new List<string> { "m1", "m2" }, null, "120"));
 
+        // Incremental giờ VẪN quét recent các hộp thư (spam/trash/…) — trả rỗng ở test này.
+        _gatewayMock.Setup(m => m.ListMessageIdsAsync(It.IsAny<Connection>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GmailMessageList(new List<string>(), null));
+
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Connection c, string id, CancellationToken ct) => 
+            .ReturnsAsync((Connection c, string id, CancellationToken ct) =>
                 new GmailMessage(id, "t", "S", null, new List<string>(), new List<string>(), new List<string>(), null, new List<string>(), false, null));
 
         _mapperMock.Setup(m => m.ToItem(It.IsAny<GmailMessage>(), connection.UserId, connection.Id, It.IsAny<ISet<string>>()))
@@ -156,7 +162,7 @@ public class GmailSyncServiceTests
 
         var result = await _service.SyncConnectionAsync(connection);
 
-        _gatewayMock.Verify(m => m.ListMessageIdsAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _gatewayMock.Verify(m => m.ListHistoryAsync(connection, "50", null, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
 
         result.Created.Should().Be(2);
         result.NewCursor.Should().Be("120");
@@ -177,7 +183,7 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.GetProfileAsync(connection, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailProfile("a", 200, 10, 10));
 
-        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string> { "f1" }, null));
 
         _gatewayMock.Setup(m => m.GetMessageAsync(connection, It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -189,7 +195,8 @@ public class GmailSyncServiceTests
 
         var result = await _service.SyncConnectionAsync(connection);
 
-        _gatewayMock.Verify(m => m.ListMessageIdsAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        // FullSync giờ list global + từng mailbox (SENT/DRAFT/STARRED/CATEGORY_*) → nhiều lần.
+        _gatewayMock.Verify(m => m.ListMessageIdsAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
 
         result.Created.Should().Be(1);
         result.NewCursor.Should().Be("200");
@@ -204,7 +211,7 @@ public class GmailSyncServiceTests
         _gatewayMock.Setup(m => m.GetProfileAsync(connection, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailProfile("a", 100, 10, 10));
 
-        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string>(), null));
 
         _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
@@ -226,7 +233,7 @@ public class GmailSyncServiceTests
 
         _gatewayMock.Setup(m => m.GetProfileAsync(connection, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailProfile("a", 100, 10, 10));
-        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string>(), null));
         _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, Item>());
@@ -256,7 +263,7 @@ public class GmailSyncServiceTests
 
         _gatewayMock.Setup(m => m.GetProfileAsync(connection, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailProfile("a", 100, 10, 10));
-        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _gatewayMock.Setup(m => m.ListMessageIdsAsync(connection, null, It.IsAny<int>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailMessageList(new List<string>(), null));
         _itemsMock.Setup(m => m.GetTrackedByConnectionIdAsync(connection.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, Item>());

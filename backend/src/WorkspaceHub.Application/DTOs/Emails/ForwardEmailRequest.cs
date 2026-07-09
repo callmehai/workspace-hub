@@ -22,4 +22,7 @@ public class ForwardEmailRequest
 
     /// <summary>Có đính kèm attachment từ email gốc không. Mặc định true.</summary>
     public bool IncludeAttachments { get; set; } = true;
+
+    /// <summary>File người dùng tự đính kèm thêm khi forward (ngoài file gốc, tùy chọn).</summary>
+    public List<AttachmentUpload> Attachments { get; set; } = new();
 }

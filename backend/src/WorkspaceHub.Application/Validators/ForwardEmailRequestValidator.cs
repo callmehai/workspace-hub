@@ -30,5 +30,10 @@ public class ForwardEmailRequestValidator : AbstractValidator<ForwardEmailReques
 
         RuleFor(x => x.BodyHtml)
             .NotEmpty().WithMessage("Vui lòng nhập nội dung email.");
+
+        RuleForEach(x => x.Attachments).SetValidator(new AttachmentUploadValidator());
+        RuleFor(x => x.Attachments)
+            .Must(a => AttachmentRules.EstimateTotalBytes(a) <= AttachmentRules.MaxTotalBytes)
+            .WithMessage("Tổng dung lượng đính kèm vượt quá 25MB (giới hạn Gmail).");
     }
 }

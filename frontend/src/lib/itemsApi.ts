@@ -14,8 +14,38 @@ export interface GetItemsParams {
   search?: string;
   tagId?: string;
   projectKey?: string;
+  /** Lọc theo Gmail label (INBOX/SENT/DRAFT/STARRED/IMPORTANT/CATEGORY_*) — chỉ áp cho Email. */
+  gmailLabel?: string;
+  /** Lọc ticket Jira theo người phụ trách (accountId); "unassigned" = chưa gán. */
+  assignee?: string;
   page?: number;
   limit?: number;
+}
+
+/** 1 người phụ trách để filter Jira. accountId = "unassigned" khi ticket chưa gán. */
+export interface JiraAssignee {
+  accountId: string;
+  displayName: string;
+}
+
+/** 1 comment của ticket Jira (2 chiều). */
+export interface JiraComment {
+  id: string;
+  body: string;
+  authorName: string;
+  authorAccountId: string | null;
+  created: string | null;
+  updated: string | null;
+}
+
+/** 1 attachment (metadata) của ticket Jira. */
+export interface JiraAttachment {
+  id: string;
+  filename: string;
+  mimeType: string | null;
+  size: number;
+  authorName: string | null;
+  created: string | null;
 }
 
 
@@ -28,6 +58,12 @@ export const itemsApi = {
     return response.data;
   },
   
+  /** Danh sách người phụ trách (assignee) suy từ ticket Jira đã sync — cho filter tab Jira. */
+  getAssignees: async (): Promise<JiraAssignee[]> => {
+    const response = await api.get('/items/assignees');
+    return response.data;
+  },
+
   getItemById: async (id: string): Promise<ItemResponse> => {
     const response = await api.get(`/items/${id}`);
     return response.data;
@@ -65,6 +101,53 @@ export const itemsApi = {
   updateItemImportant: async (id: string, isImportant: boolean): Promise<ItemResponse> => {
     const response = await api.patch(`/items/${id}/important`, { isImportant });
     return response.data;
+  },
+
+  // ── Jira ticket: comment 2 chiều ──
+  getComments: async (itemId: string): Promise<JiraComment[]> => {
+    const res = await api.get(`/items/${itemId}/comments`);
+    return res.data;
+  },
+  addComment: async (itemId: string, body: string, mediaIds?: string[]): Promise<JiraComment> => {
+    const res = await api.post(`/items/${itemId}/comments`, { body, mediaIds });
+    return res.data;
+  },
+  updateComment: async (itemId: string, commentId: string, body: string): Promise<JiraComment> => {
+    const res = await api.put(`/items/${itemId}/comments/${commentId}`, { body });
+    return res.data;
+  },
+  deleteComment: async (itemId: string, commentId: string): Promise<void> => {
+    await api.delete(`/items/${itemId}/comments/${commentId}`);
+  },
+
+  // ── Jira ticket: attachment 2 chiều ──
+  getAttachments: async (itemId: string): Promise<JiraAttachment[]> => {
+    const res = await api.get(`/items/${itemId}/attachments`);
+    return res.data;
+  },
+  uploadAttachment: async (itemId: string, file: File): Promise<JiraAttachment[]> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await api.post(`/items/${itemId}/attachments`, fd);
+    return res.data;
+  },
+  deleteAttachment: async (itemId: string, attachmentId: string): Promise<void> => {
+    await api.delete(`/items/${itemId}/attachments/${attachmentId}`);
+  },
+  /** URL tải trực tiếp (dùng cho <img> preview ảnh — cùng origin nên cookie auth tự gửi kèm). */
+  attachmentUrl: (itemId: string, attachmentId: string): string =>
+    `${api.defaults.baseURL ?? '/api'}/items/${itemId}/attachments/${attachmentId}/download`,
+  /** Tải file: nhận blob rồi kích hoạt download với đúng filename. */
+  downloadAttachment: async (itemId: string, attachmentId: string, filename: string): Promise<void> => {
+    const res = await api.get(`/items/${itemId}/attachments/${attachmentId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   },
 };
 

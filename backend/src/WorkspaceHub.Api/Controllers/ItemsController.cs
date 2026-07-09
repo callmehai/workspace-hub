@@ -18,6 +18,7 @@ public class ItemsController : ApiControllerBase
 {
     private readonly IItemService _itemService;
     private readonly IItemWriteBackService _writeBackService;
+    private readonly IJiraTicketService _ticketService;
     private readonly IValidator<GetItemsRequest> _validator;
     private readonly IValidator<UpdateItemStatusRequest> _updateStatusValidator;
     private readonly IValidator<CreateNoteRequest> _createNoteValidator;
@@ -28,6 +29,7 @@ public class ItemsController : ApiControllerBase
     public ItemsController(
         IItemService itemService,
         IItemWriteBackService writeBackService,
+        IJiraTicketService ticketService,
         IValidator<GetItemsRequest> validator,
         IValidator<UpdateItemStatusRequest> updateStatusValidator,
         IValidator<CreateNoteRequest> createNoteValidator,
@@ -37,6 +39,7 @@ public class ItemsController : ApiControllerBase
     {
         _itemService = itemService;
         _writeBackService = writeBackService;
+        _ticketService = ticketService;
         _validator = validator;
         _updateStatusValidator = updateStatusValidator;
         _createNoteValidator = createNoteValidator;
@@ -59,6 +62,17 @@ public class ItemsController : ApiControllerBase
         await _validator.ValidateAndThrowAsync(request, ct);
 
         var result = await _itemService.GetItemsAsync(CurrentUserId, request, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// GET /api/items/assignees — danh sách người phụ trách (assignee) suy từ ticket Jira đã sync,
+    /// dùng cho filter theo user ở tab Jira. Gồm "unassigned" nếu có ticket chưa gán.
+    /// </summary>
+    [HttpGet("assignees")]
+    public async Task<ActionResult<IReadOnlyList<JiraAssigneeDto>>> GetAssignees(CancellationToken ct = default)
+    {
+        var result = await _itemService.GetTicketAssigneesAsync(CurrentUserId, ct);
         return Ok(result);
     }
 
@@ -165,5 +179,66 @@ public class ItemsController : ApiControllerBase
     {
         var updated = await _itemService.ToggleImportantAsync(CurrentUserId, id, request.IsImportant, ct);
         return Ok(updated);
+    }
+
+    // ───────────────────── Jira comment (2 chiều) ─────────────────────
+
+    /// <summary>GET /api/items/{id}/comments — list comment của ticket Jira.</summary>
+    [HttpGet("{id:guid}/comments")]
+    public async Task<ActionResult<IReadOnlyList<JiraCommentDto>>> GetComments(Guid id, CancellationToken ct = default)
+        => Ok(await _ticketService.GetCommentsAsync(id, CurrentUserId, ct));
+
+    /// <summary>POST /api/items/{id}/comments — thêm comment.</summary>
+    [HttpPost("{id:guid}/comments")]
+    public async Task<ActionResult<JiraCommentDto>> AddComment(Guid id, [FromBody] TicketCommentBody body, CancellationToken ct = default)
+        => Ok(await _ticketService.AddCommentAsync(id, CurrentUserId, body.Body, body.MediaIds, ct));
+
+    /// <summary>PUT /api/items/{id}/comments/{commentId} — sửa comment.</summary>
+    [HttpPut("{id:guid}/comments/{commentId}")]
+    public async Task<ActionResult<JiraCommentDto>> UpdateComment(Guid id, string commentId, [FromBody] TicketCommentBody body, CancellationToken ct = default)
+        => Ok(await _ticketService.UpdateCommentAsync(id, CurrentUserId, commentId, body.Body, ct));
+
+    /// <summary>DELETE /api/items/{id}/comments/{commentId} — xoá comment.</summary>
+    [HttpDelete("{id:guid}/comments/{commentId}")]
+    public async Task<IActionResult> DeleteComment(Guid id, string commentId, CancellationToken ct = default)
+    {
+        await _ticketService.DeleteCommentAsync(id, CurrentUserId, commentId, ct);
+        return NoContent();
+    }
+
+    // ───────────────────── Jira attachment (2 chiều) ─────────────────────
+
+    /// <summary>GET /api/items/{id}/attachments — list attachment metadata.</summary>
+    [HttpGet("{id:guid}/attachments")]
+    public async Task<ActionResult<IReadOnlyList<JiraAttachmentDto>>> GetAttachments(Guid id, CancellationToken ct = default)
+        => Ok(await _ticketService.GetAttachmentsAsync(id, CurrentUserId, ct));
+
+    /// <summary>GET /api/items/{id}/attachments/{attId}/download — tải file.</summary>
+    [HttpGet("{id:guid}/attachments/{attId}/download")]
+    public async Task<IActionResult> DownloadAttachment(Guid id, string attId, CancellationToken ct = default)
+    {
+        var (data, mime, filename) = await _ticketService.DownloadAttachmentAsync(id, CurrentUserId, attId, ct);
+        return File(data, mime, filename);
+    }
+
+    /// <summary>POST /api/items/{id}/attachments — upload file (multipart form-data, field "file").</summary>
+    [HttpPost("{id:guid}/attachments")]
+    [RequestSizeLimit(30_000_000)] // ~30MB
+    public async Task<ActionResult<IReadOnlyList<JiraAttachmentDto>>> UploadAttachment(Guid id, IFormFile file, CancellationToken ct = default)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Thiếu file.");
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var result = await _ticketService.UploadAttachmentAsync(
+            id, CurrentUserId, file.FileName, file.ContentType ?? "application/octet-stream", ms.ToArray(), ct);
+        return Ok(result);
+    }
+
+    /// <summary>DELETE /api/items/{id}/attachments/{attId} — xoá attachment.</summary>
+    [HttpDelete("{id:guid}/attachments/{attId}")]
+    public async Task<IActionResult> DeleteAttachment(Guid id, string attId, CancellationToken ct = default)
+    {
+        await _ticketService.DeleteAttachmentAsync(id, CurrentUserId, attId, ct);
+        return NoContent();
     }
 }
