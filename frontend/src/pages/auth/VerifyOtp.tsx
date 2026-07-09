@@ -45,18 +45,36 @@ export const VerifyOtp = () => {
     if (!email) navigate('/register', { replace: true });
   }, [email, navigate]);
 
-  const initRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-        },
-        'expired-callback': () => {
-          console.warn('Recaptcha expired');
-          setBanner(t('verifyOtp.resendFail') || 'Mã captcha hết hạn, vui lòng thử lại.');
-        }
-      });
+  const resetRecaptcha = () => {
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+      } catch {
+        // ignore if already cleared
+      }
+      window.recaptchaVerifier = undefined;
     }
+    // Clear the DOM container so a new widget can be rendered
+    const container = document.getElementById('recaptcha-container');
+    if (container) {
+      container.innerHTML = '';
+    }
+  };
+
+  const initRecaptcha = () => {
+    // Always reset first to avoid "already rendered" error
+    resetRecaptcha();
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+      callback: () => {
+        // solved
+      },
+      'expired-callback': () => {
+        console.warn('Recaptcha expired');
+        resetRecaptcha();
+        setBanner(t('verifyOtp.resendFail') || 'Mã captcha hết hạn, vui lòng thử lại.');
+      }
+    });
   };
 
   const sendFirebaseOtp = async (phoneToUse: string) => {
@@ -68,21 +86,16 @@ export const VerifyOtp = () => {
       setBanner('');
       setIsSending(true);
       initRecaptcha();
-      const appVerifier = window.recaptchaVerifier;
-      if (appVerifier) {
-        const confirmResult = await signInWithPhoneNumber(auth, phoneToUse, appVerifier);
-        setConfirmationResult(confirmResult);
-        toast.success(t('verifyOtp.resent') || 'Đã gửi mã OTP qua Firebase.');
-      }
+      const appVerifier = window.recaptchaVerifier!;
+      const confirmResult = await signInWithPhoneNumber(auth, phoneToUse, appVerifier);
+      setConfirmationResult(confirmResult);
+      toast.success(t('verifyOtp.resent') || 'Đã gửi mã OTP qua Firebase.');
     } catch (error: unknown) {
       console.error('Firebase Auth Error:', error);
       const msg = error instanceof Error ? error.message : '';
       setBanner(msg || t('verifyOtp.resendFail') || '');
-      // Reset recaptcha if failed so user can try again
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
+      // Reset recaptcha so user can retry
+      resetRecaptcha();
     } finally {
       setIsSending(false);
     }
