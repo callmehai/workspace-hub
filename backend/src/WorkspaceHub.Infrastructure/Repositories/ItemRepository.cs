@@ -79,6 +79,13 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             var lbl = $"\"{gmailLabel.Trim()}\"";
             query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains(lbl));
         }
+        else
+        {
+            // Không lọc mailbox cụ thể → loại Spam/Trash khỏi các view tổng (giống Gmail: "Tất cả thư"
+            // KHÔNG gồm Spam/Trash). Item không có labels (Event/File/Note/Ticket) không bị ảnh hưởng.
+            query = query.Where(i => i.MetadataJson == null ||
+                (!i.MetadataJson.Contains("\"SPAM\"") && !i.MetadataJson.Contains("\"TRASH\"")));
+        }
 
         // Project filter (for Jira tickets)
         if (!string.IsNullOrWhiteSpace(projectKey))

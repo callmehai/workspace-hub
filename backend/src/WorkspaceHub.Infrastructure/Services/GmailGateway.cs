@@ -50,6 +50,9 @@ public class GmailGateway : IGmailGateway
         if (labelIds is { Count: > 0 })
         {
             request.LabelIds = labelIds.ToList();
+            // messages.list mặc định LOẠI Spam/Trash — phải bật cờ này khi lọc riêng 2 hộp đó.
+            if (labelIds.Any(l => l == "SPAM" || l == "TRASH"))
+                request.IncludeSpamTrash = true;
         }
 
         var response = await request.ExecuteAsync(ct);

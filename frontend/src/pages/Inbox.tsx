@@ -10,7 +10,7 @@ import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/i
 import {
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight,
-  Send, FileEdit, Megaphone, Users, Bell, Mails, LayoutGrid, Loader2,
+  Send, FileEdit, Megaphone, Users, Bell, Mails, LayoutGrid, Loader2, ShieldAlert, Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
@@ -39,10 +39,12 @@ const MAILBOXES: { value: MailboxValue; labelKey: TranslationKey; Icon: LucideIc
   { value: 'STARRED', labelKey: 'mailbox.starred', Icon: Star },
   { value: 'SENT', labelKey: 'mailbox.sent', Icon: Send },
   { value: 'DRAFT', labelKey: 'mailbox.drafts', Icon: FileEdit },
+  { value: 'ALL', labelKey: 'mailbox.allMail', Icon: Mails },
+  { value: 'SPAM', labelKey: 'mailbox.spam', Icon: ShieldAlert },
+  { value: 'TRASH', labelKey: 'mailbox.trash', Icon: Trash2 },
   { value: 'CATEGORY_PROMOTIONS', labelKey: 'mailbox.promotions', Icon: Megaphone },
   { value: 'CATEGORY_SOCIAL', labelKey: 'mailbox.social', Icon: Users },
   { value: 'CATEGORY_UPDATES', labelKey: 'mailbox.updates', Icon: Bell },
-  { value: 'ALL', labelKey: 'mailbox.allMail', Icon: Mails },
   { value: null, labelKey: 'mailbox.all', Icon: LayoutGrid },
 ];
 

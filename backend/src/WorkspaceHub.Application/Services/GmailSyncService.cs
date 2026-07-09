@@ -300,7 +300,7 @@ public class GmailSyncService : IGmailSyncService
     // sẽ không bao giờ được kéo nếu chỉ list toàn hộp thư → phải list riêng từng label.
     // (SPAM/TRASH cố tình bỏ — includeSpamTrash=false; Purchases/Bills Gmail không expose.)
     private static readonly string[] MailboxLabels =
-        { "SENT", "DRAFT", "STARRED", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES" };
+        { "SENT", "DRAFT", "STARRED", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "SPAM", "TRASH" };
     private const int PerLabelBatch = 50;
 
     private async Task<(List<string> CollectedIds, string? NewCursor)> FullSyncAsync(Connection connection, int maxMessages, CancellationToken ct)
