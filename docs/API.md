@@ -94,7 +94,11 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - `activeUsers + lockedUsers == totalUsers` (invariant).
 - Status: 200 · 401 · 403.
 
-`GET /api/admin/users/{id}`, `PATCH /users/{id}/lock`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
+`POST /api/admin/users/{id}/toggle-active` — toggle lock/unlock user, Admin only.
+- Response 200: `{ id, email, fullName, role, isActive, lastLoginAt, createdAt, connectionCount, itemCount }` (updated AdminUserDto).
+- Status: 200 · 400 (cannot lock self) · 401 · 403 · 404 (user not found).
+
+`GET /api/admin/users/{id}`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
 - `GET /api/integrations` — catalog cho user. **OData ⊕** (target — $filter isEnabled/provider, $orderby).
@@ -141,7 +145,7 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
 > Notification type cho Jira (jira_assigned…): chưa làm — optional, chờ có nguồn sync-event Jira.
 
 ## Items (thêm write-back ⭐)
-- `GET /api/items?folderId&statuses&types&isImportant&tagId&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagId` ✅ **SCRUM-71** = lọc item gắn tag đó (join `TagAssignment`). Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
+- `GET /api/items?folderId&statuses&types&isImportant&tagId&projectKey&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagId` ✅ **SCRUM-71** = lọc item gắn tag đó (join `TagAssignment`). `projectKey` = lọc theo dự án (Jira Ticket). Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
 - `POST /api/items/note` — tạo Note.
 - `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar.

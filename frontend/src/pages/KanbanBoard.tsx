@@ -58,6 +58,8 @@ export const KanbanBoard = () => {
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
+  const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -96,6 +98,15 @@ export const KanbanBoard = () => {
     }, 350);
   }, []);
 
+  const projectKeyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleProjectKeyChange = useCallback((val: string) => {
+    setProjectKeyFilter(val);
+    if (projectKeyDebounceRef.current) clearTimeout(projectKeyDebounceRef.current);
+    projectKeyDebounceRef.current = setTimeout(() => {
+      setDebouncedProjectKey(val.trim());
+    }, 350);
+  }, []);
+
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
@@ -107,7 +118,7 @@ export const KanbanBoard = () => {
    * Số trên header cột = TỔNG THẬT từ server (total của envelope), không phải số đã load.
    */
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, projectKey: debouncedProjectKey, search }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -117,6 +128,7 @@ export const KanbanBoard = () => {
       types: typeFilter.length > 0 ? typeFilter : undefined,
       isImportant: importantOnly || undefined,
       tagId: tagFilter || undefined,
+      projectKey: debouncedProjectKey || undefined,
       search: search || undefined,
       page: pageParam,
       limit: COL_PAGE_SIZE,
@@ -292,6 +304,8 @@ export const KanbanBoard = () => {
           onImportantToggle={() => setImportantOnly(v => !v)}
           tagFilter={tagFilter}
           onTagFilter={setTagFilter}
+          projectKeyFilter={projectKeyFilter}
+          onProjectKeyChange={handleProjectKeyChange}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
