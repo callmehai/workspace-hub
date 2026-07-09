@@ -145,8 +145,9 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
 > Notification type cho Jira (jira_assigned…): chưa làm — optional, chờ có nguồn sync-event Jira.
 
 ## Items (thêm write-back ⭐)
-- `GET /api/items?folderId&statuses&types&isImportant&tagId&projectKey&gmailLabel&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagId` ✅ **SCRUM-71** = lọc item gắn tag đó (join `TagAssignment`). `projectKey` = lọc theo dự án (Jira Ticket). `gmailLabel` = lọc email theo **Gmail label** (`INBOX`/`SENT`/`DRAFT`/`STARRED`/`IMPORTANT`/`CATEGORY_PROMOTIONS`/`CATEGORY_SOCIAL`/`CATEGORY_UPDATES`/...) — match token trong `metadata.labels`; chỉ Email có labels nên loại khác tự loại. **SPAM/TRASH chưa lọc được** (sync bỏ qua, `includeSpamTrash=false`); Purchases/Bills của Gmail là view ML nội bộ, **không** expose qua API. Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
+- `GET /api/items?folderId&statuses&types&isImportant&tagId&projectKey&assignee&gmailLabel&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagId` ✅ **SCRUM-71** = lọc item gắn tag đó (join `TagAssignment`). `projectKey` = lọc theo dự án (Jira Ticket). `assignee` = lọc Ticket theo **người phụ trách** (accountId; `"unassigned"` = chưa gán) — match `metadata.assigneeAccountId`. `gmailLabel` = lọc email theo **Gmail label** (`INBOX`/`SENT`/`DRAFT`/`STARRED`/`IMPORTANT`/`CATEGORY_PROMOTIONS`/`CATEGORY_SOCIAL`/`CATEGORY_UPDATES`/...) — match token trong `metadata.labels`; chỉ Email có labels nên loại khác tự loại. **SPAM/TRASH chưa lọc được** (sync bỏ qua, `includeSpamTrash=false`); Purchases/Bills của Gmail là view ML nội bộ, **không** expose qua API. Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
+- `GET /api/items/assignees` — danh sách người phụ trách (`{accountId, displayName}[]`) suy từ Ticket Jira đã sync của user (cho filter tab Jira). Gồm `{accountId:"unassigned"}` nếu có ticket chưa gán.
 - `POST /api/items/note` — tạo Note.
 - `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar.
 - `POST /api/items/ticket` ✅ **SCRUM-56** — tạo issue mới → đẩy lên Jira.
@@ -157,7 +158,7 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
   - Email: `{isUnread?, isStarred?, labels?[], isTrashed?}` (KHÔNG sửa nội dung)
   - Event: `{title?, start?, end?, location?, attendees?[]}`
   - File: `{name?, isTrashed?}`
-  - Ticket ✅ **SCRUM-57:** `{summary?, description?, assignee?(accountId), priority?, statusTransition?, labels?[], comment?}` — **nội dung sửa được** (khác Email immutable). `description` plain text → ADF (`AdfConverter.FromPlainText`). `summary/description/priority/labels` qua `PUT /issue`; `assignee` qua `PUT /issue/{key}/assignee`; `statusTransition` = id/tên transition (Jira đổi status qua transition, không set field trực tiếp — không khả dụng theo workflow → 422); `comment` = thêm comment (`POST /comment`, không sửa field). Đi qua cùng `IWriteBackGuard` của SCRUM-38; Jira không có HTTP ETag → version-token = `fields.updated` lưu trong `Items.ETag`. Reject field Google trên ticket → 422.
+  - Ticket ✅ **SCRUM-57:** `{summary?, description?, assignee?(accountId), priority?, statusTransition?, labels?[], comment?, issueType?}` — **nội dung sửa được** (khác Email immutable). `issueType` = đổi loại issue (Task/Bug/Story…) qua `PUT /issue` field `issuetype.name` (có thể 422 nếu Jira workflow/screen không cho đổi giữa 2 loại). `description` plain text → ADF (`AdfConverter.FromPlainText`). `summary/description/priority/labels` qua `PUT /issue`; `assignee` qua `PUT /issue/{key}/assignee`; `statusTransition` = id/tên transition (Jira đổi status qua transition, không set field trực tiếp — không khả dụng theo workflow → 422); `comment` = thêm comment (`POST /comment`, không sửa field). Đi qua cùng `IWriteBackGuard` của SCRUM-38; Jira không có HTTP ETag → version-token = `fields.updated` lưu trong `Items.ETag`. Reject field Google trên ticket → 422.
   - → đẩy lên provider, fetch lại + cập nhật ETag/metadata local. (400 validation, 403 thiếu scope, 409 conflict version, 422 transition/field không hợp lệ, 502 provider lỗi)
 - `PATCH /api/items/{id}/status` — Kanban (local only).
 - `PATCH /api/items/{id}/archive` — local only.
@@ -172,6 +173,18 @@ Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt 
 - `GET /api/jira/assignable-users?connectionId=&projectKey=&query=` — user gán được (`{accountId, displayName, email, active}`).
 - `GET /api/jira/priorities?connectionId=` — danh sách priority (`{id, name}`).
 - (404 connection (cả của user khác), 422 connection không phải Jira / không active / projectKey thiếu, 502 provider lỗi)
+
+### Jira ticket — comment + attachment (2 chiều) ✅
+Chỉ áp cho Item `Type=Ticket`. Resolve item → (Connection Jira Active, issueKey) + kiểm ownership (`IJiraTicketService`). Gọi Jira REST v3 trực tiếp (không đi qua write-back-guard vì comment/attachment độc lập field, không đụng version-token). FE render **inline** trong drawer chi tiết ticket (`JiraTicketPanel`) — không còn form "Sửa ticket".
+- `GET /api/items/{id}/comments` — list comment (`{id, body, authorName, authorAccountId, created, updated}[]`, `orderBy=created`). `body` = **markdown subset** (ADF→markdown qua `AdfConverter.ToMarkdown`): `**đậm**`, `*nghiêng*`, `~~gạch~~`, `[text](url)`, bullet `- `, ordered `1. `, và media (file nhúng) → marker `[[attach:{attachmentId}]]` (FE resolve tên file + tải).
+- `POST /api/items/{id}/comments` — thêm comment. Body `{ body, mediaIds?[] }`. `body` = markdown subset → ADF (`FromMarkdown`); `mediaIds` = id các attachment (đã upload lên issue) để **nhúng vào comment** dạng ADF media node. Cho phép `body` rỗng nếu có `mediaIds`. → comment vừa tạo.
+- `PUT /api/items/{id}/comments/{commentId}` — sửa comment. Body `{ body }` (markdown). Marker `[[attach:id]]` trong body được giữ (round-trip → media node), nên sửa text không mất file đã nhúng.
+- `DELETE /api/items/{id}/comments/{commentId}` — xoá comment (204).
+- `GET /api/items/{id}/attachments` — list metadata (`{id, filename, mimeType, size, authorName, created}[]`).
+- `GET /api/items/{id}/attachments/{attId}/download` — tải nội dung file (stream, `File(data, mime, filename)`; FE tải blob rồi save-as đúng tên).
+- `POST /api/items/{id}/attachments` — upload (`multipart/form-data`, field `file`; `X-Atlassian-Token: no-check` server-side; `[RequestSizeLimit]` ~30MB, FE chặn >25MB). → list attachment mới.
+- `DELETE /api/items/{id}/attachments/{attId}` — xoá attachment trên Jira (204).
+- (400 body/file rỗng, 404 item không phải owner / không tồn tại, 422 item không phải Ticket / connection không Jira-Active, 502 provider lỗi)
 
 ## Item-Folder — không đổi
 `POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.

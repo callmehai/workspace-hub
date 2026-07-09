@@ -123,7 +123,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 
 **MetadataJson shape:**
 - Email: `{from, to[], threadId, labels[], hasAttachment, isUnread, isStarred, webUrl}`  ← thêm isUnread/isStarred cho 2 chiều
-- Event: `{start, end, location, attendees[], meetUrl}`
+- Event: `{start, end, location, attendees[], meetUrl, htmlLink}` (`htmlLink` = link mở event trong Google Calendar — nút "Mở trong Calendar")
 - File: `{mimeType, size, webViewLink, iconLink}`
 - Note: `{contentMarkdown}`
 - Ticket (Jira, ✅ SCRUM-55): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`. `ETag` = `fields.updated` (ISO-8601 UTC) làm version-token cho conflict (SCRUM-57). Description gốc là ADF → `AdfConverter.ToPlainText` lấy Snippet (đọc); ghi ngược (text→ADF) ở SCRUM-57. Xem CHANGELOG.
