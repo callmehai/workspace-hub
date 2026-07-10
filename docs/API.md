@@ -221,7 +221,7 @@ Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `I
 - `DELETE /api/emails/drafts/{itemId}` — [Authorize]. Xoá nháp (chuyển message nháp vào thùng rác trên Gmail và xoá item local). Trả `204 NoContent`. (404 item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
 
 ## Scheduled Emails (đổi ConnectionId ⭐)
-- `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (404 connection, 422 connection không phải Gmail)
+- `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, attachments[]?, sendAt} → 201. `attachments[]` = `{ filename, mimeType, contentBase64 }` (file user tự đính kèm, base64; lưu `AttachmentsJson` → cron gửi kèm khi tới hạn; tổng ≤ 25MB). (404 connection, 422 connection không phải Gmail)
 - `GET /api/scheduled-emails/{id}` — chi tiết một email hẹn giờ.
 - `GET /api/ScheduledEmails` — **OData ⊕** convention route (`ScheduledEmailsController`): `$filter` (vd `Status eq 'Pending'`), `$orderby` (vd `SendAt`, `CreatedAt`), `$top/$skip/$count`. Query OData **PascalCase** tên property CLR; JSON response camelCase. Response `{ value, @odata.count? }`. **Lưu ý:** `$filter/$orderby` chạy **in-memory** sau khi load rows theo `CurrentUserId` (map DTO có parse JSON) — không SQL push-down như `GET /api/Notifications`.
 - `PATCH /api/scheduled-emails/{id}/cancel` — (422 đã gửi).

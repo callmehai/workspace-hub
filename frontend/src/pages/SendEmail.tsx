@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Send, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Send, Eye, Pencil, Trash2, Paperclip, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -10,10 +10,15 @@ import { EMAIL_TEMPLATES } from '../lib/emailTemplates';
 import { handleApiError } from '../lib/errorUtils';
 import { EmailChipsInput } from '../components/EmailChipsInput';
 import { RichTextEditor } from '../components/RichTextEditor';
-import { AttachmentPicker } from '../components/AttachmentPicker';
 import { Select } from '../components/Select';
 import { useI18n } from '../hooks/useI18n';
 import { itemsApi } from '../lib/itemsApi';
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export const SendEmail = () => {
   const { t } = useI18n();
@@ -349,9 +354,14 @@ export const SendEmail = () => {
           </div>
 
           <label className={`${labelClass} shrink-0`}>{t('sendEmail.content')}</label>
-          <RichTextEditor value={body} onChange={setBody} placeholder={t('sendEmail.contentPlaceholder')} className="mb-3 shrink-0" />
-
-          <AttachmentPicker files={files} onChange={setFiles} className="shrink-0 mb-4" />
+          <RichTextEditor
+            value={body}
+            onChange={setBody}
+            placeholder={t('sendEmail.contentPlaceholder')}
+            className="mb-4 shrink-0"
+            attachFiles={files}
+            onAttachFilesChange={setFiles}
+          />
 
           <div className="shrink-0 mb-4">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -438,6 +448,25 @@ export const SendEmail = () => {
                 </div>
               )}
             </div>
+
+            {/* Đính kèm — hiện đúng như thư sẽ gửi */}
+            {files.length > 0 && (
+              <div className="shrink-0 border-t border-gray-100 dark:border-slate-800 px-5 py-3">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-slate-400 mb-2">
+                  <Paperclip className="w-3.5 h-3.5" />
+                  {t('sendEmail.previewAttachments', { n: files.length })}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {files.map((f, i) => (
+                    <span key={`${f.name}::${f.size}::${i}`} className="inline-flex items-center gap-1.5 max-w-[220px] px-2 py-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-[12px]">
+                      <FileText className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+                      <span className="truncate text-gray-700 dark:text-slate-200">{f.name}</span>
+                      <span className="shrink-0 text-gray-400 dark:text-slate-500">{formatFileSize(f.size)}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
