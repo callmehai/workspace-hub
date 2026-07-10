@@ -427,13 +427,14 @@ public class JiraGateway : IJiraGateway
                 var displayName = GetString(u, "displayName") ?? accountId;
                 var email = GetString(u, "emailAddress");
                 bool active = u.TryGetProperty("active", out var a) && a.ValueKind == JsonValueKind.True;
-                list.Add(new JiraUser(accountId, displayName, email, active));
+                var avatarUrl = ExtractAvatarUrl(u);
+                list.Add(new JiraUser(accountId, displayName, email, active, avatarUrl));
             }
         }
         return list;
     }
 
-    public async Task<string?> GetSiteUrlAsync(Connection connection, CancellationToken ct = default)
+    public async Task<JiraSite?> GetSiteAsync(Connection connection, CancellationToken ct = default)
     {
         // GET accessible-resources (URL tuyệt đối, KHÔNG qua cloudId) → tìm site khớp cloudId (ProviderAccountId).
         try
@@ -441,22 +442,45 @@ public class JiraGateway : IJiraGateway
             var doc = await GetJsonAsync(connection, "https://api.atlassian.com/oauth/token/accessible-resources", ct);
             if (doc.ValueKind != JsonValueKind.Array) return null;
 
-            string? firstUrl = null;
+            JiraSite? first = null;
             foreach (var site in doc.EnumerateArray())
             {
                 var url = GetString(site, "url");
                 if (url is null) continue;
-                firstUrl ??= url;
+                var parsed = new JiraSite(GetString(site, "name") ?? UrlHost(url), url.TrimEnd('/'));
+                first ??= parsed;
                 if (GetString(site, "id") == connection.ProviderAccountId)
-                    return url.TrimEnd('/');
+                    return parsed;
             }
-            return firstUrl?.TrimEnd('/'); // fallback: site đầu tiên nếu không khớp cloudId
+            return first; // fallback: site đầu tiên nếu không khớp cloudId
         }
         catch
         {
-            return null; // best-effort — thiếu site URL chỉ làm mất nút "Mở trong Jira", không hỏng sync
+            return null; // best-effort — thiếu site chỉ làm mất tên account / nút "Mở trong Jira", không hỏng sync
         }
     }
+
+    public async Task<string?> GetSiteUrlAsync(Connection connection, CancellationToken ct = default)
+        => (await GetSiteAsync(connection, ct))?.Url;
+
+    /// <summary>Avatar 48x48 (hoặc size lớn nhất có) từ object user Jira; null nếu không có.</summary>
+    private static string? ExtractAvatarUrl(JsonElement user)
+    {
+        if (!user.TryGetProperty("avatarUrls", out var avatars) || avatars.ValueKind != JsonValueKind.Object)
+            return null;
+        foreach (var size in new[] { "48x48", "32x32", "24x24", "16x16" })
+        {
+            if (avatars.TryGetProperty(size, out var el) && el.ValueKind == JsonValueKind.String)
+            {
+                var v = el.GetString();
+                if (!string.IsNullOrWhiteSpace(v)) return v;
+            }
+        }
+        return null;
+    }
+
+    private static string UrlHost(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : url;
 
     /// <summary>GET JSON từ Jira + map status code chuẩn (403/404/502).</summary>
     private async Task<JsonElement> GetJsonAsync(Connection connection, string url, CancellationToken ct)

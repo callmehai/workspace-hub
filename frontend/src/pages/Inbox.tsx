@@ -151,7 +151,7 @@ export const Inbox = () => {
   const [typeFilter, setTypeFilter] = useState<ItemType[]>([]);
   const [mailbox, setMailbox] = useState<MailboxValue>('INBOX'); // default = Hộp thư đến (như Gmail)
   const [importantOnly, setImportantOnly] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
@@ -244,7 +244,7 @@ export const Inbox = () => {
     isImportant: importantOnly || undefined,
     search: search || undefined,
     folderId: selectedFolderId || undefined,
-    tagId: tagFilter ?? undefined,
+    tagIds: tagFilters.length > 0 ? tagFilters : undefined,
     projectKey: effectiveProjectKey,
     assignee: effectiveAssignee,
     gmailLabel,
@@ -252,7 +252,7 @@ export const Inbox = () => {
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagId: params.tagId, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -262,7 +262,7 @@ export const Inbox = () => {
     isImportant: params.isImportant,
     search: params.search,
     folderId: params.folderId,
-    tagId: params.tagId,
+    tagIds: params.tagIds,
     projectKey: params.projectKey,
     assignee: params.assignee,
     gmailLabel: params.gmailLabel,
@@ -320,7 +320,7 @@ export const Inbox = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
-  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilter, search, selectedFolderId, mailbox]);
+  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilters, search, selectedFolderId, mailbox]);
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -356,7 +356,7 @@ export const Inbox = () => {
   const currentFolder = selectedFolderId
     ? folders.find(f => f.id === selectedFolderId) ?? null
     : null;
-  const hasActiveFilters = Boolean(statusFilter.length > 0 || (!sourceType && typeFilter.length > 0) || importantOnly || tagFilter || search || effectiveProjectKey);
+  const hasActiveFilters = Boolean(statusFilter.length > 0 || (!sourceType && typeFilter.length > 0) || importantOnly || tagFilters.length > 0 || search || effectiveProjectKey);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
@@ -381,8 +381,12 @@ export const Inbox = () => {
           sourceType={sourceType}
           importantOnly={importantOnly}
           onImportantToggle={() => { setImportantOnly(v => !v); setPage(1); }}
-          tagFilter={tagFilter}
-          onTagFilter={(id) => { setTagFilter(id); setPage(1); }}
+          tagFilters={tagFilters}
+          onToggleTagFilter={(id) => {
+            setTagFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+            setPage(1);
+          }}
+          onClearTagFilters={() => { setTagFilters([]); setPage(1); }}
           projectKeyFilter={projectKeyFilter}
           onProjectKeyChange={handleProjectKeyChange}
           assigneeFilter={assigneeFilter}

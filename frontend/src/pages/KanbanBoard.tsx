@@ -59,7 +59,7 @@ export const KanbanBoard = () => {
   // Ở Bảng, statusFilter = lọc CỘT hiển thị (đa chọn — không chọn gì = hiện đủ 3 cột)
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
@@ -126,7 +126,7 @@ export const KanbanBoard = () => {
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
 
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -135,7 +135,7 @@ export const KanbanBoard = () => {
       folderId: selectedFolderId || undefined,
       types: effectiveTypes,
       isImportant: importantOnly || undefined,
-      tagId: tagFilter || undefined,
+      tagIds: tagFilters.length > 0 ? tagFilters : undefined,
       projectKey: effectiveProjectKey,
       assignee: effectiveAssignee,
       search: search || undefined,
@@ -312,8 +312,10 @@ export const KanbanBoard = () => {
           sourceType={sourceType}
           importantOnly={importantOnly}
           onImportantToggle={() => setImportantOnly(v => !v)}
-          tagFilter={tagFilter}
-          onTagFilter={setTagFilter}
+          tagFilters={tagFilters}
+          onToggleTagFilter={(id) =>
+            setTagFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+          onClearTagFilters={() => setTagFilters([])}
           projectKeyFilter={projectKeyFilter}
           onProjectKeyChange={handleProjectKeyChange}
           assigneeFilter={assigneeFilter}

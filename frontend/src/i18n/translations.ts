@@ -568,7 +568,7 @@ export const vi = {
   'toolbar.groupType': 'Loại',
   'toolbar.groupRefine': 'Lọc thêm',
   'toolbar.allProjects': 'Tất cả dự án',
-  'toolbar.allAssignees': 'Tất cả người phụ trách',
+  'toolbar.allAssignees': 'Tất cả mọi người',
   'toolbar.search': 'Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)',
 
   // ── kanban ──
@@ -596,8 +596,8 @@ export const vi = {
 
   // ── create ticket modal (SCRUM-56) ──
   'createTicket.title': 'Tạo ticket Jira mới',
-  'createTicket.account': 'Tài khoản Jira',
-  'createTicket.selectAccount': '-- Chọn tài khoản --',
+  'createTicket.account': 'Site Jira',
+  'createTicket.selectAccount': '-- Chọn site --',
   'createTicket.noConn': 'Chưa có kết nối Jira nào đang hoạt động.',
   'createTicket.project': 'Dự án (Project)',
   'createTicket.selectProject': '-- Chọn dự án --',
@@ -1287,8 +1287,8 @@ export const en: Record<TranslationKey, string> = {
 
   // ── create ticket modal (SCRUM-56) ──
   'createTicket.title': 'New Jira ticket',
-  'createTicket.account': 'Jira account',
-  'createTicket.selectAccount': '-- Choose account --',
+  'createTicket.account': 'Jira site',
+  'createTicket.selectAccount': '-- Choose site --',
   'createTicket.noConn': 'No active Jira connection found.',
   'createTicket.project': 'Project',
   'createTicket.selectProject': '-- Choose project --',
