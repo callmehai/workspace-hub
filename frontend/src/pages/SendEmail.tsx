@@ -59,12 +59,20 @@ export const SendEmail = () => {
   });
 
   const isDraftLoadedRef = React.useRef(false);
+  // Giữ liên kết thread của draft reply/forward (threadId + message-id gốc) để MỌI lần auto-save
+  // gửi kèm — nếu thiếu, Gmail rebuild MIME sẽ tách draft khỏi thread hội thoại gốc.
+  const threadLinkRef = React.useRef<{ threadId?: string | null; inReplyToMessageId?: string | null }>({});
 
-  // Populate state from the loaded draft
+  // Populate state from the loaded draft (hydrate 1 lần lúc mount — chủ đích, guard bằng isDraftLoadedRef).
   React.useEffect(() => {
     if (draftItem && !isDraftLoadedRef.current) {
       try {
         const meta = JSON.parse(draftItem.metadataJson || '{}');
+        threadLinkRef.current = {
+          threadId: meta.threadId ?? draftItem.threadId ?? null,
+          inReplyToMessageId: meta.rfc822MessageId ?? null,
+        };
+        /* eslint-disable react-hooks/set-state-in-effect -- hydrate form state 1 lần từ draft đã fetch */
         setTo(meta.to || []);
         setCc(meta.cc || []);
         setBcc(meta.bcc || []);
@@ -83,6 +91,7 @@ export const SendEmail = () => {
           resolvedConn: draftItem.connectionId || resolvedConn,
         });
         setLastSavedState(initialStateStr);
+        /* eslint-enable react-hooks/set-state-in-effect */
         isDraftLoadedRef.current = true;
       } catch (e) {
         console.error('Error parsing draft metadataJson', e);
@@ -167,6 +176,8 @@ export const SendEmail = () => {
       bcc,
       subject,
       bodyHtml: body,
+      threadId: threadLinkRef.current.threadId,
+      inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
     };
 
     saveDraftMutation.mutate({ id: draftItemId, data: payload });
@@ -189,6 +200,8 @@ export const SendEmail = () => {
       bcc,
       subject,
       bodyHtml: body,
+      threadId: threadLinkRef.current.threadId,
+      inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
     };
 
     if (draftItemId) {
@@ -228,6 +241,8 @@ export const SendEmail = () => {
           bcc: payload.bcc,
           subject: payload.subject,
           bodyHtml: composedHtml,
+          threadId: threadLinkRef.current.threadId,
+          inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
         };
         await sendEmailApi.updateDraft(draftItemId, draftPayload);
         return sendEmailApi.sendDraft(draftItemId);

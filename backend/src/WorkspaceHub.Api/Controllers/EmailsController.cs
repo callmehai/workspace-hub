@@ -147,7 +147,7 @@ public class EmailsController : ApiControllerBase
         return Ok(result);
     }
 
-    /// <summary>Xoá nháp (chuyển message nháp vào thùng rác trên Gmail và xoá item local). 200 OK.</summary>
+    /// <summary>Xoá nháp VĨNH VIỄN trên Gmail (drafts.delete, KHÔNG đẩy vào thùng rác) và xoá item local. 204 No Content.</summary>
     [HttpDelete("drafts/{itemId:guid}")]
     public async Task<IActionResult> DiscardDraft([FromRoute] Guid itemId, CancellationToken ct)
     {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Download, ChevronDown, ChevronRight, Reply, ReplyAll, Forward, Loader2, Send, X } from 'lucide-react';
-import { sendEmailApi, fileToAttachmentUpload, MAX_ATTACHMENT_TOTAL_BYTES, type EmailAttachmentDto } from '../../lib/sendEmailApi';
+import { sendEmailApi, fileToAttachmentUpload, MAX_ATTACHMENT_TOTAL_BYTES, type EmailAttachmentDto, type EmailThreadMessageDto } from '../../lib/sendEmailApi';
 import { connectionsApi } from '../../lib/connectionsApi';
 import { EmailChipsInput } from '../EmailChipsInput';
 import { RichTextEditor } from '../RichTextEditor';
@@ -78,7 +78,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   const currentConnection = connections.find(c => c.id === connectionId);
   const me = currentConnection?.providerAccountId || '';
 
-  const getReplyRecipients = (mode: 'reply' | 'replyAll' | 'forward', msg: any, myEmailAddr: string) => {
+  const getReplyRecipients = (mode: 'reply' | 'replyAll' | 'forward', msg: EmailThreadMessageDto, myEmailAddr: string) => {
     const toSet = new Set<string>();
     const ccSet = new Set<string>();
     
@@ -120,7 +120,9 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     };
   };
 
-  // Load existing draft if present in the thread on initial load
+  // Load existing draft if present in the thread on initial load.
+  // Hydrate form state 1 lần từ draft đã fetch (guard isDraftLoadedRef) — chủ đích, nên tắt set-state-in-effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (replyMode === null && !isDraftClosed && thread && thread.messages && !isDraftLoadedRef.current) {
       const draft = thread.messages.find(m => m.labels?.includes('DRAFT'));
@@ -148,6 +150,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       }
     }
   }, [thread, replyMode, isDraftClosed]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isDiscardedRef = useRef(false);
 
@@ -157,18 +160,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     latestDataRef.current = { to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState };
   }, [to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState]);
 
-  // Debounced auto-save effect
-  useEffect(() => {
-    if (!replyMode) return;
-
-    const timer = setTimeout(() => {
-      triggerAutoSave();
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [to, cc, bcc, bodyHtml, replyMode]);
-
-  const triggerAutoSave = async () => {
+  const triggerAutoSave = React.useCallback(async () => {
     if (isDiscardedRef.current) return;
     const { to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState } = latestDataRef.current;
     if (!replyMode || !thread) return;
@@ -218,7 +210,18 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [thread, connectionId]);
+
+  // Debounced auto-save effect (2s) — reset timer khi nội dung/replyMode/triggerAutoSave đổi.
+  useEffect(() => {
+    if (!replyMode) return;
+
+    const timer = setTimeout(() => {
+      triggerAutoSave();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [to, cc, bcc, bodyHtml, replyMode, triggerAutoSave]);
 
   const triggerAutoSaveImmediate = React.useCallback(() => {
     if (isDiscardedRef.current) return;
@@ -269,11 +272,22 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   const handleAction = (mode: 'reply' | 'replyAll' | 'forward') => {
     isDiscardedRef.current = false;
     setIsDraftClosed(false);
+    setIncludeAttachments(true);
+
+    // Đang có draft dở của thread này (vừa đóng bằng nút X, chưa gửi/huỷ) → RESUME đúng draft đó:
+    // giữ nguyên nội dung + draftItemId, KHÔNG tạo draft mới → tránh bỏ rơi draft cũ trên Gmail.
+    if (draftItemId) {
+      setReplyMode(mode);
+      setTimeout(() => {
+        document.getElementById('reply-box')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      return;
+    }
+
     setReplyMode(mode);
     setBodyHtml('');
     setDraftItemId(null);
     setLastSavedState('');
-    setIncludeAttachments(true);
     setAttachFiles([]);
 
     const latestMsg = thread?.messages?.[thread.messages.length - 1];

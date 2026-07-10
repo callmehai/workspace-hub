@@ -356,6 +356,7 @@ export const vi = {
   'sendEmail.discardDraft': 'Hủy nháp',
   'sendEmail.draftDiscarded': 'Đã hủy nháp',
   'sendEmail.discardConfirm': 'Bạn có chắc chắn muốn hủy thư nháp này không?',
+  'sendEmail.discardFail': 'Hủy nháp thất bại',
 
   // ── scheduled emails ──
   'schedEmail.title': 'Email hẹn giờ',
@@ -569,6 +570,7 @@ export const vi = {
   'bulk.emptySpamBtn': 'Dọn sạch Thư rác ngay',
   'bulk.emptiedTrash': 'Đã dọn sạch Thùng rác',
   'bulk.emptiedSpam': 'Đã dọn sạch Thư rác',
+  'bulk.partialDelete': 'Đã xoá một phần — một số mục bị lỗi.',
 
   // ── workspace toolbar ──
   'toolbar.folder': 'Thư mục',
@@ -1067,6 +1069,7 @@ export const en: Record<TranslationKey, string> = {
   'sendEmail.discardDraft': 'Discard draft',
   'sendEmail.draftDiscarded': 'Draft discarded',
   'sendEmail.discardConfirm': 'Are you sure you want to discard this draft?',
+  'sendEmail.discardFail': 'Failed to discard draft',
 
   // ── scheduled emails ──
   'schedEmail.title': 'Scheduled emails',
@@ -1278,8 +1281,9 @@ export const en: Record<TranslationKey, string> = {
   'bulk.spamWarning': 'Messages in Spam will be permanently deleted after 30 days.',
   'bulk.emptyTrashBtn': 'Empty Trash now',
   'bulk.emptySpamBtn': 'Empty Spam now',
-  'bulk.emptiedTrash': 'Emptyed Trash successfully',
-  'bulk.emptiedSpam': 'Emptyed Spam successfully',
+  'bulk.emptiedTrash': 'Emptied Trash successfully',
+  'bulk.emptiedSpam': 'Emptied Spam successfully',
+  'bulk.partialDelete': 'Partially deleted — some items failed.',
 
   // ── workspace toolbar ──
   'toolbar.folder': 'Folder',

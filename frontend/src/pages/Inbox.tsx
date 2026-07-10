@@ -185,10 +185,10 @@ export const Inbox = () => {
   const discardDraftMutation = useMutation({
     mutationFn: (itemId: string) => sendEmailApi.discardDraft(itemId),
     onSuccess: () => {
-      toast.success('Draft discarded');
+      toast.success(t('sendEmail.draftDiscarded'));
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => handleApiError(err, 'Failed to discard draft'),
+    onError: (err) => handleApiError(err, t('sendEmail.discardFail')),
   });
 
   const [isEmptyMailboxPending, setIsEmptyMailboxPending] = useState(false);
@@ -200,18 +200,29 @@ export const Inbox = () => {
 
     setIsEmptyMailboxPending(true);
     try {
-      const itemIds = items.map((i: ItemResponse) => i.id);
-      const results = await Promise.allSettled(itemIds.map((id: string) => itemsApi.deleteItem(id)));
-      
-      const failed = results.filter(r => r.status === 'rejected');
-      if (failed.length === results.length && results.length > 0) {
+      // Dọn TOÀN BỘ mailbox (không chỉ trang hiện tại): xoá theo lô 100 (giới hạn limit BE)
+      // cho tới khi hết. Guard: 1 lô không xoá được mục nào (toàn lỗi) → dừng, tránh lặp vô hạn.
+      let deleted = 0;
+      let failedTotal = 0;
+      for (let guard = 0; guard < 200; guard++) {
+        const batch = await itemsApi.getItems({ ...params, page: 1, limit: 100 });
+        if (batch.items.length === 0) break;
+        const results = await Promise.allSettled(batch.items.map((i) => itemsApi.deleteItem(i.id)));
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        const ok = results.length - failed;
+        deleted += ok;
+        failedTotal += failed;
+        if (ok === 0) break; // không tiến triển → dừng
+      }
+
+      if (deleted === 0 && failedTotal > 0) {
         toast.error(t('bulk.deleteFail'));
-      } else if (failed.length > 0) {
-        toast.success(t('bulk.partialDelete') || 'Đã xoá một phần, một số mục bị lỗi.');
+      } else if (failedTotal > 0) {
+        toast.success(t('bulk.partialDelete'));
       } else {
         toast.success(isTrash ? t('bulk.emptiedTrash') : t('bulk.emptiedSpam'));
       }
-      
+
       setSelectedItemIds(new Set());
       refetch();
     } catch (err) {
@@ -639,13 +650,13 @@ export const Inbox = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (window.confirm('Are you sure you want to discard this draft?')) {
+                        if (window.confirm(t('sendEmail.discardConfirm'))) {
                           discardDraftMutation.mutate(item.id);
                         }
                       }}
                       disabled={discardDraftMutation.isPending}
                       className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
-                      title="Discard draft"
+                      title={t('sendEmail.discardDraft')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

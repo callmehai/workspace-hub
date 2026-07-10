@@ -402,17 +402,38 @@ public class GmailSyncService : IGmailSyncService
                 mergedDict[kv.Key] = kv.Value;
             }
 
-            // Preserve draft-specific keys from existing metadata
-            var draftKeys = new[] { "draftId", "subject", "bodyHtml", "rfc822MessageId" };
-            foreach (var key in draftKeys)
+            // draftId + rfc822MessageId là ĐỊNH DANH ổn định — bản sync theo message-list thường không kèm.
+            // Giữ lại từ metadata cũ CHỈ KHI bản mới thiếu, và không bao giờ ghi đè giá trị mới nếu Gmail có trả về.
+            var identityKeys = new[] { "draftId", "rfc822MessageId" };
+            foreach (var key in identityKeys)
             {
-                if (existingDict.TryGetValue(key, out var val) && val.ValueKind != JsonValueKind.Null && val.ValueKind != JsonValueKind.Undefined)
+                bool newHasValue = newDict.TryGetValue(key, out var nv)
+                    && nv.ValueKind != JsonValueKind.Null && nv.ValueKind != JsonValueKind.Undefined
+                    && !(nv.ValueKind == JsonValueKind.String && string.IsNullOrEmpty(nv.GetString()));
+                if (!newHasValue
+                    && existingDict.TryGetValue(key, out var val)
+                    && val.ValueKind != JsonValueKind.Null && val.ValueKind != JsonValueKind.Undefined)
                 {
                     mergedDict[key] = val;
                 }
             }
 
-            // Also preserve to, cc, bcc if they are missing or empty in the new metadata but present in the old one
+            // subject + bodyHtml là NỘI DUNG có thể user sửa trực tiếp trên Gmail (không qua app).
+            // Chỉ preserve giá trị cũ khi bản sync mới THIẾU/RỖNG — nếu không sẽ "đóng băng" nội dung cũ vĩnh viễn.
+            var contentStringKeys = new[] { "subject", "bodyHtml" };
+            foreach (var key in contentStringKeys)
+            {
+                bool newHasValue = newDict.TryGetValue(key, out var nv)
+                    && nv.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(nv.GetString());
+                if (!newHasValue
+                    && existingDict.TryGetValue(key, out var val)
+                    && val.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(val.GetString()))
+                {
+                    mergedDict[key] = val;
+                }
+            }
+
+            // to, cc, bcc: chỉ preserve khi bản mới thiếu/rỗng (giữ nguyên hành vi cũ).
             var recipientKeys = new[] { "to", "cc", "bcc" };
             foreach (var key in recipientKeys)
             {

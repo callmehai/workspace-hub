@@ -219,7 +219,7 @@ Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `I
 - `POST /api/emails/drafts` — [Authorize]. Tạo nháp mới. Body `{ connectionId, to[], cc[], bcc[], subject?, bodyHtml?, threadId?, inReplyToMessageId?, attachments[]? }`. Trả `200` + `ItemResponse`. (400 validation, 404 connection, 422 connection không phải Gmail/không Active, 502 provider lỗi)
 - `PUT /api/emails/drafts/{itemId}` — [Authorize]. Cập nhật nháp đã có. Body `{ connectionId, to[], cc[], bcc[], subject?, bodyHtml?, threadId?, inReplyToMessageId?, attachments[]? }`. Trả `200` + `ItemResponse`. (400 validation, 404 connection/item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
 - `POST /api/emails/drafts/{itemId}/send` — [Authorize]. Gửi nháp đã có. Trả `200` + `SendEmailResult`. (404 item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
-- `DELETE /api/emails/drafts/{itemId}` — [Authorize]. Xoá nháp (chuyển message nháp vào thùng rác trên Gmail và xoá item local). Trả `204 NoContent`. (404 item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
+- `DELETE /api/emails/drafts/{itemId}` — [Authorize]. Xoá nháp **VĨNH VIỄN** trên Gmail (`drafts.delete`, KHÔNG đẩy vào thùng rác → tránh background-sync kéo về lại) + xoá item local. Trả `204 NoContent`. (404 item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
 
 ## Scheduled Emails (đổi ConnectionId ⭐)
 - `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, attachments[]?, sendAt} → 201. `attachments[]` = `{ filename, mimeType, contentBase64 }` (file user tự đính kèm, base64; lưu `AttachmentsJson` → cron gửi kèm khi tới hạn; tổng ≤ 25MB). (404 connection, 422 connection không phải Gmail)

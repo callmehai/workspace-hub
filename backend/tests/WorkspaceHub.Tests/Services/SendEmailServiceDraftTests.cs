@@ -206,7 +206,9 @@ public class SendEmailServiceDraftTests
 
         await _service.DiscardDraftAsync(userId, itemId);
 
-        _gmail.Verify(g => g.TrashMessageAsync(It.IsAny<Connection>(), "msg-123", It.IsAny<CancellationToken>()), Times.Once);
+        // DiscardDraftAsync xoá VĨNH VIỄN qua drafts.delete (draftId lấy từ metadata), KHÔNG đẩy vào thùng rác.
+        _gmail.Verify(g => g.DeleteDraftAsync(It.IsAny<Connection>(), "draft-123", It.IsAny<CancellationToken>()), Times.Once);
+        _gmail.Verify(g => g.TrashMessageAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         deleteCalled.Should().BeTrue();
     }
 }
