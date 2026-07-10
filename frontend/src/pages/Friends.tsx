@@ -203,7 +203,7 @@ export const Friends = () => {
           />
           {showSuggest && (
             <ul
-              className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+              className="absolute z-50 left-0 right-0 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800 dark:shadow-black/30"
               role="listbox"
             >
               {filteredSuggestions.map((s, i) => (
@@ -212,16 +212,23 @@ export const Friends = () => {
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pickSuggestion(s.email)}
-                    className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm ${
-                      i === selectedIdx
-                        ? 'bg-brand-50 text-brand-800 dark:bg-brand-500/10 dark:text-brand-300'
-                        : 'text-slate-800 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/60'
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+                      i === selectedIdx ? 'bg-brand-50 dark:bg-brand-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-700/60'
                     }`}
                   >
-                    <span className="truncate font-medium">{s.displayName ?? s.email}</span>
-                    {s.displayName && (
-                      <span className="truncate text-xs text-slate-500 dark:text-slate-400">{s.email}</span>
-                    )}
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                      {(s.displayName ?? s.email).charAt(0).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-[13.5px] font-medium ${
+                        i === selectedIdx ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'
+                      }`}>
+                        {s.displayName ?? s.email}
+                      </span>
+                      {s.displayName && (
+                        <span className="block truncate text-xs text-slate-400 dark:text-slate-500">{s.email}</span>
+                      )}
+                    </span>
                   </button>
                 </li>
               ))}

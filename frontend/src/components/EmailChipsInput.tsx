@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../hooks/useI18n';
 import { sendEmailApi, type ContactSuggestion } from '../lib/sendEmailApi';
@@ -216,40 +216,65 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
 
       {showDropdown && (
         <ul
-          className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg py-1"
+          className="absolute z-50 left-0 right-0 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-900/5 dark:shadow-black/30 py-1.5"
           role="listbox"
         >
-          {filtered.map((s, i) => (
-            <li key={s.email} role="option" aria-selected={i === selectedIndex}>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pickSuggestion(s)}
-                className={`w-full text-left px-3 py-2 text-sm flex flex-col gap-0.5 ${
-                  i === selectedIndex
-                    ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-800 dark:text-brand-300'
-                    : 'text-slate-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/60'
-                }`}
-              >
-                <span className="flex items-center gap-1.5 min-w-0">
-                  <span className="font-medium truncate">{s.displayName ?? s.email}</span>
-                  {s.tier === 'CloseFriend' && (
-                    <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-px text-[11px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-                      ⭐ {t('friends.closeFriend')}
+          {filtered.map((s, i) => {
+            const isFriend = !!s.tier;
+            const isClose = s.tier === 'CloseFriend';
+            const initial = (s.displayName ?? s.email).charAt(0).toUpperCase();
+            return (
+              <li key={s.email} role="option" aria-selected={i === selectedIndex}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickSuggestion(s)}
+                  className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${
+                    i === selectedIndex
+                      ? 'bg-brand-50 dark:bg-brand-500/10'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-700/60'
+                  }`}
+                >
+                  {/* Avatar chữ cái đầu — vàng = Bạn thân, brand = Bạn bè, xám = danh bạ Google */}
+                  <span
+                    className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-[13px] font-semibold ${
+                      isClose
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                        : isFriend
+                          ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300'
+                          : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {initial}
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className={`truncate text-[13.5px] font-medium ${
+                        i === selectedIndex ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'
+                      }`}>
+                        {s.displayName ?? s.email}
+                      </span>
+                      {isClose && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
+                    </span>
+                    {s.displayName && (
+                      <span className="block truncate text-xs text-slate-400 dark:text-slate-500">{s.email}</span>
+                    )}
+                  </span>
+
+                  {isFriend && (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      isClose
+                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                        : 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+                    }`}>
+                      {isClose ? t('friends.closeFriend') : t('friends.list')}
                     </span>
                   )}
-                  {s.tier === 'Friend' && (
-                    <span className="shrink-0 rounded-full bg-brand-50 px-1.5 py-px text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-                      {t('friends.list')}
-                    </span>
-                  )}
-                </span>
-                {s.displayName && (
-                  <span className="text-xs text-gray-500 dark:text-slate-400 truncate">{s.email}</span>
-                )}
-              </button>
-            </li>
-          ))}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
