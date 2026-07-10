@@ -190,7 +190,7 @@ export const Inbox = () => {
     if (item.type === 'File' && item.metadataJson) {
       try {
         isFolder = JSON.parse(item.metadataJson).isFolder === true;
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
 
     if (isFolder) {
@@ -222,7 +222,7 @@ export const Inbox = () => {
           setSelectedId(null);
           return;
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
   };
 
@@ -651,7 +651,7 @@ export const Inbox = () => {
             if (item.type === 'File' && item.metadataJson) {
               try {
                 isDriveFolder = JSON.parse(item.metadataJson).isFolder === true;
-              } catch (e) { /* ignore */ }
+              } catch { /* ignore */ }
             }
             return (
             <div
