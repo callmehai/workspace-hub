@@ -19,6 +19,8 @@ import { useI18n } from '../../hooks/useI18n';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { foldersApi } from '../../lib/itemsApi';
 import { FolderModal } from '../folders/FolderModal';
+import { ConfirmDialog } from '../ConfirmDialog';
+import { INTEGRATION_TABS } from '../../lib/itemVisuals';
 import type { FolderResponse } from '../../types/items';
 import { handleApiError } from '../../lib/errorUtils';
 
@@ -35,6 +37,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const queryClient = useQueryClient();
 
   const currentFolder = searchParams.get('folder');
+  const currentType = searchParams.get('type'); // scope integration (?type=Email|Event|File|Ticket)
 
   // Folder = CONTEXT (không phải filter). Context có 2 view: Danh sách (/) và Bảng (/kanban).
   // Đổi context giữ nguyên view đang xem; đổi view (trong page) giữ nguyên context.
@@ -44,6 +47,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<FolderResponse | undefined>();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [folderToDelete, setFolderToDelete] = useState<FolderResponse | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -88,8 +92,16 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
     onMobileClose?.();
   };
 
-  const allItemsActive = isItemsView && !currentFolder;
+  // Chọn 1 nguồn (integration) → scope trang theo loại đó. Loại trừ lẫn nhau với folder.
+  const handleSourceClick = (type: string) => {
+    navigate(`${viewPath}?type=${type}`);
+    onMobileClose?.();
+  };
+
+  // "Tất cả mục" active khi KHÔNG chọn folder VÀ KHÔNG chọn nguồn nào.
+  const allItemsActive = isItemsView && !currentFolder && !currentType;
   const isFolderActive = (id: string) => isItemsView && currentFolder === id;
+  const isSourceActive = (type: string) => isItemsView && !currentFolder && currentType === type;
 
   const assignItemMutation = useMutation({
     mutationFn: ({ folderId, itemId }: { folderId: string; itemId: string }) =>
@@ -191,6 +203,20 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
             <span className="flex-1 text-left">{t('nav.allItems')}</span>
           </button>
 
+          {/* ── Nguồn (integration) — mỗi tab scope 1 loại; filter riêng mở trong page ── */}
+          {INTEGRATION_TABS.map(({ type, labelKey, Icon }) => (
+            <button
+              key={type}
+              onClick={() => handleSourceClick(type)}
+              className={navItemClass(isSourceActive(type))}
+            >
+              <Icon className="w-[18px] h-[18px] shrink-0" />
+              <span className="flex-1 text-left">{t(labelKey)}</span>
+            </button>
+          ))}
+
+          <div className="my-1.5 border-t border-slate-100 dark:border-slate-800" />
+
           <NavLink to="/integrations" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
             <Plug className="w-[18px] h-[18px] shrink-0" />
             <span className="flex-1 text-left">{t('nav.integrations')}</span>
@@ -291,9 +317,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                   <button
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
                     onClick={() => {
-                      if (window.confirm(t('sidebar.confirmDeleteFolder'))) {
-                        deleteMutation.mutate(folder.id);
-                      }
+                      setFolderToDelete(folder);
                       setActiveMenuId(null);
                     }}
                   >
@@ -348,6 +372,21 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
         isOpen={isFolderModalOpen}
         onClose={() => setIsFolderModalOpen(false)}
         folder={editingFolder}
+      />
+
+      <ConfirmDialog
+        open={folderToDelete !== null}
+        tone="danger"
+        title={folderToDelete?.name}
+        message={t('sidebar.confirmDeleteFolder')}
+        confirmLabel={t('common.delete')}
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (folderToDelete) {
+            deleteMutation.mutate(folderToDelete.id, { onSettled: () => setFolderToDelete(null) });
+          }
+        }}
+        onCancel={() => setFolderToDelete(null)}
       />
     </>
   );

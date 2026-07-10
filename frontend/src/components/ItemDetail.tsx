@@ -4,18 +4,25 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
   Trash2, Edit3, ExternalLink, Loader2, Tag,
-  AlertCircle, Eye, EyeOff, Star, Check, Send, Plus
+  AlertCircle, Eye, EyeOff, Star, Check, Plus,
+  Share2, FolderPlus, Folder,
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
 import { TagChip, FolderChip } from './tags/TagChip';
 import { TagManagerModal } from './tags/TagManagerModal';
+import { ConfirmDialog } from './ConfirmDialog';
+import { EmailThreadView } from './emails/EmailThreadView';
+import { JiraTicketPanel } from './jira/JiraTicketPanel';
+import { DriveShareDialog } from './drive/DriveShareDialog';
+import { CreateDriveFolderModal } from './drive/CreateDriveFolderModal';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
-import { getStatusLabel, isItemUnread } from '../lib/itemMeta';
+import { getStatusLabel, isItemUnread, isDriveFolder } from '../lib/itemMeta';
 import { useSeenSet, markSeen, markUnseen } from '../lib/seenStore';
 import { typeLabelKey } from '../lib/itemVisuals';
+import type { TranslationKey } from '../i18n/translations';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
 
@@ -45,12 +52,21 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const STATUS_DOT: Record<string, string> = { Inbox: 'bg-slate-400', Doing: 'bg-blue-500', Done: 'bg-emerald-500' };
 
+/** i18n key cho câu hỏi xác nhận xoá theo loại item. */
+const DELETE_CONFIRM_KEY: Record<string, TranslationKey> = {
+  Email: 'item.confirmDeleteEmail',
+  Event: 'item.confirmDeleteEvent',
+  File: 'item.confirmDeleteFile',
+  Note: 'item.confirmDeleteNote',
+  Ticket: 'ticket.confirmDelete',
+};
+
 const TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; bg: string }> = {
-  Email:  { label: 'Email',    icon: <Mail className="w-5 h-5" />,      bg: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400' },
-  Event:  { label: 'Sự kiện', icon: <Calendar className="w-5 h-5" />,   bg: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400' },
-  File:   { label: 'Tệp',     icon: <FileText className="w-5 h-5" />,   bg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' },
-  Note:   { label: 'Ghi chú', icon: <StickyNote className="w-5 h-5" />, bg: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
-  Ticket: { label: 'Ticket',  icon: <Briefcase className="w-5 h-5" />,  bg: 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400' },
+  Email: { label: 'Email', icon: <Mail className="w-5 h-5" />, bg: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400' },
+  Event: { label: 'Sự kiện', icon: <Calendar className="w-5 h-5" />, bg: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400' },
+  File: { label: 'Tệp', icon: <FileText className="w-5 h-5" />, bg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' },
+  Note: { label: 'Ghi chú', icon: <StickyNote className="w-5 h-5" />, bg: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+  Ticket: { label: 'Ticket', icon: <Briefcase className="w-5 h-5" />, bg: 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400' },
 };
 
 export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDeleted }) => {
@@ -66,6 +82,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isAddingTag, setIsAddingTag] = useState(false);
   const addTagRef = useRef<HTMLDivElement>(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
@@ -97,7 +114,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     };
   }, [isAddingTag]);
 
-  // Event form edit state
   const [eventForm, setEventForm] = useState({
     title: '',
     start: '',
@@ -106,9 +122,39 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     attendees: ''
   });
 
+  // ── Kéo cạnh trái để đổi độ rộng drawer (nhớ qua localStorage) ──
+  const DRAWER_MIN = 420;
+  const [drawerWidth, setDrawerWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('wh-detail-width'));
+    return saved >= DRAWER_MIN ? saved : 560;
+  });
+  const widthRef = useRef(drawerWidth);
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const onMove = (ev: MouseEvent) => {
+      const max = Math.min(1200, window.innerWidth * 0.95);
+      const w = Math.max(DRAWER_MIN, Math.min(window.innerWidth - ev.clientX, max));
+      widthRef.current = w;
+      setDrawerWidth(w);
+    };
+    const onUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      localStorage.setItem('wh-detail-width', String(Math.round(widthRef.current)));
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
   // File edit state
   const [fileName, setFileName] = useState('');
   const [isRenamingFile, setIsRenamingFile] = useState(false);
+  const [driveShareOpen, setDriveShareOpen] = useState(false);
+  const [createSubfolderOpen, setCreateSubfolderOpen] = useState(false);
 
   // Fetch item by ID.
   // placeholderData: mồi từ cache list/board đang có → drawer mở TỨC THÌ với data sẵn,
@@ -155,13 +201,20 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       );
       return { prevItem, prevLists };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (updatedItem, variables) => {
       if (!variables._isAutoRead) {
         toast.success(t('item.saved'));
       }
       setIsEditing(false);
       setIsRenamingFile(false);
 
+      // Instant UI update
+      queryClient.setQueryData(['item', itemId], updatedItem);
+      queryClient.setQueriesData<PagedResult<ItemResponse>>({ queryKey: ['items'] }, (old) =>
+        old?.items ? { ...old, items: old.items.map((it) => it.id === itemId ? updatedItem : it) } : old
+      );
+
+      // Still invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
@@ -269,10 +322,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   })();
 
   const isUnread = item?.type === 'Email' && (
-    metadata.isUnread !== undefined 
-      ? metadata.isUnread === true 
+    metadata.isUnread !== undefined
+      ? metadata.isUnread === true
       : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'))
   );
+
+  // Nháp Gmail — cho phép mở trang soạn để tiếp tục chỉnh sửa + gửi.
+  const isDraft = item?.type === 'Email' && Array.isArray(metadata.labels) && metadata.labels.includes('DRAFT');
 
   const autoReadProcessedRef = React.useRef(false);
 
@@ -329,6 +385,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   }
 
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
+  const fileIsDriveFolder = item.type === 'File' && isDriveFolder(item);
+  const canDriveShare = item.type === 'File' && !!item.connectionId;
   // "Chưa xem": Email theo Gmail; Event/File/Note theo seenStore (chưa mở trong app). Ticket = false.
   const unread = isItemUnread(item, seenSet);
   // Nhãn: Ticket = status thô từ Jira; còn lại Inbox = Chưa xem/Đã xem theo unread.
@@ -349,7 +407,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   if (item.type === 'Email') {
     if (metadata.from) rows.push({ label: t('item.from'), value: metadata.from });
     const to = Array.isArray(metadata.to) ? metadata.to.join(', ') : metadata.to;
-    if (to)            rows.push({ label: t('schedEmail.detailTo'), value: to });
+    if (to) rows.push({ label: t('schedEmail.detailTo'), value: to });
     if (metadata.labels && metadata.labels.length > 0) {
       rows.push({
         label: t('item.labels'),
@@ -421,7 +479,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     let startVal = '';
     let endVal = '';
     if (metadata.start) startVal = new Date(metadata.start).toISOString().slice(0, 16);
-    if (metadata.end)   endVal = new Date(metadata.end).toISOString().slice(0, 16);
+    if (metadata.end) endVal = new Date(metadata.end).toISOString().slice(0, 16);
 
     setEventForm({
       title: item.title,
@@ -466,6 +524,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
+  // Ticket: patch 2 chiều cho panel inline (mutateAsync để panel biết khi xong → đóng editor).
+  const patchTicketField = (patch: PatchItemRequest) => patchMutation.mutateAsync(patch);
+
   // File rename edits
   const startRenamingFile = () => {
     setFileName(item.title);
@@ -495,15 +556,29 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       {/* Backdrop */}
       <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
 
-      {/* Drawer */}
-      <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col" style={{ animation: 'wh-slide-in .25s ease' }}>
+      {/* Tay cầm resize — straddle đúng MÉP TRÁI drawer (đặt ngoài drawer để không bị overflow-hidden cắt) */}
+      <div
+        onMouseDown={startResize}
+        title={t('item.resizeHint')}
+        style={{ right: drawerWidth }}
+        className="group absolute inset-y-0 z-[60] w-3 translate-x-1/2 cursor-col-resize flex items-center justify-center"
+      >
+        {/* vạch thụt 1rem trên/dưới cho khớp góc bo rounded-l-2xl, bo tròn 2 đầu → không thò ra viền */}
+        <div className="h-[calc(100%-2rem)] w-[3px] rounded-full bg-transparent group-hover:bg-brand-400/70 transition-colors" />
+      </div>
+
+      {/* Drawer — kéo cạnh trái để đổi độ rộng */}
+      <div
+        className="relative w-full max-w-[95vw] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col rounded-l-2xl overflow-hidden"
+        style={{ width: drawerWidth, animation: 'wh-slide-in .25s ease' }}
+      >
 
         {/* Header */}
         <div className="px-5 py-[18px] border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="flex items-start justify-between mb-3.5">
             <div className="flex items-center gap-3">
               <div className={`w-[42px] h-[42px] rounded-xl flex items-center justify-center shrink-0 ${tInfo.bg}`}>
-                {tInfo.icon}
+                {fileIsDriveFolder ? <Folder className="w-5 h-5" /> : tInfo.icon}
               </div>
               <div className="flex flex-wrap gap-[6px]">
                 <span className={typeChip}>{t(typeLabelKey(item.type))}</span>
@@ -559,7 +634,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 />
               );
             })}
-            
+
             {/* Add to folder button & dropdown */}
             <div className="relative" ref={addFolderRef}>
               <button
@@ -570,7 +645,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 <Plus className="w-3.5 h-3.5" />
                 <span>{t('item.addToFolder')}</span>
               </button>
-              
+
               {isAddingToFolder && (
                 <div className="absolute top-full left-0 mt-1.5 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
                   {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
@@ -652,7 +727,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 <input
                   type="text"
                   value={eventForm.title}
-                  onChange={e => setEventForm({...eventForm, title: e.target.value})}
+                  onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
                   className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -662,7 +737,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   <input
                     type="datetime-local"
                     value={eventForm.start}
-                    onChange={e => setEventForm({...eventForm, start: e.target.value})}
+                    onChange={e => setEventForm({ ...eventForm, start: e.target.value })}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -671,7 +746,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   <input
                     type="datetime-local"
                     value={eventForm.end}
-                    onChange={e => setEventForm({...eventForm, end: e.target.value})}
+                    onChange={e => setEventForm({ ...eventForm, end: e.target.value })}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -681,7 +756,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 <input
                   type="text"
                   value={eventForm.location}
-                  onChange={e => setEventForm({...eventForm, location: e.target.value})}
+                  onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
                   className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -690,7 +765,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 <input
                   type="text"
                   value={eventForm.attendees}
-                  onChange={e => setEventForm({...eventForm, attendees: e.target.value})}
+                  onChange={e => setEventForm({ ...eventForm, attendees: e.target.value })}
                   placeholder="vd1@gmail.com, vd2@gmail.com"
                   className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
@@ -712,25 +787,41 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </button>
               </div>
             </div>
+          ) : item.type === 'Ticket' ? (
+            /* ── Ticket: inline edit từng field + comment + attachment ── */
+            <JiraTicketPanel
+              item={item}
+              metadata={metadata}
+              onPatch={patchTicketField}
+              isPatching={patchMutation.isPending}
+            />
           ) : (
             /* Metadata Rows */
             rows.length > 0 && (
-              <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] overflow-hidden mb-[18px]">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 px-4 py-3.5 mb-[18px] space-y-2.5">
                 {rows.map((row, i) => (
-                  <div key={i} className="flex gap-3 px-[13px] py-[9px] border-b border-slate-200 dark:border-slate-800 last:border-b-0">
-                    <span className="text-[12.5px] text-slate-400 dark:text-slate-500 w-[118px] shrink-0">{row.label}</span>
-                    <span className="text-[12.5px] text-slate-900 dark:text-slate-100 flex-1 break-words">{row.value}</span>
+                  <div key={i} className="flex gap-3">
+                    <span className="text-[13px] text-slate-400 dark:text-slate-500 w-[110px] shrink-0">{row.label}</span>
+                    <span className="text-[13px] font-medium text-slate-800 dark:text-slate-100 flex-1 break-words min-w-0">{row.value}</span>
                   </div>
                 ))}
               </div>
             )
           )}
 
-          {/* Body Content */}
-          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('sendEmail.content')}</div>
-          <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
-            {bodyText || <span className="text-slate-400 dark:text-slate-500 italic">{t('item.noContent')}</span>}
-          </div>
+          {/* Body Content — Ticket tự render nội dung/description trong JiraTicketPanel nên loại trừ ở đây */}
+          {item.type === 'Email' && item.connectionId ? (
+            <div className="mt-4">
+              <EmailThreadView itemId={item.id} connectionId={item.connectionId} />
+            </div>
+          ) : item.type !== 'Ticket' && (
+            <>
+              <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('sendEmail.content')}</div>
+              <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
+                {bodyText || <span className="text-slate-400 dark:text-slate-500 italic">{t('item.noContent')}</span>}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Footer actions — per type */}
@@ -770,18 +861,26 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {item.type === 'Email' && (
             <>
+              {isDraft && (
+                <button
+                  onClick={() => navigate(`/send-email?draftItemId=${item.id}`)}
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" /><span>{t('item.continueEditDraft')}</span>
+                </button>
+              )}
+              {metadata.threadId && (
+                <a
+                  href={`https://mail.google.com/mail/u/0/#all/${metadata.threadId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInGmail')}</span>
+                </a>
+              )}
               <button
-                onClick={() => navigate('/scheduled')}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <Send className="w-4 h-4 text-slate-400 dark:text-slate-500" /><span>{t('item.composeNew')}</span>
-              </button>
-              <button
-                onClick={() => {
-                  if (window.confirm(t('item.confirmDeleteEmail'))) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
                 className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
@@ -800,6 +899,16 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   <Edit3 className="w-4 h-4" /><span>{t('item.editEventBtn')}</span>
                 </button>
               )}
+              {metadata.htmlLink && (
+                <a
+                  href={metadata.htmlLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInCalendar')}</span>
+                </a>
+              )}
               {metadata.meetUrl && (
                 <a
                   href={metadata.meetUrl}
@@ -811,11 +920,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </a>
               )}
               <button
-                onClick={() => {
-                  if (window.confirm(t('item.confirmDeleteEvent'))) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
                 className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
@@ -826,6 +931,26 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {item.type === 'File' && (
             <>
+              {canDriveShare && (
+                <button
+                  type="button"
+                  onClick={() => setDriveShareOpen(true)}
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>{t('item.share')}</span>
+                </button>
+              )}
+              {fileIsDriveFolder && (
+                <button
+                  type="button"
+                  onClick={() => setCreateSubfolderOpen(true)}
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  <span>{t('drive.createFolder.subfolder')}</span>
+                </button>
+              )}
               <button
                 onClick={startRenamingFile}
                 className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
@@ -843,11 +968,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </a>
               )}
               <button
-                onClick={() => {
-                  if (window.confirm(t('item.confirmDeleteFile'))) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
                 className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >
@@ -858,16 +979,35 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {item.type === 'Note' && (
             <button
-              onClick={() => {
-                if (window.confirm(t('item.confirmDeleteNote'))) {
-                  deleteMutation.mutate();
-                }
-              }}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleteMutation.isPending}
               className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
             >
               {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
+          )}
+
+          {/* ── Ticket actions — sửa ngay tại field trong panel, footer chỉ còn Mở-Jira + xoá ── */}
+          {item.type === 'Ticket' && (
+            <>
+              {metadata.issueUrl && (
+                <a
+                  href={metadata.issueUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('ticket.openInJira')}</span>
+                </a>
+              )}
+              <button
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteMutation.isPending}
+                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </button>
+            </>
           )}
         </div>
 
@@ -879,6 +1019,31 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       `}</style>
 
       <TagManagerModal isOpen={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        tone="danger"
+        message={t(DELETE_CONFIRM_KEY[item.type] ?? 'item.confirmDeleteNote')}
+        confirmLabel={t('common.delete')}
+        loading={deleteMutation.isPending}
+        onConfirm={() =>
+          deleteMutation.mutate(undefined, { onError: () => setDeleteConfirmOpen(false) })
+        }
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
+
+      <DriveShareDialog
+        itemId={itemId}
+        itemTitle={item.title}
+        isOpen={driveShareOpen}
+        onClose={() => setDriveShareOpen(false)}
+      />
+      <CreateDriveFolderModal
+        isOpen={createSubfolderOpen}
+        onClose={() => setCreateSubfolderOpen(false)}
+        defaultConnectionId={item.connectionId ?? undefined}
+        defaultParentItemId={fileIsDriveFolder ? item.id : null}
+      />
     </div>
   );
 };

@@ -26,16 +26,30 @@ public class GmailItemMapper : IGmailItemMapper
             }
         }
 
-        var metadata = new
+        var metadata = new Dictionary<string, object>
         {
-            from = message.From,
-            to = message.To,
-            threadId = message.ThreadId,
-            labels = message.LabelIds,
-            hasAttachment = message.HasAttachment,
-            webUrl = $"https://mail.google.com/mail/u/0/#all/{message.Id}",
-            isUnread = message.LabelIds != null && message.LabelIds.Contains("UNREAD")
+            { "from", message.From ?? "" },
+            { "to", message.To },
+            { "cc", message.Cc },
+            { "bcc", message.Bcc },
+            { "threadId", message.ThreadId },
+            { "labels", message.LabelIds },
+            { "hasAttachment", message.HasAttachment },
+            { "isUnread", message.LabelIds != null && message.LabelIds.Contains("UNREAD") }
         };
+
+        if (!string.IsNullOrEmpty(message.Rfc822MessageId))
+        {
+            metadata["rfc822MessageId"] = message.Rfc822MessageId;
+        }
+
+        metadata["webUrl"] = $"https://mail.google.com/mail/u/0/#all/{message.Id}";
+
+        if (message.LabelIds != null && message.LabelIds.Contains("DRAFT"))
+        {
+            metadata["subject"] = message.Subject ?? "";
+            metadata["bodyHtml"] = message.BodyHtml ?? "";
+        }
 
         return new Item
         {
@@ -45,6 +59,7 @@ public class GmailItemMapper : IGmailItemMapper
             Title = message.Subject ?? "(Không có tiêu đề)",
             Snippet = message.Snippet ?? string.Empty,
             ExternalId = message.Id,
+            ThreadId = message.ThreadId,
             ConnectionId = connectionId,
             Status = ItemStatus.Inbox,
             OccurredAt = message.OccurredAt?.UtcDateTime ?? DateTime.UtcNow,

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.DTOs.ScheduledEmails;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -76,6 +77,8 @@ public class ProcessScheduledEmailsService : IProcessScheduledEmailsService
                     continue;
                 }
 
+                var attachments = DecodeAttachments(email.AttachmentsJson);
+
                 await _gmail.SendMessageAsync(
                     connection,
                     Deserialize(email.ToJson),
@@ -83,6 +86,7 @@ public class ProcessScheduledEmailsService : IProcessScheduledEmailsService
                     Deserialize(email.BccJson),
                     email.Subject,
                     email.BodyHtml,
+                    attachments.Count > 0 ? attachments : null,
                     ct);
 
                 email.Status = ScheduledEmailStatus.Sent;
@@ -118,4 +122,25 @@ public class ProcessScheduledEmailsService : IProcessScheduledEmailsService
         => string.IsNullOrEmpty(json)
             ? new List<string>()
             : JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+
+    /// <summary>Decode JSON base64 attachments (đã lưu lúc tạo scheduled) → binary để gắn vào MIME.</summary>
+    private static IReadOnlyList<GmailAttachmentData> DecodeAttachments(string? json)
+    {
+        var list = new List<GmailAttachmentData>();
+        if (string.IsNullOrEmpty(json)) return list;
+
+        var uploads = JsonSerializer.Deserialize<List<AttachmentUpload>>(json);
+        if (uploads == null) return list;
+
+        foreach (var u in uploads)
+        {
+            byte[] data;
+            try { data = Convert.FromBase64String(u.ContentBase64); }
+            catch (FormatException) { continue; } // bỏ qua file hỏng, vẫn gửi phần còn lại
+
+            var mime = string.IsNullOrWhiteSpace(u.MimeType) ? "application/octet-stream" : u.MimeType;
+            list.Add(new GmailAttachmentData(data, u.Filename, mime, data.Length));
+        }
+        return list;
+    }
 }

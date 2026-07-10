@@ -11,4 +11,9 @@ export const adminApi = {
     const response = await api.get<PagedResult<AdminUserDto>>('/admin/users', { params });
     return response.data;
   },
+
+  toggleUserActive: async (id: string): Promise<AdminUserDto> => {
+    const response = await api.post<AdminUserDto>(`/admin/users/${id}/toggle-active`);
+    return response.data;
+  },
 };

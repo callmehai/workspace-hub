@@ -43,11 +43,14 @@ public static class DependencyInjection
         // Đăng ký cho Drive
         services.AddScoped<IDriveItemMapper, DriveItemMapper>();
         services.AddScoped<IDriveSyncService, DriveSyncService>();
+        services.AddScoped<IDriveSharingService, DriveSharingService>();
         // Đăng ký cho Jira (SCRUM-55)
         services.AddScoped<IJiraItemMapper, JiraItemMapper>();
         services.AddScoped<IJiraSyncService, JiraSyncService>();
         // Jira metadata helpers (SCRUM-59)
         services.AddScoped<IJiraMetadataService, JiraMetadataService>();
+        // Comment + attachment 2 chiều cho ticket Jira
+        services.AddScoped<IJiraTicketService, JiraTicketService>();
         // Important contacts (SCRUM-60)
         services.AddScoped<IImportantContactService, ImportantContactService>();
 

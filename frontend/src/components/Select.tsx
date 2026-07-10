@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { useI18n } from '../hooks/useI18n';
 
@@ -17,10 +17,12 @@ interface SelectProps {
   disabled?: boolean;
   /** Bung menu LÊN TRÊN (dùng khi select nằm đáy trang, vd footer phân trang). */
   dropUp?: boolean;
+  /** Icon nhỏ đứng trước nhãn (vd Briefcase cho chọn dự án). */
+  icon?: ReactNode;
 }
 
 /** Dropdown/listbox tự style (thay native <select>) — khớp tông brand, bo góc, có tick chọn. */
-export function Select({ value, onChange, options, placeholder, className = '', disabled, dropUp }: SelectProps) {
+export function Select({ value, onChange, options, placeholder, className = '', disabled, dropUp, icon }: SelectProps) {
   const { t } = useI18n();
   const ph = placeholder ?? t('common.select');
   const [open, setOpen] = useState(false);
@@ -53,14 +55,15 @@ export function Select({ value, onChange, options, placeholder, className = '', 
           open ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-300 hover:border-gray-400 dark:border-slate-700 dark:hover:border-slate-600'
         } ${className}`}
       >
-        <span className={`truncate text-left ${selected ? 'text-gray-800 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}`}>
-          {selected ? selected.label : ph}
+        <span className={`min-w-0 flex items-center gap-2 truncate text-left ${selected ? 'text-gray-800 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}`}>
+          {icon && <span className="shrink-0 text-gray-400 dark:text-slate-500">{icon}</span>}
+          <span className="truncate">{selected ? selected.label : ph}</span>
         </span>
         <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className={`absolute z-30 w-full min-w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
+        <div className={`absolute z-[70] w-full min-w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
           dropUp ? 'bottom-full mb-1.5' : 'mt-1.5'
         }`}>
           {options.length === 0 ? (

@@ -17,6 +17,19 @@ export function isEmailUnread(item: ItemResponse): boolean {
   }
 }
 
+/**
+ * Check if the email item is a draft.
+ */
+export function isDraftEmail(item: ItemResponse): boolean {
+  if (item.type !== 'Email' || !item.metadataJson) return false;
+  try {
+    const meta = JSON.parse(item.metadataJson);
+    return Array.isArray(meta.labels) && meta.labels.includes('DRAFT');
+  } catch {
+    return false;
+  }
+}
+
 // Key i18n cho 3 status Kanban (tái dùng nhãn cột kanban → list/board/drawer nhất quán).
 const STATUS_KEY: Record<ItemStatus, TranslationKey> = {
   Inbox: 'kanban.colInbox', Doing: 'kanban.colDoing', Done: 'kanban.colDone',
@@ -63,4 +76,13 @@ export function getStatusLabel(item: ItemResponse, t: (k: TranslationKey) => str
   if (item.type === 'Ticket') return getJiraStatus(item) ?? t(STATUS_KEY[item.status]);
   if (item.status === 'Inbox') return unread ? t('status.unread') : t('status.seen');
   return t(STATUS_KEY[item.status]);
+}
+
+/** Item File từ Drive có phải folder không — dùng dropdown parent + icon UI. */
+export function isDriveFolder(item: ItemResponse): boolean {
+  if (item.type !== 'File' || !item.metadataJson) return false;
+  const meta = parseMeta(item);
+  if (meta.isFolder === true) return true;
+  const mime = meta.mimeType ?? meta.MimeType;
+  return typeof mime === 'string' && mime === 'application/vnd.google-apps.folder';
 }

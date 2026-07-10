@@ -356,6 +356,10 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("ThreadId")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -373,6 +377,10 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.HasIndex("ConnectionId", "ExternalId")
                         .IsUnique()
                         .HasFilter("[ExternalId] IS NOT NULL");
+
+                    b.HasIndex("UserId", "ThreadId")
+                        .HasDatabaseName("IX_Items_User_ThreadId")
+                        .HasFilter("[ThreadId] IS NOT NULL");
 
                     b.HasIndex("UserId", "Status", "OccurredAt")
                         .HasDatabaseName("IX_Items_User_Status_OccurredAt");
@@ -447,6 +455,10 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AttachmentsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("BccJson")
                         .IsRequired()

@@ -14,17 +14,24 @@ public interface IItemRepository : IGenericRepository<Item>
     /// Trả về tuple: (danh sách items trong page, tổng số items khớp filter).
     /// Pagination thực hiện ở DB level (Skip/Take).
     /// </summary>
-    Task<(IReadOnlyList<Item> Items, int TotalCount)> GetPagedAsync(
+    Task<(IReadOnlyList<Item> Items, int TotalCount, IReadOnlyDictionary<string, int> ThreadCounts)> GetPagedAsync(
         Guid userId,
         Guid? folderId = null,
         IReadOnlyList<ItemStatus>? statuses = null,
         IReadOnlyList<ItemType>? types = null,
         bool? isImportant = null,
         string? search = null,
-        Guid? tagId = null,
+        IReadOnlyList<Guid>? tagIds = null,
+        string? projectKey = null,
+        string? gmailLabel = null,
+        string? assigneeAccountId = null,
+        Guid? connectionId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);
+
+    /// <summary>Danh sách assignee (accountId + tên) suy từ Ticket đã sync của user — cho filter theo người.</summary>
+    Task<IReadOnlyList<(string? AccountId, string DisplayName)>> GetTicketAssigneesAsync(Guid userId, CancellationToken ct = default);
 
     Task<HashSet<string>> GetExistingExternalIdsAsync(Guid connectionId, CancellationToken ct = default);
     Task AddRangeAsync(IEnumerable<Item> items, CancellationToken ct = default);
@@ -50,5 +57,12 @@ public interface IItemRepository : IGenericRepository<Item>
     /// Dùng khi disconnect connection để tránh vi phạm Unique Index (ConnectionId, ExternalId) do ConnectionId=NULL trùng lặp.
     /// </summary>
     Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Xóa toàn bộ Items (và liên kết ItemFolders/TagAssignments) cùng ThreadId của user — dùng khi
+    /// xoá 1 email gộp thread: mỗi thư trong thread là 1 row riêng nên phải xoá hết để thread biến mất.
+    /// Trả về số Item row đã xoá.
+    /// </summary>
+    Task<int> DeleteThreadAsync(Guid userId, string threadId, CancellationToken ct = default);
 }
 

@@ -8,6 +8,22 @@
 - **Kiến trúc mới:** FE gọi Firebase (kèm reCAPTCHA) để lấy OTP, người dùng nhập OTP, FE gửi lại cho Firebase để lấy **Firebase ID Token**. FE gửi ID Token này lên BE. BE chỉ việc dùng `FirebaseAdmin` SDK (`VerifyIdTokenAsync`) để xác thực token và cập nhật trạng thái `PhoneVerified = true`.
 - **Lược bỏ BE:** Đã xoá toàn bộ `OtpService`, `ISmsSender`, các implement SMS và lưu trữ OTP trên Redis. `AuthController` bỏ endpoint `send-otp`, đổi `verify-otp` thành `verify-phone`.
 - **Config:** Thay thế các biến môi trường SMS (`Sms:Twilio:*`) thành `Firebase:ProjectId` (`FIREBASE_PROJECT_ID`).
+## [2026-07-10] Jira description = Markdown subset 2 chiều + UX nháp/confirm
+
+- **Description Jira đổi từ plain text → Markdown subset** (cùng chuẩn với comment): đọc `AdfConverter.ToMarkdown`, ghi `FromMarkdown` (trước là `ToPlainText`/`FromPlainText` — làm MẤT heading/bullet/bold/code khi sync). `AdfConverter` mở rộng: heading `#`→`######`, inline `` `code` ``, code block ``` fenced — 2 chiều ADF ⇄ markdown. `Snippet` list vẫn plain text. FE `miniMarkdown` render heading/code chip/code block; toolbar `RichCommentBox` thêm nút Heading + Code, dùng luôn cho sửa MÔ TẢ.
+- **Lưu ý vận hành:** description các item Ticket đã sync trước đó vẫn là plain text — cần re-sync (reset `Connections.CursorValue` của Jira hoặc chờ issue đổi trên Jira) để nhận bản markdown.
+- **UX nháp Gmail:** click nháp mở panel chi tiết (view-only, nháp hiện trong hội thoại với badge "Thư nháp", KHÔNG tự bung ô Reply); nút "Tiếp tục chỉnh sửa" → `/send-email` load nội dung THẬT từ Gmail qua `getThread` (metadata local dạng sync không chứa body; fallback `bodyPlainText` cho nháp text thuần).
+- **Xoá email = xoá CẢ thread** (đã vậy từ trước ở `ItemWriteBackService`) — message confirm sửa lại cho đúng ngữ nghĩa.
+- **`window.confirm` → `ConfirmDialog`** toàn app (bulk delete, ticket, dọn Trash/Spam, hủy nháp ×3, gỡ quyền Drive, khoá user admin).
+
+## [2026-07-09] Google Drive — tạo folder & chia sẻ (SCRUM-79)
+
+- **Phạm vi:** `ServiceType=Drive` — tạo folder trên Google (`POST /api/drive/folders`) + chia sẻ permissions + link anyone-with-link qua `/api/drive/items/{id}/*`. Write-back synchronous; **không** bảng DB permissions; **không** ETag conflict (khác write-back Items).
+- **Entry UI:** Integrations + toolbar Inbox/Kanban + ItemDetail (Chia sẻ mọi File Drive; Tạo folder con khi `isFolder`).
+- **Sync metadata:** `DriveItemMapper` set `metadataJson.isFolder` + `parents` khi sync đọc Drive — hỗ trợ parent dropdown và nhận diện folder.
+- **Không làm v1:** cascade share từng item con trong app; quyền folder con do **kế thừa Google Drive** (hành vi provider), không logic riêng WH.
+- **Docs:** `docs/API.md`, `docs/SPRINTS.md`, spec `docs/DRIVE_FOLDER_SHARING.md`.
+
 ## [2026-07-08] Notifications in-app + SignalR hub retry (SCRUM-68)
 
 - **Sync → notification:** Mọi sync (`ConnectionSyncDispatcher`) khi `Created > 0` gọi `SyncItemNotificationService` — tối đa 10 item/sync (ưu tiên `IsImportant` nếu vượt). Lưu DB + push SignalR `ReceiveNotification`.

@@ -5,9 +5,9 @@ import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
+import { typeIcon, typeLabelKey, parseSourceType } from '../lib/itemVisuals';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
-import { isItemUnread } from '../lib/itemMeta';
+import { isItemUnread, isDraftEmail } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
 import { Plus, Star, GripVertical, AlertCircle } from 'lucide-react';
@@ -49,6 +49,8 @@ export const KanbanBoard = () => {
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect, hết nháy header khi đổi view)
   const selectedFolderId = searchParams.get('folder');
+  // Nguồn (integration) chọn ở sidebar — scope bảng theo 1 loại. null = tab "Tất cả mục".
+  const sourceType = parseSourceType(searchParams.get('type'));
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
@@ -57,7 +59,10 @@ export const KanbanBoard = () => {
   // Ở Bảng, statusFilter = lọc CỘT hiển thị (đa chọn — không chọn gì = hiện đủ 3 cột)
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
+  const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -96,6 +101,15 @@ export const KanbanBoard = () => {
     }, 350);
   }, []);
 
+  const projectKeyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleProjectKeyChange = useCallback((val: string) => {
+    setProjectKeyFilter(val);
+    if (projectKeyDebounceRef.current) clearTimeout(projectKeyDebounceRef.current);
+    projectKeyDebounceRef.current = setTimeout(() => {
+      setDebouncedProjectKey(val.trim());
+    }, 350);
+  }, []);
+
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
@@ -106,17 +120,24 @@ export const KanbanBoard = () => {
    * (kiểu Jira/Trello) — load COL_PAGE_SIZE thẻ đầu, bấm "Tải thêm" ở đáy cột để lấy tiếp.
    * Số trên header cột = TỔNG THẬT từ server (total của envelope), không phải số đã load.
    */
+  // Scope theo nguồn: có tab ⟹ khoá 1 loại (bỏ qua chip loại); tab Jira mới áp project.
+  const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
+  const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
+  const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
+
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, type: typeFilter, isImportant: importantOnly, tagId: tagFilter, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
     queryFn: ({ pageParam }: { pageParam: number }) => itemsApi.getItems({
       statuses: [status],
       folderId: selectedFolderId || undefined,
-      types: typeFilter.length > 0 ? typeFilter : undefined,
+      types: effectiveTypes,
       isImportant: importantOnly || undefined,
-      tagId: tagFilter || undefined,
+      tagIds: tagFilters.length > 0 ? tagFilters : undefined,
+      projectKey: effectiveProjectKey,
+      assignee: effectiveAssignee,
       search: search || undefined,
       page: pageParam,
       limit: COL_PAGE_SIZE,
@@ -288,10 +309,17 @@ export const KanbanBoard = () => {
           onToggleStatusFilter={toggleStatusFilter}
           typeFilter={typeFilter}
           onToggleTypeFilter={toggleTypeFilter}
+          sourceType={sourceType}
           importantOnly={importantOnly}
           onImportantToggle={() => setImportantOnly(v => !v)}
-          tagFilter={tagFilter}
-          onTagFilter={setTagFilter}
+          tagFilters={tagFilters}
+          onToggleTagFilter={(id) =>
+            setTagFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+          onClearTagFilters={() => setTagFilters([])}
+          projectKeyFilter={projectKeyFilter}
+          onProjectKeyChange={handleProjectKeyChange}
+          assigneeFilter={assigneeFilter}
+          onAssigneeChange={setAssigneeFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
         />
@@ -356,7 +384,13 @@ export const KanbanBoard = () => {
                             draggable={!(updateStatus.isPending && updateStatus.variables?.id === item.id)}
                             onDragStart={(e) => handleDragStart(e, item.id)}
                             onDragEnd={handleDragEnd}
-                            onClick={() => setSelectedItemId(item.id)}
+                            onClick={() => {
+                               if (isDraftEmail(item)) {
+                                 navigate(`/send-email?draftItemId=${item.id}`);
+                               } else {
+                                 setSelectedItemId(item.id);
+                               }
+                             }}
                             className={`shrink-0 border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all relative overflow-hidden ${
                               draggingId === item.id ? 'opacity-40 shadow-none' : 'opacity-100 shadow-sm'
                             } ${

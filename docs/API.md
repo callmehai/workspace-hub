@@ -93,7 +93,11 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - `activeUsers + lockedUsers == totalUsers` (invariant).
 - Status: 200 · 401 · 403.
 
-`GET /api/admin/users/{id}`, `PATCH /users/{id}/lock`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
+`POST /api/admin/users/{id}/toggle-active` — toggle lock/unlock user, Admin only.
+- Response 200: `{ id, email, fullName, role, isActive, lastLoginAt, createdAt, connectionCount, itemCount }` (updated AdminUserDto).
+- Status: 200 · 400 (cannot lock self) · 401 · 403 · 404 (user not found).
+
+`GET /api/admin/users/{id}`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
 - `GET /api/integrations` — catalog cho user. **OData ⊕** (target — $filter isEnabled/provider, $orderby).
@@ -140,8 +144,9 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
 > Notification type cho Jira (jira_assigned…): chưa làm — optional, chờ có nguồn sync-event Jira.
 
 ## Items (thêm write-back ⭐)
-- `GET /api/items?folderId&statuses&types&isImportant&tagId&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagId` ✅ **SCRUM-71** = lọc item gắn tag đó (join `TagAssignment`). Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
+- `GET /api/items?folderId&statuses&types&isImportant&tagIds&projectKey&assignee&gmailLabel&connectionId&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types`/`tagIds` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagIds` ✅ **SCRUM-71** = lọc item gắn **bất kỳ tag nào** trong danh sách (OR; join `TagAssignment`; lặp key `?tagIds={g1}&tagIds={g2}`). `projectKey` = lọc theo dự án (Jira Ticket). `assignee` = lọc Ticket theo **người phụ trách** (accountId; `"unassigned"` = chưa gán) — match `metadata.assigneeAccountId`. `connectionId` = lọc item thuộc **một connection** (Drive modal chọn folder cha, v.v.). `gmailLabel` = lọc email theo **Gmail label** (`INBOX`/`SENT`/`DRAFT`/`STARRED`/`IMPORTANT`/`CATEGORY_PROMOTIONS`/`CATEGORY_SOCIAL`/`CATEGORY_UPDATES`/...) — match token trong `metadata.labels`; chỉ Email có labels nên loại khác tự loại. **SPAM/TRASH chưa lọc được** (sync bỏ qua, `includeSpamTrash=false`); Purchases/Bills của Gmail là view ML nội bộ, **không** expose qua API. Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
+- `GET /api/items/assignees` — danh sách người phụ trách (`{accountId, displayName}[]`) suy từ Ticket Jira đã sync của user (cho filter tab Jira). Gồm `{accountId:"unassigned"}` nếu có ticket chưa gán.
 - `POST /api/items/note` — tạo Note.
 - `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar.
 - `POST /api/items/ticket` ✅ **SCRUM-56** — tạo issue mới → đẩy lên Jira.
@@ -152,31 +157,71 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
   - Email: `{isUnread?, isStarred?, labels?[], isTrashed?}` (KHÔNG sửa nội dung)
   - Event: `{title?, start?, end?, location?, attendees?[]}`
   - File: `{name?, isTrashed?}`
-  - Ticket ✅ **SCRUM-57:** `{summary?, description?, assignee?(accountId), priority?, statusTransition?, labels?[], comment?}` — **nội dung sửa được** (khác Email immutable). `description` plain text → ADF (`AdfConverter.FromPlainText`). `summary/description/priority/labels` qua `PUT /issue`; `assignee` qua `PUT /issue/{key}/assignee`; `statusTransition` = id/tên transition (Jira đổi status qua transition, không set field trực tiếp — không khả dụng theo workflow → 422); `comment` = thêm comment (`POST /comment`, không sửa field). Đi qua cùng `IWriteBackGuard` của SCRUM-38; Jira không có HTTP ETag → version-token = `fields.updated` lưu trong `Items.ETag`. Reject field Google trên ticket → 422.
+  - Ticket ✅ **SCRUM-57:** `{summary?, description?, assignee?(accountId), priority?, statusTransition?, labels?[], comment?, issueType?}` — **nội dung sửa được** (khác Email immutable). `issueType` = đổi loại issue (Task/Bug/Story…) qua `PUT /issue` field `issuetype.name` (có thể 422 nếu Jira workflow/screen không cho đổi giữa 2 loại). `description` plain text → ADF (`AdfConverter.FromPlainText`). `summary/description/priority/labels` qua `PUT /issue`; `assignee` qua `PUT /issue/{key}/assignee`; `statusTransition` = id/tên transition (Jira đổi status qua transition, không set field trực tiếp — không khả dụng theo workflow → 422); `comment` = thêm comment (`POST /comment`, không sửa field). Đi qua cùng `IWriteBackGuard` của SCRUM-38; Jira không có HTTP ETag → version-token = `fields.updated` lưu trong `Items.ETag`. Reject field Google trên ticket → 422.
   - → đẩy lên provider, fetch lại + cập nhật ETag/metadata local. (400 validation, 403 thiếu scope, 409 conflict version, 422 transition/field không hợp lệ, 502 provider lỗi)
 - `PATCH /api/items/{id}/status` — Kanban (local only).
 - `PATCH /api/items/{id}/archive` — local only.
 - `DELETE /api/items/{id}` ⭐ — trash/xoá trên provider + local. Type=Ticket ✅ **SCRUM-58:** xoá issue trên Jira (`DELETE /rest/api/3/issue/{key}?deleteSubtasks=true`) **rồi mới** xoá Item local — Jira lỗi (403 thiếu quyền / 502) thì Item local giữ nguyên (không xoá lệch). Owner check (không phải owner → 404). (403 thiếu quyền, 404 không tồn tại/không phải owner, 502 provider lỗi)
+  - **Type=Email gộp thread:** mỗi thư trong hội thoại là 1 Item row riêng (sync tách theo message). Xoá 1 email = **xoá CẢ thread** — `Users.Threads.Trash(threadId)` (trash cả thread trên Gmail) **rồi** xoá mọi Item row cùng `ThreadId` của user (`DeleteThreadAsync`). Nếu chỉ trash/remove thư đại diện thì thread hiện lại ở list với thư mới-nhì. Gmail lỗi → giữ nguyên row local. Email không có `ThreadId` (item cũ chưa backfill) → fallback trash 1 message + xoá 1 row. Là **Trash** (khôi phục được trong Gmail), KHÔNG hard-delete (`Messages.Delete`).
 
 ### Jira metadata helpers — ✅ SCRUM-59
 Phục vụ FE chọn giá trị khi tạo/sửa ticket (`?connectionId=` bắt buộc, ServiceType=Jira + Active). Trả dữ liệu live (KHÔNG OData). Cache nhẹ TTL 5' cho project/issue-type/priority; transitions + assignable-users không cache.
 - `GET /api/jira/projects?connectionId=` — list project (`{id, key, name}`).
 - `GET /api/jira/issue-types?connectionId=&projectKey=` — issue type hợp lệ của project (`{id, name, subtask}`).
 - `GET /api/jira/transitions?connectionId=&itemId=` — transition khả dụng cho issue hiện tại (`{id, name, toStatusName}`), đổi status.
-- `GET /api/jira/assignable-users?connectionId=&projectKey=&query=` — user gán được (`{accountId, displayName, email, active}`).
+- `GET /api/jira/assignable-users?connectionId=&projectKey=&query=` — user gán được (`{accountId, displayName, email, active, avatarUrl}`). `email` thường **null** (Atlassian ẩn theo quyền riêng tư) → FE hiển thị avatar + tên, KHÔNG email. `avatarUrl` = ảnh 48x48 (null nếu không có).
 - `GET /api/jira/priorities?connectionId=` — danh sách priority (`{id, name}`).
+- `GET /api/jira/site?connectionId=` — tên + URL Jira site (`{name, url}`) tra từ accessible-resources theo cloudId; cache 5 phút. **204** nếu không lấy được. FE dùng `name` làm nhãn dropdown "Jira account" thay cho cloudId (GUID).
 - (404 connection (cả của user khác), 422 connection không phải Jira / không active / projectKey thiếu, 502 provider lỗi)
+
+### Jira ticket — comment + attachment (2 chiều) ✅
+Chỉ áp cho Item `Type=Ticket`. Resolve item → (Connection Jira Active, issueKey) + kiểm ownership (`IJiraTicketService`). Gọi Jira REST v3 trực tiếp (không đi qua write-back-guard vì comment/attachment độc lập field, không đụng version-token). FE render **inline** trong drawer chi tiết ticket (`JiraTicketPanel`) — không còn form "Sửa ticket".
+- `GET /api/items/{id}/comments` — list comment (`{id, body, authorName, authorAccountId, created, updated}[]`, `orderBy=created`). `body` = **markdown subset** (ADF→markdown qua `AdfConverter.ToMarkdown`): `**đậm**`, `*nghiêng*`, `~~gạch~~`, `[text](url)`, bullet `- `, ordered `1. `, và media (file nhúng) → marker `[[attach:{attachmentId}]]` (FE resolve tên file + tải).
+- `POST /api/items/{id}/comments` — thêm comment. Body `{ body, mediaIds?[] }`. `body` = markdown subset → ADF (`FromMarkdown`); `mediaIds` = id các attachment (đã upload lên issue) để **nhúng vào comment** dạng ADF media node. Cho phép `body` rỗng nếu có `mediaIds`. → comment vừa tạo.
+- `PUT /api/items/{id}/comments/{commentId}` — sửa comment. Body `{ body }` (markdown). Marker `[[attach:id]]` trong body được giữ (round-trip → media node), nên sửa text không mất file đã nhúng.
+- `DELETE /api/items/{id}/comments/{commentId}` — xoá comment (204).
+- `GET /api/items/{id}/attachments` — list metadata (`{id, filename, mimeType, size, authorName, created}[]`).
+- `GET /api/items/{id}/attachments/{attId}/download` — tải nội dung file (stream, `File(data, mime, filename)`; FE tải blob rồi save-as đúng tên).
+- `POST /api/items/{id}/attachments` — upload (`multipart/form-data`, field `file`; `X-Atlassian-Token: no-check` server-side; `[RequestSizeLimit]` ~30MB, FE chặn >25MB). → list attachment mới.
+- `DELETE /api/items/{id}/attachments/{attId}` — xoá attachment trên Jira (204).
+- (400 body/file rỗng, 404 item không phải owner / không tồn tại, 422 item không phải Ticket / connection không Jira-Active, 502 provider lỗi)
+
+## Google Drive — tạo folder & chia sẻ ⭐ SCRUM-79 ✅
+
+Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `IDriveGateway` (Google Drive API permissions). **Không** lưu quyền trong DB — hỏi Google mỗi lần list/share. Áp dụng mọi Item `Type=File` có `connectionId` Drive (file lẫn folder). Share **không** qua `PATCH /api/items/{id}`, **không** dùng ETag conflict.
+
+**Sync metadata (A6):** Item File từ Drive sync kèm `metadataJson.isFolder` + `parents` (Google folder id) — FE `isDriveFolder()` dùng dropdown parent + icon.
+
+- `POST /api/drive/folders` — [Authorize]. Body `{ connectionId, name, parentItemId? }`. Tạo folder trên Google Drive + Item local ngay (không chờ cron). `parentItemId` null = gốc My Drive; nếu có → phải là folder Drive cùng connection. Trả **201** `ItemResponse` + `Location: GET /api/items/{id}`. (400 validation, 404 connection/item, 422 tên rỗng/quá dài / parent không phải folder / khác connection / parent đã trash, 403 thiếu scope Drive, 502 provider)
+- `GET /api/drive/items/{itemId}/permissions` — [Authorize]. Trả **200** `{ items: DrivePermissionDto[] }`. Mỗi dòng: `{ id, type, role, emailAddress?, displayName?, isOwner, isLink }`. `role`: reader | commenter | writer | owner. `isLink=true` khi type=anyone. (404 item không thuộc user / không phải File Drive, 502 provider)
+- `POST /api/drive/items/{itemId}/permissions` — [Authorize]. Body `{ email, role, notify? }` (`role`: reader|commenter|writer; `notify` default true). Mời user qua email. Trả **201** `DrivePermissionDto`. (400 validation, 404, 409 email đã có quyền, 422 business rule, 502)
+- `PATCH /api/drive/items/{itemId}/permissions/{permissionId}` — [Authorize]. Body `{ role }`. Đổi role (không áp dụng owner). Trả **200** `DrivePermissionDto`. (404 permission/item, 422 không sửa owner, 502)
+- `DELETE /api/drive/items/{itemId}/permissions/{permissionId}` — [Authorize]. Gỡ quyền. Trả **204**. (404, 422 owner, 502)
+- `PUT /api/drive/items/{itemId}/link-sharing` — [Authorize]. Body `{ enabled, role? }`. `enabled=true` → bật anyone-with-link (`role` bắt buộc: reader|commenter|writer); `enabled=false` → tắt link. Trả **200** `DrivePermissionDto` hoặc `null` khi tắt. (400 validation, 404, 502)
+
+**FE (SCRUM-79):** `DriveShareDialog`, `CreateDriveFolderModal`, `driveApi`; entry: ItemDetail (Chia sẻ + folder con), Integrations (Tạo folder), WorkspaceToolbar (Folder Drive). i18n `drive.*`.
 
 ## Item-Folder — không đổi
 `POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.
 
 ## Emails — gửi trực tiếp ⭐
-- `POST /api/emails/send` — [Authorize]. Body `{ connectionId, to[], cc[], bcc[], subject, bodyHtml }`. Gửi **ngay** (đồng bộ) qua Gmail. Validate connection thuộc user + ServiceType=Gmail + Active. Trả `200 { messageId, sentAt }`. (400 validation, 404 connection, 422 connection không phải Gmail / không Active, 502 provider lỗi). Gmail write-back "gửi mới".
+- `POST /api/emails/send` — [Authorize]. Body `{ connectionId, to[], cc[], bcc[], subject, bodyHtml, attachments[]? }`. Gửi **ngay** (đồng bộ) qua Gmail. `attachments[]` = `{ filename, mimeType, contentBase64 }` (file user tự đính kèm, base64; tổng ≤ 25MB, `[RequestSizeLimit]` 40MB). Validate connection thuộc user + ServiceType=Gmail + Active. Trả `200 { messageId, sentAt }`. (400 validation, 404 connection, 422 connection không phải Gmail / không Active, 502 provider lỗi). Gmail write-back "gửi mới".
 - `GET /api/emails/signature?connectionId=` — [Authorize]. Lấy chữ ký HTML đã đặt trong Gmail của connection (qua `users.settings.sendAs`, ưu tiên primary). Trả `200 { signature }` (rỗng nếu chưa đặt HOẶC connection thiếu scope `gmail.settings.basic` — không lỗi). Lưu ý: Gmail API **không** tự chèn chữ ký khi gửi, FE tự append. Scope `gmail.settings.basic` là **optional** (request thêm khi connect Gmail, không bắt buộc); connection tạo trước thay đổi này phải **reconnect** mới đọc được chữ ký.
 - `GET /api/EmailContactSuggestions?connectionId=` — [Authorize]. Gợi ý contact từ cache DB `GoogleContacts` khi soạn mail (To/Cc/Bcc). **OData ⊕** convention route (`EmailContactSuggestionsController`): `$filter` (vd `contains(Email,'al') or contains(DisplayName,'al')`), `$orderby`, `$top` (max 20), `$skip`, `$count`, `$select`. Query OData dùng **PascalCase** tên property CLR (`Email`, `DisplayName`, `Source`); JSON response vẫn camelCase. Bắt buộc query `connectionId` (scope server-side theo connection Gmail của user). Trả `{ value: [{ email, displayName, source }], @odata.count? }` — **cả** `Source=Contact` và `Source=OtherContact`. 404 connection, 422 không phải Gmail / không Active. Dữ liệu có sau sync Gmail (cron ~60s / Đồng bộ thủ công); scope optional `contacts.readonly` + `contacts.other.readonly` — thiếu → `value` rỗng, vẫn nhập tay. **Lưu ý:** `$filter/$orderby` chạy **in-memory** sau khi load cache connection (dedupe email) — không SQL push-down.
 
+### Email Threading — Reply / Forward / Attachments ⭐
+- `GET /api/emails/{itemId}/thread` — [Authorize]. Lấy toàn bộ luồng hội thoại (thread) của email item. Dữ liệu live từ Gmail API (`threads.get`), không lưu cứng xuống DB. Trả `200 { threadId, subject, messages: [{ messageId, from, to[], cc[], bcc[], subject, bodyHtml, bodyPlainText, occurredAt, isUnread, isStarred, hasAttachment, attachments: [{ attachmentId, filename, mimeType, size }] }] }`. Messages sắp theo thời gian cũ→mới. (404 item không tồn tại/không phải owner, 422 item không có threadId/connection không Gmail/không Active, 502 provider lỗi)
+- `POST /api/emails/reply` — [Authorize]. Trả lời (Reply / Reply-All) trong luồng hội thoại email đã có. Body `{ connectionId, itemId, cc?[], bcc?[], bodyHtml, replyAll, attachments[]? }`. Reply-All tự động lấy To/Cc từ metadata + live Gmail API, loại trừ email của chính user (exact match, không substring). Sử dụng header `In-Reply-To`/`References` chuẩn RFC 5322 (lấy `Message-ID` gốc từ metadata) để mail client ngoài Gmail cũng nhóm thread đúng. `attachments[]` = `{ filename, mimeType, contentBase64 }` — file user tự đính kèm (base64, tổng ≤ 25MB, `[RequestSizeLimit]` 40MB). Trả `200 { messageId, threadId, sentAt }`. (400 validation, 404 item/connection, 422 item không có threadId/connection không Gmail, 502 provider lỗi)
+- `POST /api/emails/forward` — [Authorize]. Chuyển tiếp email trong luồng. Body `{ connectionId, itemId, to[], cc?[], bcc?[], bodyHtml, includeAttachments, attachments[]? }`. Khi `includeAttachments=true`, tải attachment gốc từ Gmail và đính kèm vào thư mới (MIME multipart/mixed); `attachments[]` = file user thêm mới (base64, như `reply`). Trả `200 { messageId, threadId, sentAt }`. (400 validation, 404 item/connection, 422 item không có threadId, 502 provider lỗi)
+- `GET /api/emails/{itemId}/messages/{messageId}/attachments/{attachmentId}?filename=&mimeType=` — [Authorize]. Tải file đính kèm trực tiếp từ Gmail qua Backend Gateway (stream binary). Gọi `attachments.get(messageId, attachmentId)` **trực tiếp** với id client gửi lên — **không** re-fetch thread để so khớp id, vì Gmail cấp `attachmentId` mới mỗi lần đọc thread (id cũ vẫn hợp lệ với `attachments.get`); re-fetch + so khớp id sẽ gây 404 giả. `filename`/`mimeType` (query, optional) để set `Content-Type` + tên file tải về. Quyền đọc giới hạn ở mailbox của user (connection `me`). Trả `200` + `Content-Disposition: attachment`. (404 item/attachment không tồn tại, 422 connection không Gmail/không Active, 502 provider lỗi)
+- `GET /api/emails/{itemId}/messages/{messageId}/attachments/zip` — [Authorize]. Tải **toàn bộ** attachment của 1 message trong thread, đóng gói `.zip` (server-side `ZipArchive`, tên trùng tự thêm hậu tố `" (n)"`). Trả `application/zip` (`attachments.zip`). (404 item/message, 422 message không có attachment)
+- `POST /api/emails/drafts` — [Authorize]. Tạo nháp mới. Body `{ connectionId, to[], cc[], bcc[], subject?, bodyHtml?, threadId?, inReplyToMessageId?, attachments[]? }`. Trả `200` + `ItemResponse`. (400 validation, 404 connection, 422 connection không phải Gmail/không Active, 502 provider lỗi)
+- `PUT /api/emails/drafts/{itemId}` — [Authorize]. Cập nhật nháp đã có. Body `{ connectionId, to[], cc[], bcc[], subject?, bodyHtml?, threadId?, inReplyToMessageId?, attachments[]? }`. Trả `200` + `ItemResponse`. (400 validation, 404 connection/item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
+- `POST /api/emails/drafts/{itemId}/send` — [Authorize]. Gửi nháp đã có. Trả `200` + `SendEmailResult`. (404 item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
+- `DELETE /api/emails/drafts/{itemId}` — [Authorize]. Xoá nháp **VĨNH VIỄN** trên Gmail (`drafts.delete`, KHÔNG đẩy vào thùng rác → tránh background-sync kéo về lại) + xoá item local. Trả `204 NoContent`. (404 item, 422 connection không phải Gmail/không Active, 502 provider lỗi)
+
 ## Scheduled Emails (đổi ConnectionId ⭐)
-- `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, sendAt} → 201. (404 connection, 422 connection không phải Gmail)
+- `POST /api/scheduled-emails` — {connectionId, to[], cc[], bcc[], subject, bodyHtml, attachments[]?, sendAt} → 201. `attachments[]` = `{ filename, mimeType, contentBase64 }` (file user tự đính kèm, base64; lưu `AttachmentsJson` → cron gửi kèm khi tới hạn; tổng ≤ 25MB). (404 connection, 422 connection không phải Gmail)
 - `GET /api/scheduled-emails/{id}` — chi tiết một email hẹn giờ.
 - `GET /api/ScheduledEmails` — **OData ⊕** convention route (`ScheduledEmailsController`): `$filter` (vd `Status eq 'Pending'`), `$orderby` (vd `SendAt`, `CreatedAt`), `$top/$skip/$count`. Query OData **PascalCase** tên property CLR; JSON response camelCase. Response `{ value, @odata.count? }`. **Lưu ý:** `$filter/$orderby` chạy **in-memory** sau khi load rows theo `CurrentUserId` (map DTO có parse JSON) — không SQL push-down như `GET /api/Notifications`.
 - `PATCH /api/scheduled-emails/{id}/cancel` — (422 đã gửi).
