@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { useI18n } from '../hooks/useI18n';
 import { handleApiError } from '../lib/errorUtils';
-import { isItemUnread, getStatusLabel } from '../lib/itemMeta';
+import { isItemUnread, getStatusLabel, isDraftEmail } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
@@ -22,6 +22,8 @@ import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
 import { timeAgo } from '../lib/datetime';
 import { usePollingInterval } from '../hooks/usePollingInterval';
+import toast from 'react-hot-toast';
+import { sendEmailApi } from '../lib/sendEmailApi';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -179,6 +181,57 @@ export const Inbox = () => {
 
   // Multi-selection state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
+  const discardDraftMutation = useMutation({
+    mutationFn: (itemId: string) => sendEmailApi.discardDraft(itemId),
+    onSuccess: () => {
+      toast.success(t('sendEmail.draftDiscarded'));
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => handleApiError(err, t('sendEmail.discardFail')),
+  });
+
+  const [isEmptyMailboxPending, setIsEmptyMailboxPending] = useState(false);
+
+  const handleEmptyMailbox = async () => {
+    const isTrash = mailbox === 'TRASH';
+    const confirmMsg = isTrash ? t('bulk.emptyTrashConfirm') : t('bulk.emptySpamConfirm');
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsEmptyMailboxPending(true);
+    try {
+      // Dọn TOÀN BỘ mailbox (không chỉ trang hiện tại): xoá theo lô 100 (giới hạn limit BE)
+      // cho tới khi hết. Guard: 1 lô không xoá được mục nào (toàn lỗi) → dừng, tránh lặp vô hạn.
+      let deleted = 0;
+      let failedTotal = 0;
+      for (let guard = 0; guard < 200; guard++) {
+        const batch = await itemsApi.getItems({ ...params, page: 1, limit: 100 });
+        if (batch.items.length === 0) break;
+        const results = await Promise.allSettled(batch.items.map((i) => itemsApi.deleteItem(i.id)));
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        const ok = results.length - failed;
+        deleted += ok;
+        failedTotal += failed;
+        if (ok === 0) break; // không tiến triển → dừng
+      }
+
+      if (deleted === 0 && failedTotal > 0) {
+        toast.error(t('bulk.deleteFail'));
+      } else if (failedTotal > 0) {
+        toast.success(t('bulk.partialDelete'));
+      } else {
+        toast.success(isTrash ? t('bulk.emptiedTrash') : t('bulk.emptiedSpam'));
+      }
+
+      setSelectedItemIds(new Set());
+      refetch();
+    } catch (err) {
+      console.error(err);
+      toast.error(t('bulk.deleteFail'));
+    } finally {
+      setIsEmptyMailboxPending(false);
+    }
+  };
 
   // Đổi context (folder HOẶC nguồn) → về trang 1.
   useEffect(() => {
@@ -419,6 +472,22 @@ export const Inbox = () => {
         </div>
         )}
 
+        {isEmailScope && (mailbox === 'TRASH' || mailbox === 'SPAM') && items.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 mb-4 rounded-xl bg-rose-50 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30 text-rose-800 dark:text-rose-300 text-[13px] animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 dark:text-rose-400" />
+              <span>{mailbox === 'TRASH' ? t('bulk.trashWarning') : t('bulk.spamWarning')}</span>
+            </div>
+            <button
+              onClick={handleEmptyMailbox}
+              disabled={isEmptyMailboxPending}
+              className="shrink-0 font-bold hover:underline text-rose-700 dark:text-rose-400 flex items-center gap-1 disabled:opacity-50"
+            >
+              {isEmptyMailboxPending ? t('common.updating') : (mailbox === 'TRASH' ? t('bulk.emptyTrashBtn') : t('bulk.emptySpamBtn'))}
+            </button>
+          </div>
+        )}
+
         {/* ── Active filter summary (KHÔNG gồm folder — folder là context, hiển thị ở header) ── */}
         {hasActiveFilters && (
           <div className="flex items-center gap-2 mb-3 text-[12.5px] text-slate-500 dark:text-slate-400 flex-wrap">
@@ -496,7 +565,13 @@ export const Inbox = () => {
             return (
             <div
               key={item.id}
-              onClick={() => setSelectedId(item.id)}
+              onClick={() => {
+                if (isDraftEmail(item)) {
+                  navigate(`/send-email?draftItemId=${item.id}`);
+                } else {
+                  setSelectedId(item.id);
+                }
+              }}
               className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
             >
               {/* checkbox */}
@@ -570,10 +645,27 @@ export const Inbox = () => {
 
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 <span className={`text-[11.5px] whitespace-nowrap ${v.time}`}>{timeAgo(item.occurredAt, lang)}</span>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item, unread)}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item, unread)}`} />
-                  {getStatusLabel(item, t, unread)}
-                </span>
+                <div className="flex items-center gap-2">
+                  {isDraftEmail(item) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(t('sendEmail.discardConfirm'))) {
+                          discardDraftMutation.mutate(item.id);
+                        }
+                      }}
+                      disabled={discardDraftMutation.isPending}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+                      title={t('sendEmail.discardDraft')}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusChipClass(item, unread)}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(item, unread)}`} />
+                    {getStatusLabel(item, t, unread)}
+                  </span>
+                </div>
               </div>
             </div>
             );
@@ -657,6 +749,7 @@ export const Inbox = () => {
       <BulkActionBar
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
+        mailbox={mailbox || undefined}
       />
     </div>
   );
