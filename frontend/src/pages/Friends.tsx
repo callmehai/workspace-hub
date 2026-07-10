@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -10,6 +10,10 @@ import { handleApiError } from '../lib/errorUtils';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useI18n } from '../hooks/useI18n';
 import { EMAIL_RE } from '../lib/validation';
+import { connectionsApi } from '../lib/connectionsApi';
+import { sendEmailApi } from '../lib/sendEmailApi';
+
+const SUGGEST_DEBOUNCE_MS = 300;
 
 /** Avatar chữ cái đầu (fallback khi chưa có avatarUrl). */
 function FriendAvatar({ friend }: { friend: Pick<FriendDto, 'fullName' | 'avatarUrl'> }) {
@@ -46,6 +50,44 @@ export const Friends = () => {
     queryKey: ['friends'],
     queryFn: friendsApi.getOverview,
   });
+
+  // ── Gợi ý contact khi gõ email (cùng nguồn suggest với ô soạn mail — cache Google theo Gmail connection) ──
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const suggestWrapRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+  });
+  const gmailConnId = connections.find(
+    (c) => c.serviceType.toLowerCase() === 'gmail' && c.status.toLowerCase() === 'active',
+  )?.id;
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedQ(email.trim()), SUGGEST_DEBOUNCE_MS);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [email]);
+
+  const suggestEnabled = !!gmailConnId && debouncedQ.length >= 2;
+  const { data: suggestions = [] } = useQuery({
+    queryKey: ['contact-suggest', gmailConnId, debouncedQ],
+    queryFn: () => sendEmailApi.suggestContacts(gmailConnId!, debouncedQ),
+    enabled: suggestEnabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (suggestWrapRef.current && !suggestWrapRef.current.contains(e.target as Node)) setSuggestOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['friends'] });
 
@@ -86,8 +128,39 @@ export const Friends = () => {
     onError: (e) => { setCancelInviteTarget(null); handleApiError(e, t('errors.generic')); },
   });
 
+  // Ẩn gợi ý đã là bạn / đang chờ / đã mời — kết bạn lại chỉ ăn 409.
+  const knownEmails = new Set(
+    [
+      ...(data?.friends ?? []),
+      ...(data?.incomingRequests ?? []),
+      ...(data?.outgoingRequests ?? []),
+    ].map((f) => f.email.toLowerCase())
+      .concat((data?.emailInvites ?? []).map((i) => i.email.toLowerCase())),
+  );
+  const filteredSuggestions = suggestions.filter((s) => !knownEmails.has(s.email.toLowerCase()));
+  const showSuggest = suggestOpen && suggestEnabled && filteredSuggestions.length > 0;
+  const selectedIdx = filteredSuggestions.length === 0 ? 0 : Math.min(activeIdx, filteredSuggestions.length - 1);
+
+  const pickSuggestion = (suggestedEmail: string) => {
+    setEmail(suggestedEmail.trim().toLowerCase());
+    setSuggestOpen(false);
+  };
+
+  const onEmailKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggest) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, filteredSuggestions.length - 1)); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return; }
+    if (e.key === 'Escape') { setSuggestOpen(false); return; }
+    // Enter/Tab chọn gợi ý đang highlight (giống ô soạn mail) — Enter không submit form khi dropdown mở.
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      pickSuggestion(filteredSuggestions[selectedIdx].email);
+    }
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
+    setSuggestOpen(false);
     const target = email.trim();
     if (!EMAIL_RE.test(target)) { toast.error(t('valid.emailInvalid')); return; }
     sendRequest.mutate(target);
@@ -111,17 +184,49 @@ export const Friends = () => {
       </div>
       <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">{t('friends.subtitle')}</p>
 
-      {/* ── Form kết bạn theo email ── */}
+      {/* ── Form kết bạn theo email (gợi ý contact như ô soạn mail) ── */}
       <form onSubmit={handleSend} className="mb-6 flex gap-2">
-        <div className="relative flex-1">
+        <div ref={suggestWrapRef} className="relative flex-1">
           <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); setSuggestOpen(true); setActiveIdx(0); }}
+            onFocus={() => setSuggestOpen(true)}
+            onKeyDown={onEmailKeyDown}
             placeholder={t('friends.emailPlaceholder')}
+            autoComplete="off"
+            role="combobox"
+            aria-expanded={showSuggest}
+            aria-autocomplete="list"
             className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
+          {showSuggest && (
+            <ul
+              className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+              role="listbox"
+            >
+              {filteredSuggestions.map((s, i) => (
+                <li key={s.email} role="option" aria-selected={i === selectedIdx}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickSuggestion(s.email)}
+                    className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm ${
+                      i === selectedIdx
+                        ? 'bg-brand-50 text-brand-800 dark:bg-brand-500/10 dark:text-brand-300'
+                        : 'text-slate-800 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    <span className="truncate font-medium">{s.displayName ?? s.email}</span>
+                    {s.displayName && (
+                      <span className="truncate text-xs text-slate-500 dark:text-slate-400">{s.email}</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <button
           type="submit"
