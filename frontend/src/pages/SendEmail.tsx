@@ -180,6 +180,8 @@ export const SendEmail = () => {
       console.error('Failed to auto-save draft', err);
     }
   });
+  // `mutate` referentially stable (TanStack) — dùng làm dep của useCallback thay cả object mutation.
+  const { mutate: saveDraftMutate } = saveDraftMutation;
 
   const triggerSaveDraft = React.useCallback(async () => {
     if (isDiscardedRef.current) return;
@@ -206,8 +208,8 @@ export const SendEmail = () => {
       inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
     };
 
-    saveDraftMutation.mutate({ id: draftItemId, data: payload });
-  }, [draftItemId, lastSavedState]);
+    saveDraftMutate({ id: draftItemId, data: payload });
+  }, [saveDraftMutate]); // mọi giá trị form đọc qua latestDataRef — không cần dep
 
   const triggerSaveDraftImmediate = React.useCallback(() => {
     if (isDiscardedRef.current) return;

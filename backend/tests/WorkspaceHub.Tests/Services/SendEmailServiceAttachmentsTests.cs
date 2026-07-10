@@ -80,7 +80,7 @@ public class SendEmailServiceAttachmentsTests
         result.MessageId.Should().Be("msg-1");
         captured.Should().NotBeNull();
         captured!.Should().HaveCount(1);
-        captured[0].Filename.Should().Be("note.txt");
+        captured![0].Filename.Should().Be("note.txt");
         captured[0].MimeType.Should().Be("text/plain");
         captured[0].Data.Should().BeEquivalentTo(raw);
     }
