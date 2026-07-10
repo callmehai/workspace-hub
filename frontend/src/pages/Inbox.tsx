@@ -10,9 +10,10 @@ import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/i
 import {
   Star, AlertCircle, Inbox as InboxIcon,
   ChevronLeft, ChevronRight,
-  Send, FileEdit, Megaphone, Users, Bell, Mails, Loader2, ShieldAlert, Trash2,
+  Send, FileEdit, Megaphone, Users, Bell, Mails, Loader2, ShieldAlert, Trash2, Plug,
   type LucideIcon,
 } from 'lucide-react';
+import { connectionsApi } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -289,6 +290,24 @@ export const Inbox = () => {
   //  · null (tab Tất cả mục) → dùng chip loại đa chọn; KHÔNG label, KHÔNG project.
   const isEmailScope = sourceType === 'Email';
   const gmailLabel = isEmailScope && mailbox && mailbox !== 'ALL' ? mailbox : undefined;
+
+  // Empty state thông minh: chưa có connection cho nguồn đang xem → nút dẫn sang trang Kết nối dịch vụ.
+  const { data: connectionsList = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+    staleTime: 60_000,
+  });
+  const SOURCE_SERVICE: Record<string, { key: string; label: string }> = {
+    Email: { key: 'gmail', label: 'Gmail' },
+    Event: { key: 'gcal', label: 'Google Calendar' },
+    File: { key: 'drive', label: 'Google Drive' },
+    Ticket: { key: 'jira', label: 'Jira' },
+  };
+  const activeServices = new Set(
+    connectionsList.filter(c => c.status.toLowerCase() === 'active').map(c => c.serviceType.toLowerCase()),
+  );
+  const requiredService = sourceType ? SOURCE_SERVICE[sourceType] : undefined;
+  const missingConnection = requiredService ? !activeServices.has(requiredService.key) : activeServices.size === 0;
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
@@ -535,6 +554,21 @@ export const Inbox = () => {
                   <p className="text-[12.5px] text-slate-400 dark:text-slate-500 max-w-[360px]">
                     Mở <span className="font-medium text-slate-500 dark:text-slate-300">{t('nav.allItems')}</span> rồi kéo-thả item vào thư mục ở sidebar, hoặc dùng nút gán thư mục trên từng item.
                   </p>
+                </>
+              ) : missingConnection ? (
+                <>
+                  <p className="text-[13.5px] text-slate-500 dark:text-slate-300 font-medium">
+                    {requiredService
+                      ? t('inbox.emptyNoConnectionSource', { service: requiredService.label })
+                      : t('inbox.emptyNoConnectionAny')}
+                  </p>
+                  <button
+                    onClick={() => navigate('/integrations')}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-brand-600 text-[13px] font-semibold text-white hover:bg-brand-700 transition-colors"
+                  >
+                    <Plug className="w-4 h-4" />
+                    {t('nav.integrations')}
+                  </button>
                 </>
               ) : (
                 <>
