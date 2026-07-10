@@ -50,6 +50,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   // undefined = chưa bấm → mặc định (thư mới nhất mở, còn lại thu gọn); true/false = user đã toggle.
   const [expandedMsgs, setExpandedMsgs] = useState<Record<string, boolean | undefined>>({});
   const [replyMode, setReplyMode] = useState<'reply' | 'replyAll' | 'forward' | null>(null);
+  const isDraftLoadedRef = useRef(false);
 
   const [to, setTo] = useState<string[]>([]);
   const [cc, setCc] = useState<string[]>([]);
@@ -121,7 +122,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
   // Load existing draft if present in the thread on initial load
   useEffect(() => {
-    if (replyMode === null && !isDraftClosed && thread && thread.messages) {
+    if (replyMode === null && !isDraftClosed && thread && thread.messages && !isDraftLoadedRef.current) {
       const draft = thread.messages.find(m => m.labels?.includes('DRAFT'));
       if (draft) {
         setDraftItemId(draft.itemId || null);
@@ -143,9 +144,12 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
         } else {
           setReplyMode('reply');
         }
+        isDraftLoadedRef.current = true;
       }
     }
   }, [thread, replyMode, isDraftClosed]);
+
+  const isDiscardedRef = useRef(false);
 
   // Keep latest data in a ref for the debounced auto-save
   const latestDataRef = useRef({ to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState });
@@ -165,12 +169,16 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   }, [to, cc, bcc, bodyHtml, replyMode]);
 
   const triggerAutoSave = async () => {
+    if (isDiscardedRef.current) return;
     const { to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState } = latestDataRef.current;
     if (!replyMode || !thread) return;
 
     // Check if anything has changed
     const currentStateStr = JSON.stringify({ to, cc, bcc, bodyHtml });
     if (currentStateStr === lastSavedState) return;
+
+    // Check if discarded in the meantime
+    if (latestDataRef.current.replyMode === null) return;
 
     setIsSaving(true);
     try {
@@ -194,9 +202,14 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
       if (draftItemId) {
         await sendEmailApi.updateDraft(draftItemId, payload);
+        if (latestDataRef.current.replyMode === null || isDiscardedRef.current) return;
         setLastSavedState(currentStateStr);
       } else {
         const savedDraft = await sendEmailApi.createDraft(payload);
+        if (latestDataRef.current.replyMode === null || isDiscardedRef.current) {
+          await sendEmailApi.discardDraft(savedDraft.id);
+          return;
+        }
         setDraftItemId(savedDraft.id);
         setLastSavedState(currentStateStr);
       }
@@ -207,11 +220,54 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     }
   };
 
+  const triggerAutoSaveImmediate = React.useCallback(() => {
+    if (isDiscardedRef.current) return;
+    const { to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState } = latestDataRef.current;
+    if (!replyMode || !thread) return;
+
+    const currentStateStr = JSON.stringify({ to, cc, bcc, bodyHtml });
+    if (currentStateStr === lastSavedState) return;
+
+    const baseSubject = thread.subject || 'No Subject';
+    const draftSubject = replyMode === 'forward'
+      ? (baseSubject.toLowerCase().startsWith('fwd:') ? baseSubject : `Fwd: ${baseSubject}`)
+      : (baseSubject.toLowerCase().startsWith('re:') ? baseSubject : `Re: ${baseSubject}`);
+
+    const latestMsg = thread.messages[thread.messages.length - 1];
+
+    const payload = {
+      connectionId,
+      to,
+      cc,
+      bcc,
+      subject: draftSubject,
+      bodyHtml,
+      threadId: thread.threadId,
+      inReplyToMessageId: latestMsg?.messageId || undefined,
+    };
+
+    if (draftItemId) {
+      sendEmailApi.updateDraft(draftItemId, payload).catch(err => console.error(err));
+    } else {
+      sendEmailApi.createDraft(payload).catch(err => console.error(err));
+    }
+  }, [thread, connectionId]);
+
+  // Save on unmount if changed
+  useEffect(() => {
+    return () => {
+      if (latestDataRef.current.replyMode !== null) {
+        triggerAutoSaveImmediate();
+      }
+    };
+  }, [triggerAutoSaveImmediate]);
+
   const toggleMsg = (msgId: string, currentlyExpanded: boolean) => {
     setExpandedMsgs(prev => ({ ...prev, [msgId]: !currentlyExpanded }));
   };
 
   const handleAction = (mode: 'reply' | 'replyAll' | 'forward') => {
+    isDiscardedRef.current = false;
     setIsDraftClosed(false);
     setReplyMode(mode);
     setBodyHtml('');
@@ -292,6 +348,9 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
         }
       }
     },
+    onMutate: () => {
+      isDiscardedRef.current = true;
+    },
     onSuccess: () => {
       toast.success(t('item.saved') || 'Sent successfully');
       setReplyMode(null);
@@ -306,6 +365,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
     onError: (err) => {
+      isDiscardedRef.current = false;
       toast.error(t('item.saveFail') || 'Failed to send email');
       console.error(err);
     }
@@ -313,12 +373,13 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
   const discardMutation = useMutation({
     mutationFn: async () => {
+      isDiscardedRef.current = true;
       if (draftItemId) {
         await sendEmailApi.discardDraft(draftItemId);
       }
     },
     onSuccess: () => {
-      toast.success('Draft discarded');
+      toast.success(t('sendEmail.draftDiscarded'));
       setReplyMode(null);
       setDraftItemId(null);
       setBodyHtml('');
@@ -331,7 +392,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
     onError: (err) => {
-      toast.error('Failed to discard draft');
+      isDiscardedRef.current = false;
+      toast.error(t('item.saveFail') || 'Failed to discard draft');
       console.error(err);
     }
   });
@@ -568,20 +630,24 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
               <div className="flex items-center gap-2">
                 {draftItemId && (
                   <button
-                    onClick={() => discardMutation.mutate()}
+                    onClick={() => {
+                      if (window.confirm(t('sendEmail.discardConfirm'))) {
+                        discardMutation.mutate();
+                      }
+                    }}
                     disabled={discardMutation.isPending || replyMutation.isPending}
                     className="h-10 px-4 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10 font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 text-[13px]"
                   >
-                    Discard
+                    {t('sendEmail.discardDraft')}
                   </button>
                 )}
                 {isSaving ? (
                   <span className="text-[11.5px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Saving draft...
+                    <Loader2 className="w-3 h-3 animate-spin" /> {t('sendEmail.savingDraft')}
                   </span>
                 ) : lastSavedState ? (
                   <span className="text-[11.5px] text-slate-400 dark:text-slate-500">
-                    Draft saved
+                    {t('sendEmail.draftSaved')}
                   </span>
                 ) : null}
               </div>

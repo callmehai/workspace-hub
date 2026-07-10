@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Send, Eye, Pencil } from 'lucide-react';
+import { Send, Eye, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -53,9 +53,11 @@ export const SendEmail = () => {
     enabled: !!draftItemId,
   });
 
+  const isDraftLoadedRef = React.useRef(false);
+
   // Populate state from the loaded draft
   React.useEffect(() => {
-    if (draftItem) {
+    if (draftItem && !isDraftLoadedRef.current) {
       try {
         const meta = JSON.parse(draftItem.metadataJson || '{}');
         setTo(meta.to || []);
@@ -76,11 +78,12 @@ export const SendEmail = () => {
           resolvedConn: draftItem.connectionId || resolvedConn,
         });
         setLastSavedState(initialStateStr);
+        isDraftLoadedRef.current = true;
       } catch (e) {
         console.error('Error parsing draft metadataJson', e);
       }
     }
-  }, [draftItem]);
+  }, [draftItem, resolvedConn]);
 
   // Chữ ký THẬT từ Gmail của connection (rỗng nếu chưa đặt / connection cũ thiếu scope settings.basic).
   const { data: signature = '' } = useQuery({
@@ -102,15 +105,18 @@ export const SendEmail = () => {
     if (tpl.subject && !subject.trim()) setSubject(tpl.subject);
   };
 
+  const isDiscardedRef = React.useRef(false);
+
   // Keep a ref to the latest form values so the debounce effect always sees the newest data
-  const latestDataRef = React.useRef({ to, cc, bcc, subject, body, resolvedConn });
+  const latestDataRef = React.useRef({ to, cc, bcc, subject, body, resolvedConn, lastSavedState, draftItemId });
   React.useEffect(() => {
-    latestDataRef.current = { to, cc, bcc, subject, body, resolvedConn };
-  }, [to, cc, bcc, subject, body, resolvedConn]);
+    latestDataRef.current = { to, cc, bcc, subject, body, resolvedConn, lastSavedState, draftItemId };
+  }, [to, cc, bcc, subject, body, resolvedConn, lastSavedState, draftItemId]);
 
   // Save draft mutation
   const saveDraftMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string | null; data: SaveDraftRequest }) => {
+      if (isDiscardedRef.current) return null;
       if (id) {
         return sendEmailApi.updateDraft(id, data);
       } else {
@@ -122,7 +128,7 @@ export const SendEmail = () => {
     },
     onSuccess: (res) => {
       setIsSavingDraft(false);
-      if (!draftItemId) {
+      if (res && !draftItemId) {
         setDraftItemId(res.id);
         const params = new URLSearchParams(window.location.search);
         params.set('draftItemId', res.id);
@@ -136,7 +142,8 @@ export const SendEmail = () => {
   });
 
   const triggerSaveDraft = React.useCallback(async () => {
-    const { to, cc, bcc, subject, body, resolvedConn } = latestDataRef.current;
+    if (isDiscardedRef.current) return;
+    const { to, cc, bcc, subject, body, resolvedConn, draftItemId, lastSavedState } = latestDataRef.current;
     if (!resolvedConn) return;
     
     // Check if anything has actually changed from the last saved state
@@ -160,6 +167,32 @@ export const SendEmail = () => {
     saveDraftMutation.mutate({ id: draftItemId, data: payload });
   }, [draftItemId, lastSavedState]);
 
+  const triggerSaveDraftImmediate = React.useCallback(() => {
+    if (isDiscardedRef.current) return;
+    const { to, cc, bcc, subject, body, resolvedConn, lastSavedState, draftItemId } = latestDataRef.current;
+    if (!resolvedConn) return;
+
+    const currentStateStr = JSON.stringify({ to, cc, bcc, subject, body, resolvedConn });
+    if (currentStateStr === lastSavedState) return;
+
+    if (to.length === 0 && !subject.trim() && !body.trim()) return;
+
+    const payload: SaveDraftRequest = {
+      connectionId: resolvedConn,
+      to,
+      cc,
+      bcc,
+      subject,
+      bodyHtml: body,
+    };
+
+    if (draftItemId) {
+      sendEmailApi.updateDraft(draftItemId, payload).catch(err => console.error(err));
+    } else {
+      sendEmailApi.createDraft(payload).catch(err => console.error(err));
+    }
+  }, []);
+
   // Debounce effect for auto-saving drafts (2.0 seconds)
   React.useEffect(() => {
     if (!resolvedConn) return;
@@ -171,6 +204,13 @@ export const SendEmail = () => {
 
     return () => clearTimeout(timer);
   }, [to, cc, bcc, subject, body, resolvedConn, isLoadingDraft, triggerSaveDraft]);
+
+  // Save on unmount if changed
+  React.useEffect(() => {
+    return () => {
+      triggerSaveDraftImmediate();
+    };
+  }, [triggerSaveDraftImmediate]);
 
   const sendMutation = useMutation({
     mutationFn: async (payload: SendEmailRequest) => {
@@ -202,7 +242,7 @@ export const SendEmail = () => {
   const discardMutation = useMutation({
     mutationFn: () => sendEmailApi.discardDraft(draftItemId!),
     onSuccess: () => {
-      toast.success('Draft discarded');
+      toast.success(t('sendEmail.draftDiscarded'));
       setTo([]); setCc([]); setBcc([]); setSubject(''); setBody(''); setTemplate('blank'); setFiles([]);
       setDraftItemId(null);
       window.history.replaceState({}, '', window.location.pathname);
@@ -212,7 +252,8 @@ export const SendEmail = () => {
   });
 
   const handleDiscard = () => {
-    if (window.confirm('Are you sure you want to discard this draft?')) {
+    if (window.confirm(t('sendEmail.discardConfirm'))) {
+      isDiscardedRef.current = true;
       discardMutation.mutate();
     }
   };
@@ -228,6 +269,7 @@ export const SendEmail = () => {
 
     const attachments = files.length > 0 ? await Promise.all(files.map(fileToAttachmentUpload)) : undefined;
 
+    isDiscardedRef.current = true;
     const payload: SendEmailRequest = {
       connectionId: resolvedConn,
       to, cc, bcc, subject, bodyHtml: composedHtml,
@@ -264,12 +306,12 @@ export const SendEmail = () => {
             </div>
             {isSavingDraft && (
               <span className="text-xs text-gray-400 dark:text-slate-500 animate-pulse">
-                Saving draft...
+                {t('sendEmail.savingDraft')}
               </span>
             )}
             {!isSavingDraft && draftItemId && (
               <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                Draft saved
+                {t('sendEmail.draftSaved')}
               </span>
             )}
           </div>
@@ -357,9 +399,10 @@ export const SendEmail = () => {
                 type="button"
                 onClick={handleDiscard}
                 disabled={discardMutation.isPending}
-                className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 dark:text-red-400 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors disabled:opacity-50"
               >
-                Discard
+                <Trash2 className="w-4 h-4" />
+                {t('sendEmail.discardDraft')}
               </button>
             )}
           </div>

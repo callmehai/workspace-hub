@@ -391,8 +391,20 @@ public class ItemWriteBackService : IItemWriteBackService
                 var emailConn = await _connections.GetByIdAsync(item.ConnectionId.Value, ct);
                 if (emailConn != null)
                 {
-                    // Provider lỗi bay lên trước khi xoá DB → Item local giữ nguyên (không lệch).
-                    await _gmailGateway.TrashThreadAsync(emailConn, item.ThreadId, ct);
+                    bool isTrashOrSpam = item.MetadataJson != null &&
+                        (item.MetadataJson.Contains("\"TRASH\"") || item.MetadataJson.Contains("\"SPAM\""));
+
+                    if (isTrashOrSpam)
+                    {
+                        try { await _gmailGateway.DeleteThreadAsync(emailConn, item.ThreadId, ct); }
+                        catch (NotFoundException) { /* Đã xoá trên Gmail, tiếp tục xoá local */ }
+                    }
+                    else
+                    {
+                        // Provider lỗi bay lên trước khi xoá DB → Item local giữ nguyên (không lệch).
+                        try { await _gmailGateway.TrashThreadAsync(emailConn, item.ThreadId, ct); }
+                        catch (NotFoundException) { /* Đã xoá trên Gmail, tiếp tục xoá local */ }
+                    }
                 }
             }
 
@@ -408,7 +420,21 @@ public class ItemWriteBackService : IItemWriteBackService
                 switch (item.Type)
                 {
                     case ItemType.Email:
-                        await _gmailGateway.TrashMessageAsync(conn, item.ExternalId, ct);
+                        bool isTrashOrSpamMsg = item.MetadataJson != null &&
+                            (item.MetadataJson.Contains("\"TRASH\"") || item.MetadataJson.Contains("\"SPAM\""));
+
+                        try
+                        {
+                            if (isTrashOrSpamMsg)
+                            {
+                                await _gmailGateway.DeleteMessageAsync(conn, item.ExternalId, ct);
+                            }
+                            else
+                            {
+                                await _gmailGateway.TrashMessageAsync(conn, item.ExternalId, ct);
+                            }
+                        }
+                        catch (NotFoundException) { /* Đã xoá trên Gmail, tiếp tục xoá local */ }
                         break;
                     case ItemType.Event:
                         await _calendarGateway.DeleteEventAsync(conn, "primary", item.ExternalId, ct);

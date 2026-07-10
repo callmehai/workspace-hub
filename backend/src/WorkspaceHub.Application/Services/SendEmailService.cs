@@ -110,8 +110,50 @@ public class SendEmailService : ISendEmailService
 
         var messageDtos = thread.Messages.Select(m => {
             Guid? localId = localItems.TryGetValue(m.MessageId, out var localItem) ? localItem.Id : (Guid?)null;
+            
+            var bodyHtml = m.BodyHtml;
+            var to = m.To;
+            var cc = m.Cc;
+            var bcc = m.Bcc;
+            var subject = m.Subject;
+
+            if (localItem != null)
+            {
+                try
+                {
+                    var localMeta = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(localItem.MetadataJson ?? "{}");
+                    if (localMeta != null)
+                    {
+                        if (string.IsNullOrEmpty(bodyHtml) && localMeta.TryGetValue("bodyHtml", out var bh) && bh.ValueKind == JsonValueKind.String)
+                        {
+                            bodyHtml = bh.GetString();
+                        }
+                        if (string.IsNullOrEmpty(subject) && localMeta.TryGetValue("subject", out var sbj) && sbj.ValueKind == JsonValueKind.String)
+                        {
+                            subject = sbj.GetString();
+                        }
+                        if ((to == null || to.Count == 0) && localMeta.TryGetValue("to", out var tVal) && tVal.ValueKind == JsonValueKind.Array)
+                        {
+                            to = JsonSerializer.Deserialize<List<string>>(tVal.GetRawText()) ?? new List<string>();
+                        }
+                        if ((cc == null || cc.Count == 0) && localMeta.TryGetValue("cc", out var cVal) && cVal.ValueKind == JsonValueKind.Array)
+                        {
+                            cc = JsonSerializer.Deserialize<List<string>>(cVal.GetRawText()) ?? new List<string>();
+                        }
+                        if ((bcc == null || bcc.Count == 0) && localMeta.TryGetValue("bcc", out var bVal) && bVal.ValueKind == JsonValueKind.Array)
+                        {
+                            bcc = JsonSerializer.Deserialize<List<string>>(bVal.GetRawText()) ?? new List<string>();
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore JSON parsing errors
+                }
+            }
+
             return new EmailThreadMessageDto(
-                m.MessageId, m.From, m.To, m.Cc, m.Bcc, m.Subject, m.BodyHtml, m.BodyPlainText,
+                m.MessageId, m.From, to, cc, bcc, subject, bodyHtml, m.BodyPlainText,
                 m.OccurredAt?.UtcDateTime ?? DateTime.UtcNow, m.IsUnread, m.IsStarred, m.HasAttachment,
                 m.Labels,
                 m.Attachments.Select(a => new EmailAttachmentDto(a.AttachmentId, a.Filename, a.MimeType, a.Size)).ToList(),
@@ -451,7 +493,9 @@ public class SendEmailService : ISendEmailService
                 { "from", connection.ProviderAccountId },
                 { "to", request.To },
                 { "cc", request.Cc },
-                { "bcc", request.Bcc }
+                { "bcc", request.Bcc },
+                { "subject", request.Subject ?? "" },
+                { "bodyHtml", request.BodyHtml ?? "" }
             };
             if (!string.IsNullOrEmpty(request.InReplyToMessageId))
             {
@@ -492,9 +536,7 @@ public class SendEmailService : ISendEmailService
             if (item.ConnectionId != request.ConnectionId)
                 throw new BusinessRuleException("Draft connection mismatch.");
 
-            var draftId = GetMetadataString(item.MetadataJson, "draftId");
-            if (string.IsNullOrEmpty(draftId))
-                throw new BusinessRuleException("Item has no draftId in metadata.");
+            var draftId = await GetOrResolveDraftIdAsync(connection, item, ct);
 
             var draftResult = await _gmail.UpdateDraftAsync(
                 connection, draftId, request.To, request.Cc, request.Bcc, request.Subject ?? "", request.BodyHtml ?? "", request.ThreadId, request.InReplyToMessageId,
@@ -509,7 +551,9 @@ public class SendEmailService : ISendEmailService
                 { "from", connection.ProviderAccountId },
                 { "to", request.To },
                 { "cc", request.Cc },
-                { "bcc", request.Bcc }
+                { "bcc", request.Bcc },
+                { "subject", request.Subject ?? "" },
+                { "bodyHtml", request.BodyHtml ?? "" }
             };
             if (!string.IsNullOrEmpty(request.InReplyToMessageId))
             {
@@ -556,9 +600,7 @@ public class SendEmailService : ISendEmailService
         if (connection.Status != ConnectionStatus.Active)
             throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
 
-        var draftId = GetMetadataString(item.MetadataJson, "draftId");
-        if (string.IsNullOrEmpty(draftId))
-            throw new BusinessRuleException("Item has no draftId in metadata.");
+        var draftId = await GetOrResolveDraftIdAsync(connection, item, ct);
 
         var sentMessageId = await _gmail.SendDraftAsync(connection, draftId, ct);
 
@@ -608,18 +650,45 @@ public class SendEmailService : ISendEmailService
         if (connection.UserId != userId)
             throw new NotFoundException("Connection", item.ConnectionId.Value);
 
-        var draftId = GetMetadataString(item.MetadataJson, "draftId");
-        if (string.IsNullOrEmpty(draftId))
-            throw new BusinessRuleException("Item is not a draft (no draftId in metadata).");
+        var draftId = await GetOrResolveDraftIdAsync(connection, item, ct);
 
         if (item.ExternalId != null)
         {
-            // Trash ONLY the draft message, NOT the entire thread!
-            await _gmail.TrashMessageAsync(connection, item.ExternalId, ct);
+            // Delete the draft message permanently
+            await _gmail.DeleteDraftAsync(connection, draftId, ct);
         }
 
         _items.Remove(item);
         await _items.SaveChangesAsync(ct);
+    }
+
+    private async Task<string> GetOrResolveDraftIdAsync(Connection connection, Item item, CancellationToken ct)
+    {
+        var draftId = GetMetadataString(item.MetadataJson, "draftId");
+        if (!string.IsNullOrEmpty(draftId)) return draftId;
+
+        if (string.IsNullOrEmpty(item.ExternalId))
+            throw new BusinessRuleException("Item has no message ID to resolve draft ID.");
+
+        var resolvedDraftId = await _gmail.GetDraftIdByMessageIdAsync(connection, item.ExternalId, ct);
+        if (string.IsNullOrEmpty(resolvedDraftId))
+            throw new BusinessRuleException("Draft could not be resolved on Gmail (it may have been deleted or sent).");
+
+        // Save the resolved draftId back to local metadata
+        try
+        {
+            var metaDict = JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson ?? "{}") ?? new Dictionary<string, object>();
+            metaDict["draftId"] = resolvedDraftId;
+            item.MetadataJson = JsonSerializer.Serialize(metaDict);
+            _items.Update(item);
+            await _items.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Ignore database save error during resolution, just proceed with the resolved draftId
+        }
+
+        return resolvedDraftId;
     }
 }
 

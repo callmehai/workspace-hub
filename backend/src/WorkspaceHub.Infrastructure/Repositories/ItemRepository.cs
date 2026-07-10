@@ -80,6 +80,12 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         {
             var lbl = $"\"{gmailLabel.Trim()}\"";
             query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains(lbl));
+            
+            if (gmailLabel.Trim() != "TRASH" && gmailLabel.Trim() != "SPAM")
+            {
+                query = query.Where(i => i.MetadataJson == null ||
+                    (!i.MetadataJson.Contains("\"SPAM\"") && !i.MetadataJson.Contains("\"TRASH\"")));
+            }
         }
         else
         {
