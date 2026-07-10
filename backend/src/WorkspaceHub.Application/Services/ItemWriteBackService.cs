@@ -398,6 +398,7 @@ public class ItemWriteBackService : IItemWriteBackService
                     {
                         try { await _gmailGateway.DeleteThreadAsync(emailConn, item.ThreadId, ct); }
                         catch (NotFoundException) { /* Đã xoá trên Gmail, tiếp tục xoá local */ }
+                        catch (ForbiddenException) { /* Không đủ quyền xoá vĩnh viễn trên Gmail, chỉ xoá local */ }
                     }
                     else
                     {
@@ -435,6 +436,7 @@ public class ItemWriteBackService : IItemWriteBackService
                             }
                         }
                         catch (NotFoundException) { /* Đã xoá trên Gmail, tiếp tục xoá local */ }
+                        catch (ForbiddenException) { /* Không đủ quyền xoá vĩnh viễn trên Gmail, chỉ xoá local */ }
                         break;
                     case ItemType.Event:
                         await _calendarGateway.DeleteEventAsync(conn, "primary", item.ExternalId, ct);

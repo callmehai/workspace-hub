@@ -109,10 +109,19 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
 
   const deleteBulkMutation = useMutation({
     mutationFn: async () => {
-      await Promise.allSettled(Array.from(selectedItemIds).map(id => itemsApi.deleteItem(id)));
+      const results = await Promise.allSettled(Array.from(selectedItemIds).map(id => itemsApi.deleteItem(id)));
+      const failed = results.filter(r => r.status === 'rejected');
+      if (failed.length === results.length && results.length > 0) {
+        throw new Error('All failed');
+      }
+      return failed.length; // return failed count
     },
-    onSuccess: () => {
-      toast.success(t('bulk.deletedN', { n: selectedItemIds.size }));
+    onSuccess: (failedCount) => {
+      if (failedCount > 0) {
+        toast.success(t('bulk.partialDelete') || 'Đã xoá một phần, một số mục bị lỗi.');
+      } else {
+        toast.success(t('bulk.deletedN', { n: selectedItemIds.size }));
+      }
       queryClient.invalidateQueries({ queryKey: ['items'] });
       selectedItemIds.forEach(id => {
         queryClient.invalidateQueries({ queryKey: ['item', id] });

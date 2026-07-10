@@ -201,8 +201,17 @@ export const Inbox = () => {
     setIsEmptyMailboxPending(true);
     try {
       const itemIds = items.map((i: ItemResponse) => i.id);
-      await Promise.allSettled(itemIds.map((id: string) => itemsApi.deleteItem(id)));
-      toast.success(isTrash ? t('bulk.emptiedTrash') : t('bulk.emptiedSpam'));
+      const results = await Promise.allSettled(itemIds.map((id: string) => itemsApi.deleteItem(id)));
+      
+      const failed = results.filter(r => r.status === 'rejected');
+      if (failed.length === results.length && results.length > 0) {
+        toast.error(t('bulk.deleteFail'));
+      } else if (failed.length > 0) {
+        toast.success(t('bulk.partialDelete') || 'Đã xoá một phần, một số mục bị lỗi.');
+      } else {
+        toast.success(isTrash ? t('bulk.emptiedTrash') : t('bulk.emptiedSpam'));
+      }
+      
       setSelectedItemIds(new Set());
       refetch();
     } catch (err) {
