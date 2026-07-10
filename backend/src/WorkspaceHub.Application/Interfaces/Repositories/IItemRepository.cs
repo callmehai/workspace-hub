@@ -21,11 +21,12 @@ public interface IItemRepository : IGenericRepository<Item>
         IReadOnlyList<ItemType>? types = null,
         bool? isImportant = null,
         string? search = null,
-        Guid? tagId = null,
+        IReadOnlyList<Guid>? tagIds = null,
         string? projectKey = null,
         string? gmailLabel = null,
         string? assigneeAccountId = null,
         string? participantEmail = null,
+        Guid? connectionId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);

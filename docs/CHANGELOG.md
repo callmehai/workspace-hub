@@ -2,6 +2,7 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+
 ## [2026-07-10] Contact 1 row / person + suggest flatten
 
 - **Model:** `GoogleContacts` — **1 row / `ExternalResourceName`** (không còn 1 row/email). `Email` nullable = primary denormalized; canonical emails trong `MetadataJson`. UNIQUE `(ConnectionId, ExternalResourceName)`.
@@ -30,6 +31,14 @@
 - **Scope optional:** `https://www.googleapis.com/auth/contacts` request kèm Gmail connect; **lazy 403** khi mutate (không `tokeninfo`, không `canWrite` từ BE). GET list chỉ đọc cache DB.
 - **Schema:** `GoogleContacts.Etag`, `UpdatedAt`; sync list lưu etag từ People API.
 - **Suggest + trang contacts:** một OData `GET /api/Contacts?connectionId=` (SQL push-down) thay `EmailContactSuggestions` + REST list envelope. Commands REST tại `ContactCommandsController` (`POST/PATCH/DELETE /api/contacts`).
+
+## [2026-07-09] Google Drive — tạo folder & chia sẻ (SCRUM-79)
+
+- **Phạm vi:** `ServiceType=Drive` — tạo folder trên Google (`POST /api/drive/folders`) + chia sẻ permissions + link anyone-with-link qua `/api/drive/items/{id}/*`. Write-back synchronous; **không** bảng DB permissions; **không** ETag conflict (khác write-back Items).
+- **Entry UI:** Integrations + toolbar Inbox/Kanban + ItemDetail (Chia sẻ mọi File Drive; Tạo folder con khi `isFolder`).
+- **Sync metadata:** `DriveItemMapper` set `metadataJson.isFolder` + `parents` khi sync đọc Drive — hỗ trợ parent dropdown và nhận diện folder.
+- **Không làm v1:** cascade share từng item con trong app; quyền folder con do **kế thừa Google Drive** (hành vi provider), không logic riêng WH.
+- **Docs:** `docs/API.md`, `docs/SPRINTS.md`, spec `docs/DRIVE_FOLDER_SHARING.md`.
 
 ## [2026-07-08] Notifications in-app + SignalR hub retry (SCRUM-68)
 

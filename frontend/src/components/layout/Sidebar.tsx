@@ -211,7 +211,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
               onClick={() => handleSourceClick(type)}
               className={navItemClass(isSourceActive(type))}
             >
-              <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={2} />
+              <Icon className="w-[18px] h-[18px] shrink-0" />
               <span className="flex-1 text-left">{t(labelKey)}</span>
             </button>
           ))}

@@ -12,7 +12,8 @@ export interface GetItemsParams {
   types?: ItemType[];
   isImportant?: boolean;
   search?: string;
-  tagId?: string;
+  /** Lọc theo tag — đa chọn (OR): item khớp nếu mang bất kỳ tag nào trong danh sách. */
+  tagIds?: string[];
   projectKey?: string;
   /** Lọc theo Gmail label (INBOX/SENT/DRAFT/STARRED/IMPORTANT/CATEGORY_*) — chỉ áp cho Email. */
   gmailLabel?: string;
@@ -20,6 +21,8 @@ export interface GetItemsParams {
   assignee?: string;
   /** Lọc email threads có participant (from/to/cc/bcc). */
   participantEmail?: string;
+  /** Lọc item thuộc một connection (Drive modal chọn folder cha, v.v.). */
+  connectionId?: string;
   page?: number;
   limit?: number;
 }

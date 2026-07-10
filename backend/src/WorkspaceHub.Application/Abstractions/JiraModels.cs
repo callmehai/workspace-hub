@@ -73,8 +73,13 @@ public record JiraIssueType(string Id, string Name, bool Subtask);
 /// <summary>1 priority Jira (High/Medium/Low...).</summary>
 public record JiraPriority(string Id, string Name);
 
-/// <summary>1 user gán được cho issue/project (cho dropdown assignee). AccountId dùng khi assign.</summary>
-public record JiraUser(string AccountId, string DisplayName, string? Email, bool Active);
+/// <summary>1 user gán được cho issue/project (cho dropdown assignee). AccountId dùng khi assign.
+/// AvatarUrl = ảnh đại diện (48x48) từ Jira; Email thường rỗng do quyền riêng tư Atlassian.</summary>
+public record JiraUser(string AccountId, string DisplayName, string? Email, bool Active, string? AvatarUrl = null);
+
+/// <summary>Thông tin Jira site (Atlassian) của 1 connection — cho FE hiển thị tên account thay cho cloudId.
+/// Name = tên site (vd "Trustsoft"); Url = "https://xxx.atlassian.net".</summary>
+public record JiraSite(string Name, string Url);
 
 // ───────────────────── Comment + Attachment (2 chiều) ─────────────────────
 

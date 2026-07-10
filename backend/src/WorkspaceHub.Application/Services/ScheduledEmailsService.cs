@@ -50,6 +50,7 @@ public class ScheduledEmailsService : IScheduledEmailsService
             BccJson = JsonSerializer.Serialize(request.Bcc),
             Subject = request.Subject,
             BodyHtml = request.BodyHtml,
+            AttachmentsJson = JsonSerializer.Serialize(request.Attachments),
             SendAt = request.SendAt,
             Status = ScheduledEmailStatus.Pending,
             RetryCount = 0

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, X, SquareCheckBig } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -23,6 +23,34 @@ const LABEL_CLS = 'block text-[13px] font-medium text-slate-700 dark:text-slate-
 /** Validates a single label — no whitespace allowed (mirrors CreateTicketRequestValidator.cs) */
 function labelHasSpace(label: string) {
   return /\s/.test(label);
+}
+
+/** 1-2 chữ cái đầu của tên — dùng cho avatar fallback. */
+function initialsOf(name: string) {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+}
+
+/**
+ * Avatar tròn cho assignee — ảnh từ Jira, tự fallback về initials nếu thiếu ảnh hoặc load lỗi
+ * (nhiều avatar Jira cần auth nên có thể 403). Không hiển thị email vì Atlassian ẩn theo quyền riêng tư.
+ */
+function AssigneeAvatar({ name, src }: { name: string; src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        onError={() => setFailed(true)}
+        className="w-5 h-5 rounded-full shrink-0 object-cover bg-slate-100 dark:bg-slate-700"
+      />
+    );
+  }
+  return (
+    <span className="w-5 h-5 rounded-full shrink-0 bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[9px] font-semibold flex items-center justify-center">
+      {initialsOf(name) || '?'}
+    </span>
+  );
 }
 
 export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
@@ -109,6 +137,21 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
     queryFn: () => jiraApi.getPriorities(connectionId),
     enabled: !!connectionId,
     staleTime: 5 * 60_000,
+  });
+
+  // Tên Jira site cho mỗi connection → dropdown "Jira account" hiện tên site thay vì cloudId (GUID).
+  const siteQueries = useQueries({
+    queries: jiraConnections.map((c) => ({
+      queryKey: ['jira', 'site', c.id],
+      queryFn: () => jiraApi.getSite(c.id),
+      enabled: isOpen,
+      staleTime: 5 * 60_000,
+    })),
+  });
+  const siteNameByConn = new Map<string, string>();
+  jiraConnections.forEach((c, i) => {
+    const site = siteQueries[i]?.data;
+    if (site) siteNameByConn.set(c.id, site.name);
   });
 
   const { data: assignableUsers = [], isFetching: loadingAssignees } = useQuery({
@@ -228,7 +271,10 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
               className={SELECT_CLS}
               disabled={jiraConnections.length === 0}
               placeholder={t('createTicket.selectAccount')}
-              options={jiraConnections.map((c) => ({ value: c.id, label: c.providerAccountId || c.id }))}
+              options={jiraConnections.map((c) => ({
+                value: c.id,
+                label: siteNameByConn.get(c.id) || c.providerAccountId || c.id,
+              }))}
             />
           </div>
 
@@ -297,8 +343,9 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
             />
           </div>
 
-          {/* Priority + Assignee side by side */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Priority + Assignee — mỗi field full-width. Assignee là people-picker nên cần rộng
+              để không cắt tên (trước đây nằm cột hẹp → "Hải Trần V…" + tooltip đè xấu). */}
+          <div className="space-y-4">
             {/* Priority */}
             <div>
               <label className={LABEL_CLS}>{t('createTicket.priority')}</label>
@@ -349,11 +396,12 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
                         {assignableUsers.map((u) => (
                           <button
                             key={u.accountId}
+                            title={u.displayName}
                             onClick={() => { setAssigneeAccountId(u.accountId); setAssigneeQuery(u.displayName); setAssigneeDropOpen(false); }}
-                            className="w-full text-left px-3 py-1.5 text-[12.5px] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                            className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-[12.5px] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                           >
-                            {u.displayName}
-                            {u.email && <span className="ml-1 text-slate-400 text-[11px]">({u.email})</span>}
+                            <AssigneeAvatar name={u.displayName} src={u.avatarUrl} />
+                            <span className="truncate">{u.displayName}</span>
                           </button>
                         ))}
                       </>

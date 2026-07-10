@@ -1,5 +1,6 @@
 import api from './api';
 import type { ODataResponse } from './odata';
+import type { AttachmentUpload } from './sendEmailApi';
 
 export interface CreateScheduledEmailRequest {
   connectionId: string;
@@ -8,6 +9,7 @@ export interface CreateScheduledEmailRequest {
   bcc: string[];
   subject: string;
   bodyHtml: string;
+  attachments?: AttachmentUpload[];
   sendAt: string;
 }
 

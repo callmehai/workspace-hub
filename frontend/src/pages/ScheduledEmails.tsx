@@ -12,7 +12,7 @@ import { Select } from '../components/Select';
 import { EmailChipsInput } from '../components/EmailChipsInput';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { EMAIL_TEMPLATES } from '../lib/emailTemplates';
-import { sendEmailApi } from '../lib/sendEmailApi';
+import { sendEmailApi, fileToAttachmentUpload, MAX_ATTACHMENT_TOTAL_BYTES } from '../lib/sendEmailApi';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { useI18n } from '../hooks/useI18n';
 import type { TranslationKey } from '../i18n/translations';
@@ -182,6 +182,7 @@ export const ScheduledEmails = () => {
   const [cBcc, setCBcc] = useState<string[]>([]);
   const [cSubject, setCSubject] = useState('');
   const [cBody, setCBody] = useState('');
+  const [cFiles, setCFiles] = useState<File[]>([]);
   const [cWhen, setCWhen] = useState<Date | null>(null);
   const [cConn, setCConn] = useState('');
   const [template, setTemplate] = useState('blank');
@@ -224,6 +225,7 @@ export const ScheduledEmails = () => {
       setCBcc([]);
       setCSubject('');
       setCBody('');
+      setCFiles([]);
       setCWhen(null);
       setTemplate('blank');
       queryClient.invalidateQueries({ queryKey: ['scheduled-emails'] });
@@ -264,13 +266,17 @@ export const ScheduledEmails = () => {
     if (tpl.subject && !cSubject.trim()) setCSubject(tpl.subject);
   };
 
-  const handleScheduleSend = () => {
+  const handleScheduleSend = async () => {
     // To/Cc/Bcc đã được EmailChipsInput validate từng email lúc thêm → chỉ cần check rỗng.
     if (cTo.length === 0) return toast.error(t('sendEmail.needTo'));
     if (!cSubject.trim()) return toast.error(t('sendEmail.needSubject'));
     if (!cWhen) return toast.error(t('schedEmail.needTime'));
     if (!resolvedConn) return toast.error(t('sendEmail.needConn'));
     if (cWhen <= new Date()) return toast.error(t('schedEmail.needFuture'));
+
+    const totalSize = cFiles.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > MAX_ATTACHMENT_TOTAL_BYTES) return toast.error(t('attach.tooLarge'));
+    const attachments = cFiles.length > 0 ? await Promise.all(cFiles.map(fileToAttachmentUpload)) : undefined;
 
     const payload: CreateScheduledEmailRequest = {
       connectionId: resolvedConn,
@@ -279,6 +285,7 @@ export const ScheduledEmails = () => {
       bcc: cBcc,
       subject: cSubject,
       bodyHtml: composedHtml,
+      attachments,
       sendAt: cWhen.toISOString(),
     };
 
@@ -387,7 +394,14 @@ export const ScheduledEmails = () => {
               </div>
 
               <label className={`${labelClass} shrink-0`}>{t('sendEmail.content')}</label>
-              <RichTextEditor value={cBody} onChange={setCBody} placeholder={t('sendEmail.contentPlaceholder')} className="mb-3 shrink-0" />
+              <RichTextEditor
+                value={cBody}
+                onChange={setCBody}
+                placeholder={t('sendEmail.contentPlaceholder')}
+                className="mb-3 shrink-0"
+                attachFiles={cFiles}
+                onAttachFilesChange={setCFiles}
+              />
 
               <div className="shrink-0 mb-4">
                 <label className="flex items-center gap-2.5 cursor-pointer select-none">

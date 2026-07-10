@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WorkspaceHub.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using WorkspaceHub.Infrastructure.Data;
 namespace WorkspaceHub.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260709163414_AddScheduledEmailAttachments")]
+    partial class AddScheduledEmailAttachments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -178,19 +181,13 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("Email")
+                        .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
-
-                    b.Property<string>("Etag")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ExternalResourceName")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("MetadataJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Source")
                         .IsRequired()
@@ -200,21 +197,13 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Property<DateTime>("SyncedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ConnectionId", "DisplayName")
                         .HasDatabaseName("IX_GoogleContacts_ConnectionId_DisplayName");
 
                     b.HasIndex("ConnectionId", "Email")
-                        .HasDatabaseName("IX_GoogleContacts_ConnectionId_Email");
-
-                    b.HasIndex("ConnectionId", "ExternalResourceName")
-                        .IsUnique()
-                        .HasDatabaseName("IX_GoogleContacts_ConnectionId_ExternalResourceName")
-                        .HasFilter("[ExternalResourceName] IS NOT NULL");
+                        .IsUnique();
 
                     b.ToTable("GoogleContacts");
                 });

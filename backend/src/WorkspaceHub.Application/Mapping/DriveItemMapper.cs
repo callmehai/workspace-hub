@@ -9,13 +9,17 @@ public class DriveItemMapper : IDriveItemMapper
 {
     public Item ToItem(DriveFileDto file, Guid userId, Guid connectionId)
     {
-        var metadata = new
+        var metadata = new Dictionary<string, object?>
         {
-            mimeType = file.MimeType,
-            size = file.Size,
-            webViewLink = file.WebViewLink,
-            iconLink = file.IconLink
+            ["mimeType"] = file.MimeType,
+            ["isFolder"] = DriveMimeTypes.IsFolder(file.MimeType),
+            ["size"] = file.Size,
+            ["webViewLink"] = file.WebViewLink,
+            ["iconLink"] = file.IconLink,
         };
+
+        if (file.Parents is { Count: > 0 })
+            metadata["parents"] = file.Parents;
 
         return new Item
         {
@@ -30,7 +34,11 @@ public class DriveItemMapper : IDriveItemMapper
             OccurredAt = file.ModifiedTime?.UtcDateTime ?? DateTime.UtcNow,
             IsImportant = false,
             IsArchived = false,
-            MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
+            //Chuyển đổi metadata sang JSON và lưu vào MetadataJson
+            MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            }),
             ETag = file.Version?.ToString() ?? file.HeadRevisionId ?? file.ModifiedTime?.ToString("o")
         };
     }

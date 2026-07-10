@@ -152,6 +152,7 @@ Không đổi cấu trúc.
 | **ConnectionId** | uuid FK→Connections | thay ServiceConnectionId; phải là ServiceType=Gmail |
 | ToJson/CcJson/BccJson | nvarchar(max) (JSON) | |
 | Subject, BodyHtml | string | |
+| AttachmentsJson | nvarchar(max) (JSON) | Mảng `AttachmentUpload` (base64) — cron gửi kèm khi tới hạn. Default `""`/`[]` = không đính kèm. Migration `AddScheduledEmailAttachments`. |
 | SendAt | datetime | |
 | CreatedAt | datetime | Thêm để sort danh sách theo thứ tự tạo |
 | Status | enum string | Pending/Sent/Failed/Cancelled |
