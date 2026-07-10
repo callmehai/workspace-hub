@@ -89,6 +89,51 @@ public class DriveSyncService : IDriveSyncService
         if (newItems.Count > 0)
             await _items.AddRangeAsync(newItems, ct);
 
+        // 5. Cập nhật cờ isTopLevel cho tất cả các item Drive
+        // Một item là TopLevel nếu KHÔNG có parent nào của nó tồn tại trong danh sách existingItems.
+        var allExternalIds = new HashSet<string>(existingItems.Keys);
+        foreach (var item in existingItems.Values)
+        {
+            if (item.IsArchived || string.IsNullOrEmpty(item.MetadataJson)) continue;
+
+            bool currentIsTopLevel = item.MetadataJson.Contains("\"isTopLevel\":true");
+            bool isTopLevel = true;
+
+            // Fast path extraction without full JSON deserialization
+            int parentsIdx = item.MetadataJson.IndexOf("\"parents\":[");
+            if (parentsIdx != -1)
+            {
+                int endIdx = item.MetadataJson.IndexOf("]", parentsIdx);
+                if (endIdx != -1)
+                {
+                    string parentsStr = item.MetadataJson.Substring(parentsIdx + 11, endIdx - parentsIdx - 11);
+                    var parts = parentsStr.Split('"');
+                    for (int i = 1; i < parts.Length; i += 2)
+                    {
+                        if (allExternalIds.Contains(parts[i]))
+                        {
+                            isTopLevel = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (isTopLevel != currentIsTopLevel)
+            {
+                try
+                {
+                    var metadata = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(item.MetadataJson);
+                    if (metadata != null)
+                    {
+                        metadata["isTopLevel"] = System.Text.Json.JsonSerializer.SerializeToElement(isTopLevel);
+                        item.MetadataJson = System.Text.Json.JsonSerializer.Serialize(metadata, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+                    }
+                }
+                catch { /* ignore invalid json */ }
+            }
+        }
+
         connection.CursorType = CursorType.PageToken;
         connection.CursorValue = result.NextSyncCursor;
         connection.LastSyncedAt = DateTime.UtcNow;

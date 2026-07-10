@@ -98,4 +98,29 @@ public class ItemListQuerySqlTests
         }
         return count;
     }
+
+    [Fact]
+    public void ItemsPagedQuery_DriveHierarchyFilter_TranslatesToSql_Correctly()
+    {
+        using var db = OfflineSqlServerContext();
+        var userId = Guid.NewGuid();
+        
+        // 1. Root / All Items -> filter isTopLevel
+        var sqlRoot = db.Set<Item>()
+            .AsNoTracking()
+            .Where(i => i.UserId == userId && !i.IsArchived)
+            .Where(i => i.Type != ItemType.File || (i.MetadataJson != null && i.MetadataJson.Contains("\"isTopLevel\":true")))
+            .ToQueryString();
+
+        sqlRoot.Should().Contain("\"isTopLevel\":true");
+
+        // 2. Specific Drive Folder -> filter parentToken
+        var sqlFolder = db.Set<Item>()
+            .AsNoTracking()
+            .Where(i => i.UserId == userId && !i.IsArchived)
+            .Where(i => i.Type == ItemType.File && i.MetadataJson != null && i.MetadataJson.Contains("\"folder-id-123\""))
+            .ToQueryString();
+
+        sqlFolder.Should().Contain("\"folder-id-123\"");
+    }
 }

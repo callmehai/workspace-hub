@@ -11,7 +11,6 @@ public class GoogleDriveGateway : IGoogleDriveGateway
 {
     private readonly ITokenService _tokenService;
     private readonly ILogger<GoogleDriveGateway> _logger;
-    private const int InitialSyncPageSize = 100; // MVP: chỉ lấy N file mới nhất ở lần sync đầu tiên
    
     private const string SyncFileFields =
     "id, name, mimeType, size, webViewLink, iconLink, modifiedTime, trashed, version, headRevisionId, parents";
@@ -46,21 +45,31 @@ public class GoogleDriveGateway : IGoogleDriveGateway
         {
             if (string.IsNullOrEmpty(pageToken))
             {
-                var listRequest = service.Files.List();
-                listRequest.PageSize = InitialSyncPageSize;
-                listRequest.Fields = $"files({SyncFileFields})";
-                listRequest.OrderBy = "modifiedTime desc";
-
-                var response = await listRequest.ExecuteAsync(ct);
-                if (response.Files != null)
+                var sixMonthsAgo = DateTime.UtcNow.AddMonths(-6).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
+                string? nextListToken = null;
+                
+                do
                 {
-                    foreach (var file in response.Files)
-                        filesDto.Add(MapToDto(file));
-                    // [Info] Silent truncation warning: nếu Drive có > InitialSyncPageSize file,
-                    // user sẽ không thấy toàn bộ — chấp nhận được ở MVP.
-                    if ((response.Files?.Count ?? 0) >= InitialSyncPageSize)
-                        _logger.LogWarning("Drive initial sync capped at {PageSize} files — account may have more. Silent truncation in effect (MVP).", InitialSyncPageSize);
-                }
+                    var listRequest = service.Files.List();
+                    listRequest.PageSize = 1000;
+                    listRequest.Fields = $"nextPageToken, files({SyncFileFields})";
+                    listRequest.OrderBy = "modifiedTime desc";
+                    // Lỗi phát sinh do Google Drive API KHÔNG cho phép dùng toán tử OR với trường sharedWithMe.
+                    // Giải pháp thay thế tốt nhất:
+                    // 1. Lấy toàn bộ file mình sở hữu ('me' in owners)
+                    // 2. Lấy TOÀN BỘ file mình không sở hữu (bao gồm Shared with me VÀ file người khác tạo trong folder của mình) 
+                    //    miễn là được chỉnh sửa trong 6 tháng gần đây.
+                    listRequest.Q = $"trashed = false and ('me' in owners or modifiedTime > '{sixMonthsAgo}')";
+                    listRequest.PageToken = nextListToken;
+
+                    var response = await listRequest.ExecuteAsync(ct);
+                    if (response.Files != null)
+                    {
+                        foreach (var file in response.Files)
+                            filesDto.Add(MapToDto(file));
+                    }
+                    nextListToken = response.NextPageToken;
+                } while (!string.IsNullOrEmpty(nextListToken));
 
                 var tokenResponse = await service.Changes.GetStartPageToken().ExecuteAsync(ct);
                 nextToken = tokenResponse.StartPageTokenValue
