@@ -11,10 +11,13 @@ public class JiraItemMapper : IJiraItemMapper
 
     public Item ToItem(JiraIssue issue, Guid userId, Guid connectionId, string? siteUrl = null)
     {
-        var description = AdfConverter.ToPlainText(issue.Description);
-        var snippet = description.Length > SnippetMaxLength
-            ? description[..SnippetMaxLength]
-            : description;
+        // Markdown subset (giữ heading/bold/list/code như trên Jira) — FE render bằng miniMarkdown.
+        var description = AdfConverter.ToMarkdown(issue.Description);
+        // Snippet cho list = plain text (không lộ ký tự markdown ** ` # trong dòng preview).
+        var plainForSnippet = AdfConverter.ToPlainText(issue.Description);
+        var snippet = plainForSnippet.Length > SnippetMaxLength
+            ? plainForSnippet[..SnippetMaxLength]
+            : plainForSnippet;
 
         // Browse URL mở issue trên web: "{site}/browse/{KEY}" (site lấy từ accessible-resources).
         var issueUrl = !string.IsNullOrWhiteSpace(siteUrl) && !string.IsNullOrWhiteSpace(issue.Key)

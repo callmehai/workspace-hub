@@ -7,6 +7,7 @@ import { EmailChipsInput } from '../EmailChipsInput';
 import { RichTextEditor } from '../RichTextEditor';
 import { AttachmentPicker } from '../AttachmentPicker';
 import { AttachmentCard } from './AttachmentCard';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { useI18n } from '../../hooks/useI18n';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
@@ -42,6 +43,15 @@ function extractEmail(str?: string | null): string {
   return (m ? m[1] : str).trim().toLowerCase();
 }
 
+/** Message THẬT cuối cùng của thread (bỏ nháp) — mốc tính người nhận reply + header In-Reply-To. */
+function lastNonDraftMessage(msgs: EmailThreadMessageDto[] | undefined): EmailThreadMessageDto | undefined {
+  if (!msgs?.length) return undefined;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (!msgs[i].labels?.includes('DRAFT')) return msgs[i];
+  }
+  return undefined;
+}
+
 export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connectionId }) => {
   const { t, lang } = useI18n();
   const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
@@ -64,6 +74,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedState, setLastSavedState] = useState<string>('');
   const [isDraftClosed, setIsDraftClosed] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
 
   const { data: thread, isLoading, isError } = useQuery({
     queryKey: ['emailThread', itemId],
@@ -120,32 +131,27 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     };
   };
 
-  // Load existing draft if present in the thread on initial load.
-  // Hydrate form state 1 lần từ draft đã fetch (guard isDraftLoadedRef) — chủ đích, nên tắt set-state-in-effect.
+  // Hydrate SILENT nháp có sẵn trong thread (1 lần, guard isDraftLoadedRef): nạp nội dung + draftItemId
+  // vào state nhưng KHÔNG tự mở ô Reply — panel chi tiết chỉ để XEM. Bấm Reply/Forward mới resume nháp.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (replyMode === null && !isDraftClosed && thread && thread.messages && !isDraftLoadedRef.current) {
       const draft = thread.messages.find(m => m.labels?.includes('DRAFT'));
       if (draft) {
+        // Nháp text thuần (tạo ngoài app) không có bodyHtml → fallback bodyPlainText (giữ xuống dòng).
+        const draftBody = draft.bodyHtml
+          || (draft.bodyPlainText ? draft.bodyPlainText.replace(/\n/g, '<br/>') : '');
         setDraftItemId(draft.itemId || null);
         setTo(draft.to || []);
         setCc(draft.cc || []);
         setBcc(draft.bcc || []);
-        setBodyHtml(draft.bodyHtml || '');
+        setBodyHtml(draftBody);
         setLastSavedState(JSON.stringify({
           to: draft.to || [],
           cc: draft.cc || [],
           bcc: draft.bcc || [],
-          bodyHtml: draft.bodyHtml || ''
+          bodyHtml: draftBody
         }));
-        
-        if (draft.subject?.toLowerCase().startsWith('fwd:')) {
-          setReplyMode('forward');
-        } else if (draft.cc?.length > 0 || draft.to?.length > 1) {
-          setReplyMode('replyAll');
-        } else {
-          setReplyMode('reply');
-        }
         isDraftLoadedRef.current = true;
       }
     }
@@ -179,7 +185,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
         ? (baseSubject.toLowerCase().startsWith('fwd:') ? baseSubject : `Fwd: ${baseSubject}`)
         : (baseSubject.toLowerCase().startsWith('re:') ? baseSubject : `Re: ${baseSubject}`);
 
-      const latestMsg = thread.messages[thread.messages.length - 1];
+      const latestMsg = lastNonDraftMessage(thread.messages);
 
       const payload = {
         connectionId,
@@ -236,7 +242,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
       ? (baseSubject.toLowerCase().startsWith('fwd:') ? baseSubject : `Fwd: ${baseSubject}`)
       : (baseSubject.toLowerCase().startsWith('re:') ? baseSubject : `Re: ${baseSubject}`);
 
-    const latestMsg = thread.messages[thread.messages.length - 1];
+    const latestMsg = lastNonDraftMessage(thread.messages);
 
     const payload = {
       connectionId,
@@ -290,7 +296,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     setLastSavedState('');
     setAttachFiles([]);
 
-    const latestMsg = thread?.messages?.[thread.messages.length - 1];
+    const latestMsg = lastNonDraftMessage(thread?.messages);
     if (latestMsg) {
       const rec = getReplyRecipients(mode, latestMsg, me);
       setTo(rec.to);
@@ -322,7 +328,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
         const draftSubject = mode === 'forward'
           ? (baseSubject.toLowerCase().startsWith('fwd:') ? baseSubject : `Fwd: ${baseSubject}`)
           : (baseSubject.toLowerCase().startsWith('re:') ? baseSubject : `Re: ${baseSubject}`);
-        const latestMsg = thread?.messages?.[thread.messages.length - 1];
+        const latestMsg = lastNonDraftMessage(thread?.messages);
 
         await sendEmailApi.updateDraft(draftItemId, {
           connectionId,
@@ -465,18 +471,23 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     );
   }
 
-  // Filter out any messages that are draft
-  const nonDraftMessages = thread.messages.filter(msg => !msg.labels?.includes('DRAFT'));
+  // Hiện CẢ nháp trong hội thoại (view-only, badge "Thư nháp") — chỉnh sửa qua nút "Tiếp tục chỉnh sửa"
+  // ở footer panel hoặc resume khi bấm Reply/Forward.
+  const messages = thread.messages;
+  // Nút Reply/Forward gắn vào message THẬT cuối cùng (không gắn vào nháp).
+  let lastNonDraftIdx = -1;
+  messages.forEach((m, i) => { if (!m.labels?.includes('DRAFT')) lastNonDraftIdx = i; });
 
   return (
     <div className="space-y-4">
       <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">
-        {t('sendEmail.content') || 'Hội thoại'} ({nonDraftMessages.length})
+        {t('sendEmail.content') || 'Hội thoại'} ({messages.length})
       </div>
-      
+
       <div className="space-y-3">
-        {nonDraftMessages.map((msg, index) => {
-          const isLatest = index === nonDraftMessages.length - 1;
+        {messages.map((msg, index) => {
+          const isDraftMsg = !!msg.labels?.includes('DRAFT');
+          const isLatest = index === messages.length - 1;
           const isExpanded = expandedMsgs[msg.messageId] ?? isLatest;
           const sender = parseSender(msg.from);
           const initial = (sender.name || sender.email || '?').charAt(0).toUpperCase();
@@ -493,7 +504,14 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                     {initial}
                   </div>
                   <div className="flex flex-col items-start min-w-0">
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-full" title={sender.email}>{sender.name}</span>
+                    <span className="flex items-center gap-1.5 max-w-full min-w-0">
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate" title={sender.email}>{sender.name}</span>
+                      {isDraftMsg && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                          {t('mailbox.drafts')}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
                       {new Date(msg.occurredAt).toLocaleString(dl)}
                     </span>
@@ -557,8 +575,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                     </div>
                   )}
 
-                  {/* Quick Actions (only show on latest expanded) */}
-                  {isLatest && !replyMode && (
+                  {/* Quick Actions — gắn vào message THẬT cuối cùng (không phải nháp) */}
+                  {index === lastNonDraftIdx && !replyMode && (
                     <div className="mt-5 flex items-center gap-2">
                       <button onClick={() => handleAction('reply')} className="h-9 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold flex items-center gap-1.5 transition-colors">
                         <Reply className="w-4 h-4 text-slate-500" /> Reply
@@ -645,11 +663,7 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
               <div className="flex items-center gap-2">
                 {draftItemId && (
                   <button
-                    onClick={() => {
-                      if (window.confirm(t('sendEmail.discardConfirm'))) {
-                        discardMutation.mutate();
-                      }
-                    }}
+                    onClick={() => setDiscardConfirmOpen(true)}
                     disabled={discardMutation.isPending || replyMutation.isPending}
                     className="h-10 px-4 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10 font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 text-[13px]"
                   >
@@ -678,6 +692,17 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
           </div>
         </div>
       )}
+
+      {/* Xác nhận hủy thư nháp */}
+      <ConfirmDialog
+        open={discardConfirmOpen}
+        tone="danger"
+        message={t('sendEmail.discardConfirm')}
+        confirmLabel={t('sendEmail.discardDraft')}
+        loading={discardMutation.isPending}
+        onConfirm={() => discardMutation.mutate(undefined, { onSettled: () => setDiscardConfirmOpen(false) })}
+        onCancel={() => setDiscardConfirmOpen(false)}
+      />
     </div>
   );
 };

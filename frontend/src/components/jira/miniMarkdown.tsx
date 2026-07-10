@@ -52,6 +52,20 @@ function renderInline(text: string, keyBase: string, renderAttach?: AttachRender
       const end = rest.indexOf('~~', 2);
       if (end > 2) { pushText(); out.push(<s key={`${keyBase}-s${k++}`}>{renderInline(rest.slice(2, end), `${keyBase}-s${k}`, renderAttach)}</s>); i += end + 2; continue; }
     }
+    // `code` inline — chip mono như Jira
+    if (text[i] === '`') {
+      const end = text.indexOf('`', i + 1);
+      if (end > i + 1) {
+        pushText();
+        out.push(
+          <code key={`${keyBase}-c${k++}`} className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-mono text-rose-600 dark:text-rose-400 break-all">
+            {text.slice(i + 1, end)}
+          </code>
+        );
+        i = end + 1;
+        continue;
+      }
+    }
     // *italic* or _italic_
     const ch = text[i];
     if (ch === '*' || ch === '_') {
@@ -65,7 +79,15 @@ function renderInline(text: string, keyBase: string, renderAttach?: AttachRender
   return out;
 }
 
-/** Render markdown subset → React (khối: paragraph, bullet/ordered list). */
+/** Class heading theo level — Jira-style: H1/H2 to đậm, H3+ nhỏ dần. */
+function headingClass(level: number): string {
+  if (level <= 1) return 'text-[16px] font-bold mt-3 mb-1';
+  if (level === 2) return 'text-[15px] font-bold mt-2.5 mb-1';
+  if (level === 3) return 'text-[14px] font-semibold mt-2 mb-0.5';
+  return 'text-[13.5px] font-semibold mt-1.5 mb-0.5';
+}
+
+/** Render markdown subset → React (khối: paragraph, heading, bullet/ordered list, fenced code). */
 export function renderRichText(text: string, renderAttach?: AttachRenderer): React.ReactNode {
   const lines = (text ?? '').replace(/\r\n/g, '\n').split('\n');
   const blocks: React.ReactNode[] = [];
@@ -73,6 +95,34 @@ export function renderRichText(text: string, renderAttach?: AttachRenderer): Rea
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
+
+    // Fenced code block ``` ... ```
+    if (line.trimStart().startsWith('```')) {
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !(lines[i] ?? '').trimStart().startsWith('```')) { codeLines.push(lines[i]); i++; }
+      if (i < lines.length) i++; // bỏ dòng đóng
+      blocks.push(
+        <pre key={`cb${bi++}`} className="my-1.5 px-3 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-mono leading-[1.6] text-slate-800 dark:text-slate-200 overflow-x-auto whitespace-pre">
+          {codeLines.join('\n')}
+        </pre>
+      );
+      continue;
+    }
+
+    // Heading "# " → "###### "
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      const level = heading[1].length;
+      blocks.push(
+        <p key={`h${bi++}`} className={`${headingClass(level)} text-slate-900 dark:text-slate-50`}>
+          {renderInline(heading[2], `h${bi}-${i}`, renderAttach)}
+        </p>
+      );
+      i++;
+      continue;
+    }
+
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
     const ordered = /^\s*\d+\.\s+(.*)$/.exec(line);
 
@@ -90,7 +140,16 @@ export function renderRichText(text: string, renderAttach?: AttachRenderer): Rea
       blocks.push(<ol key={`ol${bi++}`} className="list-decimal pl-5 space-y-0.5 my-1">{items}</ol>);
       continue;
     }
-    if (line.trim() === '') { i++; continue; }
+    if (line.trim() === '') {
+      // Dòng trống = ngắt đoạn — chèn khoảng cách (1 lần cho cả cụm dòng trống) để giữ bố cục gốc.
+      if (blocks.length > 0) {
+        blocks.push(<div key={`sp${bi++}`} className="h-2.5" aria-hidden />);
+        while (i < lines.length && (lines[i] ?? '').trim() === '') i++;
+      } else {
+        i++;
+      }
+      continue;
+    }
     blocks.push(<p key={`p${bi++}`} className="my-0.5">{renderInline(line, `p${bi}-${i}`, renderAttach)}</p>);
     i++;
   }

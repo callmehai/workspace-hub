@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
@@ -192,12 +193,13 @@ export const Inbox = () => {
   });
 
   const [isEmptyMailboxPending, setIsEmptyMailboxPending] = useState(false);
+  const [emptyMailboxConfirmOpen, setEmptyMailboxConfirmOpen] = useState(false);
+  // Nháp đang chờ xác nhận hủy (null = đóng dialog).
+  const [discardDraftTargetId, setDiscardDraftTargetId] = useState<string | null>(null);
 
   const handleEmptyMailbox = async () => {
     const isTrash = mailbox === 'TRASH';
-    const confirmMsg = isTrash ? t('bulk.emptyTrashConfirm') : t('bulk.emptySpamConfirm');
-    if (!window.confirm(confirmMsg)) return;
-
+    setEmptyMailboxConfirmOpen(false);
     setIsEmptyMailboxPending(true);
     try {
       // Dọn TOÀN BỘ mailbox (không chỉ trang hiện tại): xoá theo lô 100 (giới hạn limit BE)
@@ -479,7 +481,7 @@ export const Inbox = () => {
               <span>{mailbox === 'TRASH' ? t('bulk.trashWarning') : t('bulk.spamWarning')}</span>
             </div>
             <button
-              onClick={handleEmptyMailbox}
+              onClick={() => setEmptyMailboxConfirmOpen(true)}
               disabled={isEmptyMailboxPending}
               className="shrink-0 font-bold hover:underline text-rose-700 dark:text-rose-400 flex items-center gap-1 disabled:opacity-50"
             >
@@ -565,13 +567,7 @@ export const Inbox = () => {
             return (
             <div
               key={item.id}
-              onClick={() => {
-                if (isDraftEmail(item)) {
-                  navigate(`/send-email?draftItemId=${item.id}`);
-                } else {
-                  setSelectedId(item.id);
-                }
-              }}
+              onClick={() => setSelectedId(item.id)}
               className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
             >
               {/* checkbox */}
@@ -650,9 +646,7 @@ export const Inbox = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (window.confirm(t('sendEmail.discardConfirm'))) {
-                          discardDraftMutation.mutate(item.id);
-                        }
+                        setDiscardDraftTargetId(item.id);
                       }}
                       disabled={discardDraftMutation.isPending}
                       className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
@@ -750,6 +744,34 @@ export const Inbox = () => {
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
         mailbox={mailbox || undefined}
+      />
+
+      {/* Xác nhận dọn sạch Thùng rác / Thư rác */}
+      <ConfirmDialog
+        open={emptyMailboxConfirmOpen}
+        tone="danger"
+        message={mailbox === 'TRASH' ? t('bulk.emptyTrashConfirm') : t('bulk.emptySpamConfirm')}
+        confirmLabel={mailbox === 'TRASH' ? t('bulk.emptyTrashBtn') : t('bulk.emptySpamBtn')}
+        loading={isEmptyMailboxPending}
+        onConfirm={handleEmptyMailbox}
+        onCancel={() => setEmptyMailboxConfirmOpen(false)}
+      />
+
+      {/* Xác nhận hủy thư nháp (nút thùng rác trên dòng nháp) */}
+      <ConfirmDialog
+        open={discardDraftTargetId !== null}
+        tone="danger"
+        message={t('sendEmail.discardConfirm')}
+        confirmLabel={t('sendEmail.discardDraft')}
+        loading={discardDraftMutation.isPending}
+        onConfirm={() => {
+          if (discardDraftTargetId) {
+            discardDraftMutation.mutate(discardDraftTargetId, {
+              onSettled: () => setDiscardDraftTargetId(null),
+            });
+          }
+        }}
+        onCancel={() => setDiscardDraftTargetId(null)}
       />
     </div>
   );
