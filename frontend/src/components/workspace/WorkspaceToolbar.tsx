@@ -61,13 +61,15 @@ function FilterGroup({ label, children }: { label: string; children: React.React
   );
 }
 
-/** Lọc theo tag dạng dropdown checklist — gom mọi tag vào 1 nút, không rải chip tràn hàng. */
+/** Lọc theo tag dạng dropdown checklist ĐA CHỌN — gom mọi tag vào 1 nút, không rải chip tràn hàng.
+ *  Chọn nhiều tag = lọc OR (item khớp nếu mang bất kỳ tag nào đã chọn). */
 function TagFilterDropdown({
-  tags, tagFilter, onTagFilter, onManage,
+  tags, tagFilters, onToggleTagFilter, onClearTagFilters, onManage,
 }: {
   tags: TagResponse[];
-  tagFilter: string | null;
-  onTagFilter: (id: string | null) => void;
+  tagFilters: string[];
+  onToggleTagFilter: (id: string) => void;
+  onClearTagFilters: () => void;
   onManage: () => void;
 }) {
   const { t } = useI18n();
@@ -83,7 +85,8 @@ function TagFilterDropdown({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const selected = tags.find(x => x.id === tagFilter) ?? null;
+  const selectedTags = tags.filter(x => tagFilters.includes(x.id));
+  const hasSelection = selectedTags.length > 0;
 
   return (
     <div className="relative" ref={ref}>
@@ -91,15 +94,21 @@ function TagFilterDropdown({
         onClick={() => setOpen(o => !o)}
         title={t('tag.filterTitle')}
         className={`inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-[13px] font-medium border transition-colors whitespace-nowrap
-          ${selected
+          ${hasSelection
             ? 'bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/30'
             : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
           }`}
       >
-        {selected
-          ? <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selected.color }} />
-          : <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-        <span className="max-w-[140px] truncate">{selected ? selected.name : t('tag.filterAll')}</span>
+        {selectedTags.length === 1
+          ? <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selectedTags[0].color }} />
+          : <Tag className={`w-3.5 h-3.5 shrink-0 ${hasSelection ? '' : 'text-slate-400'}`} />}
+        <span className="max-w-[140px] truncate">
+          {selectedTags.length === 1
+            ? selectedTags[0].name
+            : hasSelection
+              ? t('tag.filterCount', { n: selectedTags.length })
+              : t('tag.filterAll')}
+        </span>
         <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -109,9 +118,9 @@ function TagFilterDropdown({
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               {t('tag.filterTitle')}
             </span>
-            {selected && (
+            {hasSelection && (
               <button
-                onClick={() => onTagFilter(null)}
+                onClick={onClearTagFilters}
                 className="text-[12px] font-medium text-brand-600 dark:text-brand-400 hover:underline"
               >
                 {t('tag.clearSelection')}
@@ -126,11 +135,11 @@ function TagFilterDropdown({
           ) : (
             <div className="max-h-60 overflow-y-auto py-1">
               {tags.map(tg => {
-                const active = tagFilter === tg.id;
+                const active = tagFilters.includes(tg.id);
                 return (
                   <button
                     key={tg.id}
-                    onClick={() => onTagFilter(active ? null : tg.id)}
+                    onClick={() => onToggleTagFilter(tg.id)}
                     className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
                   >
                     <span className={`flex items-center justify-center w-4 h-4 rounded-[5px] border shrink-0 transition-colors
@@ -175,8 +184,9 @@ interface WorkspaceToolbarProps {
   sourceType?: ItemType | null;
   importantOnly: boolean;
   onImportantToggle: () => void;
-  tagFilter: string | null;
-  onTagFilter: (id: string | null) => void;
+  tagFilters: string[];
+  onToggleTagFilter: (id: string) => void;
+  onClearTagFilters: () => void;
   projectKeyFilter?: string;
   onProjectKeyChange?: (v: string) => void;
   assigneeFilter?: string;
@@ -191,7 +201,7 @@ export const WorkspaceToolbar = ({
   typeFilter, onToggleTypeFilter,
   sourceType = null,
   importantOnly, onImportantToggle,
-  tagFilter, onTagFilter,
+  tagFilters, onToggleTagFilter, onClearTagFilters,
   projectKeyFilter, onProjectKeyChange,
   assigneeFilter, onAssigneeChange,
   searchInput, onSearchChange,
@@ -282,10 +292,18 @@ export const WorkspaceToolbar = ({
     }
   };
 
+  // Nút tạo nhanh — ở tab lẻ chỉ hiện nút hợp loại đó; "Tất cả mục" hiện đủ.
+  // Ghi chú là loại nội bộ (không phải integration) → chỉ hiện ở "Tất cả mục".
+  const showNote = !sourceType;
+  const showEvent = !sourceType || sourceType === 'Event';
+  const showTicket = !sourceType || sourceType === 'Ticket';
+  const showDriveFolder = hasActiveDrive && (!sourceType || sourceType === 'File');
+  const showCreateRow = showNote || showEvent || showTicket || showDriveFolder;
+
   return (
     <>
-      {/* ── Hàng 1: context + actions (vị trí cố định ở cả 2 view) ── */}
-      <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
+      {/* ── Hàng 1: context + Đồng bộ + đổi view — cố định ở góc trên phải ── */}
+      <div className="flex items-end justify-between gap-3 mb-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5">
             {folder && (
@@ -342,46 +360,6 @@ export const WorkspaceToolbar = ({
               <span>{t('toolbar.board')}</span>
             </button>
           </div>
-
-          {/* Nút tạo nhanh — ở tab lẻ chỉ hiện nút hợp loại đó; "Tất cả mục" hiện đủ.
-              Ghi chú là loại nội bộ (không phải integration) → chỉ hiện ở "Tất cả mục". */}
-          {!sourceType && (
-            <button
-              onClick={() => setIsNoteOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-              title={t('toolbar.noteTooltip')}
-            >
-              <Plus className="w-4 h-4" /> {t('toolbar.note')}
-            </button>
-          )}
-          {(!sourceType || sourceType === 'Event') && (
-            <button
-              onClick={() => setIsEventOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-              title={t('toolbar.eventTooltip')}
-            >
-              <Plus className="w-4 h-4" /> {t('toolbar.event')}
-            </button>
-          )}
-          {(!sourceType || sourceType === 'Ticket') && (
-            <button
-              onClick={() => setIsTicketOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-              title={t('toolbar.ticketTooltip')}
-            >
-              <Plus className="w-4 h-4" /> {t('type.ticket')}
-            </button>
-          )}
-          {hasActiveDrive && (!sourceType || sourceType === 'File') && (
-            <button
-              type="button"
-              onClick={() => setIsDriveFolderOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-            >
-              <FolderPlus className="w-4 h-4" />
-              <span>{t('toolbar.driveFolder')}</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -414,8 +392,8 @@ export const WorkspaceToolbar = ({
           )}
         </div>
 
-        {/* Tier 2 — lọc thêm: Quan trọng + Tag (checklist dropdown) */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Tier 2 — lọc thêm (trái): Quan trọng + Tag · nút tạo nhanh (phải), ngay trên thanh search */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <FilterGroup label={t('toolbar.groupRefine')}>
             <Chip active={importantOnly} onClick={onImportantToggle}>
               <Star className={`w-3.5 h-3.5 ${importantOnly ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
@@ -423,11 +401,55 @@ export const WorkspaceToolbar = ({
             </Chip>
             <TagFilterDropdown
               tags={tags}
-              tagFilter={tagFilter}
-              onTagFilter={onTagFilter}
+              tagFilters={tagFilters}
+              onToggleTagFilter={onToggleTagFilter}
+              onClearTagFilters={onClearTagFilters}
               onManage={() => setIsTagManagerOpen(true)}
             />
           </FilterGroup>
+
+          {/* Nút tạo nhanh — dồn về mép phải, cùng dòng lọc thêm. Ẩn cả cụm nếu không có nút hợp tab. */}
+          {showCreateRow && (
+            <div className="flex items-center gap-2.5 flex-wrap justify-end ml-auto">
+              {showNote && (
+                <button
+                  onClick={() => setIsNoteOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+                  title={t('toolbar.noteTooltip')}
+                >
+                  <Plus className="w-4 h-4" /> {t('toolbar.note')}
+                </button>
+              )}
+              {showEvent && (
+                <button
+                  onClick={() => setIsEventOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+                  title={t('toolbar.eventTooltip')}
+                >
+                  <Plus className="w-4 h-4" /> {t('toolbar.event')}
+                </button>
+              )}
+              {showTicket && (
+                <button
+                  onClick={() => setIsTicketOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+                  title={t('toolbar.ticketTooltip')}
+                >
+                  <Plus className="w-4 h-4" /> {t('type.ticket')}
+                </button>
+              )}
+              {showDriveFolder && (
+                <button
+                  type="button"
+                  onClick={() => setIsDriveFolderOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  <span>{t('toolbar.driveFolder')}</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

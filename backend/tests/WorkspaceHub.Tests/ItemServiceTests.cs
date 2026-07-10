@@ -280,7 +280,7 @@ public class ItemServiceTests
         Assert.Equal(0, result.Total);
         _repoMock.Verify(r => r.GetPagedAsync(
             It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<IReadOnlyList<ItemStatus>?>(),
-            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
+            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<IReadOnlyList<Guid>?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -304,7 +304,7 @@ public class ItemServiceTests
         Assert.Equal(0, result.Total);
         _repoMock.Verify(r => r.GetPagedAsync(
             It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<IReadOnlyList<ItemStatus>?>(),
-            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
+            It.IsAny<IReadOnlyList<ItemType>?>(), It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<IReadOnlyList<Guid>?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

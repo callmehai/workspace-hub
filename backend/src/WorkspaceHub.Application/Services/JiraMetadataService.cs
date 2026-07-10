@@ -70,6 +70,20 @@ public class JiraMetadataService : IJiraMetadataService
         return await _gateway.GetTransitionsAsync(conn, item.ExternalId, ct);
     }
 
+    public async Task<JiraSite?> GetSiteAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        var conn = await GetValidJiraConnectionAsync(connectionId, userId, ct);
+
+        var cacheKey = $"jira:site:{connectionId}";
+        if (_cache.TryGetValue(cacheKey, out JiraSite? cached) && cached is not null)
+            return cached;
+
+        var site = await _gateway.GetSiteAsync(conn, ct);
+        if (site is not null)
+            _cache.Set(cacheKey, site, CacheTtl);
+        return site;
+    }
+
     private async Task<IReadOnlyList<T>> GetCachedAsync<T>(
         string cacheKey,
         Guid connectionId,

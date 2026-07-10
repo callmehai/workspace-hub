@@ -21,7 +21,7 @@ public interface IItemRepository : IGenericRepository<Item>
         IReadOnlyList<ItemType>? types = null,
         bool? isImportant = null,
         string? search = null,
-        Guid? tagId = null,
+        IReadOnlyList<Guid>? tagIds = null,
         string? projectKey = null,
         string? gmailLabel = null,
         string? assigneeAccountId = null,
