@@ -721,13 +721,6 @@ export function CalendarPage() {
               <h1 className="m-0 text-[22px] font-semibold leading-tight">{currentFolder?.name ?? t('calendar.pageTitle')}</h1>
               {isFetching && !loading && <Loader2 className="h-4 w-4 animate-spin text-brand-500" />}
             </div>
-            <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
-              {currentFolder
-                ? t('calendar.folderSubtitle')
-                : googleCalendarOnly
-                  ? t('calendar.googleSubtitle', { n: entries.length })
-                  : t('calendar.subtitle', { n: entries.length })}
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
             <button type="button" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
@@ -778,11 +771,6 @@ export function CalendarPage() {
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="mb-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-[12px] text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
-          <CalendarDays className="h-4 w-4 shrink-0" />
-          <span>{t('calendar.interactionHint')}</span>
         </div>
 
         <div className="flex min-h-[620px] flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
