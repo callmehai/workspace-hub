@@ -69,10 +69,11 @@ public class ItemService : IItemService
             request.Types,
             request.IsImportant,
             request.Search?.Trim(),
-            request.TagId,
+            request.TagIds,
             request.ProjectKey,
             request.GmailLabel,
             request.Assignee,
+            request.ConnectionId,
             page,
             limit,
             ct);

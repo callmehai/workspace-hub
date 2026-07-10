@@ -119,4 +119,10 @@ public interface IJiraGateway
     /// Dùng để build browse URL "{site}/browse/{KEY}". Trả null nếu không lấy được (không throw).
     /// </summary>
     Task<string?> GetSiteUrlAsync(Connection connection, CancellationToken ct = default);
+
+    /// <summary>
+    /// Thông tin Jira site (name + url) của connection — cho FE hiển thị tên account thay cho cloudId.
+    /// Trả null nếu không lấy được (không throw).
+    /// </summary>
+    Task<JiraSite?> GetSiteAsync(Connection connection, CancellationToken ct = default);
 }

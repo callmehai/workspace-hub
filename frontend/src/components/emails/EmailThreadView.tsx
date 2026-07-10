@@ -222,9 +222,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                     {msg.bcc?.length > 0 && <div><span className="font-semibold w-10 inline-block">Bcc:</span> {msg.bcc.join(', ')}</div>}
                   </div>
 
-                  {/* HTML Body */}
-                  <div 
-                    className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] break-words overflow-x-auto email-body-content"
+                  {/* HTML Body — LUÔN render trên nền sáng: HTML người gửi soạn cho nền trắng,
+                      để nền tối (dark mode) sẽ thành chữ đen trên nền tối = vô hình. */}
+                  <div
+                    className="text-[13.5px] leading-[1.65] break-words overflow-x-auto email-body-content rounded-lg bg-white text-slate-900 p-3.5 ring-1 ring-slate-200 dark:ring-slate-700 [color-scheme:light]"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.bodyHtml || msg.bodyPlainText?.replace(/\n/g, '<br/>') || '') }}
                   />
 

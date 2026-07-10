@@ -12,12 +12,14 @@ export interface GetItemsParams {
   types?: ItemType[];
   isImportant?: boolean;
   search?: string;
-  tagId?: string;
+  /** Lọc theo tag — đa chọn (OR): item khớp nếu mang bất kỳ tag nào trong danh sách. */
+  tagIds?: string[];
   projectKey?: string;
   /** Lọc theo Gmail label (INBOX/SENT/DRAFT/STARRED/IMPORTANT/CATEGORY_*) — chỉ áp cho Email. */
   gmailLabel?: string;
   /** Lọc ticket Jira theo người phụ trách (accountId); "unassigned" = chưa gán. */
   assignee?: string;
+  connectionId?: string;
   page?: number;
   limit?: number;
 }

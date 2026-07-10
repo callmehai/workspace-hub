@@ -14,10 +14,11 @@ public record GetItemsRequest(
     IReadOnlyList<ItemType>? Types = null,
     bool? IsImportant = null,
     string? Search = null,
-    Guid? TagId = null,
+    IReadOnlyList<Guid>? TagIds = null,   // đa chọn: item khớp nếu mang BẤT KỲ tag nào trong danh sách (OR)
     string? ProjectKey = null,
     string? GmailLabel = null,
     string? Assignee = null,      // Jira accountId; "unassigned" = ticket chưa gán người
+    Guid? ConnectionId = null,    // Lọc item theo connection (Drive/Gmail/…)
     int Page = 1,
     int Limit = 20);
 

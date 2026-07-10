@@ -24,12 +24,20 @@ export interface JiraUser {
   displayName: string;
   email: string | null;
   active: boolean;
+  /** Avatar 48x48 từ Jira (có thể null nếu user không có ảnh). */
+  avatarUrl: string | null;
 }
 
 export interface JiraTransition {
   id: string;
   name: string;
   toStatusName: string | null;
+}
+
+/** Thông tin Jira site (Atlassian) của 1 connection — hiển thị tên account thay cho cloudId. */
+export interface JiraSite {
+  name: string;
+  url: string;
 }
 
 // ── API client ────────────────────────────────────────────────────────────────
@@ -85,5 +93,15 @@ export const jiraApi = {
   getTransitions: async (connectionId: string, itemId: string): Promise<JiraTransition[]> => {
     const res = await api.get('/jira/transitions', { params: { connectionId, itemId } });
     return res.data;
+  },
+
+  /**
+   * GET /api/jira/site?connectionId=
+   * Jira site info (name + url) for a connection — cached 5 min on BE.
+   * Returns null when BE responds 204 (site could not be resolved).
+   */
+  getSite: async (connectionId: string): Promise<JiraSite | null> => {
+    const res = await api.get('/jira/site', { params: { connectionId } });
+    return res.status === 204 ? null : res.data;
   },
 };

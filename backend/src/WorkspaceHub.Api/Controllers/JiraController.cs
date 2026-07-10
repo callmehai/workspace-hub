@@ -43,4 +43,12 @@ public class JiraController : ApiControllerBase
     [HttpGet("transitions")]
     public async Task<IActionResult> GetTransitions([FromQuery] Guid connectionId, [FromQuery] Guid itemId, CancellationToken ct)
         => Ok(await _metadata.GetTransitionsAsync(connectionId, CurrentUserId, itemId, ct));
+
+    /// <summary>GET /api/jira/site?connectionId= — tên + URL Jira site (cho FE hiển thị tên account). 204 nếu không lấy được.</summary>
+    [HttpGet("site")]
+    public async Task<IActionResult> GetSite([FromQuery] Guid connectionId, CancellationToken ct)
+    {
+        var site = await _metadata.GetSiteAsync(connectionId, CurrentUserId, ct);
+        return site is null ? NoContent() : Ok(site);
+    }
 }
