@@ -15,4 +15,7 @@ public interface IJiraMetadataService
 
     /// <summary>Transition khả dụng của 1 issue (theo itemId local). Không cache (phụ thuộc workflow state).</summary>
     Task<IReadOnlyList<JiraTransition>> GetTransitionsAsync(Guid connectionId, Guid userId, Guid itemId, CancellationToken ct = default);
+
+    /// <summary>Thông tin Jira site (name + url) của connection — cho FE hiển thị tên account. Cache 5 phút.</summary>
+    Task<JiraSite?> GetSiteAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
 }

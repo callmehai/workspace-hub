@@ -23,7 +23,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         IReadOnlyList<ItemType>? types = null,
         bool? isImportant = null,
         string? search = null,
-        Guid? tagId = null,
+        IReadOnlyList<Guid>? tagIds = null,
         string? projectKey = null,
         string? gmailLabel = null,
         string? assigneeAccountId = null,
@@ -48,11 +48,12 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 i.ItemFolders.Any(ifj => ifj.FolderId == folderId.Value));
         }
 
-        // TagId: join qua TagAssignments junction table
-        if (tagId.HasValue)
+        // TagIds: join qua TagAssignments junction table — đa chọn theo OR
+        // (item khớp nếu mang BẤT KỲ tag nào trong danh sách đã chọn).
+        if (tagIds is { Count: > 0 })
         {
             query = query.Where(i =>
-                i.TagAssignments.Any(ta => ta.TagId == tagId.Value));
+                i.TagAssignments.Any(ta => tagIds.Contains(ta.TagId)));
         }
 
         // Status: Kanban column filter (Inbox/Doing/Done) — đa chọn
