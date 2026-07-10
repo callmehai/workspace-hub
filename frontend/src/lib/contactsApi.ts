@@ -1,12 +1,13 @@
 import api from './api';
 import { odataEscape, parseODataResponse, type ODataResponse } from './odata';
+import type { QueryClient } from '@tanstack/react-query';
 
 export type GoogleContactSource = 'Contact' | 'OtherContact';
 
 export interface ContactDto {
   id: string;
   connectionId: string;
-  email: string;
+  email?: string | null;
   displayName?: string | null;
   source: GoogleContactSource;
   etag?: string | null;
@@ -14,19 +15,60 @@ export interface ContactDto {
   updatedAt?: string | null;
 }
 
-/** Gợi ý autocomplete — subset của ContactDto. */
-export type ContactSuggestion = Pick<ContactDto, 'email' | 'displayName' | 'source'>;
+export interface LabeledEmail {
+  value: string;
+  label?: string | null;
+}
+
+export interface LabeledPhone {
+  value: string;
+  label?: string | null;
+}
+
+export interface ContactBirthday {
+  month?: number | null;
+  day?: number | null;
+  year?: number | null;
+}
+
+export interface ContactOrganization {
+  name?: string | null;
+  title?: string | null;
+}
+
+export interface ContactProfile {
+  givenName?: string | null;
+  familyName?: string | null;
+  emails: LabeledEmail[];
+  phones: LabeledPhone[];
+  birthday?: ContactBirthday | null;
+  organization?: ContactOrganization | null;
+}
+
+export interface ContactDetailDto extends ContactDto {
+  profile: ContactProfile;
+  readOnly: boolean;
+}
+
+/** Gợi ý autocomplete — luôn có email (flatten từ profile). */
+export type ContactSuggestion = {
+  email: string;
+  displayName?: string | null;
+  source: GoogleContactSource;
+};
 
 export interface CreateContactRequest {
   connectionId: string;
   email: string;
   displayName?: string;
+  profile?: ContactProfile;
 }
 
 export interface PatchContactRequest {
   displayName?: string;
   email?: string;
   etag: string;
+  profile?: ContactProfile;
 }
 
 export interface GetContactsParams {
@@ -34,6 +76,39 @@ export interface GetContactsParams {
   search?: string;
   skip?: number;
   top?: number;
+}
+
+/** Cùng logic hiển thị tên ở list + detail — ưu tiên Họ/Tên trong profile. */
+export function contactDisplayName(
+  contact: Pick<ContactDto, 'displayName' | 'email'> & { profile?: ContactProfile },
+): string {
+  const parts = [contact.profile?.givenName, contact.profile?.familyName]
+    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+  if (parts.length > 0) return parts.join(' ');
+  return contact.displayName?.trim() || contact.email || '—';
+}
+
+/** Gộp row list khi detail/poll có data mới hơn (tránh list stale trong khi panel đã đúng). */
+export function patchContactListCache(queryClient: QueryClient, contact: ContactDetailDto): void {
+  const displayName = contactDisplayName(contact);
+  queryClient.setQueriesData<ODataResponse<ContactDto>>(
+    { queryKey: ['contacts'] },
+    (cached) => {
+      if (!cached?.value) return cached;
+      const index = cached.value.findIndex((r) => r.id === contact.id);
+      if (index < 0) return cached;
+      const value = [...cached.value];
+      value[index] = {
+        ...value[index],
+        displayName,
+        email: contact.email,
+        etag: contact.etag,
+        updatedAt: contact.updatedAt,
+        syncedAt: contact.syncedAt,
+      };
+      return { ...cached, value };
+    },
+  );
 }
 
 function buildContactsFilter(params: GetContactsParams): string | undefined {
@@ -66,21 +141,19 @@ export const contactsApi = {
     return parseODataResponse<ContactDto>(response.data);
   },
 
-  /** Gợi ý To/Cc/Bcc — cùng endpoint OData, $select subset. */
-  suggestContacts: async (connectionId: string, q: string, limit = 10): Promise<ContactSuggestion[]> => {
-    if (q.trim().length < 2) return [];
+  getContactById: async (id: string): Promise<ContactDetailDto> => {
+    const response = await api.get<ContactDetailDto>(`/contacts/${id}`);
+    return response.data;
+  },
+
+  /** Gợi ý To/Cc/Bcc — flatten mọi email trong profile. */
+  suggestContacts: async (connectionId: string, query: string, limit = 10): Promise<ContactSuggestion[]> => {
+    if (query.trim().length < 2) return [];
     try {
-      const term = odataEscape(q.trim());
-      const filter = `contains(Email,'${term}') or contains(DisplayName,'${term}')`;
-      const url =
-        `/Contacts?connectionId=${connectionId}` +
-        `&$filter=${encodeURIComponent(filter)}` +
-        `&$top=${limit}` +
-        `&$orderby=${encodeURIComponent('DisplayName')}` +
-        `&$select=${encodeURIComponent('email,displayName,source')}`;
-      const response = await api.get(url);
-      const { value } = parseODataResponse<ContactSuggestion>(response.data);
-      return value;
+      const response = await api.get<ContactSuggestion[]>('/contacts/suggest', {
+        params: { connectionId, query: query.trim(), limit },
+      });
+      return response.data;
     } catch {
       return [];
     }
@@ -91,8 +164,8 @@ export const contactsApi = {
     return response.data;
   },
 
-  updateContact: async (id: string, payload: PatchContactRequest): Promise<ContactDto> => {
-    const response = await api.patch<ContactDto>(`/contacts/${id}`, payload);
+  updateContact: async (id: string, payload: PatchContactRequest): Promise<ContactDetailDto> => {
+    const response = await api.patch<ContactDetailDto>(`/contacts/${id}`, payload);
     return response.data;
   },
 

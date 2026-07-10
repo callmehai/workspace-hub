@@ -23,5 +23,9 @@ public class GetItemsRequestValidator : AbstractValidator<GetItemsRequest>
             .Must(s => s!.Trim().Length <= 200)
             .WithMessage("Search term cannot exceed 200 characters.")
             .When(x => !string.IsNullOrWhiteSpace(x.Search));
+
+        RuleFor(x => x.ParticipantEmail)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.ParticipantEmail));
     }
 }

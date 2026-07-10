@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Contacts;
@@ -10,7 +9,7 @@ using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Application.Services;
 
-/// <summary>CRUD contact đã lưu (Source=Contact) với write-back Google People API (SCRUM-76).</summary>
+/// <summary>CRUD contact đã lưu (Source=Contact) với write-back Google People API (SCRUM-76/77).</summary>
 public class GoogleContactService : IGoogleContactService
 {
     private readonly IGoogleContactRepository _contacts;
@@ -42,37 +41,86 @@ public class GoogleContactService : IGoogleContactService
         return _contacts.GetQueryableByConnectionId(connectionId);
     }
 
+    public async Task<ContactDetailDto> GetByIdAsync(Guid userId, Guid id, CancellationToken ct = default)
+    {
+        var contact = await _contacts.GetByIdForUserAsync(id, userId, ct)
+            ?? throw new NotFoundException(nameof(GoogleContact), id);
+
+        return BuildDetailFromCache(
+            contact,
+            readOnly: contact.Source == GoogleContactSource.OtherContact);
+    }
+
+    public async Task<IReadOnlyList<ContactSuggestionDto>> SuggestAsync(
+        Guid userId,
+        Guid connectionId,
+        string query,
+        int limit = 10,
+        CancellationToken ct = default)
+    {
+        await ValidateGmailConnectionAsync(userId, connectionId, ct);
+
+        var term = query.Trim();
+        if (term.Length < 2) return [];
+
+        limit = Math.Clamp(limit, 1, 50);
+        var rows = await _contacts.ListForConnectionAsync(connectionId, ct);
+        var results = new List<ContactSuggestionDto>();
+        var seenEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            var profile = DeserializeProfile(row);
+            var displayName = ContactProfileJson.ComputeDisplayName(profile) ?? row.DisplayName;
+
+            foreach (var labeled in profile.Emails.Where(e => !string.IsNullOrWhiteSpace(e.Value)))
+            {
+                var email = labeled.Value.Trim().ToLowerInvariant();
+                if (!seenEmails.Add(email)) continue;
+
+                if (!email.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    && !(displayName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                {
+                    continue;
+                }
+
+                results.Add(new ContactSuggestionDto
+                {
+                    Email = email,
+                    DisplayName = displayName,
+                    Source = row.Source,
+                });
+
+                if (results.Count >= limit) return results;
+            }
+        }
+
+        return results;
+    }
+
     public async Task<ContactDto> CreateAsync(Guid userId, CreateContactRequest request, CancellationToken ct = default)
     {
         var connection = await ValidateGmailConnectionAsync(userId, request.ConnectionId, ct);
 
-        var email = request.Email.Trim().ToLowerInvariant();
-        var displayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim();
+        var profile = ContactProfileJson.ResolveForCreate(request);
+        var email = ContactProfileJson.PrimaryEmail(profile, request.Email.Trim().ToLowerInvariant())
+            ?? throw new BusinessRuleException("Contact email is required.");
 
         if (await _contacts.GetByEmailForConnectionAsync(connection.Id, email, ct) != null)
             throw new ConflictException("A contact with this email already exists for this connection.");
 
-        var created = await _peopleGateway.CreateContactAsync(connection, email, displayName, ct);
+        var created = await _peopleGateway.CreateContactAsync(connection, profile, ct);
         var now = DateTime.UtcNow;
 
-        var entity = new GoogleContact
-        {
-            Id = Guid.NewGuid(),
-            ConnectionId = connection.Id,
-            Email = created.Email,
-            DisplayName = created.DisplayName,
-            Source = GoogleContactSource.Contact,
-            ExternalResourceName = created.ResourceName,
-            Etag = created.Etag,
-            SyncedAt = now,
-            UpdatedAt = now
-        };
+        await _contacts.ApplyDetailToResourceAsync(connection.Id, created.ResourceName, created, now, ct);
 
-        await UpsertOrThrowConflictAsync(entity, ct);
+        var entity = await _contacts.GetByResourceNameForConnectionAsync(connection.Id, created.ResourceName, ct)
+            ?? throw new InvalidOperationException("Contact cache row missing after create.");
+
         return _mapper.ToDto(entity);
     }
 
-    public async Task<ContactDto> UpdateAsync(Guid userId, Guid id, PatchContactRequest request, CancellationToken ct = default)
+    public async Task<ContactDetailDto> UpdateAsync(Guid userId, Guid id, PatchContactRequest request, CancellationToken ct = default)
     {
         var contact = await _contacts.GetByIdForUserAsync(id, userId, ct)
             ?? throw new NotFoundException(nameof(GoogleContact), id);
@@ -83,27 +131,23 @@ public class GoogleContactService : IGoogleContactService
         if (string.IsNullOrWhiteSpace(contact.ExternalResourceName))
             throw new BusinessRuleException("Contact is not linked to Google. Please sync and try again.");
 
-        var live = await _peopleGateway.GetContactAsync(connection, contact.ExternalResourceName, ct);
-        _guard.EnsureNoConflict(request.Etag, live.Etag);
+        _guard.EnsureNoConflict(request.Etag, contact.Etag);
 
-        var email = string.IsNullOrWhiteSpace(request.Email)
-            ? contact.Email
-            : request.Email.Trim().ToLowerInvariant();
-        var displayName = request.DisplayName != null
-            ? (string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim())
-            : contact.DisplayName;
+        var cachedProfile = DeserializeProfile(contact);
+        var profile = ContactProfileJson.ResolveForPatch(request, cachedProfile);
+        if (!ContactProfileJson.HasEmail(profile))
+            throw new BusinessRuleException("Contact must have at least one email.");
 
         var updated = await _peopleGateway.UpdateContactAsync(
-            connection, contact.ExternalResourceName, live.Etag, email, displayName, ct);
+            connection, contact.ExternalResourceName, contact.Etag, profile, ct);
 
         var now = DateTime.UtcNow;
-        contact.Email = updated.Email;
-        contact.DisplayName = updated.DisplayName;
-        contact.Etag = updated.Etag;
-        contact.UpdatedAt = now;
+        await _contacts.ApplyDetailToResourceAsync(connection.Id, updated.ResourceName, updated, now, ct);
 
-        await UpsertOrThrowConflictAsync(contact, ct);
-        return _mapper.ToDto(contact);
+        var refreshed = await _contacts.GetByIdForUserAsync(id, userId, ct)
+            ?? throw new NotFoundException(nameof(GoogleContact), id);
+
+        return _mapper.ToDetailDto(refreshed, ContactProfileJson.Normalize(updated.Profile));
     }
 
     public async Task DeleteAsync(Guid userId, Guid id, CancellationToken ct = default)
@@ -118,8 +162,19 @@ public class GoogleContactService : IGoogleContactService
             throw new BusinessRuleException("Contact is not linked to Google. Please sync and try again.");
 
         await _peopleGateway.DeleteContactAsync(connection, contact.ExternalResourceName, ct);
-        await _contacts.DeleteAsync(contact, ct);
+        await _contacts.DeleteByResourceNameAsync(connection.Id, contact.ExternalResourceName, ct);
     }
+
+    private static ContactProfileDto DeserializeProfile(GoogleContact contact)
+    {
+        var profile = ContactProfileJson.Deserialize(contact.MetadataJson);
+        if (profile.Emails.Count == 0 && !string.IsNullOrWhiteSpace(contact.Email))
+            profile.Emails.Add(new LabeledEmailDto { Value = contact.Email });
+        return ContactProfileJson.Normalize(profile);
+    }
+
+    private ContactDetailDto BuildDetailFromCache(GoogleContact contact, bool readOnly) =>
+        _mapper.ToDetailDto(contact, DeserializeProfile(contact), readOnly);
 
     private static void EnsureMutableSource(GoogleContact contact)
     {
@@ -142,17 +197,5 @@ public class GoogleContactService : IGoogleContactService
             throw new BusinessRuleException($"Connection is not active (status: {connection.Status}).");
 
         return connection;
-    }
-
-    private async Task UpsertOrThrowConflictAsync(GoogleContact contact, CancellationToken ct)
-    {
-        try
-        {
-            await _contacts.UpsertAsync(contact, ct);
-        }
-        catch (DbUpdateException)
-        {
-            throw new ConflictException("A contact with this email already exists for this connection.");
-        }
     }
 }

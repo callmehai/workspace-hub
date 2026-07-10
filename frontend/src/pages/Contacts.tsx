@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { connectionsApi } from '../lib/connectionsApi';
 import {
   contactsApi,
+  contactDisplayName,
   type ContactDto,
   type GoogleContactSource,
 } from '../lib/contactsApi';
@@ -16,6 +17,7 @@ import { handleContactMutateError, resolveContactApiError } from '../lib/contact
 import { Select } from '../components/Select';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ContactDetailPanel } from '../components/contacts/ContactDetailPanel';
 import { useI18n } from '../hooks/useI18n';
 import { timeAgo } from '../lib/datetime';
 import type { TranslationKey } from '../i18n/translations';
@@ -222,6 +224,7 @@ export const Contacts = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ContactDto | undefined>();
   const [deleting, setDeleting] = useState<ContactDto | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -255,6 +258,7 @@ export const Contacts = () => {
       top: limit,
     }),
     enabled: !!resolvedConn,
+    staleTime: 0,
   });
 
   const items = data?.value ?? [];
@@ -288,8 +292,19 @@ export const Contacts = () => {
   };
 
   const openEdit = (contact: ContactDto) => {
-    setEditing(contact);
-    setModalOpen(true);
+    if (contact.source === 'Contact') {
+      setSelectedContactId(contact.id);
+      return;
+    }
+    toast(t('contacts.readOnlyTooltip'));
+  };
+
+  const handleRowClick = (row: ContactDto) => {
+    if (row.source === 'Contact') {
+      setSelectedContactId(row.id);
+    } else {
+      toast(t('contacts.readOnlyTooltip'));
+    }
   };
 
   const formatTime = (iso?: string | null) => {
@@ -333,7 +348,7 @@ export const Contacts = () => {
         )}
 
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
-          <div className="w-full sm:w-64 shrink-0">
+          <div className="w-full sm:w-[30%] shrink-0 min-w-0">
             <Select
               value={resolvedConn}
               onChange={setConn}
@@ -345,7 +360,7 @@ export const Contacts = () => {
               className="h-9 text-[13px]"
             />
           </div>
-          <div className="relative flex-1 min-w-0">
+          <div className="relative w-full sm:w-[70%] min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="search"
@@ -416,12 +431,21 @@ export const Contacts = () => {
                   <tbody>
                     {items.map((row) => {
                       const mutable = row.source === 'Contact' && !readOnlyMode;
+                      const isActive = selectedContactId === row.id;
                       return (
-                        <tr key={row.id} className="border-b border-slate-50 dark:border-slate-800/80 last:border-0 hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                        <tr
+                          key={row.id}
+                          onClick={() => handleRowClick(row)}
+                          className={`border-b border-slate-50 dark:border-slate-800/80 last:border-0 cursor-pointer transition-colors ${
+                            isActive
+                              ? 'bg-brand-50/80 dark:bg-brand-500/10'
+                              : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
                           <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
-                            {row.displayName || '—'}
+                            {contactDisplayName(row)}
                           </td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.email}</td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.email ?? '—'}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
                               row.source === 'Contact'
@@ -435,7 +459,7 @@ export const Contacts = () => {
                             {formatTime(row.updatedAt ?? row.syncedAt)}
                             {isFetching && <Loader2 className="inline w-3 h-3 ml-1 animate-spin opacity-50" />}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                             {row.source === 'Contact' ? (
                               <div className="flex items-center gap-1 justify-end">
                                 <button
@@ -540,7 +564,7 @@ export const Contacts = () => {
       <ConfirmDialog
         open={deleting !== null}
         tone="danger"
-        title={deleting?.displayName || deleting?.email}
+        title={deleting?.displayName || deleting?.email || '—'}
         message={t('contacts.confirmDelete')}
         confirmLabel={t('common.delete')}
         loading={deleteMutation.isPending}
@@ -549,6 +573,17 @@ export const Contacts = () => {
         }}
         onCancel={() => setDeleting(null)}
       />
+
+      {selectedContactId && resolvedConn && (
+        <ContactDetailPanel
+          contactId={selectedContactId}
+          connectionId={resolvedConn}
+          readOnlyMode={readOnlyMode}
+          onClose={() => setSelectedContactId(null)}
+          onUpdated={() => queryClient.invalidateQueries({ queryKey: ['contacts'] })}
+          onForbidden={() => setReadOnlyMode(true)}
+        />
+      )}
     </div>
   );
 };

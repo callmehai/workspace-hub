@@ -231,11 +231,16 @@ public class AppDbContext : DbContext
         b.Entity<GoogleContact>(e =>
         {
             e.HasKey(x => x.Id);
-            e.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            e.Property(x => x.Email).HasMaxLength(320);
             e.Property(x => x.DisplayName).HasMaxLength(256);
             e.Property(x => x.ExternalResourceName).HasMaxLength(256);
             e.Property(x => x.Etag).HasMaxLength(128);
-            e.HasIndex(x => new { x.ConnectionId, x.Email }).IsUnique();
+            e.Property(x => x.MetadataJson); // nvarchar(max) — không set HasColumnType (SQLite test friendly)
+            e.HasIndex(x => new { x.ConnectionId, x.Email })
+                .HasDatabaseName("IX_GoogleContacts_ConnectionId_Email");
+            e.HasIndex(x => new { x.ConnectionId, x.ExternalResourceName })
+                .IsUnique()
+                .HasDatabaseName("IX_GoogleContacts_ConnectionId_ExternalResourceName");
             e.HasIndex(x => new { x.ConnectionId, x.DisplayName })
                 .HasDatabaseName("IX_GoogleContacts_ConnectionId_DisplayName");
 

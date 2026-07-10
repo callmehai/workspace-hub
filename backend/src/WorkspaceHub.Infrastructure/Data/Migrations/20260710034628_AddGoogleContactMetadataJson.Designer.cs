@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WorkspaceHub.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using WorkspaceHub.Infrastructure.Data;
 namespace WorkspaceHub.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260710034628_AddGoogleContactMetadataJson")]
+    partial class AddGoogleContactMetadataJson
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -178,6 +181,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("Email")
+                        .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
 
@@ -209,12 +213,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .HasDatabaseName("IX_GoogleContacts_ConnectionId_DisplayName");
 
                     b.HasIndex("ConnectionId", "Email")
-                        .HasDatabaseName("IX_GoogleContacts_ConnectionId_Email");
-
-                    b.HasIndex("ConnectionId", "ExternalResourceName")
-                        .IsUnique()
-                        .HasDatabaseName("IX_GoogleContacts_ConnectionId_ExternalResourceName")
-                        .HasFilter("[ExternalResourceName] IS NOT NULL");
+                        .IsUnique();
 
                     b.ToTable("GoogleContacts");
                 });

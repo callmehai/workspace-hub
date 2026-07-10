@@ -17,5 +17,10 @@ public class CreateContactRequestValidator : AbstractValidator<CreateContactRequ
         RuleFor(x => x.DisplayName)
             .MaximumLength(256).WithMessage("DisplayName must be at most 256 characters.")
             .When(x => !string.IsNullOrWhiteSpace(x.DisplayName));
+
+        When(x => x.Profile != null, () =>
+        {
+            RuleFor(x => x.Profile!).SetValidator(new ContactProfileValidator());
+        });
     }
 }

@@ -19,8 +19,16 @@ public class PatchContactRequestValidator : AbstractValidator<PatchContactReques
             .MaximumLength(256).WithMessage("DisplayName must be at most 256 characters.")
             .When(x => !string.IsNullOrWhiteSpace(x.DisplayName));
 
+        When(x => x.Profile != null, () =>
+        {
+            RuleFor(x => x.Profile!).SetValidator(new ContactProfileValidator());
+            RuleFor(x => x.Profile!)
+                .Must(p => p.Emails.Any(e => !string.IsNullOrWhiteSpace(e.Value)))
+                .WithMessage("Contact must have at least one email.");
+        });
+
         RuleFor(x => x)
-            .Must(x => !string.IsNullOrWhiteSpace(x.Email) || !string.IsNullOrWhiteSpace(x.DisplayName))
-            .WithMessage("At least one of Email or DisplayName must be provided.");
+            .Must(x => x.Profile != null || !string.IsNullOrWhiteSpace(x.Email) || !string.IsNullOrWhiteSpace(x.DisplayName))
+            .WithMessage("At least one of Profile, Email, or DisplayName must be provided.");
     }
 }

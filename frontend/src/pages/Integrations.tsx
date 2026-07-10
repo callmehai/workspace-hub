@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 import { Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
-import { usePollingInterval } from '../hooks/usePollingInterval';
 
 const SERVICES: {
   integrationKey: string; provider: string; serviceType: string;
@@ -53,7 +52,6 @@ const SERVICES: {
 
 export const Integrations = () => {
   const queryClient = useQueryClient();
-  const pollMs = usePollingInterval(60_000);
   const { t, lang } = useI18n();
   const dfLocale = lang === 'vi' ? vi : enUS;
 
@@ -61,9 +59,6 @@ export const Integrations = () => {
     queryKey: ['connections'],
     queryFn: connectionsApi.getConnections,
     retry: false,
-    refetchInterval: pollMs,
-    refetchIntervalInBackground: true,
-    refetchOnWindowFocus: true,
   });
 
   const disconnectMutation = useMutation({

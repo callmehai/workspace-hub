@@ -10,9 +10,18 @@ public interface IGoogleContactService
         Guid connectionId,
         CancellationToken ct = default);
 
+    Task<ContactDetailDto> GetByIdAsync(Guid userId, Guid id, CancellationToken ct = default);
+
     Task<ContactDto> CreateAsync(Guid userId, CreateContactRequest request, CancellationToken ct = default);
 
-    Task<ContactDto> UpdateAsync(Guid userId, Guid id, PatchContactRequest request, CancellationToken ct = default);
+    Task<ContactDetailDto> UpdateAsync(Guid userId, Guid id, PatchContactRequest request, CancellationToken ct = default);
 
     Task DeleteAsync(Guid userId, Guid id, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ContactSuggestionDto>> SuggestAsync(
+        Guid userId,
+        Guid connectionId,
+        string query,
+        int limit = 10,
+        CancellationToken ct = default);
 }

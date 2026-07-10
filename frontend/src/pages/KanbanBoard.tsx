@@ -16,7 +16,6 @@ import { handleApiError } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
 import type { TranslationKey } from '../i18n/translations';
 import { timeAgo } from '../lib/datetime';
-import { usePollingInterval } from '../hooks/usePollingInterval';
 
 
 function typeTileClass(t: ItemType): string {
@@ -45,7 +44,6 @@ export const KanbanBoard = () => {
   const { t, lang } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
-  const pollMs = usePollingInterval(45_000);
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect, hết nháy header khi đổi view)
   const selectedFolderId = searchParams.get('folder');
@@ -148,9 +146,6 @@ export const KanbanBoard = () => {
       return loaded < lastPage.total ? allPages.length + 1 : undefined;
     },
     staleTime: 0,
-    refetchInterval: pollMs,
-    refetchIntervalInBackground: true,
-    refetchOnWindowFocus: true,
   });
 
   // 3 cột cố định → gọi hook tường minh (không được gọi hook trong vòng lặp)

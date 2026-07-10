@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Send, Eye, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -15,6 +16,7 @@ import { useI18n } from '../hooks/useI18n';
 
 export const SendEmail = () => {
   const { t } = useI18n();
+  const [searchParams] = useSearchParams();
   const [to, setTo] = useState<string[]>([]);
   const [cc, setCc] = useState<string[]>([]);
   const [bcc, setBcc] = useState<string[]>([]);
@@ -35,6 +37,13 @@ export const SendEmail = () => {
     [connections],
   );
   const resolvedConn = conn || activeGmail[0]?.id || '';
+
+  useEffect(() => {
+    const prefillConn = searchParams.get('connectionId');
+    const prefillTo = searchParams.get('to');
+    if (prefillConn) setConn(prefillConn);
+    if (prefillTo?.trim()) setTo([prefillTo.trim()]);
+  }, [searchParams]);
 
   // Chữ ký THẬT từ Gmail của connection (rỗng nếu chưa đặt / connection cũ thiếu scope settings.basic).
   const { data: signature = '' } = useQuery({

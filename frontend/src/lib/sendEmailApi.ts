@@ -113,9 +113,9 @@ export const sendEmailApi = {
     return response.data?.signature ?? '';
   },
 
-  /** Gợi ý contact — OData /api/Contacts (SQL push-down). */
-  suggestContacts: (connectionId: string, q: string, limit = 10) =>
-    contactsApi.suggestContacts(connectionId, q, limit),
+  /** Gợi ý contact — GET /api/contacts/suggest (flatten email trong profile). */
+  suggestContacts: (connectionId: string, query: string, limit = 10) =>
+    contactsApi.suggestContacts(connectionId, query, limit),
 
   getThread: async (itemId: string): Promise<EmailThreadResponse> => {
     const response = await api.get(`/emails/${itemId}/thread`);

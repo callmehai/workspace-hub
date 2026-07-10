@@ -1,5 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.Contacts;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
 using WorkspaceHub.Infrastructure.Data;
@@ -152,6 +154,86 @@ public class GoogleContactRepositorySyncTests
             var remaining = await db.GoogleContacts.Where(c => c.ConnectionId == connectionId).ToListAsync();
             remaining.Should().HaveCount(1);
             remaining[0].Email.Should().Be("alice@example.com");
+        }
+    }
+
+    [Fact]
+    public async Task SyncForConnectionAsync_PreservesContactWithoutEmail()
+    {
+        var (db, connectionId) = await CreateSeededDbAsync();
+        await using (db)
+        {
+            var repo = new GoogleContactRepository(db);
+            var contactId = Guid.NewGuid();
+            var profile = new ContactProfileDto { GivenName = "Phone", FamilyName = "Only", Phones = [new LabeledPhoneDto { Value = "0901234567" }] };
+            var metadata = ContactProfileJson.Serialize(profile);
+
+            await repo.SyncForConnectionAsync(connectionId, new[]
+            {
+                new GoogleContact
+                {
+                    Id = contactId,
+                    ConnectionId = connectionId,
+                    Email = null,
+                    DisplayName = "Phone Only",
+                    Source = GoogleContactSource.Contact,
+                    ExternalResourceName = "people/c-no-email",
+                    MetadataJson = metadata,
+                    SyncedAt = DateTime.UtcNow,
+                }
+            });
+
+            var row = await db.GoogleContacts.SingleAsync(c => c.ConnectionId == connectionId);
+            row.Id.Should().Be(contactId);
+            row.Email.Should().BeNull();
+            row.ExternalResourceName.Should().Be("people/c-no-email");
+        }
+    }
+
+    [Fact]
+    public async Task ApplyDetailToResourceAsync_UpsertsSingleRowPerResource()
+    {
+        var (db, connectionId) = await CreateSeededDbAsync();
+        await using (db)
+        {
+            var repo = new GoogleContactRepository(db);
+            var contactRowId = Guid.NewGuid();
+            var resourceName = "people/c256";
+            var syncedAt = DateTime.UtcNow.AddDays(-1);
+
+            db.GoogleContacts.Add(new GoogleContact
+            {
+                Id = contactRowId,
+                ConnectionId = connectionId,
+                Email = "work@example.com",
+                DisplayName = "Work",
+                Source = GoogleContactSource.Contact,
+                ExternalResourceName = resourceName,
+                Etag = "etag-old",
+                SyncedAt = syncedAt,
+            });
+            await db.SaveChangesAsync();
+
+            var profile = ContactProfileJson.BuildSimple("phamgiakhanh0709@gmail.com", "Khanh");
+            profile.Emails.Add(new LabeledEmailDto { Value = "work@example.com", Label = "work" });
+            var detail = new PeopleContactDetail
+            {
+                Email = "phamgiakhanh0709@gmail.com",
+                DisplayName = "Khanh",
+                Etag = "etag-new",
+                ResourceName = resourceName,
+                Profile = profile,
+            };
+
+            var updatedAt = DateTime.UtcNow;
+            await repo.ApplyDetailToResourceAsync(connectionId, resourceName, detail, updatedAt);
+
+            var rows = await db.GoogleContacts.Where(c => c.ConnectionId == connectionId).ToListAsync();
+            rows.Should().HaveCount(1);
+            rows[0].Id.Should().Be(contactRowId);
+            rows[0].Email.Should().Be("work@example.com");
+            rows[0].Etag.Should().Be("etag-new");
+            rows[0].MetadataJson.Should().Contain("work@example.com");
         }
     }
 }

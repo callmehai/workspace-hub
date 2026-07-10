@@ -2,6 +2,22 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-10] Contact 1 row / person + suggest flatten
+
+- **Model:** `GoogleContacts` — **1 row / `ExternalResourceName`** (không còn 1 row/email). `Email` nullable = primary denormalized; canonical emails trong `MetadataJson`. UNIQUE `(ConnectionId, ExternalResourceName)`.
+- **Sync:** `PeopleGateway.MergePerson` theo resourceName; person **không email** (chỉ tên/SĐT) vẫn cache — chỉ xóa DB khi Google không còn trả person.
+- **Write-back:** `ApplyDetailToResource` upsert 1 row; PATCH validate ≥1 email (app); dedupe email profile.
+- **Suggest:** `GET /api/contacts/suggest?connectionId=&query=&limit=` — flatten mọi email trong `MetadataJson` (thay OData `contains(Email)` cho autocomplete).
+- **Migration:** `GoogleContactOneRowPerPerson` — gộp row trùng resourceName trước khi đổi index.
+
+## [2026-07-10] Contact detail panel + Google profile fields (SCRUM-77)
+
+- **Profile JSON:** `GoogleContacts.MetadataJson` — camelCase `{ givenName, familyName, emails[], phones[], birthday, organization }`; `Email` + `DisplayName` denormalized cho OData/suggest.
+- **People API:** read/write `names,emailAddresses,phoneNumbers,birthdays,organizations`; update luôn GET + merge sub-field (Google replace cả field).
+- **API:** `GET /api/contacts/{id}` → `ContactDetailDto` **từ cache DB** (profile trong `MetadataJson`); PATCH/POST/DELETE mới gọi People API. `GET /api/items?participantEmail=` lọc thread Email.
+- **FE:** `ContactDetailPanel` split-view (pattern `ItemDetail`), `ContactProfileForm`, recent emails, nút Gửi email → `/send-email?connectionId=&to=`.
+- **Ngoài scope phase này:** địa chỉ, biographies, Calendar/Drive related items.
+
 ## [2026-07-09] Google Contacts sync merge + create guard (SCRUM-76 fix)
 
 - **Sync merge:** `GoogleContactRepository.SyncForConnectionAsync` thay full-replace — match theo `ExternalResourceName` rồi `Email`, **giữ `Id` và `UpdatedAt`**; xoá orphan không còn trên Google.
@@ -36,7 +52,7 @@
 - **BE cron batch sync:** `ProcessConnectionsSyncService` quét mọi Connection Active + Integration enabled → sync qua `IConnectionSyncDispatcher` (đủ Gmail/GCal/Drive/Jira). Mỗi connection lỗi không chặn batch.
 - **BackgroundService (prod + dev):** `Cron:SyncAutoRun` + `Cron:SyncIntervalSeconds` — tách key riêng với cron email (`AutoRun` / `IntervalSeconds`). **Prod:** `docker-compose.prod.yml` bật `Cron__SyncAutoRun=true` (60s), cùng pattern scheduled email — **không** cần cron-job.org cho sync. Endpoint HTTP vẫn có cho test/thay thế khi tắt `SyncAutoRun`.
 - **On-demand nhất quán:** `ConnectionHealthChecker` chuyển sang dispatcher (không chỉ Gmail) — align với cron.
-- **FE polling (TanStack Query):** Inbox/Kanban `items` 45s; Integrations `connections` 60s; `refetchIntervalInBackground` (poll cả tab nền); invalidate cross-tab/lọc khi `total` đổi (Inbox). Manual sync trên Integrations invalidate cả `items`.
+- **FE polling (TanStack Query):** `useBackgroundDataRefresh` trong **MainLayout** — mỗi ~60s invalidate `items` / `contacts` / `contact` / `connections` (chỉ refetch query đang mount; tạm dừng khi tab hidden). Header vẫn poll `unreadCount` riêng. Inbox invalidate cross-filter khi `total` đổi.
 - **Không làm:** WebSocket/SSE, Gmail push notification — UI cập nhật qua poll sau khi cron ghi DB.
 
 ## [2026-07-07] UI polish + Theme Sáng/Tối + Song ngữ VI/EN + Trang Profile

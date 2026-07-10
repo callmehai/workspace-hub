@@ -15,6 +15,7 @@ public class GoogleContactMapper : IGoogleContactMapper
             Source = row.Source,
             ExternalResourceName = row.ExternalResourceName,
             Etag = row.Etag,
+            MetadataJson = row.MetadataJson,
             SyncedAt = syncedAt
         };
 
@@ -29,6 +30,21 @@ public class GoogleContactMapper : IGoogleContactMapper
             Etag = entity.Etag,
             SyncedAt = entity.SyncedAt,
             UpdatedAt = entity.UpdatedAt
+        };
+
+    public ContactDetailDto ToDetailDto(GoogleContact entity, ContactProfileDto profile, bool readOnly = false) =>
+        new()
+        {
+            Id = entity.Id,
+            ConnectionId = entity.ConnectionId,
+            Email = entity.Email,
+            DisplayName = entity.DisplayName,
+            Source = entity.Source,
+            Etag = entity.Etag,
+            SyncedAt = entity.SyncedAt,
+            UpdatedAt = entity.UpdatedAt,
+            Profile = profile,
+            ReadOnly = readOnly,
         };
 }
 

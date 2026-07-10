@@ -50,6 +50,10 @@ public class ItemService : IItemService
         var page = Math.Max(1, request.Page);
         var limit = Math.Clamp(request.Limit, 1, 100);
 
+        var types = request.Types;
+        if ((types is null || types.Count == 0) && !string.IsNullOrWhiteSpace(request.ParticipantEmail))
+            types = [ItemType.Email];
+
         // Validate folder ownership
         if (request.FolderId.HasValue)
         {
@@ -66,13 +70,14 @@ public class ItemService : IItemService
             userId,
             request.FolderId,
             request.Statuses,
-            request.Types,
+            types,
             request.IsImportant,
             request.Search?.Trim(),
             request.TagId,
             request.ProjectKey,
             request.GmailLabel,
             request.Assignee,
+            request.ParticipantEmail?.Trim().ToLowerInvariant(),
             page,
             limit,
             ct);

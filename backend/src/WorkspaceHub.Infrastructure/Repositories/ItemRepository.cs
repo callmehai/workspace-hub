@@ -27,6 +27,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? projectKey = null,
         string? gmailLabel = null,
         string? assigneeAccountId = null,
+        string? participantEmail = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -103,6 +104,16 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 ? "\"assigneeAccountId\":null"
                 : $"\"assigneeAccountId\":\"{assigneeAccountId.Trim()}\"";
             query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains(needle));
+        }
+
+        // Participant email filter (Email threads) — match quoted email in from/to/cc/bcc metadata.
+        if (!string.IsNullOrWhiteSpace(participantEmail))
+        {
+            var needle = $"\"{participantEmail.Trim().ToLowerInvariant()}\"";
+            query = query.Where(i =>
+                i.Type == ItemType.Email &&
+                i.MetadataJson != null &&
+                i.MetadataJson.Contains(needle));
         }
 
         // ── Search: Title hoặc Snippet ──

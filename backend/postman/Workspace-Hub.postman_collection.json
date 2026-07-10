@@ -494,6 +494,29 @@
           ]
         },
         {
+          "name": "List items — participantEmail (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items?participantEmail=alice@example.com&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items"],
+              "query": [
+                { "key": "participantEmail", "value": "alice@example.com" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('paged envelope', function () { pm.expect(pm.response.json()).to.have.property('items'); });"
+            ] } }
+          ]
+        },
+        {
           "name": "List items — filter type=Note (200)",
           "request": {
             "method": "GET",
@@ -859,7 +882,7 @@
       ]
     },
     {
-      "name": "06b — Google Contacts (SCRUM-76)",
+      "name": "06b — Google Contacts (SCRUM-76/77)",
       "item": [
         {
           "name": "List Google contacts (200)",
@@ -906,6 +929,24 @@
               "var j = pm.response.json();",
               "pm.environment.set('googleContactId', j.id);",
               "pm.environment.set('googleContactEtag', j.etag);"
+            ] } }
+          ]
+        },
+        {
+          "name": "Get Google contact detail (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/contacts/{{googleContactId}}", "host": ["{{baseUrl}}"], "path": ["api", "contacts", "{{googleContactId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login'); return; }",
+              "if (!pm.environment.get('googleContactId')) { pm.test.skip('skipped — chưa tạo contact'); return; }",
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "var j = pm.response.json();",
+              "pm.test('has profile', function () { pm.expect(j).to.have.property('profile'); });",
+              "if (j.etag) pm.environment.set('googleContactEtag', j.etag);"
             ] } }
           ]
         },

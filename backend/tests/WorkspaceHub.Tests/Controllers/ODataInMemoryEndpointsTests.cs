@@ -62,6 +62,7 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.EnsureDeletedAsync();
         db.Database.EnsureCreated();
         db.Notifications.RemoveRange(db.Notifications);
         db.ScheduledEmails.RemoveRange(db.ScheduledEmails);
@@ -183,6 +184,7 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.EnsureDeletedAsync();
         db.Database.EnsureCreated();
         db.Notifications.RemoveRange(db.Notifications);
         db.ScheduledEmails.RemoveRange(db.ScheduledEmails);

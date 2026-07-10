@@ -7,7 +7,7 @@ using WorkspaceHub.Application.Interfaces.Services;
 
 namespace WorkspaceHub.Api.Controllers;
 
-/// <summary>REST: POST/PATCH/DELETE tại api/contacts. List OData → <see cref="ContactsController"/> /api/Contacts.</summary>
+/// <summary>REST: GET/POST/PATCH/DELETE tại api/contacts. List OData → <see cref="ContactsController"/> /api/Contacts.</summary>
 [Authorize]
 [ODataIgnored]
 [Route("api/contacts")]
@@ -27,6 +27,18 @@ public class ContactCommandsController : ApiControllerBase
         _patchValidator = patchValidator;
     }
 
+    [HttpGet("suggest")]
+    public async Task<ActionResult<IReadOnlyList<ContactSuggestionDto>>> Suggest(
+        [FromQuery] Guid connectionId,
+        [FromQuery] string query,
+        [FromQuery] int limit = 10,
+        CancellationToken ct = default) =>
+        Ok(await _service.SuggestAsync(CurrentUserId, connectionId, query, limit, ct));
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<ContactDetailDto>> GetById(Guid id, CancellationToken ct = default) =>
+        Ok(await _service.GetByIdAsync(CurrentUserId, id, ct));
+
     [HttpPost]
     public async Task<ActionResult<ContactDto>> Create(
         [FromBody] CreateContactRequest request,
@@ -38,7 +50,7 @@ public class ContactCommandsController : ApiControllerBase
     }
 
     [HttpPatch("{id:guid}")]
-    public async Task<ActionResult<ContactDto>> Patch(
+    public async Task<ActionResult<ContactDetailDto>> Patch(
         Guid id,
         [FromBody] PatchContactRequest request,
         CancellationToken ct = default)

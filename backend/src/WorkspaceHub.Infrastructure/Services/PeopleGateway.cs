@@ -4,6 +4,7 @@ using Google.Apis.PeopleService.v1.Data;
 using Google.Apis.Services;
 using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Contacts;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
@@ -12,10 +13,11 @@ namespace WorkspaceHub.Infrastructure.Services;
 
 public class PeopleGateway : IPeopleGateway
 {
-    private const string PersonFields = "names,emailAddresses";
-    private const string ReadMask = "names,emailAddresses";
-    private const string WritePersonFields = "names,emailAddresses";
-    private const string GetPersonFields = "names,emailAddresses,metadata";
+    private const string PersonFields = "names,emailAddresses,phoneNumbers,birthdays,organizations";
+    /// <summary>otherContacts.list chỉ cho phép subset — không có birthdays/organizations (400 nếu gửi full mask).</summary>
+    private const string OtherContactReadMask = "names,emailAddresses";
+    private const string WritePersonFields = PersonFields;
+    private const string GetPersonFields = PersonFields + ",metadata";
     private const int PageSize = 100;
     private const string ContactsForbiddenMessage = "Reconnect Gmail to allow editing contacts.";
 
@@ -31,12 +33,12 @@ public class PeopleGateway : IPeopleGateway
     public async Task<IReadOnlyList<PeopleContactRow>> ListAllAsync(Connection connection, CancellationToken ct = default)
     {
         using var people = await BuildPeopleServiceAsync(connection, ct);
-        var byEmail = new Dictionary<string, PeopleContactRow>(StringComparer.OrdinalIgnoreCase);
+        var byResource = new Dictionary<string, PeopleContactRow>(StringComparer.Ordinal);
 
-        await CollectConnectionsAsync(people, connection.Id, byEmail, ct);
-        await CollectOtherContactsAsync(people, connection.Id, byEmail, ct);
+        await CollectConnectionsAsync(people, connection.Id, byResource, ct);
+        await CollectOtherContactsAsync(people, connection.Id, byResource, ct);
 
-        return byEmail.Values.ToList();
+        return byResource.Values.ToList();
     }
 
     public async Task<PeopleContactDetail> GetContactAsync(Connection connection, string resourceName, CancellationToken ct = default)
@@ -56,10 +58,11 @@ public class PeopleGateway : IPeopleGateway
     }
 
     public async Task<PeopleContactDetail> CreateContactAsync(
-        Connection connection, string email, string? displayName, CancellationToken ct = default)
+        Connection connection, ContactProfileDto profile, CancellationToken ct = default)
     {
         using var people = await BuildPeopleServiceAsync(connection, ct);
-        var person = BuildPerson(email, displayName, etag: null, resourceName: null);
+        var person = new Person();
+        PeopleContactProfileMapper.ApplyProfile(person, profile, existing: null);
 
         try
         {
@@ -69,6 +72,7 @@ public class PeopleGateway : IPeopleGateway
         }
         catch (Google.GoogleApiException ex)
         {
+            var email = PeopleContactProfileMapper.PrimaryEmail(profile) ?? "contact";
             throw GoogleApiExceptionHandler.Handle(ex, "People", "Contact", email, ContactsForbiddenMessage);
         }
     }
@@ -77,8 +81,7 @@ public class PeopleGateway : IPeopleGateway
         Connection connection,
         string resourceName,
         string? etag,
-        string email,
-        string? displayName,
+        ContactProfileDto profile,
         CancellationToken ct = default)
     {
         using var people = await BuildPeopleServiceAsync(connection, ct);
@@ -92,12 +95,8 @@ public class PeopleGateway : IPeopleGateway
             {
                 ETag = etag ?? existing.ETag,
                 ResourceName = resourceName,
-                EmailAddresses = [new EmailAddress { Value = email }],
             };
-
-            var mergedName = PeopleContactNameHelper.BuildNameForUpdate(existing.Names?.FirstOrDefault(), displayName);
-            if (mergedName != null)
-                person.Names = [mergedName];
+            PeopleContactProfileMapper.ApplyProfile(person, profile, existing);
 
             var request = people.People.UpdateContact(person, resourceName);
             request.UpdatePersonFields = WritePersonFields;
@@ -127,7 +126,7 @@ public class PeopleGateway : IPeopleGateway
     private async Task CollectConnectionsAsync(
         PeopleServiceService people,
         Guid connectionId,
-        Dictionary<string, PeopleContactRow> byEmail,
+        Dictionary<string, PeopleContactRow> byResource,
         CancellationToken ct)
     {
         try
@@ -144,7 +143,7 @@ public class PeopleGateway : IPeopleGateway
                 if (response.Connections != null)
                 {
                     foreach (var person in response.Connections)
-                        MergePerson(byEmail, person, GoogleContactSource.Contact, overwrite: true);
+                        MergePerson(byResource, person, GoogleContactSource.Contact, overwrite: true);
                 }
 
                 pageToken = response.NextPageToken;
@@ -161,7 +160,7 @@ public class PeopleGateway : IPeopleGateway
     private async Task CollectOtherContactsAsync(
         PeopleServiceService people,
         Guid connectionId,
-        Dictionary<string, PeopleContactRow> byEmail,
+        Dictionary<string, PeopleContactRow> byResource,
         CancellationToken ct)
     {
         try
@@ -170,7 +169,7 @@ public class PeopleGateway : IPeopleGateway
             do
             {
                 var request = people.OtherContacts.List();
-                request.ReadMask = ReadMask;
+                request.ReadMask = OtherContactReadMask;
                 request.PageSize = PageSize;
                 request.PageToken = pageToken;
 
@@ -178,7 +177,7 @@ public class PeopleGateway : IPeopleGateway
                 if (response.OtherContacts != null)
                 {
                     foreach (var person in response.OtherContacts)
-                        MergePerson(byEmail, person, GoogleContactSource.OtherContact, overwrite: false);
+                        MergePerson(byResource, person, GoogleContactSource.OtherContact, overwrite: false);
                 }
 
                 pageToken = response.NextPageToken;
@@ -193,70 +192,47 @@ public class PeopleGateway : IPeopleGateway
     }
 
     private static void MergePerson(
-        Dictionary<string, PeopleContactRow> byEmail,
+        Dictionary<string, PeopleContactRow> byResource,
         Person person,
         GoogleContactSource source,
         bool overwrite)
     {
-        var displayName = PeopleContactNameHelper.ExtractDisplayName(person);
         var resourceName = person.ResourceName;
-        var etag = person.ETag;
+        if (string.IsNullOrWhiteSpace(resourceName)) return;
 
-        if (person.EmailAddresses == null) return;
-
-        foreach (var addr in person.EmailAddresses)
+        var profile = ContactProfileJson.Normalize(PeopleContactProfileMapper.FromPerson(person));
+        var displayName = PeopleContactProfileMapper.ResolveDisplayName(person, profile);
+        var row = new PeopleContactRow
         {
-            if (string.IsNullOrWhiteSpace(addr.Value)) continue;
-
-            var email = addr.Value.Trim().ToLowerInvariant();
-            var row = new PeopleContactRow
-            {
-                Email = email,
-                DisplayName = displayName,
-                Source = source,
-                ExternalResourceName = resourceName,
-                Etag = etag
-            };
-
-            if (overwrite || !byEmail.ContainsKey(email))
-                byEmail[email] = row;
-        }
-    }
-
-    private static Person BuildPerson(string email, string? displayName, string? etag, string? resourceName)
-    {
-        var person = new Person
-        {
-            ETag = etag,
-            ResourceName = resourceName,
-            EmailAddresses = [new EmailAddress { Value = email }],
+            Email = ContactProfileJson.ResolvePrimaryEmail(profile),
+            DisplayName = displayName,
+            Source = source,
+            ExternalResourceName = resourceName,
+            Etag = person.ETag,
+            MetadataJson = PeopleContactProfileMapper.ToJson(profile),
         };
 
-        if (!string.IsNullOrWhiteSpace(displayName))
+        if (!byResource.TryGetValue(resourceName, out var existing))
         {
-            person.Names = [PeopleContactNameHelper.BuildNameForCreate(displayName)];
+            byResource[resourceName] = row;
+            return;
         }
 
-        return person;
+        if (overwrite || existing.Source == GoogleContactSource.OtherContact && source == GoogleContactSource.Contact)
+            byResource[resourceName] = row;
     }
 
     private static PeopleContactDetail MapDetail(Person person)
     {
-        var email = person.EmailAddresses?
-            .Select(a => a.Value)
-            .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))
-            ?.Trim()
-            .ToLowerInvariant()
-            ?? throw new InvalidOperationException("People API returned contact without email.");
-
-        var displayName = PeopleContactNameHelper.ExtractDisplayName(person);
+        var profile = ContactProfileJson.Normalize(PeopleContactProfileMapper.FromPerson(person));
 
         return new PeopleContactDetail
         {
-            Email = email,
-            DisplayName = displayName,
+            Email = ContactProfileJson.ResolvePrimaryEmail(profile),
+            DisplayName = PeopleContactProfileMapper.ResolveDisplayName(person, profile),
             Etag = person.ETag,
-            ResourceName = person.ResourceName ?? throw new InvalidOperationException("People API returned contact without resourceName.")
+            ResourceName = person.ResourceName ?? throw new InvalidOperationException("People API returned contact without resourceName."),
+            Profile = profile,
         };
     }
 

@@ -21,7 +21,6 @@ import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
 import { timeAgo } from '../lib/datetime';
-import { usePollingInterval } from '../hooks/usePollingInterval';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -143,7 +142,6 @@ export const Inbox = () => {
   const { t, lang } = useI18n();
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
-  const pollMs = usePollingInterval(45_000);
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -275,9 +273,6 @@ export const Inbox = () => {
     // Ghi đè staleTime global 5 phút — mỗi bộ lọc (Tất cả / Email / …) là queryKey riêng;
     // nếu không, quay lại "Tất cả" sẽ hiện cache cũ trong khi tab lọc Email vẫn poll được mail mới.
     staleTime: 0,
-    refetchInterval: pollMs,
-    refetchIntervalInBackground: true,
-    refetchOnWindowFocus: true,
   });
 
   // Khi poll (cùng bộ lọc) phát hiện total đổi → refresh mọi query items (tab/bộ lọc khác).

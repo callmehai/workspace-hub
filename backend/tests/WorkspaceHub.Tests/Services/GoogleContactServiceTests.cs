@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Google.Apis.PeopleService.v1.Data;
 using Moq;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
@@ -9,6 +10,7 @@ using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.Services;
 using WorkspaceHub.Domain.Entities;
 using WorkspaceHub.Domain.Enums;
+using WorkspaceHub.Infrastructure.Services;
 using Xunit;
 
 namespace WorkspaceHub.Tests.Services;
@@ -44,21 +46,36 @@ public class GoogleContactServiceTests
     {
         _connections.Setup(c => c.GetByIdAsync(_connectionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ActiveGmail());
+
         _contacts.Setup(r => r.GetByEmailForConnectionAsync(_connectionId, "alice@example.com", It.IsAny<CancellationToken>()))
             .ReturnsAsync((GoogleContact?)null);
 
-        _people.Setup(p => p.CreateContactAsync(It.IsAny<Connection>(), "alice@example.com", "Alice", It.IsAny<CancellationToken>()))
+        _contacts.Setup(r => r.GetByResourceNameForConnectionAsync(_connectionId, "people/c123", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleContact
+            {
+                Id = Guid.NewGuid(),
+                ConnectionId = _connectionId,
+                Email = "alice@example.com",
+                DisplayName = "Alice",
+                Source = GoogleContactSource.Contact,
+                ExternalResourceName = "people/c123",
+                Etag = "etag-1",
+                SyncedAt = DateTime.UtcNow,
+            });
+
+        var profile = ContactProfileJson.BuildSimple("alice@example.com", "Alice");
+        _people.Setup(p => p.CreateContactAsync(It.IsAny<Connection>(), It.IsAny<ContactProfileDto>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PeopleContactDetail
             {
                 Email = "alice@example.com",
                 DisplayName = "Alice",
                 Etag = "etag-1",
-                ResourceName = "people/c123"
+                ResourceName = "people/c123",
+                Profile = profile,
             });
 
-        GoogleContact? upserted = null;
-        _contacts.Setup(r => r.UpsertAsync(It.IsAny<GoogleContact>(), It.IsAny<CancellationToken>()))
-            .Callback((GoogleContact c, CancellationToken _) => upserted = c)
+        _contacts.Setup(r => r.ApplyDetailToResourceAsync(
+                _connectionId, "people/c123", It.IsAny<PeopleContactDetail>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         var result = await _service.CreateAsync(_userId, new CreateContactRequest
@@ -70,10 +87,60 @@ public class GoogleContactServiceTests
 
         result.Email.Should().Be("alice@example.com");
         result.Source.Should().Be(GoogleContactSource.Contact);
-        upserted.Should().NotBeNull();
-        upserted!.ExternalResourceName.Should().Be("people/c123");
-        upserted.Etag.Should().Be("etag-1");
-        _people.Verify(p => p.CreateContactAsync(It.IsAny<Connection>(), "alice@example.com", "Alice", It.IsAny<CancellationToken>()), Times.Once);
+        _people.Verify(p => p.CreateContactAsync(
+            It.IsAny<Connection>(),
+            It.Is<ContactProfileDto>(pr => ContactProfileJson.PrimaryEmail(pr, null) == "alice@example.com"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetById_OtherContact_ReturnsReadOnly()
+    {
+        var contactId = Guid.NewGuid();
+        _contacts.Setup(r => r.GetByIdForUserAsync(contactId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleContact
+            {
+                Id = contactId,
+                ConnectionId = _connectionId,
+                Email = "bob@example.com",
+                DisplayName = "Bob",
+                Source = GoogleContactSource.OtherContact,
+                ExternalResourceName = "people/c999",
+                SyncedAt = DateTime.UtcNow,
+            });
+
+        var detail = await _service.GetByIdAsync(_userId, contactId);
+
+        detail.ReadOnly.Should().BeTrue();
+        detail.Email.Should().Be("bob@example.com");
+        _people.Verify(p => p.GetContactAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetById_Contact_ReadsFromCacheWithoutCallingGoogle()
+    {
+        var contactId = Guid.NewGuid();
+        var metadata = ContactProfileJson.Serialize(ContactProfileJson.BuildSimple("alice@example.com", "Alice"));
+        _contacts.Setup(r => r.GetByIdForUserAsync(contactId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleContact
+            {
+                Id = contactId,
+                ConnectionId = _connectionId,
+                Email = "alice@example.com",
+                DisplayName = "Alice",
+                Source = GoogleContactSource.Contact,
+                ExternalResourceName = "people/c123",
+                Etag = "etag-1",
+                MetadataJson = metadata,
+                SyncedAt = DateTime.UtcNow,
+            });
+
+        var detail = await _service.GetByIdAsync(_userId, contactId);
+
+        detail.ReadOnly.Should().BeFalse();
+        detail.Etag.Should().Be("etag-1");
+        detail.Profile.Emails[0].Value.Should().Be("alice@example.com");
+        _people.Verify(p => p.GetContactAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -89,6 +156,7 @@ public class GoogleContactServiceTests
             Source = GoogleContactSource.Contact,
             ExternalResourceName = "people/c123",
             Etag = "stored-etag",
+            MetadataJson = ContactProfileJson.Serialize(ContactProfileJson.BuildSimple("alice@example.com", "Alice")),
             SyncedAt = DateTime.UtcNow
         };
 
@@ -96,14 +164,6 @@ public class GoogleContactServiceTests
             .ReturnsAsync(contact);
         _connections.Setup(c => c.GetByIdAsync(_connectionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ActiveGmail());
-        _people.Setup(p => p.GetContactAsync(It.IsAny<Connection>(), "people/c123", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new PeopleContactDetail
-            {
-                Email = "alice@example.com",
-                DisplayName = "Alice",
-                Etag = "live-etag",
-                ResourceName = "people/c123"
-            });
 
         var act = () => _service.UpdateAsync(_userId, contactId, new PatchContactRequest
         {
@@ -112,7 +172,9 @@ public class GoogleContactServiceTests
         });
 
         await act.Should().ThrowAsync<ConflictException>();
-        _people.Verify(p => p.UpdateContactAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _people.Verify(p => p.GetContactAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _people.Verify(p => p.UpdateContactAsync(
+            It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<ContactProfileDto>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -182,7 +244,7 @@ public class GoogleContactServiceTests
         });
 
         await act.Should().ThrowAsync<ConflictException>();
-        _people.Verify(p => p.CreateContactAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _people.Verify(p => p.CreateContactAsync(It.IsAny<Connection>(), It.IsAny<ContactProfileDto>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -192,7 +254,7 @@ public class GoogleContactServiceTests
             .ReturnsAsync(ActiveGmail());
         _contacts.Setup(r => r.GetByEmailForConnectionAsync(_connectionId, "alice@example.com", It.IsAny<CancellationToken>()))
             .ReturnsAsync((GoogleContact?)null);
-        _people.Setup(p => p.CreateContactAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+        _people.Setup(p => p.CreateContactAsync(It.IsAny<Connection>(), It.IsAny<ContactProfileDto>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ForbiddenException("Reconnect Gmail to allow editing contacts."));
 
         var act = () => _service.CreateAsync(_userId, new CreateContactRequest
