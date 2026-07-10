@@ -4,7 +4,7 @@
 
 ## [2026-07-10] Calendar workspace view (FE)
 
-- **View thứ ba:** thêm route `/calendar` cạnh Danh sách/Bảng; view switcher và Sidebar giữ nguyên `?folder=` khi đổi view/context.
+- **View thứ ba có kiểm soát:** thêm route `/calendar` cạnh Danh sách/Bảng; chỉ hiện nút Lịch ở **Tất cả mục**, nguồn **Google Calendar (Event)** và folder. Email/Jira/Drive chỉ có Danh sách–Bảng; nếu deep-link `/calendar?type=Email|Ticket|File` thì redirect về Danh sách đúng nguồn. View switcher và Sidebar giữ nguyên `?folder=` khi đổi view/context.
 - **Hai chế độ:** Tháng + Tuần; tuần chia slot 30 phút (07:00–21:00) và có hàng **Cả ngày**. Click slot mở form với ngày/giờ có sẵn; điều hướng được các tháng/tuần và quay về hôm nay.
 - **Ba lớp thời gian:** Google Calendar Event (amber, CRUD/write-back), ScheduledEmail Pending (blue, read-only, mở màn Email hẹn giờ), Jira deadline (violet, read-only, mở ItemDetail). Khi vào folder, chỉ Item Event/Ticket đã gắn folder được hiển thị; ScheduledEmail hiện chỉ có ở lịch chung vì schema chưa có FolderId.
 - **Drag/drop:** chỉ Event có `draggable`; month drop giữ giờ hiện tại, week timed-slot drop đổi ngày+giờ, week all-day row đổi thành cả ngày. Jira/ScheduledEmail tuyệt đối read-only trên lịch.

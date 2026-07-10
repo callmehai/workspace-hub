@@ -94,7 +94,10 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
 
   // Chọn 1 nguồn (integration) → scope trang theo loại đó. Loại trừ lẫn nhau với folder.
   const handleSourceClick = (type: string) => {
-    navigate(`${viewPath}?type=${type}`);
+    // Chỉ Google Calendar có view Lịch. Từ /calendar mà chuyển sang Email/Jira/Drive
+    // thì về Danh sách của nguồn đó, tránh một calendar rỗng/không đúng ngữ nghĩa.
+    const targetPath = location.pathname === '/calendar' && type !== 'Event' ? '/' : viewPath;
+    navigate(`${targetPath}?type=${type}`);
     onMobileClose?.();
   };
 

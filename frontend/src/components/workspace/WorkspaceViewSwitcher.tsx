@@ -10,7 +10,10 @@ interface WorkspaceViewSwitcherProps {
   sourceType?: string | null;
 }
 
-/** Chuyển giữa ba cách nhìn của cùng một workspace, luôn giữ nguyên context folder/source. */
+/**
+ * Chuyển cách nhìn của workspace và giữ context.
+ * Lịch chỉ có ý nghĩa ở Tất cả mục, Google Calendar và folder; Email/Jira/Drive chỉ dùng List/Board.
+ */
 export function WorkspaceViewSwitcher({ view, folderId, sourceType }: WorkspaceViewSwitcherProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -23,10 +26,13 @@ export function WorkspaceViewSwitcher({ view, folderId, sourceType }: WorkspaceV
     return value ? `?${value}` : '';
   })();
 
+  const canOpenCalendar = Boolean(folderId) || !sourceType || sourceType === 'Event';
   const options = [
     { value: 'list' as const, path: '/', label: t('toolbar.list'), Icon: List },
     { value: 'board' as const, path: '/kanban', label: t('toolbar.board'), Icon: LayoutGrid },
-    { value: 'calendar' as const, path: '/calendar', label: t('toolbar.calendar'), Icon: CalendarDays },
+    ...(canOpenCalendar
+      ? [{ value: 'calendar' as const, path: '/calendar', label: t('toolbar.calendar'), Icon: CalendarDays }]
+      : []),
   ];
 
   return (

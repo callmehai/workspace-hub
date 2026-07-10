@@ -599,7 +599,10 @@ export const vi = {
   // ── calendar view ──
   'calendar.pageTitle': 'Calendar',
   'calendar.subtitle': '{n} mục theo thời gian · Google Calendar, Jira và email hẹn giờ',
+  'calendar.googleSubtitle': '{n} sự kiện từ các tài khoản Google Calendar đang kết nối',
   'calendar.folderSubtitle': 'Folder · chỉ hiện các sự kiện và deadline đã gắn vào thư mục này',
+  'calendar.scope': 'Phạm vi',
+  'calendar.googleScope': 'Chỉ Google Calendar',
   'calendar.showOnCalendar': 'Hiện trên lịch',
   'calendar.events': 'Sự kiện',
   'calendar.scheduledEmails': 'Email hẹn giờ',
@@ -1367,7 +1370,10 @@ export const en: Record<TranslationKey, string> = {
   // ── calendar view ──
   'calendar.pageTitle': 'Calendar',
   'calendar.subtitle': '{n} time-based items · Google Calendar, Jira, and scheduled email',
+  'calendar.googleSubtitle': '{n} events from connected Google Calendar accounts',
   'calendar.folderSubtitle': 'Folder · only events and deadlines assigned to this folder are shown',
+  'calendar.scope': 'Scope',
+  'calendar.googleScope': 'Google Calendar only',
   'calendar.showOnCalendar': 'Show on calendar',
   'calendar.events': 'Events',
   'calendar.scheduledEmails': 'Scheduled email',

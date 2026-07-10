@@ -1,6 +1,6 @@
 import { useMemo, useState, type DragEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink,
   Flag, Loader2, Mail, MapPin, Plus, RefreshCw, Search, Trash2, Users, X,
@@ -298,6 +298,7 @@ export function CalendarPage() {
   const pollMs = usePollingInterval(45_000);
   const folderId = searchParams.get('folder');
   const sourceType = searchParams.get('type');
+  const googleCalendarOnly = sourceType === 'Event' && !folderId;
   const [range, setRange] = useState<CalendarRange>('month');
   const [cursor, setCursor] = useState(() => new Date());
   const [search, setSearch] = useState('');
@@ -308,12 +309,12 @@ export function CalendarPage() {
   const [deleteEntry, setDeleteEntry] = useState<CalendarEntry | null>(null);
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; value: CalendarEventFormValue; entry?: CalendarEntry } | null>(null);
 
-  const calendarItemsKey = ['calendar-items', folderId] as const;
+  const calendarItemsKey = ['calendar-items', folderId, googleCalendarOnly ? 'event-only' : 'combined'] as const;
   const { data: itemPage, isLoading: itemsLoading, isError: itemsError, isFetching } = useQuery({
     queryKey: calendarItemsKey,
     queryFn: () => itemsApi.getItems({
       folderId: folderId ?? undefined,
-      types: ['Event', 'Ticket'],
+      types: googleCalendarOnly ? ['Event'] : ['Event', 'Ticket'],
       page: 1,
       limit: 100,
     }),
@@ -325,7 +326,7 @@ export function CalendarPage() {
   const { data: scheduledPage, isLoading: scheduledLoading } = useQuery({
     queryKey: ['calendar-scheduled-emails'],
     queryFn: () => scheduledEmailsApi.getScheduledEmails(0, 100, 'Pending'),
-    enabled: !folderId,
+    enabled: !folderId && !googleCalendarOnly,
     staleTime: 0,
     refetchInterval: pollMs,
     refetchIntervalInBackground: true,
@@ -347,20 +348,14 @@ export function CalendarPage() {
 
   const entries = useMemo(() => {
     const itemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => entry !== null);
-    const scheduledEntries = folderId ? [] : (scheduledPage?.value ?? []).map(scheduledToEntry);
-    const queryKind: CalendarEntryKind | null = sourceType === 'Event'
-      ? 'event'
-      : sourceType === 'Ticket'
-        ? 'jira'
-        : sourceType === 'Email'
-          ? 'scheduled'
-          : null;
+    const scheduledEntries = folderId || googleCalendarOnly ? [] : (scheduledPage?.value ?? []).map(scheduledToEntry);
+    const queryKind: CalendarEntryKind | null = googleCalendarOnly ? 'event' : null;
     return [...itemEntries, ...scheduledEntries]
       .filter(entry => layers[entry.kind])
       .filter(entry => !queryKind || entry.kind === queryKind)
       .filter(entry => !search.trim() || entry.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
       .sort((left, right) => left.start.getTime() - right.start.getTime());
-  }, [itemPage, scheduledPage, folderId, sourceType, layers, search]);
+  }, [itemPage, scheduledPage, folderId, googleCalendarOnly, layers, search]);
 
   const firstConnectionId = gcalConnections[0]?.id ?? '';
 
@@ -461,7 +456,9 @@ export function CalendarPage() {
     mutationFn: async () => {
       const relevant = connections.filter(connection =>
         connection.status.toLowerCase() === 'active'
-        && ['gcal', 'jira'].includes(connection.serviceType.toLowerCase()));
+        && (googleCalendarOnly
+          ? connection.serviceType.toLowerCase() === 'gcal'
+          : ['gcal', 'jira'].includes(connection.serviceType.toLowerCase())));
       await Promise.all(relevant.map(connection => connectionsApi.syncConnection(connection.id)));
     },
     onSuccess: () => {
@@ -548,7 +545,7 @@ export function CalendarPage() {
   const nextRange = () => setCursor(current => range === 'month' ? addMonths(current, 1) : addDays(current, 7));
   const title = range === 'month' ? formatMonthTitle(cursor, lang) : formatWeekTitle(startOfWeek(cursor), lang);
   const dayNames = lang === 'vi' ? DAY_NAMES_VI : DAY_NAMES_EN;
-  const loading = itemsLoading || (!folderId && scheduledLoading);
+  const loading = itemsLoading || (!folderId && !googleCalendarOnly && scheduledLoading);
 
   const entriesForDay = (day: Date) => entries.filter(entry => entryOccursOn(entry, day));
 
@@ -709,6 +706,11 @@ export function CalendarPage() {
     );
   };
 
+  // URL cũ/deep-link không hợp lệ: Email/Jira/Drive không có calendar view.
+  if (sourceType && sourceType !== 'Event') {
+    return <Navigate to={`/?type=${encodeURIComponent(sourceType)}`} replace />;
+  }
+
   return (
     <div className="min-h-full bg-slate-50 px-4 py-5 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:px-6">
       <div className="mx-auto flex max-w-[1500px] flex-col">
@@ -720,7 +722,11 @@ export function CalendarPage() {
               {isFetching && !loading && <Loader2 className="h-4 w-4 animate-spin text-brand-500" />}
             </div>
             <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
-              {currentFolder ? t('calendar.folderSubtitle') : t('calendar.subtitle', { n: entries.length })}
+              {currentFolder
+                ? t('calendar.folderSubtitle')
+                : googleCalendarOnly
+                  ? t('calendar.googleSubtitle', { n: entries.length })
+                  : t('calendar.subtitle', { n: entries.length })}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -733,12 +739,18 @@ export function CalendarPage() {
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('calendar.showOnCalendar')}</span>
-            {([
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {googleCalendarOnly ? t('calendar.scope') : t('calendar.showOnCalendar')}
+            </span>
+            {googleCalendarOnly ? (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 text-[12.5px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200">
+                <CalendarDays className="h-3.5 w-3.5" />{t('calendar.googleScope')}
+              </span>
+            ) : ([
               ['event', t('calendar.events'), 'bg-amber-500'],
               ['scheduled', t('calendar.scheduledEmails'), 'bg-blue-500'],
               ['jira', t('calendar.jiraDeadlines'), 'bg-violet-500'],
-            ] as const).map(([kind, label, dot]) => (
+            ] as const).filter(([kind]) => !folderId || kind !== 'scheduled').map(([kind, label, dot]) => (
               <button key={kind} type="button" onClick={() => setLayers(current => ({ ...current, [kind]: !current[kind] }))} className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition ${layers[kind] ? 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/15 dark:text-brand-300' : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'}`}>
                 <span className={`h-2.5 w-2.5 rounded-[3px] ${dot}`} />{label}
               </button>
