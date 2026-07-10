@@ -2,7 +2,6 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
-
 ## [2026-07-10] Contact 1 row / person + suggest flatten
 
 - **Model:** `GoogleContacts` — **1 row / `ExternalResourceName`** (không còn 1 row/email). `Email` nullable = primary denormalized; canonical emails trong `MetadataJson`. UNIQUE `(ConnectionId, ExternalResourceName)`.
@@ -31,6 +30,14 @@
 - **Scope optional:** `https://www.googleapis.com/auth/contacts` request kèm Gmail connect; **lazy 403** khi mutate (không `tokeninfo`, không `canWrite` từ BE). GET list chỉ đọc cache DB.
 - **Schema:** `GoogleContacts.Etag`, `UpdatedAt`; sync list lưu etag từ People API.
 - **Suggest + trang contacts:** một OData `GET /api/Contacts?connectionId=` (SQL push-down) thay `EmailContactSuggestions` + REST list envelope. Commands REST tại `ContactCommandsController` (`POST/PATCH/DELETE /api/contacts`).
+
+## [2026-07-10] Jira description = Markdown subset 2 chiều + UX nháp/confirm
+
+- **Description Jira đổi từ plain text → Markdown subset** (cùng chuẩn với comment): đọc `AdfConverter.ToMarkdown`, ghi `FromMarkdown` (trước là `ToPlainText`/`FromPlainText` — làm MẤT heading/bullet/bold/code khi sync). `AdfConverter` mở rộng: heading `#`→`######`, inline `` `code` ``, code block ``` fenced — 2 chiều ADF ⇄ markdown. `Snippet` list vẫn plain text. FE `miniMarkdown` render heading/code chip/code block; toolbar `RichCommentBox` thêm nút Heading + Code, dùng luôn cho sửa MÔ TẢ.
+- **Lưu ý vận hành:** description các item Ticket đã sync trước đó vẫn là plain text — cần re-sync (reset `Connections.CursorValue` của Jira hoặc chờ issue đổi trên Jira) để nhận bản markdown.
+- **UX nháp Gmail:** click nháp mở panel chi tiết (view-only, nháp hiện trong hội thoại với badge "Thư nháp", KHÔNG tự bung ô Reply); nút "Tiếp tục chỉnh sửa" → `/send-email` load nội dung THẬT từ Gmail qua `getThread` (metadata local dạng sync không chứa body; fallback `bodyPlainText` cho nháp text thuần).
+- **Xoá email = xoá CẢ thread** (đã vậy từ trước ở `ItemWriteBackService`) — message confirm sửa lại cho đúng ngữ nghĩa.
+- **`window.confirm` → `ConfirmDialog`** toàn app (bulk delete, ticket, dọn Trash/Spam, hủy nháp ×3, gỡ quyền Drive, khoá user admin).
 
 ## [2026-07-09] Google Drive — tạo folder & chia sẻ (SCRUM-79)
 

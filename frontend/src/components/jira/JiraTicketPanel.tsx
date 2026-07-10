@@ -304,27 +304,27 @@ export function JiraTicketPanel({ item, metadata, onPatch, isPatching }: Props) 
       <div>
         <span className="block text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('ticket.descLabel')}</span>
         {editingText === 'description' ? (
-          <div>
-            <textarea
-              autoFocus value={draft} rows={6}
-              onChange={(e) => setDraft(e.target.value)}
-              className={INPUT + ' resize-y min-h-[120px]'}
-            />
-            <div className="flex justify-end gap-2 mt-2">
-              <button onClick={cancelText} disabled={isPatching} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">{t('common.cancel')}</button>
-              <button onClick={() => savePatch({ description: draft.trim() })} disabled={isPatching || draft.trim() === curDescription} className="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700 disabled:opacity-60 transition-colors flex items-center gap-1.5">
-                {isPatching && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{t('common.save')}
-              </button>
-            </div>
-          </div>
+          /* Sửa mô tả bằng RichCommentBox — cùng toolbar định dạng + preview như comment (markdown subset ↔ ADF). */
+          <RichCommentBox
+            initialValue={curDescription}
+            placeholder={t('ticket.descEmpty')}
+            submitLabel={t('common.save')}
+            pending={isPatching}
+            t={t}
+            onSubmit={(body) => savePatch({ description: body })}
+            onCancel={cancelText}
+          />
         ) : (
           <button
             onClick={() => editText('description', curDescription)}
-            className="group relative w-full text-left rounded-[10px] bg-slate-50 dark:bg-slate-800 hover:bg-brand-50/60 dark:hover:bg-slate-700/60 hover:ring-1 hover:ring-brand-200 dark:hover:ring-brand-500/30 p-[14px] transition-colors"
+            className="group relative w-full text-left rounded-xl bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200/70 dark:ring-slate-700/60 hover:bg-brand-50/40 dark:hover:bg-slate-700/50 hover:ring-brand-200 dark:hover:ring-brand-500/30 px-4 py-3.5 transition-colors"
           >
-            <span className="block text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap break-words">
-              {curDescription || <span className="text-slate-400 dark:text-slate-500 italic">{t('ticket.descEmpty')}</span>}
-            </span>
+            {/* Render markdown subset (đậm/nghiêng/list/link) — cùng renderer với comment, khớp ADF từ Jira */}
+            <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] break-words">
+              {curDescription
+                ? renderRichText(curDescription)
+                : <span className="text-slate-400 dark:text-slate-500 italic">{t('ticket.descEmpty')}</span>}
+            </div>
             <span className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-brand-200 dark:border-brand-500/40 text-brand-600 dark:text-brand-400 text-[11px] font-medium shadow-sm">
               <Pencil className="w-3 h-3" />{t('ticket.editField')}
             </span>

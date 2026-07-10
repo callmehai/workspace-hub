@@ -10,9 +10,14 @@ public interface IGmailGateway
     Task<GmailHistory> ListHistoryAsync(Connection connection, string startHistoryId, string? pageToken, CancellationToken ct = default);
     Task<string?> ModifyMessageAsync(Connection connection, string messageId, IList<string> addLabelIds, IList<string> removeLabelIds, CancellationToken ct = default);
     Task<string?> TrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default);
+    Task DeleteDraftAsync(Connection connection, string draftId, CancellationToken ct = default);
 
     /// <summary>Chuyển CẢ thread (mọi message trong hội thoại) vào Trash — dùng khi xoá 1 email gộp thread.</summary>
     Task TrashThreadAsync(Connection connection, string threadId, CancellationToken ct = default);
+    /// <summary>Xoá vĩnh viễn CẢ thread khỏi Gmail.</summary>
+    Task DeleteThreadAsync(Connection connection, string threadId, CancellationToken ct = default);
+    /// <summary>Xoá vĩnh viễn message khỏi Gmail.</summary>
+    Task DeleteMessageAsync(Connection connection, string messageId, CancellationToken ct = default);
     Task<string?> UntrashMessageAsync(Connection connection, string messageId, CancellationToken ct = default);
     Task<string?> GetMessageETagAsync(Connection connection, string messageId, CancellationToken ct = default);
 
@@ -59,4 +64,33 @@ public interface IGmailGateway
         string bodyHtml,
         IReadOnlyList<GmailAttachmentData>? attachments = null,
         CancellationToken ct = default);
+
+    Task<GmailDraftResult> CreateDraftAsync(
+        Connection connection,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default);
+
+    Task<GmailDraftResult> UpdateDraftAsync(
+        Connection connection,
+        string draftId,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default);
+
+    Task<string> SendDraftAsync(Connection connection, string draftId, CancellationToken ct = default);
+    Task<string?> GetDraftIdByMessageIdAsync(Connection connection, string messageId, CancellationToken ct = default);
 }
+

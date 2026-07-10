@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workspace Hub — Prototype view Lịch</title>
+<style>
+  :root{
+    --bg:#f8fafc; --surface:#ffffff; --surface2:#f1f5f9; --border:#e2e8f0; --border-soft:#eef2f7;
+    --text:#0f172a; --soft:#64748b; --faint:#94a3b8;
+    --brand:#4f46e5; --brand-soft:#eef2ff; --brand-text:#4338ca; --brand-ring:rgba(99,102,241,.28);
+    --ev-bg:#fffbeb; --ev-tx:#92400e; --ev-bd:#fde68a;
+    --sc-bg:#eff6ff; --sc-tx:#1e40af; --sc-bd:#bfdbfe;
+    --ji-bg:#f5f3ff; --ji-tx:#5b21b6; --ji-bd:#ddd6fe;
+    --danger:#dc2626; --danger-soft:#fef2f2;
+    --ok:#059669;
+    --shadow:0 1px 2px rgba(15,23,42,.05);
+    --shadow-lg:0 12px 32px rgba(15,23,42,.16), 0 2px 8px rgba(15,23,42,.08);
+    --today-ring:rgba(79,70,229,.35);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#020617; --surface:#0f172a; --surface2:#1e293b; --border:#334155; --border-soft:#1e293b;
+      --text:#f1f5f9; --soft:#94a3b8; --faint:#64748b;
+      --brand:#6366f1; --brand-soft:rgba(99,102,241,.16); --brand-text:#a5b4fc; --brand-ring:rgba(129,140,248,.35);
+      --ev-bg:rgba(245,158,11,.14); --ev-tx:#fcd34d; --ev-bd:rgba(245,158,11,.35);
+      --sc-bg:rgba(59,130,246,.14); --sc-tx:#93c5fd; --sc-bd:rgba(59,130,246,.35);
+      --ji-bg:rgba(139,92,246,.14); --ji-tx:#c4b5fd; --ji-bd:rgba(139,92,246,.35);
+      --danger:#f87171; --danger-soft:rgba(239,68,68,.12);
+      --ok:#34d399;
+      --shadow:0 1px 2px rgba(0,0,0,.4);
+      --shadow-lg:0 16px 40px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.35);
+      --today-ring:rgba(129,140,248,.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#020617; --surface:#0f172a; --surface2:#1e293b; --border:#334155; --border-soft:#1e293b;
+    --text:#f1f5f9; --soft:#94a3b8; --faint:#64748b;
+    --brand:#6366f1; --brand-soft:rgba(99,102,241,.16); --brand-text:#a5b4fc; --brand-ring:rgba(129,140,248,.35);
+    --ev-bg:rgba(245,158,11,.14); --ev-tx:#fcd34d; --ev-bd:rgba(245,158,11,.35);
+    --sc-bg:rgba(59,130,246,.14); --sc-tx:#93c5fd; --sc-bd:rgba(59,130,246,.35);
+    --ji-bg:rgba(139,92,246,.14); --ji-tx:#c4b5fd; --ji-bd:rgba(139,92,246,.35);
+    --danger:#f87171; --danger-soft:rgba(239,68,68,.12);
+    --ok:#34d399;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+    --shadow-lg:0 16px 40px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.35);
+    --today-ring:rgba(129,140,248,.45);
+  }
+  :root[data-theme="light"]{
+    --bg:#f8fafc; --surface:#ffffff; --surface2:#f1f5f9; --border:#e2e8f0; --border-soft:#eef2f7;
+    --text:#0f172a; --soft:#64748b; --faint:#94a3b8;
+    --brand:#4f46e5; --brand-soft:#eef2ff; --brand-text:#4338ca; --brand-ring:rgba(99,102,241,.28);
+    --ev-bg:#fffbeb; --ev-tx:#92400e; --ev-bd:#fde68a;
+    --sc-bg:#eff6ff; --sc-tx:#1e40af; --sc-bd:#bfdbfe;
+    --ji-bg:#f5f3ff; --ji-tx:#5b21b6; --ji-bd:#ddd6fe;
+    --danger:#dc2626; --danger-soft:#fef2f2;
+    --ok:#059669;
+    --shadow:0 1px 2px rgba(15,23,42,.05);
+    --shadow-lg:0 12px 32px rgba(15,23,42,.16), 0 2px 8px rgba(15,23,42,.08);
+    --today-ring:rgba(79,70,229,.35);
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit; color:inherit; background:none; border:none; cursor:pointer; padding:0}
+  input,select{font:inherit; color:var(--text)}
+  ::placeholder{color:var(--faint)}
+
+  .app{display:flex; height:100vh; overflow:hidden}
+
+  /* ── Sidebar (mock — chỉ để thấy folder context được giữ nguyên) ── */
+  .sidebar{
+    width:212px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border);
+    padding:14px 10px; display:flex; flex-direction:column; gap:2px; overflow-y:auto;
+  }
+  .logo{display:flex; align-items:center; gap:8px; padding:4px 8px 14px; font-weight:700; font-size:14px}
+  .logo .mark{width:26px;height:26px;border-radius:8px;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:13px;font-weight:800}
+  .navlabel{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:12px 8px 4px}
+  .navitem{
+    display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px;
+    color:var(--soft); font-weight:500; text-align:left; width:100%;
+  }
+  .navitem:hover{background:var(--surface2)}
+  .navitem.active{background:var(--brand-soft); color:var(--brand-text); font-weight:600}
+  .navitem .dot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
+  .navitem .ico{width:15px; text-align:center; flex-shrink:0; opacity:.85}
+  .sidebar .note{margin-top:auto; font-size:11px; color:var(--faint); padding:10px 8px 2px; line-height:1.45}
+
+  /* ── Main ── */
+  .main{flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden}
+  .maininner{padding:18px 22px 10px; display:flex; flex-direction:column; min-height:0; flex:1}
+
+  /* Toolbar hàng 1 */
+  .row1{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px}
+  .row1 h1{font-size:21px; font-weight:600; margin:0; line-height:1.2; display:flex; align-items:center; gap:9px}
+  .row1 h1 .fdot{width:12px;height:12px;border-radius:99px;background:#94a3b8}
+  .row1 .sub{font-size:12.5px; color:var(--soft); margin-top:2px}
+  .row1 .right{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+
+  .btn{
+    display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 12px;
+    font-size:13px; font-weight:600; color:var(--text); background:var(--surface);
+    border:1px solid var(--border); border-radius:9px; box-shadow:var(--shadow);
+    transition:background .12s;
+  }
+  .btn:hover{background:var(--surface2)}
+  .btn.primary{background:var(--brand); border-color:var(--brand); color:#fff}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.danger{color:var(--danger)}
+  .btn.sm{height:29px; padding:0 10px; font-size:12.5px; border-radius:8px}
+
+  .switcher{display:flex; align-items:center; gap:3px; padding:3px; background:var(--surface); border:1px solid var(--border); border-radius:9px}
+  .switcher button{
+    display:flex; align-items:center; gap:6px; padding:6px 11px; border-radius:7px;
+    font-size:13px; font-weight:500; color:var(--soft); transition:background .12s;
+  }
+  .switcher button:hover{background:var(--surface2)}
+  .switcher button.on{background:var(--brand-soft); color:var(--brand-text); font-weight:600}
+
+  /* Toolbar hàng 2: lớp phủ + tạo nhanh */
+  .row2{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px}
+  .row2 .group{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+  .grouplabel{font-size:12px; color:var(--faint); font-weight:600; margin-right:2px}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 11px;
+    border-radius:99px; border:1px solid var(--border); background:var(--surface);
+    font-size:12.5px; font-weight:500; color:var(--soft); transition:all .12s;
+  }
+  .chip:hover{background:var(--surface2)}
+  .chip.on{background:var(--brand-soft); border-color:transparent; color:var(--brand-text); font-weight:600}
+  .chip .swatch{width:9px;height:9px;border-radius:3px}
+
+  /* Hàng 3: search */
+  .row3{margin-bottom:12px}
+  .search{position:relative}
+  .search input{
+    width:100%; height:34px; padding:0 12px 0 32px; border-radius:9px;
+    border:1px solid var(--border); background:var(--surface); outline:none; font-size:13px;
+  }
+  .search input:focus{border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-ring)}
+  .search .mag{position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--faint)}
+
+  /* Hint bar */
+  .hint{
+    display:flex; align-items:center; gap:8px; padding:7px 12px; margin-bottom:12px;
+    background:var(--brand-soft); border-radius:9px; color:var(--brand-text); font-size:12.5px;
+  }
+  .hint b{font-weight:700}
+  .hint .x{margin-left:auto; opacity:.6; font-size:15px; line-height:1}
+  .hint .x:hover{opacity:1}
+
+  /* ── Calendar header ── */
+  .calhead{display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap}
+  .calhead .navbtns{display:flex; align-items:center; gap:4px}
+  .iconbtn{
+    width:30px; height:30px; display:grid; place-items:center; border-radius:8px;
+    border:1px solid var(--border); background:var(--surface); color:var(--soft); font-size:14px;
+  }
+  .iconbtn:hover{background:var(--surface2)}
+  .calhead .title{font-size:16px; font-weight:700; margin:0 4px; font-variant-numeric:tabular-nums}
+  .calhead .spacer{flex:1}
+  .rangeseg{display:flex; padding:3px; gap:3px; background:var(--surface); border:1px solid var(--border); border-radius:9px}
+  .rangeseg button{padding:4px 12px; border-radius:6px; font-size:12.5px; font-weight:500; color:var(--soft)}
+  .rangeseg button.on{background:var(--brand-soft); color:var(--brand-text); font-weight:600}
+
+  /* ── Month grid ── */
+  .calwrap{flex:1; min-height:0; display:flex; flex-direction:column; overflow:auto; border:1px solid var(--border); border-radius:12px; background:var(--surface)}
+  .dowrow{display:grid; grid-template-columns:repeat(7,1fr); border-bottom:1px solid var(--border); background:var(--surface)}
+  .dowrow div{padding:7px 10px; font-size:11.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--faint)}
+  .mgrid{display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:minmax(108px,1fr); flex:1}
+  .cell{
+    border-right:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft);
+    padding:5px 6px; min-width:0; position:relative; transition:background .12s; cursor:pointer;
+  }
+  .cell:nth-child(7n){border-right:none}
+  .cell:hover{background:var(--surface2)}
+  .cell.dim .dnum{color:var(--faint)}
+  .cell.dropok{background:var(--brand-soft); outline:2px dashed var(--brand); outline-offset:-3px}
+  .dnum{
+    font-size:12px; font-weight:600; color:var(--soft); width:24px; height:24px;
+    display:grid; place-items:center; border-radius:99px; margin-bottom:2px;
+    font-variant-numeric:tabular-nums;
+  }
+  .cell.today .dnum{background:var(--brand); color:#fff; font-weight:700}
+  .evs{display:flex; flex-direction:column; gap:2px; min-width:0}
+  .ev{
+    display:flex; align-items:center; gap:5px; padding:2px 7px; border-radius:6px;
+    font-size:11.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    border:1px solid; cursor:pointer; min-width:0;
+  }
+  .ev:hover{filter:brightness(.96)}
+  .ev .t{font-weight:500; opacity:.75; font-variant-numeric:tabular-nums; flex-shrink:0}
+  .ev .nm{overflow:hidden; text-overflow:ellipsis}
+  .ev .fdot{width:7px;height:7px;border-radius:99px;flex-shrink:0}
+  .ev.ev-event{background:var(--ev-bg); color:var(--ev-tx); border-color:var(--ev-bd)}
+  .ev.ev-scheduled{background:var(--sc-bg); color:var(--sc-tx); border-color:var(--sc-bd); font-style:italic}
+  .ev.ev-jira{background:var(--ji-bg); color:var(--ji-tx); border-color:var(--ji-bd)}
+  .ev.ghost{opacity:.35}
+  .more{font-size:11px; font-weight:600; color:var(--brand-text); padding:1px 7px; border-radius:6px; text-align:left; width:100%}
+  .more:hover{background:var(--brand-soft)}
+
+  /* ── Week grid ── */
+  .weekhead{display:grid; grid-template-columns:52px repeat(7,1fr); border-bottom:1px solid var(--border)}
+  .weekhead .wd{padding:7px 8px; text-align:center}
+  .weekhead .wd .nm{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--faint)}
+  .weekhead .wd .dn{font-size:16px; font-weight:700; color:var(--soft); width:30px; height:30px; margin:2px auto 0; display:grid; place-items:center; border-radius:99px; font-variant-numeric:tabular-nums}
+  .weekhead .wd.today .dn{background:var(--brand); color:#fff}
+  .weekbody{flex:1; overflow-y:auto; position:relative}
+  .weekgrid{display:grid; grid-template-columns:52px repeat(7,1fr); position:relative}
+  .hourlbl{
+    height:46px; font-size:10.5px; color:var(--faint); text-align:right; padding-right:8px;
+    transform:translateY(-6px); font-variant-numeric:tabular-nums;
+  }
+  .wcol{border-left:1px solid var(--border-soft); position:relative; cursor:pointer}
+  .wcol .hline{height:46px; border-bottom:1px solid var(--border-soft)}
+  .wev{
+    position:absolute; left:3px; right:3px; border-radius:7px; border:1px solid;
+    padding:3px 7px; font-size:11.5px; font-weight:600; overflow:hidden; cursor:pointer; z-index:2;
+    box-shadow:var(--shadow);
+  }
+  .wev .t{display:block; font-weight:500; opacity:.75; font-size:10.5px; font-variant-numeric:tabular-nums}
+  .nowline{position:absolute; left:52px; right:0; height:2px; background:var(--danger); z-index:3; pointer-events:none}
+  .nowline::before{content:""; position:absolute; left:-5px; top:-3px; width:8px; height:8px; border-radius:99px; background:var(--danger)}
+
+  /* ── Popover ── */
+  .overlay{position:fixed; inset:0; z-index:40}
+  .pop{
+    position:fixed; z-index:50; width:318px; background:var(--surface); border:1px solid var(--border);
+    border-radius:13px; box-shadow:var(--shadow-lg); padding:14px 15px;
+  }
+  .pop h3{margin:0 0 2px; font-size:14.5px; font-weight:700; line-height:1.3; text-wrap:balance}
+  .pop .meta{display:flex; flex-direction:column; gap:6px; margin:10px 0 4px}
+  .pop .mrow{display:flex; gap:8px; font-size:12.5px; color:var(--soft); align-items:baseline}
+  .pop .mrow .k{width:16px; text-align:center; flex-shrink:0; opacity:.8}
+  .pop .mrow .v{min-width:0}
+  .attnd{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+  .attnd span{background:var(--surface2); border-radius:99px; padding:1px 8px; font-size:11.5px; color:var(--soft)}
+  .pop .typechip{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; border:1px solid; margin-bottom:7px}
+  .pop .actions{display:flex; gap:7px; margin-top:13px}
+  .pop .actions .btn{flex:1; justify-content:center}
+  .pop .closex{position:absolute; top:10px; right:12px; color:var(--faint); font-size:16px; line-height:1}
+  .pop .closex:hover{color:var(--text)}
+  .pop label{display:block; font-size:11.5px; font-weight:600; color:var(--soft); margin:9px 0 3px}
+  .pop input[type=text],.pop input[type=date],.pop input[type=time]{
+    width:100%; height:31px; padding:0 9px; border:1px solid var(--border); border-radius:8px;
+    background:var(--surface); outline:none; font-size:12.5px;
+  }
+  .pop input:focus{border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-ring)}
+  .pop .cols{display:flex; gap:7px}
+  .pop .cols>div{flex:1}
+  .pop .check{display:flex; align-items:center; gap:7px; margin-top:10px; font-size:12.5px; color:var(--soft); cursor:pointer}
+  .pop .check input{accent-color:var(--brand)}
+  .conflict{
+    margin-top:11px; padding:9px 11px; border-radius:9px; background:var(--danger-soft);
+    border:1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+    font-size:12px; color:var(--danger); line-height:1.45;
+  }
+  .conflict b{font-weight:700}
+  .conflict button{margin-top:6px; font-weight:700; text-decoration:underline; color:var(--danger)}
+  .daylist{display:flex; flex-direction:column; gap:4px; margin-top:8px}
+
+  /* Hiệu ứng trượt khi lăn chuột chuyển tháng/tuần */
+  .calwrap.nav-fwd > *{animation:slideup .24s ease-out}
+  .calwrap.nav-back > *{animation:slidedown .24s ease-out}
+  @keyframes slideup{from{opacity:.25; transform:translateY(16px)}to{opacity:1; transform:none}}
+  @keyframes slidedown{from{opacity:.25; transform:translateY(-16px)}to{opacity:1; transform:none}}
+
+  /* Toast */
+  .toasts{position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; gap:7px; align-items:center}
+  .toast{
+    background:var(--text); color:var(--bg); padding:8px 14px; border-radius:10px;
+    font-size:12.5px; font-weight:600; box-shadow:var(--shadow-lg); display:flex; align-items:center; gap:9px;
+    animation:tin .18s ease-out;
+  }
+  .toast code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; font-weight:500;
+    opacity:.75; background:rgba(128,128,128,.25); padding:1px 6px; border-radius:5px;
+  }
+  .toast.err{background:var(--danger); color:#fff}
+  @keyframes tin{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important} }
+
+  @media (max-width:860px){ .sidebar{display:none} }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar mock: chứng minh Lịch giữ nguyên context folder + nguồn -->
+  <aside class="sidebar">
+    <div class="logo"><span class="mark">W</span> Workspace Hub</div>
+    <button class="navitem active" data-folder="" onclick="setFolder('',this)"><span class="ico">▦</span> Tất cả mục</button>
+    <button class="navitem"><span class="ico">✉</span> Email</button>
+    <button class="navitem"><span class="ico">▤</span> Jira</button>
+    <button class="navitem"><span class="ico">▣</span> Drive</button>
+    <div class="navlabel">Folder</div>
+    <button class="navitem" data-folder="prn" onclick="setFolder('prn',this)"><span class="dot" style="background:#6366f1"></span> Đồ án PRN232</button>
+    <button class="navitem" data-folder="kha" onclick="setFolder('kha',this)"><span class="dot" style="background:#10b981"></span> Khách hàng A</button>
+    <div class="note">Prototype — click folder để thấy Lịch được scope theo folder giống hệt Danh sách / Bảng.</div>
+  </aside>
+
+  <main class="main"><div class="maininner">
+    <!-- Hàng 1: context + Đồng bộ + view switcher (thêm nút LỊCH thứ 3) -->
+    <div class="row1">
+      <div>
+        <h1 id="pageTitle">Tất cả mục</h1>
+        <div class="sub" id="pageSub">128 mục · 3 kết nối đang hoạt động</div>
+      </div>
+      <div class="right">
+        <button class="btn" onclick="toast('Đồng bộ on-demand — kéo event mới từ Google Calendar về','POST /api/sync/all')">⟳ Đồng bộ</button>
+        <div class="switcher">
+          <button onclick="toast('Trong app thật: route “/” — ngoài phạm vi prototype này')">☰ Danh sách</button>
+          <button onclick="toast('Trong app thật: route “/kanban” — ngoài phạm vi prototype này')">▦ Bảng</button>
+          <button class="on">▦̲ Lịch</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hàng 2: lớp phủ theo thời gian (điểm ăn tiền của Lịch in-app) + tạo nhanh -->
+    <div class="row2">
+      <div class="group">
+        <span class="grouplabel">Hiện trên lịch</span>
+        <button class="chip on" id="chip-event" onclick="toggleLayer('event')"><span class="swatch" style="background:#f59e0b"></span> Sự kiện</button>
+        <button class="chip on" id="chip-scheduled" onclick="toggleLayer('scheduled')"><span class="swatch" style="background:#3b82f6"></span> Email hẹn giờ</button>
+        <button class="chip on" id="chip-jira" onclick="toggleLayer('jira')"><span class="swatch" style="background:#8b5cf6"></span> Deadline Jira</button>
+      </div>
+      <button class="btn primary" onclick="openCreateAt(todayStr(), '09:00', null)">＋ Tạo event</button>
+    </div>
+
+    <!-- Hàng 3: search giữ nguyên vị trí như 2 view kia -->
+    <div class="row3"><div class="search">
+      <span class="mag">⌕</span>
+      <input id="searchBox" type="text" placeholder="Tìm theo tiêu đề event…" oninput="state.search=this.value; render()">
+    </div></div>
+
+    <div class="hint" id="hintBar">
+      <b>Prototype tương tác</b> · Click ô trống để tạo event · Click event để xem / sửa / xoá · Kéo-thả sang ngày khác để dời lịch · <b>Lăn chuột</b> để chuyển tháng/tuần · Thử sửa “Bảo vệ đồ án” để xem xử lý 409
+      <button class="x" onclick="document.getElementById('hintBar').remove()">✕</button>
+    </div>
+
+    <!-- Header lịch -->
+    <div class="calhead">
+      <div class="navbtns">
+        <button class="iconbtn" onclick="nav(-1,true)">‹</button>
+        <button class="iconbtn" onclick="nav(1,true)">›</button>
+      </div>
+      <button class="btn sm" onclick="goToday()">Hôm nay</button>
+      <h2 class="title" id="calTitle"></h2>
+      <div class="spacer"></div>
+      <div class="rangeseg">
+        <button id="seg-month" class="on" onclick="setRange('month')">Tháng</button>
+        <button id="seg-week" onclick="setRange('week')">Tuần</button>
+      </div>
+    </div>
+
+    <!-- Vùng lịch -->
+    <div class="calwrap" id="calWrap"></div>
+  </div></main>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ────────────────────────────── Data giả ────────────────────────────── */
+const TODAY = new Date(2026, 6, 10); // 10/07/2026 — khớp "hôm nay" của demo
+const FOLDERS = { prn:{name:'Đồ án PRN232', color:'#6366f1'}, kha:{name:'Khách hàng A', color:'#10b981'} };
+
+let seq = 100;
+let items = [
+  // type 'event' = Item Type=Event (CRUD 2 chiều). 'scheduled' & 'jira' = lớp phủ read-only.
+  {id:'e1', type:'event', title:'Daily standup nhóm', date:'2026-07-10', start:'09:00', end:'09:15', folder:'prn', attendees:['hai@fpt.edu.vn','dung@fpt.edu.vn'], location:'Google Meet', meet:true},
+  {id:'e2', type:'event', title:'Demo Sprint 4 với mentor', date:'2026-07-13', start:'14:00', end:'15:30', folder:'prn', attendees:['mentor@fpt.edu.vn'], location:'Phòng B302', meet:true},
+  {id:'e3', type:'event', title:'Họp khách hàng A — review hợp đồng', date:'2026-07-15', start:'10:00', end:'11:00', folder:'kha', attendees:['contact@khachhanga.vn','sales@congty.vn'], location:'Văn phòng KH', meet:false},
+  {id:'e4', type:'event', title:'Retro Sprint 4', date:'2026-07-17', start:'16:00', end:'17:00', folder:'prn', attendees:[], location:'', meet:true},
+  {id:'e5', type:'event', title:'Bảo vệ đồ án PRN232', date:'2026-07-21', start:'08:00', end:'11:00', folder:'prn', attendees:['hoidong@fpt.edu.vn'], location:'Hội trường C', meet:false, stale:true},
+  {id:'e6', type:'event', title:'Ăn trưa team', date:'2026-07-10', start:'12:00', end:'13:00', folder:'', attendees:[], location:'Quán quen', meet:false},
+  {id:'e7', type:'event', title:'1-1 với leader', date:'2026-07-08', start:'15:00', end:'15:30', folder:'', attendees:[], location:'', meet:true},
+  {id:'e8', type:'event', title:'Khảo sát site khách hàng A', date:'2026-07-28', start:'09:00', end:'12:00', folder:'kha', attendees:['contact@khachhanga.vn'], location:'Nhà máy Bình Dương', meet:false},
+  // Email hẹn giờ (ScheduledEmails) — read-only trên lịch, click sẽ điều hướng
+  {id:'s1', type:'scheduled', title:'Gửi: Báo giá dịch vụ Q3', date:'2026-07-14', start:'08:00', end:'08:00', folder:'kha'},
+  {id:'s2', type:'scheduled', title:'Gửi: Follow-up mentor sau demo', date:'2026-07-16', start:'07:30', end:'07:30', folder:'prn'},
+  // Deadline Jira (Item Type=Ticket có duedate) — read-only trên lịch
+  {id:'j1', type:'jira', title:'SCRUM-72 · Cron sync định kỳ', date:'2026-07-18', start:'17:00', end:'17:00', folder:'prn'},
+  {id:'j2', type:'jira', title:'SCRUM-64 · OTP Twilio', date:'2026-07-11', start:'17:00', end:'17:00', folder:'prn'},
+  {id:'j3', type:'jira', title:'SCRUM-52 · Finalize Swagger + E2E', date:'2026-07-24', start:'17:00', end:'17:00', folder:'prn'},
+];
+
+const state = {
+  range:'month',
+  cursor:new Date(TODAY),
+  layers:{event:true, scheduled:true, jira:true},
+  folder:'',
+  search:'',
+};
+
+/* ────────────────────────────── Utils ────────────────────────────── */
+const DOW = ['T2','T3','T4','T5','T6','T7','CN'];
+const pad = n => String(n).padStart(2,'0');
+const dstr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayStr = () => dstr(TODAY);
+function parseD(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function fmtDate(s){ const d = parseD(s); return `${DOW[(d.getDay()+6)%7]}, ${d.getDate()} thg ${d.getMonth()+1}, ${d.getFullYear()}`; }
+function mins(t){ const [h,m] = t.split(':').map(Number); return h*60+m; }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+function visibleItems(){
+  return items.filter(it =>
+    state.layers[it.type] &&
+    (!state.folder || it.folder === state.folder) &&
+    (!state.search || it.title.toLowerCase().includes(state.search.toLowerCase()))
+  );
+}
+function itemsOn(dateStr){
+  return visibleItems().filter(it => it.date === dateStr)
+    .sort((a,b) => mins(a.start) - mins(b.start));
+}
+
+/* ────────────────────────────── Render ────────────────────────────── */
+function render(){
+  const wrap = document.getElementById('calWrap');
+  const c = state.cursor;
+  if(state.range === 'month'){
+    document.getElementById('calTitle').textContent = `Tháng ${c.getMonth()+1} · ${c.getFullYear()}`;
+    wrap.innerHTML = renderMonth();
+    bindMonth();
+  } else {
+    const ws = weekStart(c);
+    const we = new Date(ws); we.setDate(we.getDate()+6);
+    const sameM = ws.getMonth() === we.getMonth();
+    document.getElementById('calTitle').textContent = sameM
+      ? `${ws.getDate()} – ${we.getDate()} thg ${we.getMonth()+1}, ${we.getFullYear()}`
+      : `${ws.getDate()} thg ${ws.getMonth()+1} – ${we.getDate()} thg ${we.getMonth()+1}, ${we.getFullYear()}`;
+    wrap.innerHTML = renderWeek(ws);
+    bindWeek();
+  }
+}
+
+function renderMonth(){
+  const y = state.cursor.getFullYear(), m = state.cursor.getMonth();
+  const first = new Date(y, m, 1);
+  const startOffset = (first.getDay()+6)%7; // T2 đầu tuần
+  const gridStart = new Date(y, m, 1 - startOffset);
+  const daysInView = Math.ceil((startOffset + new Date(y, m+1, 0).getDate()) / 7) * 7;
+
+  let html = `<div class="dowrow">${DOW.map(d=>`<div>${d}</div>`).join('')}</div><div class="mgrid">`;
+  for(let i=0;i<daysInView;i++){
+    const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+    const ds = dstr(d);
+    const isToday = ds === todayStr();
+    const dim = d.getMonth() !== m;
+    const evs = itemsOn(ds);
+    const shown = evs.slice(0,3);
+    const extra = evs.length - shown.length;
+    html += `<div class="cell${dim?' dim':''}${isToday?' today':''}" data-date="${ds}">
+      <div class="dnum">${d.getDate()}</div>
+      <div class="evs">
+        ${shown.map(ev => chipHtml(ev)).join('')}
+        ${extra>0 ? `<button class="more" data-date="${ds}">+${extra} mục khác</button>` : ''}
+      </div>
+    </div>`;
+  }
+  return html + '</div>';
+}
+
+function chipHtml(ev){
+  const drag = ev.type === 'event' ? ' draggable="true"' : '';
+  const fd = ev.folder && FOLDERS[ev.folder] ? `<span class="fdot" style="background:${FOLDERS[ev.folder].color}"></span>` : '';
+  const icon = ev.type === 'scheduled' ? '✉ ' : ev.type === 'jira' ? '⚑ ' : '';
+  return `<div class="ev ev-${ev.type}" data-id="${ev.id}"${drag} title="${esc(ev.title)}">
+    ${fd}<span class="t">${ev.start}</span><span class="nm">${icon}${esc(ev.title)}</span>
+  </div>`;
+}
+
+const H0 = 7, H1 = 21, ROWH = 46;
+function weekStart(d){ const r = new Date(d); r.setDate(r.getDate() - (r.getDay()+6)%7); return r; }
+
+function renderWeek(ws){
+  const days = Array.from({length:7}, (_,i) => { const d = new Date(ws); d.setDate(ws.getDate()+i); return d; });
+  let head = `<div class="weekhead"><div></div>${days.map(d=>{
+    const t = dstr(d)===todayStr();
+    return `<div class="wd${t?' today':''}"><div class="nm">${DOW[(d.getDay()+6)%7]}</div><div class="dn">${d.getDate()}</div></div>`;
+  }).join('')}</div>`;
+
+  let gut = '<div>' + Array.from({length:H1-H0}, (_,i)=>`<div class="hourlbl">${pad(H0+i)}:00</div>`).join('') + '</div>';
+
+  let cols = days.map(d => {
+    const ds = dstr(d);
+    const evs = itemsOn(ds);
+    const lines = Array.from({length:H1-H0}, ()=>'<div class="hline"></div>').join('');
+    const evHtml = evs.map(ev => {
+      const top = (mins(ev.start) - H0*60) / 60 * ROWH;
+      const durMin = Math.max(mins(ev.end) - mins(ev.start), 30);
+      const h = durMin / 60 * ROWH - 2;
+      if (top < -20 || top > (H1-H0)*ROWH) return '';
+      const icon = ev.type === 'scheduled' ? '✉ ' : ev.type === 'jira' ? '⚑ ' : '';
+      return `<div class="wev ev-${ev.type}" data-id="${ev.id}" style="top:${Math.max(top,0)}px;height:${h}px">
+        ${icon}${esc(ev.title)}<span class="t">${ev.start}${ev.type==='event' ? ' – '+ev.end : ''}</span>
+      </div>`;
+    }).join('');
+    return `<div class="wcol" data-date="${ds}">${lines}${evHtml}</div>`;
+  }).join('');
+
+  // đường "bây giờ" nếu tuần chứa hôm nay (demo: 10:25)
+  let now = '';
+  if (days.some(d => dstr(d) === todayStr())){
+    const top = (10*60+25 - H0*60)/60*ROWH;
+    now = `<div class="nowline" style="top:${top}px"></div>`;
+  }
+  return head + `<div class="weekbody"><div class="weekgrid">${gut}${cols}${now}</div></div>`;
+}
+
+/* ────────────────────────────── Bind events ────────────────────────────── */
+function bindMonth(){
+  document.querySelectorAll('.cell').forEach(cell => {
+    cell.addEventListener('click', e => {
+      if (e.target.closest('.ev') || e.target.closest('.more')) return;
+      openCreateAt(cell.dataset.date, '09:00', cell);
+    });
+    cell.addEventListener('dragover', e => { e.preventDefault(); cell.classList.add('dropok'); });
+    cell.addEventListener('dragleave', () => cell.classList.remove('dropok'));
+    cell.addEventListener('drop', e => {
+      e.preventDefault(); cell.classList.remove('dropok');
+      const id = e.dataTransfer.getData('text/plain');
+      const ev = items.find(x => x.id === id);
+      if (ev && ev.date !== cell.dataset.date){
+        ev.date = cell.dataset.date;
+        render();
+        toast(`Đã dời “${ev.title}” → ${fmtDate(ev.date)}`, 'PATCH /api/items/'+id+' · 200');
+      }
+    });
+  });
+  document.querySelectorAll('.ev').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openDetail(el.dataset.id, el); });
+    el.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', el.dataset.id));
+  });
+  document.querySelectorAll('.more').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); openDayList(btn.dataset.date, btn); });
+  });
+}
+
+function bindWeek(){
+  document.querySelectorAll('.wcol').forEach(col => {
+    col.addEventListener('click', e => {
+      if (e.target.closest('.wev')) return;
+      const rect = col.getBoundingClientRect();
+      const mins30 = Math.floor((e.clientY - rect.top) / ROWH * 2) / 2;
+      const h = Math.min(Math.max(H0 + Math.floor(mins30), H0), H1-1);
+      const m = (mins30 % 1) ? '30' : '00';
+      openCreateAt(col.dataset.date, `${pad(h)}:${m}`, null, e.clientX, e.clientY);
+    });
+  });
+  document.querySelectorAll('.wev').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openDetail(el.dataset.id, el); });
+  });
+}
+
+/* ────────────────────────────── Popover core ────────────────────────────── */
+function closePop(){
+  document.querySelectorAll('.overlay,.pop').forEach(el => el.remove());
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePop(); });
+
+function showPop(html, anchorEl, cx, cy){
+  closePop();
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.addEventListener('click', closePop);
+  document.body.appendChild(ov);
+  const pop = document.createElement('div');
+  pop.className = 'pop';
+  pop.innerHTML = `<button class="closex" onclick="closePop()">✕</button>` + html;
+  document.body.appendChild(pop);
+  // định vị: cạnh anchor, clamp trong viewport
+  let x = cx ?? 0, y = cy ?? 0;
+  if (anchorEl){
+    const r = anchorEl.getBoundingClientRect();
+    x = r.right + 8; y = r.top;
+    if (x + 330 > innerWidth) x = r.left - 330;
+    if (x < 8) x = Math.min(Math.max(r.left, 8), innerWidth - 330);
+  }
+  x = Math.min(Math.max(x, 8), innerWidth - 330);
+  y = Math.min(Math.max(y, 8), innerHeight - pop.offsetHeight - 12);
+  pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  y = Math.min(Math.max(y, 8), innerHeight - pop.offsetHeight - 12);
+  pop.style.top = y + 'px';
+  return pop;
+}
+
+/* ────────────────────────────── CRUD: Create ────────────────────────────── */
+function openCreateAt(dateStr, startTime, anchorEl, cx, cy){
+  const endH = pad(Math.min(Number(startTime.slice(0,2)) + 1, 23));
+  const html = `
+    <h3>Tạo event mới</h3>
+    <div style="font-size:11.5px;color:var(--faint);margin-top:1px">Ghi thẳng lên Google Calendar (write-back)</div>
+    <label>Tiêu đề</label>
+    <input type="text" id="f-title" placeholder="VD: Họp review sprint" autofocus>
+    <div class="cols">
+      <div><label>Ngày</label><input type="date" id="f-date" value="${dateStr}"></div>
+    </div>
+    <div class="cols">
+      <div><label>Bắt đầu</label><input type="time" id="f-start" value="${startTime}"></div>
+      <div><label>Kết thúc</label><input type="time" id="f-end" value="${endH}:${startTime.slice(3)}"></div>
+    </div>
+    <label>Địa điểm</label>
+    <input type="text" id="f-loc" placeholder="Không bắt buộc">
+    <label>Người tham dự (email, phẩy)</label>
+    <input type="text" id="f-att" placeholder="a@gmail.com, b@gmail.com">
+    <label class="check"><input type="checkbox" id="f-meet"> Thêm link Google Meet</label>
+    <div class="actions">
+      <button class="btn" onclick="closePop()">Huỷ</button>
+      <button class="btn primary" onclick="doCreate()">Tạo event</button>
+    </div>`;
+  const pop = showPop(html, anchorEl, cx, cy);
+  pop.querySelector('#f-title').focus();
+}
+
+function doCreate(){
+  const g = id => document.getElementById(id);
+  const title = g('f-title').value.trim();
+  if (!title){ toast('Tiêu đề không được để trống', '400 Bad Request', true); return; }
+  const s = g('f-start').value, e = g('f-end').value;
+  if (mins(e) <= mins(s)){ toast('Giờ kết thúc phải sau giờ bắt đầu', '400 Bad Request', true); return; }
+  items.push({
+    id:'e'+(++seq), type:'event', title,
+    date:g('f-date').value, start:s, end:e,
+    location:g('f-loc').value.trim(),
+    attendees:g('f-att').value.split(',').map(x=>x.trim()).filter(Boolean),
+    meet:g('f-meet').checked, folder:state.folder,
+  });
+  closePop(); render();
+  toast(`Đã tạo “${title}” trên Google Calendar`, 'POST /api/items/event · 201');
+}
+
+/* ────────────────────────────── Read + Update + Delete ────────────────────────────── */
+const TYPE_LABEL = {event:['Sự kiện','ev'], scheduled:['Email hẹn giờ','sc'], jira:['Deadline Jira','ji']};
+
+function openDetail(id, anchorEl){
+  const ev = items.find(x => x.id === id); if (!ev) return;
+  const [lbl, tk] = TYPE_LABEL[ev.type];
+  const fol = ev.folder && FOLDERS[ev.folder];
+
+  if (ev.type !== 'event'){
+    // Lớp phủ read-only → điều hướng về màn quản lý gốc
+    const dest = ev.type === 'scheduled' ? 'Trang “Email hẹn giờ” (/scheduled)' : 'Panel ticket Jira (ItemDetail)';
+    showPop(`
+      <span class="typechip" style="background:var(--${tk}-bg);color:var(--${tk}-tx);border-color:var(--${tk}-bd)">${lbl}</span>
+      <h3>${esc(ev.title)}</h3>
+      <div class="meta">
+        <div class="mrow"><span class="k">🕐</span><span class="v">${fmtDate(ev.date)} · ${ev.start}</span></div>
+        ${fol ? `<div class="mrow"><span class="k">◉</span><span class="v">${fol.name}</span></div>` : ''}
+        <div class="mrow"><span class="k">ℹ</span><span class="v">Lớp phủ chỉ-đọc — sửa/xoá tại màn quản lý gốc.</span></div>
+      </div>
+      <div class="actions"><button class="btn" style="flex:1" onclick="closePop();toast('Điều hướng: ${dest}')">Mở ${lbl} ↗</button></div>
+    `, anchorEl);
+    return;
+  }
+
+  showPop(`
+    <span class="typechip" style="background:var(--ev-bg);color:var(--ev-tx);border-color:var(--ev-bd)">Sự kiện · Google Calendar</span>
+    <h3>${esc(ev.title)}</h3>
+    <div class="meta">
+      <div class="mrow"><span class="k">🕐</span><span class="v">${fmtDate(ev.date)} · ${ev.start} – ${ev.end}</span></div>
+      ${ev.location ? `<div class="mrow"><span class="k">📍</span><span class="v">${esc(ev.location)}</span></div>` : ''}
+      ${fol ? `<div class="mrow"><span class="k">◉</span><span class="v">${fol.name}</span></div>` : ''}
+      ${ev.meet ? `<div class="mrow"><span class="k">▶</span><span class="v" style="color:var(--brand-text);font-weight:600">Tham gia Google Meet</span></div>` : ''}
+      ${ev.attendees.length ? `<div class="mrow"><span class="k">👥</span><span class="v"><div class="attnd">${ev.attendees.map(a=>`<span>${esc(a)}</span>`).join('')}</div></span></div>` : ''}
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="openEdit('${ev.id}')">✎ Sửa</button>
+      <button class="btn danger" onclick="doDelete('${ev.id}')">Xoá</button>
+      <button class="btn" onclick="toast('Mở metadata.htmlLink trong tab mới','GET htmlLink')">GCal ↗</button>
+    </div>
+  `, anchorEl);
+}
+
+function openEdit(id){
+  const ev = items.find(x => x.id === id); if (!ev) return;
+  const pop = document.querySelector('.pop'); if (!pop) return;
+  pop.innerHTML = `
+    <button class="closex" onclick="closePop()">✕</button>
+    <h3>Sửa event</h3>
+    <label>Tiêu đề</label>
+    <input type="text" id="f-title" value="${esc(ev.title)}">
+    <div class="cols"><div><label>Ngày</label><input type="date" id="f-date" value="${ev.date}"></div></div>
+    <div class="cols">
+      <div><label>Bắt đầu</label><input type="time" id="f-start" value="${ev.start}"></div>
+      <div><label>Kết thúc</label><input type="time" id="f-end" value="${ev.end}"></div>
+    </div>
+    <label>Địa điểm</label>
+    <input type="text" id="f-loc" value="${esc(ev.location||'')}">
+    <label>Người tham dự</label>
+    <input type="text" id="f-att" value="${esc(ev.attendees.join(', '))}">
+    <div id="conflictBox"></div>
+    <div class="actions">
+      <button class="btn" onclick="closePop()">Huỷ</button>
+      <button class="btn primary" onclick="doSave('${id}')">Lưu thay đổi</button>
+    </div>`;
+}
+
+function doSave(id){
+  const ev = items.find(x => x.id === id); if (!ev) return;
+  const g = k => document.getElementById(k);
+  if (mins(g('f-end').value) <= mins(g('f-start').value)){ toast('Giờ kết thúc phải sau giờ bắt đầu','400 Bad Request', true); return; }
+
+  // Demo IWriteBackGuard: event stale → ETag lệch → 409
+  if (ev.stale){
+    document.getElementById('conflictBox').innerHTML = `
+      <div class="conflict">
+        <b>409 — Event đã thay đổi trên Google Calendar.</b><br>
+        Ai đó vừa sửa event này (ETag lệch). Tải bản mới nhất rồi sửa tiếp để không ghi đè.
+        <br><button onclick="resolveConflict('${id}')">⟳ Tải bản mới nhất</button>
+      </div>`;
+    toast('Conflict phiên bản — không ghi đè thay đổi trên Google', 'PATCH /api/items/'+id+' · 409', true);
+    return;
+  }
+
+  ev.title = g('f-title').value.trim() || ev.title;
+  ev.date = g('f-date').value; ev.start = g('f-start').value; ev.end = g('f-end').value;
+  ev.location = g('f-loc').value.trim();
+  ev.attendees = g('f-att').value.split(',').map(x=>x.trim()).filter(Boolean);
+  closePop(); render();
+  toast(`Đã cập nhật “${ev.title}” → đẩy lên Google Calendar`, 'PATCH /api/items/'+id+' · 200');
+}
+
+function resolveConflict(id){
+  const ev = items.find(x => x.id === id); if (!ev) return;
+  ev.stale = false;
+  ev.location = 'Hội trường C (đổi từ B — bản mới trên Google)';
+  document.getElementById('conflictBox').innerHTML = '';
+  document.getElementById('f-loc').value = ev.location;
+  toast('Đã đồng bộ bản mới nhất — ETag cập nhật, lưu lại được rồi', 'GET event · ETag refreshed');
+}
+
+function doDelete(id){
+  const ev = items.find(x => x.id === id); if (!ev) return;
+  const pop = document.querySelector('.pop'); if (!pop) return;
+  pop.innerHTML = `
+    <button class="closex" onclick="closePop()">✕</button>
+    <h3>Xoá event này?</h3>
+    <div class="meta"><div class="mrow"><span class="k">⚠</span><span class="v">“${esc(ev.title)}” sẽ bị xoá trên <b>cả Google Calendar</b> lẫn Workspace Hub. Không hoàn tác được.</span></div></div>
+    <div class="actions">
+      <button class="btn" onclick="closePop()">Huỷ</button>
+      <button class="btn danger" style="border-color:var(--danger)" onclick="confirmDelete('${id}')">Xoá vĩnh viễn</button>
+    </div>`;
+}
+function confirmDelete(id){
+  const ev = items.find(x => x.id === id);
+  items = items.filter(x => x.id !== id);
+  closePop(); render();
+  toast(`Đã xoá “${ev.title}” khỏi Google Calendar`, 'DELETE /api/items/'+id+' · 204');
+}
+
+function openDayList(dateStr, anchorEl){
+  const evs = itemsOn(dateStr);
+  showPop(`
+    <h3>${fmtDate(dateStr)}</h3>
+    <div class="daylist">${evs.map(ev => chipHtml(ev)).join('')}</div>
+  `, anchorEl);
+  document.querySelectorAll('.pop .ev').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openDetail(el.dataset.id, el); });
+  });
+}
+
+/* ────────────────────────────── Điều hướng / filter ────────────────────────────── */
+function nav(dir, animated){
+  const c = state.cursor;
+  if (state.range === 'month') c.setMonth(c.getMonth() + dir);
+  else c.setDate(c.getDate() + 7*dir);
+  render();
+  if (animated){
+    const wrap = document.getElementById('calWrap');
+    wrap.classList.remove('nav-fwd','nav-back');
+    void wrap.offsetWidth; // restart animation
+    wrap.classList.add(dir > 0 ? 'nav-fwd' : 'nav-back');
+  }
+}
+
+/* Lăn chuột trên vùng lịch = chuyển tháng/tuần.
+   View Tuần: ưu tiên scroll dọc xem giờ — chỉ chuyển tuần khi đã chạm mép trên/dưới. */
+let wheelAcc = 0, wheelLockUntil = 0, wheelLastAt = 0;
+document.getElementById('calWrap').addEventListener('wheel', e => {
+  if (document.querySelector('.pop')) return; // đang mở popover thì không chuyển
+  const body = e.target.closest('.weekbody');
+  if (body){
+    const down = e.deltaY > 0;
+    const canScroll = down
+      ? body.scrollTop + body.clientHeight < body.scrollHeight - 1
+      : body.scrollTop > 0;
+    if (canScroll) return; // để scroll giờ tự nhiên
+  }
+  e.preventDefault();
+  const now = performance.now();
+  if (now < wheelLockUntil) return;
+  if (now - wheelLastAt > 250) wheelAcc = 0; // reset khi ngắt quãng
+  wheelLastAt = now;
+  wheelAcc += e.deltaY;
+  if (Math.abs(wheelAcc) >= 90){
+    const dir = wheelAcc > 0 ? 1 : -1;
+    wheelAcc = 0;
+    wheelLockUntil = now + 420; // throttle — 1 nấc lăn = 1 tháng/tuần, không bay vèo vèo
+    nav(dir, true);
+  }
+}, {passive:false});
+function goToday(){ state.cursor = new Date(TODAY); render(); }
+function setRange(r){
+  state.range = r;
+  document.getElementById('seg-month').classList.toggle('on', r==='month');
+  document.getElementById('seg-week').classList.toggle('on', r==='week');
+  render();
+}
+function toggleLayer(k){
+  state.layers[k] = !state.layers[k];
+  document.getElementById('chip-'+k).classList.toggle('on', state.layers[k]);
+  render();
+}
+function setFolder(f, el){
+  state.folder = f;
+  document.querySelectorAll('.navitem[data-folder]').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const fol = FOLDERS[f];
+  document.getElementById('pageTitle').innerHTML = fol
+    ? `<span class="fdot" style="background:${fol.color}"></span> ${fol.name}` : 'Tất cả mục';
+  document.getElementById('pageSub').textContent = fol
+    ? 'Folder · Lịch chỉ hiện mục đã gán vào folder này' : '128 mục · 3 kết nối đang hoạt động';
+  render();
+}
+
+/* ────────────────────────────── Toast ────────────────────────────── */
+function toast(msg, api, isErr){
+  const t = document.createElement('div');
+  t.className = 'toast' + (isErr ? ' err' : '');
+  t.innerHTML = esc(msg) + (api ? ` <code>${esc(api)}</code>` : '');
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+
+render();
+</script>
+
+</body>
+</html>

@@ -7,6 +7,7 @@ import { driveApi } from '../../lib/driveApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
+import { ConfirmDialog } from '../ConfirmDialog';
 import type { DrivePermission, DrivePermissionRole } from '../../types/drive';
 
 interface Props {
@@ -31,6 +32,8 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
   const [email, setEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<DrivePermissionRole>('reader');
   const [notify, setNotify] = useState(true);
+  // Permission đang chờ xác nhận gỡ (null = đóng dialog).
+  const [removeTargetId, setRemoveTargetId] = useState<string | null>(null);
   // Mở dialog mới fetch — cache key ['drive-permissions', itemId]
   const permissionsQuery = useQuery({
     queryKey: ['drive-permissions', itemId],
@@ -143,11 +146,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
             </div>
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm(t('drive.share.confirmRemove'))) {
-                  removeMutation.mutate(perm.id);
-                }
-              }}
+              onClick={() => setRemoveTargetId(perm.id)}
               disabled={isBusy}
               className="text-[12px] font-medium text-rose-600 hover:underline shrink-0 disabled:opacity-50"
             >
@@ -244,6 +243,21 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
           <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-slate-600">{t('common.close')}</button>
         </div>
       </div>
+
+      {/* Xác nhận gỡ quyền chia sẻ */}
+      <ConfirmDialog
+        open={removeTargetId !== null}
+        tone="danger"
+        message={t('drive.share.confirmRemove')}
+        confirmLabel={t('drive.share.remove')}
+        loading={removeMutation.isPending}
+        onConfirm={() => {
+          if (removeTargetId) {
+            removeMutation.mutate(removeTargetId, { onSettled: () => setRemoveTargetId(null) });
+          }
+        }}
+        onCancel={() => setRemoveTargetId(null)}
+      />
     </div>
   );
 }

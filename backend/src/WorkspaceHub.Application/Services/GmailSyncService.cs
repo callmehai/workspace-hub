@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -262,19 +263,69 @@ public class GmailSyncService : IGmailSyncService
                         {
                             existing.Title = mapped.Title;
                             existing.Snippet = mapped.Snippet;
-                            existing.MetadataJson = mapped.MetadataJson;
+                            existing.MetadataJson = MergeMetadata(existing.MetadataJson, mapped.MetadataJson);
                             existing.ETag = mapped.ETag;
                             existing.OccurredAt = mapped.OccurredAt;
                             existing.IsImportant = mapped.IsImportant;
                             // Keep existing.Status intact to avoid overwriting Kanban columns.
                         }
+                        else
+                        {
+                            // Even if ETag is the same, merge metadata to ensure draft details are preserved
+                            existing.MetadataJson = MergeMetadata(existing.MetadataJson, mapped.MetadataJson);
+                        }
                         skippedCount++;
                     }
                     else
                     {
-                        newItems.Add(mapped);
-                        existingItems[mapped.ExternalId!] = mapped;
-                        successfullyCreatedCount++;
+                        // For DRAFT messages: Gmail changes messageId on each draft update.
+                        // Check if we already have a local item with the same draftId OR same threadId+DRAFT label
+                        // → update ExternalId instead of creating a duplicate (which would lose the user's bodyHtml/subject).
+                        bool mappedIsDraft = IsDraftItem(mapped.MetadataJson);
+                        Item? existingDraft = null;
+
+                        if (mappedIsDraft)
+                        {
+                            var mappedDraftId = ExtractDraftIdFromMetadata(mapped.MetadataJson);
+
+                            // Strategy 1: match by draftId (most reliable when available)
+                            if (mappedDraftId != null)
+                            {
+                                existingDraft = existingItems.Values.FirstOrDefault(item =>
+                                {
+                                    var id = ExtractDraftIdFromMetadata(item.MetadataJson);
+                                    return id != null && id == mappedDraftId;
+                                });
+                            }
+
+                            // Strategy 2: match by threadId + DRAFT label (Gmail allows max 1 draft per thread)
+                            if (existingDraft == null && !string.IsNullOrEmpty(mapped.ThreadId))
+                            {
+                                existingDraft = existingItems.Values.FirstOrDefault(item =>
+                                    item.ThreadId == mapped.ThreadId
+                                    && item.ExternalId != mapped.ExternalId
+                                    && IsDraftItem(item.MetadataJson));
+                            }
+                        }
+
+                        if (existingDraft != null)
+                        {
+                            // Update the existing draft item's ExternalId to the new message ID
+                            existingItems.Remove(existingDraft.ExternalId!);
+                            existingDraft.ExternalId = mapped.ExternalId;
+                            existingDraft.ThreadId = mapped.ThreadId;
+                            existingDraft.ETag = mapped.ETag;
+                            existingDraft.OccurredAt = mapped.OccurredAt;
+                            existingDraft.MetadataJson = MergeMetadata(existingDraft.MetadataJson, mapped.MetadataJson);
+                            existingItems[mapped.ExternalId!] = existingDraft;
+                            skippedCount++;
+                        }
+                        else
+                        {
+                            newItems.Add(mapped);
+                            existingItems[mapped.ExternalId!] = mapped;
+                            successfullyCreatedCount++;
+                        }
                     }
                 }
             }
@@ -334,5 +385,96 @@ public class GmailSyncService : IGmailSyncService
             pageToken = page.NextPageToken;
         } while (!string.IsNullOrEmpty(pageToken) && pulled < max);
         return result;
+    }
+
+    private static string MergeMetadata(string? existingJson, string newJson)
+    {
+        if (string.IsNullOrEmpty(existingJson)) return newJson;
+        try
+        {
+            var existingDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(existingJson);
+            var newDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(newJson);
+            if (existingDict == null || newDict == null) return newJson;
+
+            var mergedDict = new Dictionary<string, object>();
+            foreach (var kv in newDict)
+            {
+                mergedDict[kv.Key] = kv.Value;
+            }
+
+            // draftId + rfc822MessageId là ĐỊNH DANH ổn định — bản sync theo message-list thường không kèm.
+            // Giữ lại từ metadata cũ CHỈ KHI bản mới thiếu, và không bao giờ ghi đè giá trị mới nếu Gmail có trả về.
+            var identityKeys = new[] { "draftId", "rfc822MessageId" };
+            foreach (var key in identityKeys)
+            {
+                bool newHasValue = newDict.TryGetValue(key, out var nv)
+                    && nv.ValueKind != JsonValueKind.Null && nv.ValueKind != JsonValueKind.Undefined
+                    && !(nv.ValueKind == JsonValueKind.String && string.IsNullOrEmpty(nv.GetString()));
+                if (!newHasValue
+                    && existingDict.TryGetValue(key, out var val)
+                    && val.ValueKind != JsonValueKind.Null && val.ValueKind != JsonValueKind.Undefined)
+                {
+                    mergedDict[key] = val;
+                }
+            }
+
+            // subject + bodyHtml là NỘI DUNG có thể user sửa trực tiếp trên Gmail (không qua app).
+            // Chỉ preserve giá trị cũ khi bản sync mới THIẾU/RỖNG — nếu không sẽ "đóng băng" nội dung cũ vĩnh viễn.
+            var contentStringKeys = new[] { "subject", "bodyHtml" };
+            foreach (var key in contentStringKeys)
+            {
+                bool newHasValue = newDict.TryGetValue(key, out var nv)
+                    && nv.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(nv.GetString());
+                if (!newHasValue
+                    && existingDict.TryGetValue(key, out var val)
+                    && val.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(val.GetString()))
+                {
+                    mergedDict[key] = val;
+                }
+            }
+
+            // to, cc, bcc: chỉ preserve khi bản mới thiếu/rỗng (giữ nguyên hành vi cũ).
+            var recipientKeys = new[] { "to", "cc", "bcc" };
+            foreach (var key in recipientKeys)
+            {
+                if (existingDict.TryGetValue(key, out var existingVal) && existingVal.ValueKind == JsonValueKind.Array && existingVal.GetArrayLength() > 0)
+                {
+                    if (!newDict.TryGetValue(key, out var newVal) || newVal.ValueKind != JsonValueKind.Array || newVal.GetArrayLength() == 0)
+                    {
+                        mergedDict[key] = existingVal;
+                    }
+                }
+            }
+
+            return JsonSerializer.Serialize(mergedDict);
+        }
+        catch
+        {
+            return newJson;
+        }
+    }
+
+    /// <summary>Extract the Gmail "draftId" string from an item's MetadataJson (if present).</summary>
+    private static string? ExtractDraftIdFromMetadata(string? metadataJson)
+    {
+        if (string.IsNullOrEmpty(metadataJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.TryGetProperty("draftId", out var val) && val.ValueKind == JsonValueKind.String)
+            {
+                return val.GetString();
+            }
+        }
+        catch { /* ignore */ }
+        return null;
+    }
+
+    /// <summary>Check if an item's MetadataJson indicates it is a DRAFT email.</summary>
+    private static bool IsDraftItem(string? metadataJson)
+    {
+        if (string.IsNullOrEmpty(metadataJson)) return false;
+        // Quick string check before parsing JSON
+        return metadataJson.Contains("\"DRAFT\"");
     }
 }
