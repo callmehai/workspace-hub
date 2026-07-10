@@ -92,7 +92,7 @@ public class ItemServiceTests
         // Arrange — page = -5 phải được clamp thành 1
         _repoMock
             .Setup(r => r.GetPagedAsync(
-            _userId, null, null, null, null, null, null, null, null, null, null, null, null,
+            _userId, null, null, null, null, null, null, null, null, null, null, null,
             1, // clamp thành 1
             20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
@@ -115,7 +115,7 @@ public class ItemServiceTests
         // Arrange — limit = 999 phải được clamp thành 100
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null, null, null, null, null, null, null,
+                _userId, null, null, null, null, null, null, null, null, null, null, null,
                 1, 100, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
@@ -137,7 +137,7 @@ public class ItemServiceTests
         // Arrange — limit = 0 phải được clamp thành 1
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null, null, null, null, null, null, null,
+                _userId, null, null, null, null, null, null, null, null, null, null, null,
                 1, 1, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
@@ -169,7 +169,7 @@ public class ItemServiceTests
         // Assert
         _repoMock.Verify(r => r.GetPagedAsync(
             _userId, null, null, null, null,
-            "meeting", null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()), Times.Once);
+            "meeting", null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public class ItemServiceTests
             _userId, folderId,
             It.Is<IReadOnlyList<ItemStatus>>(s => s.SequenceEqual(new[] { ItemStatus.Doing })),
             It.Is<IReadOnlyList<ItemType>>(ty => ty.SequenceEqual(new[] { ItemType.Email })),
-            true, "report", null, null, null, null, null, 2, 10, It.IsAny<CancellationToken>()), Times.Once);
+            true, "report", null, null, null, null, null, null, 2, 10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

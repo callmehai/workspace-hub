@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Send, Eye, Pencil, Paperclip, FileText } from 'lucide-react';
@@ -22,12 +22,14 @@ function formatFileSize(bytes: number): string {
 export const SendEmail = () => {
   const { t } = useI18n();
   const [searchParams] = useSearchParams();
-  const [to, setTo] = useState<string[]>([]);
+  const prefillConn = searchParams.get('connectionId') ?? '';
+  const prefillTo = searchParams.get('to')?.trim() ?? '';
+  const [to, setTo] = useState<string[]>(() => (prefillTo ? [prefillTo] : []));
   const [cc, setCc] = useState<string[]>([]);
   const [bcc, setBcc] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [conn, setConn] = useState('');
+  const [conn, setConn] = useState(prefillConn);
   const [template, setTemplate] = useState('blank');
   const [includeSignature, setIncludeSignature] = useState(true);
   const [files, setFiles] = useState<File[]>([]);
@@ -42,13 +44,6 @@ export const SendEmail = () => {
     [connections],
   );
   const resolvedConn = conn || activeGmail[0]?.id || '';
-
-  useEffect(() => {
-    const prefillConn = searchParams.get('connectionId');
-    const prefillTo = searchParams.get('to');
-    if (prefillConn) setConn(prefillConn);
-    if (prefillTo?.trim()) setTo([prefillTo.trim()]);
-  }, [searchParams]);
 
   // Chữ ký THẬT từ Gmail của connection (rỗng nếu chưa đặt / connection cũ thiếu scope settings.basic).
   const { data: signature = '' } = useQuery({

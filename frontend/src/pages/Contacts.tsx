@@ -72,21 +72,15 @@ interface ContactFormModalProps {
   onForbidden: () => void;
 }
 
-function ContactFormModal({
-  open, contact, connectionId, readOnlyMode, onClose, onForbidden,
-}: ContactFormModalProps) {
+function ContactFormModalContent({
+  contact, connectionId, readOnlyMode, onClose, onForbidden,
+}: Omit<ContactFormModalProps, 'open'>) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const isEdit = !!contact;
 
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-
-  useEffect(() => {
-    if (!open) return;
-    setDisplayName(contact?.displayName ?? '');
-    setEmail(contact?.email ?? '');
-  }, [open, contact]);
+  const [displayName, setDisplayName] = useState(contact?.displayName ?? '');
+  const [email, setEmail] = useState(contact?.email ?? '');
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -126,8 +120,6 @@ function ContactFormModal({
     },
   });
 
-  if (!open) return null;
-
   const saving = createMutation.isPending || updateMutation.isPending;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -155,57 +147,74 @@ function ContactFormModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
-    >
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            {isEdit ? t('contacts.editTitle') : t('contacts.createTitle')}
-          </h2>
-          <button type="button" onClick={onClose} disabled={saving} className="p-1 rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
-            <X className="w-4 h-4" />
+    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          {isEdit ? t('contacts.editTitle') : t('contacts.createTitle')}
+        </h2>
+        <button type="button" onClick={onClose} disabled={saving} className="p-1 rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('contacts.name')}</label>
+          <input
+            type="text"
+            readOnly={readOnlyMode}
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+            placeholder={t('contacts.namePlaceholder')}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('contacts.email')}</label>
+          <input
+            type="email"
+            required
+            readOnly={readOnlyMode}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+            placeholder="name@example.com"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+            {t('common.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={saving || readOnlyMode}
+            className="px-4 py-2 text-sm rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {saving ? t('common.saving') : t('common.save')}
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('contacts.name')}</label>
-            <input
-              type="text"
-              readOnly={readOnlyMode}
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-              placeholder={t('contacts.namePlaceholder')}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('contacts.email')}</label>
-            <input
-              type="email"
-              required
-              readOnly={readOnlyMode}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-              placeholder="name@example.com"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving || readOnlyMode}
-              className="px-4 py-2 text-sm rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              {saving ? t('common.saving') : t('common.save')}
-            </button>
-          </div>
-        </form>
-      </div>
+      </form>
+    </div>
+  );
+}
+
+function ContactFormModal({
+  open, contact, connectionId, readOnlyMode, onClose, onForbidden,
+}: ContactFormModalProps) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <ContactFormModalContent
+        key={contact?.id ?? 'create'}
+        contact={contact}
+        connectionId={connectionId}
+        readOnlyMode={readOnlyMode}
+        onClose={onClose}
+        onForbidden={onForbidden}
+      />
     </div>
   );
 }
@@ -220,7 +229,7 @@ export const Contacts = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [readOnlyMode, setReadOnlyMode] = useState(false);
+  const [readOnlyByConn, setReadOnlyByConn] = useState<Record<string, boolean>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ContactDto | undefined>();
   const [deleting, setDeleting] = useState<ContactDto | null>(null);
@@ -244,10 +253,12 @@ export const Contacts = () => {
     [connections],
   );
   const resolvedConn = conn || activeGmail[0]?.id || '';
+  const readOnlyMode = resolvedConn ? (readOnlyByConn[resolvedConn] ?? false) : false;
 
-  useEffect(() => {
-    setReadOnlyMode(false);
-  }, [resolvedConn]);
+  const markConnReadOnly = () => {
+    if (!resolvedConn) return;
+    setReadOnlyByConn(prev => ({ ...prev, [resolvedConn]: true }));
+  };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['contacts', resolvedConn, sourceFilter, debouncedSearch, page, limit],
@@ -276,7 +287,7 @@ export const Contacts = () => {
     },
     onError: (err) => {
       handleContactMutateError(err, t, t('contacts.deleteFail'), {
-        onForbidden: () => setReadOnlyMode(true),
+        onForbidden: markConnReadOnly,
       });
     },
   });
@@ -558,7 +569,7 @@ export const Contacts = () => {
         connectionId={resolvedConn}
         readOnlyMode={readOnlyMode}
         onClose={() => setModalOpen(false)}
-        onForbidden={() => setReadOnlyMode(true)}
+        onForbidden={markConnReadOnly}
       />
 
       <ConfirmDialog
@@ -581,7 +592,7 @@ export const Contacts = () => {
           readOnlyMode={readOnlyMode}
           onClose={() => setSelectedContactId(null)}
           onUpdated={() => queryClient.invalidateQueries({ queryKey: ['contacts'] })}
-          onForbidden={() => setReadOnlyMode(true)}
+          onForbidden={markConnReadOnly}
         />
       )}
     </div>
