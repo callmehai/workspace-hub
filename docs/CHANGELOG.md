@@ -2,6 +2,14 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-10] Calendar workspace view (FE)
+
+- **View thứ ba:** thêm route `/calendar` cạnh Danh sách/Bảng; view switcher và Sidebar giữ nguyên `?folder=` khi đổi view/context.
+- **Hai chế độ:** Tháng + Tuần; tuần chia slot 30 phút (07:00–21:00) và có hàng **Cả ngày**. Click slot mở form với ngày/giờ có sẵn; điều hướng được các tháng/tuần và quay về hôm nay.
+- **Ba lớp thời gian:** Google Calendar Event (amber, CRUD/write-back), ScheduledEmail Pending (blue, read-only, mở màn Email hẹn giờ), Jira deadline (violet, read-only, mở ItemDetail). Khi vào folder, chỉ Item Event/Ticket đã gắn folder được hiển thị; ScheduledEmail hiện chỉ có ở lịch chung vì schema chưa có FolderId.
+- **Drag/drop:** chỉ Event có `draggable`; month drop giữ giờ hiện tại, week timed-slot drop đổi ngày+giờ, week all-day row đổi thành cả ngày. Jira/ScheduledEmail tuyệt đối read-only trên lịch.
+- **Contract BE cần khớp:** FE gửi `allDay` kèm `start/end` để tương thích API hiện tại; BE Calendar cần map `allDay=true` sang `EventDateTime.Date` để Google lưu đúng event cả ngày. Jira overlay đọc `ItemResponse.dueAt` hoặc `metadata.dueDate`; Jira sync phải populate một trong hai field thì deadline mới xuất hiện.
+
 ## [2026-07-10] Jira description = Markdown subset 2 chiều + UX nháp/confirm
 
 - **Description Jira đổi từ plain text → Markdown subset** (cùng chuẩn với comment): đọc `AdfConverter.ToMarkdown`, ghi `FromMarkdown` (trước là `ToPlainText`/`FromPlainText` — làm MẤT heading/bullet/bold/code khi sync). `AdfConverter` mở rộng: heading `#`→`######`, inline `` `code` ``, code block ``` fenced — 2 chiều ADF ⇄ markdown. `Snippet` list vẫn plain text. FE `miniMarkdown` render heading/code chip/code block; toolbar `RichCommentBox` thêm nút Heading + Code, dùng luôn cho sửa MÔ TẢ.

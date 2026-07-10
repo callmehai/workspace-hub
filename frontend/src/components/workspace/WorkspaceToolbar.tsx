@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
+  Star, Search, RefreshCw, Plus, Tag, Settings2,
   FolderPlus, Briefcase, UserRound, Loader2, ChevronDown, Check,
 } from 'lucide-react';
 import { Select } from '../Select';
@@ -20,10 +20,11 @@ import { CreateEventModal } from './CreateEventModal';
 import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
 import { CreateDriveFolderModal } from '../drive/CreateDriveFolderModal';
+import { WorkspaceViewSwitcher, type WorkspaceView } from './WorkspaceViewSwitcher';
 
 /*
- * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
- * MỤC TIÊU: đổi view KHÔNG thay đổi layout — mọi hàng GIỐNG HỆT nhau ở 2 view:
+ * Toolbar dùng chung cho các view chính của workspace.
+ * MỤC TIÊU: đổi view KHÔNG làm mất context folder/source:
  *   Hàng 1: context + actions · Hàng 2: chips (trạng thái + loại + quan trọng)
  *   Hàng 3: search full-width.
  * Ở Bảng, chip Trạng thái = lọc CỘT hiển thị (chọn "Đang xử lý" → chỉ hiện cột đó).
@@ -168,7 +169,7 @@ function TagFilterDropdown({
 }
 
 interface WorkspaceToolbarProps {
-  view: 'list' | 'board';
+  view: WorkspaceView;
   folder: FolderResponse | null;
   /** Context không tìm thấy trong list folders (share/ẩn) nhưng vẫn đang chọn */
   folderId: string | null;
@@ -257,15 +258,6 @@ export const WorkspaceToolbar = ({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [projectQueries]);
 
-  // Giữ NGUYÊN context khi đổi view (Danh sách ↔ Bảng): cả folder LẪN nguồn (tab Email/Jira/…).
-  const q = (() => {
-    const p = new URLSearchParams();
-    if (folderId) p.set('folder', folderId);
-    if (sourceType) p.set('type', sourceType);
-    const s = p.toString();
-    return s ? `?${s}` : '';
-  })();
-
   const handleSyncAll = async () => {
     try {
       setIsSyncing(true);
@@ -337,29 +329,7 @@ export const WorkspaceToolbar = ({
             <span>{t('toolbar.sync')}</span>
           </button>
 
-          {/* View switcher — luôn giữ ?folder= khi đổi view */}
-          <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px] dark:bg-slate-800 dark:border-slate-700">
-            <button
-              onClick={() => view !== 'list' && navigate(`/${q}`)}
-              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${view === 'list'
-                  ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
-                  : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
-                }`}
-            >
-              <List className="w-4 h-4" />
-              <span>{t('toolbar.list')}</span>
-            </button>
-            <button
-              onClick={() => view !== 'board' && navigate(`/kanban${q}`)}
-              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${view === 'board'
-                  ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
-                  : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
-                }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              <span>{t('toolbar.board')}</span>
-            </button>
-          </div>
+          <WorkspaceViewSwitcher view={view} folderId={folderId} sourceType={sourceType} />
         </div>
       </div>
 

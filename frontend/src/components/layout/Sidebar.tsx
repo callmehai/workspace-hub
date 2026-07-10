@@ -39,9 +39,9 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const currentFolder = searchParams.get('folder');
   const currentType = searchParams.get('type'); // scope integration (?type=Email|Event|File|Ticket)
 
-  // Folder = CONTEXT (không phải filter). Context có 2 view: Danh sách (/) và Bảng (/kanban).
+  // Folder = CONTEXT (không phải filter). Context có 3 view: Danh sách, Bảng và Lịch.
   // Đổi context giữ nguyên view đang xem; đổi view (trong page) giữ nguyên context.
-  const isItemsView = location.pathname === '/' || location.pathname === '/kanban';
+  const isItemsView = location.pathname === '/' || location.pathname === '/kanban' || location.pathname === '/calendar';
   const viewPath = isItemsView ? location.pathname : '/';
 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);

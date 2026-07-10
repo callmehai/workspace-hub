@@ -93,6 +93,8 @@ export interface PatchItemRequest {
   end?: string; // ISO DateTime
   location?: string;
   attendees?: string[];
+  /** Calendar UI contract: true = event cả ngày. BE Calendar cần map sang EventDateTime.Date. */
+  allDay?: boolean;
   name?: string;
   statusTransition?: string;
   // ── Jira (Type=Ticket) — SCRUM-57. Content is editable (unlike Email).
@@ -127,6 +129,8 @@ export interface CreateEventRequest {
   end: string;
   location?: string;
   attendees?: string[];
+  /** Calendar UI contract: true = event cả ngày. Start/end vẫn gửi để tương thích API hiện tại. */
+  allDay?: boolean;
 }
 
 // ── Tags (SCRUM-70/71) ──

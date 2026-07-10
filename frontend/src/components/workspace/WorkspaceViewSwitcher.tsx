@@ -1,0 +1,50 @@
+import { CalendarDays, LayoutGrid, List } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useI18n } from '../../hooks/useI18n';
+
+export type WorkspaceView = 'list' | 'board' | 'calendar';
+
+interface WorkspaceViewSwitcherProps {
+  view: WorkspaceView;
+  folderId?: string | null;
+  sourceType?: string | null;
+}
+
+/** Chuyển giữa ba cách nhìn của cùng một workspace, luôn giữ nguyên context folder/source. */
+export function WorkspaceViewSwitcher({ view, folderId, sourceType }: WorkspaceViewSwitcherProps) {
+  const navigate = useNavigate();
+  const { t } = useI18n();
+
+  const query = (() => {
+    const params = new URLSearchParams();
+    if (folderId) params.set('folder', folderId);
+    if (sourceType) params.set('type', sourceType);
+    const value = params.toString();
+    return value ? `?${value}` : '';
+  })();
+
+  const options = [
+    { value: 'list' as const, path: '/', label: t('toolbar.list'), Icon: List },
+    { value: 'board' as const, path: '/kanban', label: t('toolbar.board'), Icon: LayoutGrid },
+    { value: 'calendar' as const, path: '/calendar', label: t('toolbar.calendar'), Icon: CalendarDays },
+  ];
+
+  return (
+    <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px] dark:bg-slate-800 dark:border-slate-700">
+      {options.map(({ value, path, label, Icon }) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => view !== value && navigate(`${path}${query}`)}
+          className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${view === value
+            ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
+            : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
+          }`}
+        >
+          <Icon className="w-4 h-4" />
+          <span>{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
