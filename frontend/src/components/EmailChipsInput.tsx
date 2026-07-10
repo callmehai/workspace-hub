@@ -4,6 +4,10 @@ import { X, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../hooks/useI18n';
 import { sendEmailApi, type ContactSuggestion } from '../lib/sendEmailApi';
+import { friendsApi } from '../lib/friendsApi';
+
+/** Gợi ý = bạn bè trong app (ưu tiên, Bạn thân trước) + cache contact Google. */
+type Suggestion = ContactSuggestion & { tier?: 'Friend' | 'CloseFriend' };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEBOUNCE_MS = 300;
@@ -49,9 +53,26 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
     retry: false,
   });
 
-  const filtered = suggestions.filter(
-    (s) => !value.some((v) => v.toLowerCase() === s.email.toLowerCase())
-  );
+  // Bạn bè trong app — không cần connectionId, khớp theo tên HOẶC email, Bạn thân lên đầu.
+  const { data: friendsOverview } = useQuery({
+    queryKey: ['friends'],
+    queryFn: friendsApi.getOverview,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const q = debouncedQ.toLowerCase();
+  const friendMatches: Suggestion[] = q.length >= 2
+    ? (friendsOverview?.friends ?? [])
+        .filter((f) => f.email.toLowerCase().includes(q) || f.fullName.toLowerCase().includes(q))
+        .sort((a, b) => Number(b.myTier === 'CloseFriend') - Number(a.myTier === 'CloseFriend'))
+        .map((f) => ({ email: f.email, displayName: f.fullName, tier: f.myTier }))
+    : [];
+  const friendEmails = new Set(friendMatches.map((f) => f.email.toLowerCase()));
+
+  const filtered: Suggestion[] = [
+    ...friendMatches,
+    ...suggestions.filter((s) => !friendEmails.has(s.email.toLowerCase())),
+  ].filter((s) => !value.some((v) => v.toLowerCase() === s.email.toLowerCase()));
 
   /** Index đang highlight trong dropdown — luôn nằm trong [0, filtered.length). */
   const selectedIndex = filtered.length === 0 ? 0 : Math.min(activeIdx, filtered.length - 1);
@@ -145,7 +166,7 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
     if (/[,;\s]/.test(text)) { e.preventDefault(); addFrom(text); }
   };
 
-  const showDropdown = open && suggestEnabled && filtered.length > 0;
+  const showDropdown = open && filtered.length > 0;
 
   return (
     <div ref={wrapRef} className="relative mb-3 min-w-0">
@@ -210,7 +231,19 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
                     : 'text-slate-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/60'
                 }`}
               >
-                <span className="font-medium truncate">{s.displayName ?? s.email}</span>
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-medium truncate">{s.displayName ?? s.email}</span>
+                  {s.tier === 'CloseFriend' && (
+                    <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-px text-[11px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                      ⭐ {t('friends.closeFriend')}
+                    </span>
+                  )}
+                  {s.tier === 'Friend' && (
+                    <span className="shrink-0 rounded-full bg-brand-50 px-1.5 py-px text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                      {t('friends.list')}
+                    </span>
+                  )}
+                </span>
                 {s.displayName && (
                   <span className="text-xs text-gray-500 dark:text-slate-400 truncate">{s.email}</span>
                 )}
