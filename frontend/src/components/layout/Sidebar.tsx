@@ -11,7 +11,8 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
-  X
+  X,
+  Contact,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -225,6 +226,11 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
           <NavLink to="/send-email" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
             <Send className="w-[18px] h-[18px] shrink-0" />
             <span className="flex-1 text-left">{t('nav.sendEmail')}</span>
+          </NavLink>
+
+          <NavLink to="/contacts" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
+            <Contact className="w-[18px] h-[18px] shrink-0" />
+            <span className="flex-1 text-left">{t('nav.contacts')}</span>
           </NavLink>
 
           <NavLink to="/scheduled-emails" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>

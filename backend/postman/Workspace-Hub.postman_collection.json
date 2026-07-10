@@ -859,6 +859,93 @@
       ]
     },
     {
+      "name": "06b — Google Contacts (SCRUM-76)",
+      "item": [
+        {
+          "name": "List Google contacts (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/Contacts?connectionId={{gmailConnectionId}}&$top=20&$skip=0&$count=true&$orderby=DisplayName",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "Contacts"],
+              "query": [
+                { "key": "connectionId", "value": "{{gmailConnectionId}}" },
+                { "key": "$top", "value": "20" },
+                { "key": "$skip", "value": "0" },
+                { "key": "$count", "value": "true" },
+                { "key": "$orderby", "value": "DisplayName" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "if (!pm.environment.get('gmailConnectionId')) { pm.test.skip('skipped — cần Gmail connection'); return; }",
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "var body = pm.response.json();",
+              "pm.test('OData value', function () { pm.expect(body).to.have.property('value'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Create Google contact (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"connectionId\": \"{{gmailConnectionId}}\",\n  \"email\": \"postman-contact-{{userId}}@test.local\",\n  \"displayName\": \"Postman Contact\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/contacts", "host": ["{{baseUrl}}"], "path": ["api", "contacts"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login thành công'); return; }",
+              "if (!pm.environment.get('gmailConnectionId')) { pm.test.skip('skipped — cần Gmail connection'); return; }",
+              "if (pm.response.code === 403) { pm.test.skip('skipped — thiếu scope contacts write, reconnect Gmail'); return; }",
+              "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+              "var j = pm.response.json();",
+              "pm.environment.set('googleContactId', j.id);",
+              "pm.environment.set('googleContactEtag', j.etag);"
+            ] } }
+          ]
+        },
+        {
+          "name": "Patch Google contact (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"etag\": \"{{googleContactEtag}}\",\n  \"displayName\": \"Postman Contact Updated\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/contacts/{{googleContactId}}", "host": ["{{baseUrl}}"], "path": ["api", "contacts", "{{googleContactId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login'); return; }",
+              "if (!pm.environment.get('googleContactId')) { pm.test.skip('skipped — chưa tạo contact'); return; }",
+              "if (pm.response.code === 403) { pm.test.skip('skipped — thiếu scope write'); return; }",
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.environment.set('googleContactEtag', pm.response.json().etag);"
+            ] } }
+          ]
+        },
+        {
+          "name": "Delete Google contact (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/contacts/{{googleContactId}}", "host": ["{{baseUrl}}"], "path": ["api", "contacts", "{{googleContactId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.environment.get('accessToken')) { pm.test.skip('skipped — cần Login'); return; }",
+              "if (!pm.environment.get('googleContactId')) { pm.test.skip('skipped — chưa tạo contact'); return; }",
+              "if (pm.response.code === 403) { pm.test.skip('skipped — thiếu scope write'); return; }",
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
       "name": "07 — Admin (RBAC)",
       "item": [
         {

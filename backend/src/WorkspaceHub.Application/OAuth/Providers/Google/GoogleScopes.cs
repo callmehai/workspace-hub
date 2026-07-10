@@ -16,6 +16,7 @@ internal static class GoogleScopes
     public const string GmailSettingsBasic = "https://www.googleapis.com/auth/gmail.settings.basic";
     public const string ContactsReadonly       = "https://www.googleapis.com/auth/contacts.readonly";
     public const string ContactsOtherReadonly  = "https://www.googleapis.com/auth/contacts.other.readonly";
+    public const string Contacts               = "https://www.googleapis.com/auth/contacts";
     public const string CalendarReadonly = "https://www.googleapis.com/auth/calendar.readonly";
     public const string CalendarWrite    = "https://www.googleapis.com/auth/calendar";
     public const string DriveReadonly    = "https://www.googleapis.com/auth/drive.readonly";
@@ -39,11 +40,11 @@ internal static class GoogleScopes
         };
 
     // Scopes TUỲ CHỌN — request thêm để nâng trải nghiệm, KHÔNG bắt buộc để connect.
-    // gmail.settings.basic: chữ ký Gmail. contacts*: gợi ý To/Cc/Bcc (SCRUM-69). Thiếu → mất tính năng, không chặn connect.
+    // gmail.settings.basic: chữ ký Gmail. contacts*: gợi ý To/Cc/Bcc (SCRUM-69). contacts write (SCRUM-76): tuỳ chọn — thiếu → lazy 403 khi mutate.
     public static readonly IReadOnlyDictionary<ServiceType, string[]> OptionalServiceScopes =
         new Dictionary<ServiceType, string[]>
         {
-            [ServiceType.Gmail] = [GmailSettingsBasic, ContactsReadonly, ContactsOtherReadonly],
+            [ServiceType.Gmail] = [GmailSettingsBasic, ContactsReadonly, ContactsOtherReadonly, Contacts],
         };
 
     /// <summary>Scopes request khi build auth URL — openid+email (id_token) + bắt buộc + tuỳ chọn của service.</summary>

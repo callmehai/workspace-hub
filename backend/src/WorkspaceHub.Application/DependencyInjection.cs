@@ -55,6 +55,8 @@ public static class DependencyInjection
 
         // Tags (SCRUM-70)
         services.AddScoped<ITagService, TagService>();
+        // Google contacts write-back (SCRUM-76)
+        services.AddScoped<IGoogleContactService, GoogleContactService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
         services.AddScoped<ISyncItemNotificationService, SyncItemNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();

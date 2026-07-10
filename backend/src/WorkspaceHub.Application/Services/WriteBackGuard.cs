@@ -47,7 +47,7 @@ public class WriteBackGuard : IWriteBackGuard
                 "Write-back ETag conflict: stored={StoredEtag}, provider={ProviderEtag}",
                 storedEtag, providerEtag);
             throw new ConflictException(
-                "Dữ liệu trên máy chủ đã thay đổi. Đang tự động cập nhật lại phiên bản mới nhất.");
+                "Server data has changed. Refreshing with the latest version.");
         }
     }
 }

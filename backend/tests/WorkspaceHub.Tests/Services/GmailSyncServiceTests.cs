@@ -46,7 +46,7 @@ public class GmailSyncServiceTests
 
         _peopleMock.Setup(m => m.ListAllAsync(It.IsAny<Connection>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<PeopleContactRow>());
-        _googleContactsMock.Setup(m => m.ReplaceAllForConnectionAsync(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<GoogleContact>>(), It.IsAny<CancellationToken>()))
+        _googleContactsMock.Setup(m => m.SyncForConnectionAsync(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<GoogleContact>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _googleContactMapperMock.Setup(m => m.ToEntity(It.IsAny<PeopleContactRow>(), It.IsAny<Guid>(), It.IsAny<DateTime>()))
             .Returns((PeopleContactRow row, Guid connId, DateTime syncedAt) => new GoogleContact
@@ -247,7 +247,7 @@ public class GmailSyncServiceTests
 
         await _service.SyncConnectionAsync(connection);
 
-        _googleContactsMock.Verify(m => m.ReplaceAllForConnectionAsync(
+        _googleContactsMock.Verify(m => m.SyncForConnectionAsync(
             connection.Id,
             It.Is<IReadOnlyList<GoogleContact>>(list =>
                 list.Count == 2 &&
@@ -274,6 +274,6 @@ public class GmailSyncServiceTests
 
         result.NewCursor.Should().Be("100");
         connection.Status.Should().Be(ConnectionStatus.Active);
-        _googleContactsMock.Verify(m => m.ReplaceAllForConnectionAsync(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<GoogleContact>>(), It.IsAny<CancellationToken>()), Times.Never);
+        _googleContactsMock.Verify(m => m.SyncForConnectionAsync(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<GoogleContact>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

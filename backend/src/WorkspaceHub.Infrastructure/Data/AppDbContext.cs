@@ -234,6 +234,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Email).HasMaxLength(320).IsRequired();
             e.Property(x => x.DisplayName).HasMaxLength(256);
             e.Property(x => x.ExternalResourceName).HasMaxLength(256);
+            e.Property(x => x.Etag).HasMaxLength(128);
             e.HasIndex(x => new { x.ConnectionId, x.Email }).IsUnique();
             e.HasIndex(x => new { x.ConnectionId, x.DisplayName })
                 .HasDatabaseName("IX_GoogleContacts_ConnectionId_DisplayName");

@@ -34,6 +34,10 @@ internal static class GoogleApiExceptionHandler
         if (ex.HttpStatusCode == HttpStatusCode.NotFound)
             return new NotFoundException(resourceType, resourceId);
 
+        if (ex.HttpStatusCode == HttpStatusCode.PreconditionFailed)
+            return new ConflictException(
+                "Server data has changed. Refreshing with the latest version.");
+
         if (IsInsufficientPermissions(ex))
             return new ForbiddenException(forbiddenMessage);
 

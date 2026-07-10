@@ -112,7 +112,7 @@ Sau đó điền `userEmail` + `userPassword` của tài khoản này vào envir
 
 ## Phủ nhóm endpoint
 
-Auth (register/login/me/logout/google **+ send-otp/verify-otp**) · Connections (list/oauth-start/refresh/disconnect) · Folders (CRUD + item-folder) · Items (list/filter/get/note/event/status/delete) · Scheduled-emails (list/create/cancel) · Important-contacts (CRUD) · Admin (users/stats/toggle-integration + RBAC) · Jira (projects/issue-types/priorities/assignable-users/transitions/ticket CRUD error-cases) · Health.
+Auth (register/login/me/logout/google **+ send-otp/verify-otp**) · Connections (list/oauth-start/refresh/disconnect) · Folders (CRUD + item-folder) · Items (list/filter/get/note/event/status/delete) · Scheduled-emails (list/create/cancel) · Important-contacts (CRUD) · **Google-contacts (list/create/patch/delete — SCRUM-76)** · Admin (users/stats/toggle-integration + RBAC) · Jira (projects/issue-types/priorities/assignable-users/transitions/ticket CRUD error-cases) · Health.
 
 ## Kết quả chạy (evidence)
 

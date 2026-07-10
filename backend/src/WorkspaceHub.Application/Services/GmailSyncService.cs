@@ -202,7 +202,7 @@ public class GmailSyncService : IGmailSyncService
                 .Select(r => _googleContactMapper.ToEntity(r, connection.Id, syncedAt))
                 .ToList();
 
-            await _googleContacts.ReplaceAllForConnectionAsync(connection.Id, entities, ct);
+            await _googleContacts.SyncForConnectionAsync(connection.Id, entities, ct);
         }
         catch (Exception ex)
         {

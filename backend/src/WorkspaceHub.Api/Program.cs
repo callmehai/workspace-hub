@@ -14,8 +14,8 @@ using WorkspaceHub.Api.Hubs;
 using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application;
 using WorkspaceHub.Application.DTOs;
+using WorkspaceHub.Application.DTOs.Contacts;
 using WorkspaceHub.Application.DTOs.Notifications;
-using WorkspaceHub.Application.DTOs.Emails;
 using WorkspaceHub.Application.DTOs.ScheduledEmails;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Infrastructure;
@@ -28,9 +28,8 @@ edmBuilder.EnableLowerCamelCase(); // Force camelCase cho tất cả OData respo
 edmBuilder.EntitySet<FolderResponse>("Folders");
 var scheduledEmails = edmBuilder.EntitySet<ScheduledEmailDto>("ScheduledEmails");
 scheduledEmails.EntityType.HasKey(e => e.Id);
-var contactSuggestionType = edmBuilder.EntityType<ContactSuggestionDto>();
-contactSuggestionType.HasKey(c => c.Email);
-edmBuilder.EntitySet<ContactSuggestionDto>("EmailContactSuggestions");
+var contacts = edmBuilder.EntitySet<ContactDto>("Contacts");
+contacts.EntityType.HasKey(c => c.Id);
 var notifications = edmBuilder.EntitySet<NotificationDto>("Notifications");
 notifications.EntityType.HasKey(n => n.Id);
 

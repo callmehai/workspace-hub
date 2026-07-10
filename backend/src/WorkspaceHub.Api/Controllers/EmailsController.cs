@@ -7,7 +7,7 @@ using WorkspaceHub.Application.Interfaces.Services;
 
 namespace WorkspaceHub.Api.Controllers;
 
-/// <summary>REST: send/signature tại api/emails. Contact suggest OData → <see cref="EmailContactSuggestionsController"/>.</summary>
+/// <summary>REST: send/signature tại api/emails. Contact OData → <see cref="ContactsController"/> /api/Contacts.</summary>
 [Authorize]
 [ODataIgnored]
 [Route("api/emails")]

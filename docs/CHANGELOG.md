@@ -2,6 +2,19 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-09] Google Contacts sync merge + create guard (SCRUM-76 fix)
+
+- **Sync merge:** `GoogleContactRepository.SyncForConnectionAsync` thay full-replace — match theo `ExternalResourceName` rồi `Email`, **giữ `Id` và `UpdatedAt`**; xoá orphan không còn trên Google.
+- **Create guard:** `POST /api/contacts` kiểm tra trùng email local **trước** `people.createContact` — tránh orphan trên Google khi DB 409.
+- **Test:** isolation OData `GET /api/Contacts` (user A không đọc connection user B); `$select`; repository sync preserve Id.
+
+## [2026-07-09] Google Contacts write-back + trang `/contacts` (SCRUM-76)
+
+- **Write-back:** `POST/PATCH/DELETE /api/contacts` — chỉ `Source=Contact`; `PATCH` bắt buộc `etag`, conflict qua `IWriteBackGuard` + Google 412 → 409.
+- **Scope optional:** `https://www.googleapis.com/auth/contacts` request kèm Gmail connect; **lazy 403** khi mutate (không `tokeninfo`, không `canWrite` từ BE). GET list chỉ đọc cache DB.
+- **Schema:** `GoogleContacts.Etag`, `UpdatedAt`; sync list lưu etag từ People API.
+- **Suggest + trang contacts:** một OData `GET /api/Contacts?connectionId=` (SQL push-down) thay `EmailContactSuggestions` + REST list envelope. Commands REST tại `ContactCommandsController` (`POST/PATCH/DELETE /api/contacts`).
+
 ## [2026-07-08] Notifications in-app + SignalR hub retry (SCRUM-68)
 
 - **Sync → notification:** Mọi sync (`ConnectionSyncDispatcher`) khi `Created > 0` gọi `SyncItemNotificationService` — tối đa 10 item/sync (ưu tiên `IsImportant` nếu vượt). Lưu DB + push SignalR `ReceiveNotification`.
@@ -11,11 +24,11 @@
 
 ## [2026-07-08] Google Contacts autocomplete (SCRUM-69)
 
-- **Sync read-only:** Mỗi lần sync Gmail (cron định kỳ SCRUM-72 ~60s, nút Đồng bộ, hoặc lazy khi mở list items) kéo `connections.list` + `otherContacts.list` (People API) vào `GoogleContacts` — full replace theo `ConnectionId`. Best-effort: lỗi contact không fail mail sync.
+- **Sync read-only:** Mỗi lần sync Gmail (cron định kỳ SCRUM-72 ~60s, nút Đồng bộ, hoặc lazy khi mở list items) kéo `connections.list` + `otherContacts.list` (People API) vào `GoogleContacts` — **merge upsert** theo `ConnectionId` (giữ `Id`; xem [2026-07-09] sync fix). Best-effort: lỗi contact không fail mail sync.
 - **Scopes optional:** `contacts.readonly` + `contacts.other.readonly` request kèm Gmail connect; thiếu scope → sync/suggest rỗng, user vẫn nhập tay.
-- **Suggest từ cache DB:** `GET /api/EmailContactSuggestions?connectionId=` + OData convention route (`$filter/$top/$orderby`). Không gọi Google lúc gõ. Cả `Contact` và `OtherContact`.
+- **Suggest từ cache DB:** OData `GET /api/Contacts?connectionId=` (`$filter/$top/$orderby/$select`) — đọc cache `GoogleContacts`, không gọi Google lúc gõ; cả `Contact` và `OtherContact`. *(Lúc ship SCRUM-69 dùng `GET /api/EmailContactSuggestions` — gộp vào `/api/Contacts` tại SCRUM-76, xem [2026-07-09].)*
 - **FE:** `EmailChipsInput` debounce 300ms + dropdown; wire `SendEmail` + `ScheduledEmails`.
-- **Ticket sau:** write-back + trang `/contacts` — **SCRUM-76** (spec local `docs/CONTACTS_WRITEBACK.md`).
+- **Ticket sau:** write-back + trang `/contacts` — ✅ **SCRUM-76 Done**.
 ## [2026-07-07] Cron sync connections + FE auto-refresh (SCRUM-72)
 
 > **Mở rộng SCRUM-16:** bổ sung sync **định kỳ** ngoài on-demand; webhook/push realtime vẫn ngoài scope.

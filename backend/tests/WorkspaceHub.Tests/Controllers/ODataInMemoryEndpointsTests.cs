@@ -13,7 +13,7 @@ using WorkspaceHub.Infrastructure.Data;
 
 namespace WorkspaceHub.Tests.Controllers;
 
-/// <summary>OData in-memory trên convention route — ScheduledEmails, EmailContactSuggestions, Notifications.</summary>
+/// <summary>OData — ScheduledEmails, Contacts, Notifications.</summary>
 public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> _factory;
@@ -383,7 +383,7 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Fact]
-    public async Task EmailContactSuggestions_Get_Filter_ReturnsAlice()
+    public async Task Contacts_Get_Filter_ReturnsAlice()
     {
         await ResetAndSeedAsync();
         using var scope = _factory.Services.CreateScope();
@@ -395,13 +395,58 @@ public class ODataInMemoryEndpointsTests : IClassFixture<WebApplicationFactory<P
         var client = CreateAuthClient();
         var filter = Uri.EscapeDataString("contains(Email,'alice')");
         var response = await client.GetAsync(
-            $"/api/EmailContactSuggestions?connectionId={connId}&$filter={filter}&$count=true&$top=10");
+            $"/api/Contacts?connectionId={connId}&$filter={filter}&$count=true&$top=10");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var (items, _) = await ParseODataCollectionAsync(response);
         items.Should().HaveCount(1);
         items[0].GetProperty("email").GetString().Should().Be("alice@example.com");
+    }
+
+    [Fact]
+    public async Task Contacts_Get_OtherUsersConnection_Returns404()
+    {
+        await ResetAndSeedAsync();
+        Guid user1ConnId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            user1ConnId = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+                .Connections.Where(c => c.UserId == UserId)
+                .Select(c => c.Id)
+                .FirstAsync();
+        }
+
+        var client2 = CreateAuthClientForUser2(_factory);
+        var response = await client2.GetAsync($"/api/Contacts?connectionId={user1ConnId}&$top=10");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Contacts_Get_Select_ReturnsSubsetOnly()
+    {
+        await ResetAndSeedAsync();
+        using var scope = _factory.Services.CreateScope();
+        var connId = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+            .Connections.Where(c => c.UserId == UserId)
+            .Select(c => c.Id)
+            .FirstAsync();
+
+        var client = CreateAuthClient();
+        var response = await client.GetAsync(
+            $"/api/Contacts?connectionId={connId}&$select=Email,DisplayName&$count=true&$top=10");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var (items, _) = await ParseODataCollectionAsync(response);
+        items.Should().NotBeEmpty();
+        foreach (var item in items)
+        {
+            item.TryGetProperty("email", out _).Should().BeTrue();
+            item.TryGetProperty("displayName", out _).Should().BeTrue();
+            item.TryGetProperty("id", out _).Should().BeFalse();
+            item.TryGetProperty("etag", out _).Should().BeFalse();
+        }
     }
 
     private static async Task<(JsonElement[] Items, int Total)> ParseODataCollectionAsync(HttpResponseMessage response)

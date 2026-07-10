@@ -14,7 +14,10 @@ public class PeopleGateway : IPeopleGateway
 {
     private const string PersonFields = "names,emailAddresses";
     private const string ReadMask = "names,emailAddresses";
+    private const string WritePersonFields = "names,emailAddresses";
+    private const string GetPersonFields = "names,emailAddresses,metadata";
     private const int PageSize = 100;
+    private const string ContactsForbiddenMessage = "Reconnect Gmail to allow editing contacts.";
 
     private readonly ITokenService _tokenService;
     private readonly ILogger<PeopleGateway> _logger;
@@ -34,6 +37,91 @@ public class PeopleGateway : IPeopleGateway
         await CollectOtherContactsAsync(people, connection.Id, byEmail, ct);
 
         return byEmail.Values.ToList();
+    }
+
+    public async Task<PeopleContactDetail> GetContactAsync(Connection connection, string resourceName, CancellationToken ct = default)
+    {
+        using var people = await BuildPeopleServiceAsync(connection, ct);
+        try
+        {
+            var request = people.People.Get(resourceName);
+            request.PersonFields = GetPersonFields;
+            var person = await request.ExecuteAsync(ct);
+            return MapDetail(person);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "People", "Contact", resourceName, ContactsForbiddenMessage);
+        }
+    }
+
+    public async Task<PeopleContactDetail> CreateContactAsync(
+        Connection connection, string email, string? displayName, CancellationToken ct = default)
+    {
+        using var people = await BuildPeopleServiceAsync(connection, ct);
+        var person = BuildPerson(email, displayName, etag: null, resourceName: null);
+
+        try
+        {
+            var request = people.People.CreateContact(person);
+            var created = await request.ExecuteAsync(ct);
+            return MapDetail(created);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "People", "Contact", email, ContactsForbiddenMessage);
+        }
+    }
+
+    public async Task<PeopleContactDetail> UpdateContactAsync(
+        Connection connection,
+        string resourceName,
+        string? etag,
+        string email,
+        string? displayName,
+        CancellationToken ct = default)
+    {
+        using var people = await BuildPeopleServiceAsync(connection, ct);
+        try
+        {
+            var getRequest = people.People.Get(resourceName);
+            getRequest.PersonFields = GetPersonFields;
+            var existing = await getRequest.ExecuteAsync(ct);
+
+            var person = new Person
+            {
+                ETag = etag ?? existing.ETag,
+                ResourceName = resourceName,
+                EmailAddresses = [new EmailAddress { Value = email }],
+            };
+
+            var mergedName = PeopleContactNameHelper.BuildNameForUpdate(existing.Names?.FirstOrDefault(), displayName);
+            if (mergedName != null)
+                person.Names = [mergedName];
+
+            var request = people.People.UpdateContact(person, resourceName);
+            request.UpdatePersonFields = WritePersonFields;
+            var updated = await request.ExecuteAsync(ct);
+            return MapDetail(updated);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "People", "Contact", resourceName, ContactsForbiddenMessage);
+        }
+    }
+
+    public async Task DeleteContactAsync(Connection connection, string resourceName, CancellationToken ct = default)
+    {
+        using var people = await BuildPeopleServiceAsync(connection, ct);
+        try
+        {
+            var request = people.People.DeleteContact(resourceName);
+            await request.ExecuteAsync(ct);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "People", "Contact", resourceName, ContactsForbiddenMessage);
+        }
     }
 
     private async Task CollectConnectionsAsync(
@@ -110,9 +198,9 @@ public class PeopleGateway : IPeopleGateway
         GoogleContactSource source,
         bool overwrite)
     {
-        var displayName = person.Names?.FirstOrDefault()?.DisplayName
-            ?? person.Names?.FirstOrDefault()?.GivenName;
+        var displayName = PeopleContactNameHelper.ExtractDisplayName(person);
         var resourceName = person.ResourceName;
+        var etag = person.ETag;
 
         if (person.EmailAddresses == null) return;
 
@@ -126,12 +214,50 @@ public class PeopleGateway : IPeopleGateway
                 Email = email,
                 DisplayName = displayName,
                 Source = source,
-                ExternalResourceName = resourceName
+                ExternalResourceName = resourceName,
+                Etag = etag
             };
 
             if (overwrite || !byEmail.ContainsKey(email))
                 byEmail[email] = row;
         }
+    }
+
+    private static Person BuildPerson(string email, string? displayName, string? etag, string? resourceName)
+    {
+        var person = new Person
+        {
+            ETag = etag,
+            ResourceName = resourceName,
+            EmailAddresses = [new EmailAddress { Value = email }],
+        };
+
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            person.Names = [PeopleContactNameHelper.BuildNameForCreate(displayName)];
+        }
+
+        return person;
+    }
+
+    private static PeopleContactDetail MapDetail(Person person)
+    {
+        var email = person.EmailAddresses?
+            .Select(a => a.Value)
+            .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))
+            ?.Trim()
+            .ToLowerInvariant()
+            ?? throw new InvalidOperationException("People API returned contact without email.");
+
+        var displayName = PeopleContactNameHelper.ExtractDisplayName(person);
+
+        return new PeopleContactDetail
+        {
+            Email = email,
+            DisplayName = displayName,
+            Etag = person.ETag,
+            ResourceName = person.ResourceName ?? throw new InvalidOperationException("People API returned contact without resourceName.")
+        };
     }
 
     private async Task<PeopleServiceService> BuildPeopleServiceAsync(Connection connection, CancellationToken ct)

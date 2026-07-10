@@ -50,7 +50,7 @@ Status đầy đủ: `docs/SPRINTS.md`.
 - SCRUM-31 cron `process-scheduled` — To Do
 - SCRUM-26→29 hardening/tests — To Do
 - SCRUM-41→43 bắt đầu FE — To Do
-- SCRUM-69 Google Contacts suggest (sync cache + `GET /api/emails/contacts/suggest`) — **Done**
+- SCRUM-69 Google Contacts suggest (sync cache + OData `GET /api/Contacts?connectionId=`) — **Done**
 
 **Sprint 4:** FE đầy đủ + deploy + nghiệm thu (SCRUM-44→53).
 

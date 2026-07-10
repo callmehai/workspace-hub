@@ -9,6 +9,7 @@ import { Integrations } from './pages/Integrations';
 import { OAuthCallback } from './pages/connections/OAuthCallback';
 import { ScheduledEmails } from './pages/ScheduledEmails';
 import { SendEmail } from './pages/SendEmail';
+import { Contacts } from './pages/Contacts';
 import { ProfilePage } from './pages/ProfilePage';
 import { GoogleCallback } from './pages/auth/GoogleCallback';
 import { VerifyOtp } from './pages/auth/VerifyOtp';
@@ -67,6 +68,10 @@ export const router = createBrowserRouter([
           {
             path: 'send-email',
             element: <SendEmail />,
+          },
+          {
+            path: 'contacts',
+            element: <Contacts />,
           },
           {
             path: 'profile',

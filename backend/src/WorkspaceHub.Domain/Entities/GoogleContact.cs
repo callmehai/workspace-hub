@@ -2,7 +2,7 @@ using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Domain.Entities;
 
-/// <summary>Cache contact Google theo Connection Gmail — sync read-only, gợi ý To/Cc/Bcc (SCRUM-69).</summary>
+/// <summary>Cache contact Google theo Connection Gmail — sync + write-back CRUD (SCRUM-69/76).</summary>
 public class GoogleContact
 {
     public Guid Id { get; set; }
@@ -11,7 +11,9 @@ public class GoogleContact
     public string? DisplayName { get; set; }
     public GoogleContactSource Source { get; set; }
     public string? ExternalResourceName { get; set; }
+    public string? Etag { get; set; }
     public DateTime SyncedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 
     public Connection Connection { get; set; } = null!;
 }
