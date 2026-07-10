@@ -81,9 +81,9 @@ public class JiraGateway : IJiraGateway
             ["summary"]   = request.Summary
         };
 
-        var adf = AdfConverter.FromPlainText(request.Description);
-        if (adf is not null)
-            fields["description"] = adf;
+        // Markdown subset → ADF (giữ heading/bold/list/code round-trip với Jira).
+        if (!string.IsNullOrEmpty(request.Description))
+            fields["description"] = AdfConverter.FromMarkdown(request.Description);
 
         if (!string.IsNullOrWhiteSpace(request.AssigneeAccountId))
             fields["assignee"] = new { accountId = request.AssigneeAccountId };
@@ -152,8 +152,8 @@ public class JiraGateway : IJiraGateway
 
         if (request.Description != null)
         {
-            // Description rỗng → ADF doc RỖNG (content:[]) để xoá nội dung; có text → ADF.
-            fields["description"] = AdfConverter.FromPlainTextOrEmptyDoc(request.Description);
+            // Markdown subset → ADF (giữ heading/bold/list/code). Rỗng → doc RỖNG (content:[]) để xoá nội dung.
+            fields["description"] = AdfConverter.FromMarkdown(request.Description);
         }
 
         if (request.PriorityName != null)

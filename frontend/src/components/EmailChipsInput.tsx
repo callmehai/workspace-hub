@@ -125,7 +125,8 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
         setOpen(false);
         return;
       }
-      if (e.key === 'Enter' && draft.trim()) {
+      // Enter HOẶC Tab đều chọn gợi ý đang highlight (giống Gmail). preventDefault để Tab không nhảy field.
+      if ((e.key === 'Enter' || e.key === 'Tab') && draft.trim()) {
         e.preventDefault();
         pickSuggestion(filtered[selectedIndex]);
         return;

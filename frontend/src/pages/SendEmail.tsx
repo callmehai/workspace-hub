@@ -11,6 +11,7 @@ import { handleApiError } from '../lib/errorUtils';
 import { EmailChipsInput } from '../components/EmailChipsInput';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { Select } from '../components/Select';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useI18n } from '../hooks/useI18n';
 import { itemsApi } from '../lib/itemsApi';
 
@@ -51,11 +52,21 @@ export const SendEmail = () => {
   );
   const resolvedConn = conn || activeGmail[0]?.id || '';
 
-  // Load existing draft if present
+  // Load existing draft — metadata local (connectionId + thread linkage).
   const { data: draftItem, isLoading: isLoadingDraft } = useQuery({
     queryKey: ['draft-item', draftItemId],
     queryFn: () => itemsApi.getItemById(draftItemId!),
     enabled: !!draftItemId,
+  });
+
+  // NỘI DUNG nháp (subject/body/recipients) sống trên Gmail — metadata local (định dạng sync)
+  // KHÔNG chứa body. Fetch thread live để lấy nội dung THẬT của message DRAFT.
+  const { data: draftThread, isLoading: isLoadingThread } = useQuery({
+    queryKey: ['draft-thread', draftItemId],
+    queryFn: () => sendEmailApi.getThread(draftItemId!),
+    enabled: !!draftItemId,
+    retry: false,
+    staleTime: 0,
   });
 
   const isDraftLoadedRef = React.useRef(false);
@@ -63,41 +74,54 @@ export const SendEmail = () => {
   // gửi kèm — nếu thiếu, Gmail rebuild MIME sẽ tách draft khỏi thread hội thoại gốc.
   const threadLinkRef = React.useRef<{ threadId?: string | null; inReplyToMessageId?: string | null }>({});
 
-  // Populate state from the loaded draft (hydrate 1 lần lúc mount — chủ đích, guard bằng isDraftLoadedRef).
+  // Hydrate form 1 lần: ƯU TIÊN nội dung live từ Gmail (draftThread), fallback metadata local.
+  // Chờ thread settled (xong/lỗi) rồi mới nạp — tránh hiện form rỗng trước khi có content.
   React.useEffect(() => {
-    if (draftItem && !isDraftLoadedRef.current) {
+    const threadSettled = !draftItemId || !isLoadingThread;
+    if (draftItem && threadSettled && !isDraftLoadedRef.current) {
       try {
         const meta = JSON.parse(draftItem.metadataJson || '{}');
+        const draftMsg = draftThread?.messages?.find((m) => m.labels?.includes('DRAFT'));
+
         threadLinkRef.current = {
-          threadId: meta.threadId ?? draftItem.threadId ?? null,
+          threadId: draftThread?.threadId ?? meta.threadId ?? draftItem.threadId ?? null,
           inReplyToMessageId: meta.rfc822MessageId ?? null,
         };
+
+        const nextTo = draftMsg?.to ?? meta.to ?? [];
+        const nextCc = draftMsg?.cc ?? meta.cc ?? [];
+        const nextBcc = draftMsg?.bcc ?? meta.bcc ?? [];
+        const nextSubject = draftMsg?.subject || meta.subject || '';
+        // Nháp text thuần (tạo ngoài app) không có bodyHtml → fallback bodyPlainText (giữ xuống dòng).
+        const nextBody = draftMsg?.bodyHtml
+          || (draftMsg?.bodyPlainText ? draftMsg.bodyPlainText.replace(/\n/g, '<br/>') : '')
+          || meta.bodyHtml || '';
+
         /* eslint-disable react-hooks/set-state-in-effect -- hydrate form state 1 lần từ draft đã fetch */
-        setTo(meta.to || []);
-        setCc(meta.cc || []);
-        setBcc(meta.bcc || []);
-        setSubject(meta.subject || '');
-        setBody(meta.bodyHtml || '');
+        setTo(nextTo);
+        setCc(nextCc);
+        setBcc(nextBcc);
+        setSubject(nextSubject);
+        setBody(nextBody);
         if (draftItem.connectionId) {
           setConn(draftItem.connectionId);
         }
         // Initialize lastSavedState to prevent immediate double-save
-        const initialStateStr = JSON.stringify({
-          to: meta.to || [],
-          cc: meta.cc || [],
-          bcc: meta.bcc || [],
-          subject: meta.subject || '',
-          body: meta.bodyHtml || '',
+        setLastSavedState(JSON.stringify({
+          to: nextTo,
+          cc: nextCc,
+          bcc: nextBcc,
+          subject: nextSubject,
+          body: nextBody,
           resolvedConn: draftItem.connectionId || resolvedConn,
-        });
-        setLastSavedState(initialStateStr);
+        }));
         /* eslint-enable react-hooks/set-state-in-effect */
         isDraftLoadedRef.current = true;
       } catch (e) {
-        console.error('Error parsing draft metadataJson', e);
+        console.error('Error hydrating draft', e);
       }
     }
-  }, [draftItem, resolvedConn]);
+  }, [draftItem, draftThread, isLoadingThread, draftItemId, resolvedConn]);
 
   // Chữ ký THẬT từ Gmail của connection (rỗng nếu chưa đặt / connection cũ thiếu scope settings.basic).
   const { data: signature = '' } = useQuery({
@@ -271,11 +295,11 @@ export const SendEmail = () => {
     onError: (err) => handleApiError(err, 'Failed to discard draft'),
   });
 
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+
   const handleDiscard = () => {
-    if (window.confirm(t('sendEmail.discardConfirm'))) {
-      isDiscardedRef.current = true;
-      discardMutation.mutate();
-    }
+    isDiscardedRef.current = true;
+    discardMutation.mutate(undefined, { onSettled: () => setDiscardConfirmOpen(false) });
   };
 
   const handleSend = async () => {
@@ -301,7 +325,7 @@ export const SendEmail = () => {
   const labelClass = 'block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5';
   const inputClass = 'w-full h-9 px-3 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors';
 
-  if (isLoadingDraft) {
+  if (isLoadingDraft || (!!draftItemId && isLoadingThread)) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center bg-gray-50 dark:bg-slate-950">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
@@ -422,7 +446,7 @@ export const SendEmail = () => {
             {draftItemId && (
               <button
                 type="button"
-                onClick={handleDiscard}
+                onClick={() => setDiscardConfirmOpen(true)}
                 disabled={discardMutation.isPending}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors disabled:opacity-50"
               >
@@ -485,6 +509,17 @@ export const SendEmail = () => {
           </div>
         </div>
       </div>
+
+      {/* Xác nhận hủy thư nháp */}
+      <ConfirmDialog
+        open={discardConfirmOpen}
+        tone="danger"
+        message={t('sendEmail.discardConfirm')}
+        confirmLabel={t('sendEmail.discardDraft')}
+        loading={discardMutation.isPending}
+        onConfirm={handleDiscard}
+        onCancel={() => setDiscardConfirmOpen(false)}
+      />
     </div>
   );
 };

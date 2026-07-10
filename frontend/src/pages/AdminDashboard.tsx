@@ -7,6 +7,7 @@ import type { AdminUserDto } from '../types/admin';
 import { Users, UserCheck, Lock, AlertCircle, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { PageSizeSelect } from '../components/PageSizeSelect';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { format } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
 import { useI18n } from '../hooks/useI18n';
@@ -60,14 +61,10 @@ export const AdminDashboard = () => {
     onError: (err) => handleApiError(err, t('admin.userStatusUpdateFail')),
   });
 
-  const handleToggleActive = (user: AdminUserDto) => {
-    const confirmMessage = user.isActive
-      ? t('admin.confirmLock')
-      : t('admin.confirmUnlock');
-    if (window.confirm(confirmMessage)) {
-      toggleActiveMutation.mutate(user.id);
-    }
-  };
+  // User đang chờ xác nhận khoá/mở khoá (null = đóng dialog).
+  const [toggleTarget, setToggleTarget] = useState<AdminUserDto | null>(null);
+
+  const handleToggleActive = (user: AdminUserDto) => setToggleTarget(user);
 
   useEffect(() => {
     if (statsError) handleApiError(statsError, t('admin.statsError'));
@@ -271,6 +268,21 @@ export const AdminDashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Xác nhận khoá / mở khoá tài khoản */}
+      <ConfirmDialog
+        open={toggleTarget !== null}
+        tone={toggleTarget?.isActive ? 'danger' : 'primary'}
+        message={toggleTarget?.isActive ? t('admin.confirmLock') : t('admin.confirmUnlock')}
+        confirmLabel={t('common.confirm')}
+        loading={toggleActiveMutation.isPending}
+        onConfirm={() => {
+          if (toggleTarget) {
+            toggleActiveMutation.mutate(toggleTarget.id, { onSettled: () => setToggleTarget(null) });
+          }
+        }}
+        onCancel={() => setToggleTarget(null)}
+      />
     </div>
   );
 };

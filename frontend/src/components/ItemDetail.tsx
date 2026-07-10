@@ -58,6 +58,7 @@ const DELETE_CONFIRM_KEY: Record<string, TranslationKey> = {
   Event: 'item.confirmDeleteEvent',
   File: 'item.confirmDeleteFile',
   Note: 'item.confirmDeleteNote',
+  Ticket: 'ticket.confirmDelete',
 };
 
 const TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; bg: string }> = {
@@ -325,6 +326,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       ? metadata.isUnread === true
       : (Array.isArray(metadata.labels) && metadata.labels.includes('UNREAD'))
   );
+
+  // Nháp Gmail — cho phép mở trang soạn để tiếp tục chỉnh sửa + gửi.
+  const isDraft = item?.type === 'Email' && Array.isArray(metadata.labels) && metadata.labels.includes('DRAFT');
 
   const autoReadProcessedRef = React.useRef(false);
 
@@ -857,6 +861,14 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {item.type === 'Email' && (
             <>
+              {isDraft && (
+                <button
+                  onClick={() => navigate(`/send-email?draftItemId=${item.id}`)}
+                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" /><span>{t('item.continueEditDraft')}</span>
+                </button>
+              )}
               {metadata.threadId && (
                 <a
                   href={`https://mail.google.com/mail/u/0/#all/${metadata.threadId}`}
@@ -989,11 +1001,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 </a>
               )}
               <button
-                onClick={() => {
-                  if (window.confirm(t('ticket.confirmDelete'))) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
                 className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
               >

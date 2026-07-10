@@ -8,6 +8,7 @@ import { type FolderResponse, type TagResponse } from '../types/items';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../hooks/useI18n';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface BulkActionBarProps {
   selectedItemIds: Set<string>;
@@ -22,6 +23,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
   const [isAdding, setIsAdding] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const [isTagging, setIsTagging] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
 
   // Hết selection (sau khi hành động xong / bấm X) → reset dropdown, tránh lần sau
@@ -131,16 +133,10 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
     onError: (err) => handleApiError(err, t('bulk.deleteFail'), { navigate })
   });
 
-  const handleDelete = () => {
-    const isTrashOrSpam = mailbox === 'TRASH' || mailbox === 'SPAM';
-    const confirmMsg = isTrashOrSpam
-      ? t('bulk.deletePermanentlyConfirm', { n: selectedItemIds.size })
-      : t('bulk.deleteConfirm', { n: selectedItemIds.size });
-
-    if (window.confirm(confirmMsg)) {
-      deleteBulkMutation.mutate();
-    }
-  };
+  const isTrashOrSpam = mailbox === 'TRASH' || mailbox === 'SPAM';
+  const deleteConfirmMsg = isTrashOrSpam
+    ? t('bulk.deletePermanentlyConfirm', { n: selectedItemIds.size })
+    : t('bulk.deleteConfirm', { n: selectedItemIds.size });
 
   if (selectedItemIds.size === 0) return null;
 
@@ -272,7 +268,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
 
         {/* Xoá / Xoá vĩnh viễn hàng loạt */}
         <button
-          onClick={handleDelete}
+          onClick={() => setDeleteConfirmOpen(true)}
           disabled={deleteBulkMutation.isPending}
           className="flex items-center gap-2 text-[13px] font-semibold px-3 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 transition-all disabled:opacity-50"
         >
@@ -292,6 +288,18 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
       >
         <X className="w-5 h-5" />
       </button>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        tone="danger"
+        message={deleteConfirmMsg}
+        confirmLabel={isTrashOrSpam ? t('bulk.deletePermanently') : t('bulk.delete')}
+        loading={deleteBulkMutation.isPending}
+        onConfirm={() =>
+          deleteBulkMutation.mutate(undefined, { onSettled: () => setDeleteConfirmOpen(false) })
+        }
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   );
 };
