@@ -216,19 +216,27 @@ export const Friends = () => {
                       i === selectedIdx ? 'bg-brand-50 dark:bg-brand-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-700/60'
                     }`}
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
-                      {(s.displayName ?? s.email).charAt(0).toUpperCase()}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-[13.5px] font-medium ${
-                        i === selectedIdx ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'
-                      }`}>
-                        {s.displayName ?? s.email}
-                      </span>
-                      {s.displayName && (
-                        <span className="block truncate text-xs text-slate-400 dark:text-slate-500">{s.email}</span>
-                      )}
-                    </span>
+                    {(() => {
+                      const name = s.displayName && s.displayName.trim().toLowerCase() !== s.email.trim().toLowerCase()
+                        ? s.displayName : null;
+                      return (
+                        <>
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                            {(name ?? s.email).charAt(0).toUpperCase()}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className={`block truncate text-[13.5px] font-medium ${
+                              i === selectedIdx ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'
+                            }`}>
+                              {name ?? s.email}
+                            </span>
+                            {name && (
+                              <span className="block truncate text-xs text-slate-400 dark:text-slate-500">{s.email}</span>
+                            )}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </button>
                 </li>
               ))}

@@ -222,7 +222,10 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
           {filtered.map((s, i) => {
             const isFriend = !!s.tier;
             const isClose = s.tier === 'CloseFriend';
-            const initial = (s.displayName ?? s.email).charAt(0).toUpperCase();
+            // Google đôi khi trả displayName = chính email → coi như KHÔNG có tên (tránh in trùng 2 dòng).
+            const name = s.displayName && s.displayName.trim().toLowerCase() !== s.email.trim().toLowerCase()
+              ? s.displayName : null;
+            const initial = (name ?? s.email).charAt(0).toUpperCase();
             return (
               <li key={s.email} role="option" aria-selected={i === selectedIndex}>
                 <button
@@ -253,11 +256,11 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
                       <span className={`truncate text-[13.5px] font-medium ${
                         i === selectedIndex ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'
                       }`}>
-                        {s.displayName ?? s.email}
+                        {name ?? s.email}
                       </span>
                       {isClose && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
                     </span>
-                    {s.displayName && (
+                    {name && (
                       <span className="block truncate text-xs text-slate-400 dark:text-slate-500">{s.email}</span>
                     )}
                   </span>
