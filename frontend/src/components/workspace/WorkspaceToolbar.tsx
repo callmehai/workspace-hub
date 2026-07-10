@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   Star, Search, RefreshCw, Plus, Tag, Settings2,
-  FolderPlus, Briefcase, UserRound, Loader2, ChevronDown, Check,
+  FolderPlus, Briefcase, UserRound, Users, Loader2, ChevronDown, Check,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';

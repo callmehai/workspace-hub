@@ -58,16 +58,23 @@ public record PatchItemRequest(
     string? StatusTransition = null,    // id hoặc tên transition (đổi status qua transition)
     List<string>? Labels = null,        // set toàn bộ labels (thay vì add/remove)
     string? Comment = null,             // thêm comment (thao tác riêng, không sửa field)
-    string? IssueType = null            // đổi loại issue (Task/Bug/Story...) qua PUT /issue
+    string? IssueType = null,           // đổi loại issue (Task/Bug/Story...) qua PUT /issue
+    // ── Google Calendar & Tasks (Type=Event) — SCRUM-37
+    string? CalendarType = null,        // "event" | "task"
+    List<Guid>? DriveItemIds = null     // danh sách file đính kèm từ Drive
 );
 
 public record CreateEventRequest(
     Guid ConnectionId,
     string Title,
     DateTimeOffset Start,
-    DateTimeOffset End,
+    DateTimeOffset? End = null,         // null → task (service sẽ set End = Start.AddDays(1) all-day)
     string? Location = null,
-    List<string>? Attendees = null
+    List<string>? Attendees = null,
+    string? Description = null,
+    string? CalendarType = null,        // "event" (default) | "task"
+    bool AllDay = false,
+    List<Guid>? DriveItemIds = null     // ID Item Drive trong DB — BE resolve ra fileId/title/mimeType
 );
 
 /// <summary>

@@ -166,18 +166,44 @@ public class ItemWriteBackService : IItemWriteBackService
                 break;
 
             case ItemType.Event:
+                // calendarType, description và driveItemIds được chấp nhận cho Event
                 if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.IsTrashed != null || payload.Name != null)
                     throw new BusinessRuleException("Invalid fields for Event writeback.");
                     
+                // Ghi nhận driveAttachments nếu có driveItemIds
+                IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
+                if (payload.DriveItemIds != null && payload.DriveItemIds.Count > 0)
+                {
+                    var driveItems = await _items.GetByIdsAndUserAsync(payload.DriveItemIds, userId, ct);
+                    driveAttachments = driveItems
+                        .Select(di => {
+                            var dm = string.IsNullOrEmpty(di.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(di.MetadataJson) ?? new Dictionary<string, object>();
+                            var mt = dm.TryGetValue("mimeType", out var mv) ? mv.ToString() : null;
+                            var url = dm.TryGetValue("webViewLink", out var uv) ? uv.ToString() : null;
+                            return new CalendarDriveAttachment(di.ExternalId, di.Title, mt, url);
+                        })
+                        .ToList();
+                }
+
+                // Lấy allDay hiện tại từ metadata
+                var currentMeta = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+                bool existingAllDay = false;
+                if (currentMeta.TryGetValue("allDay", out var adv) && adv is JsonElement jeAllDay && jeAllDay.ValueKind == JsonValueKind.True)
+                {
+                    existingAllDay = true;
+                }
+
                 var evDto = new CalendarEvent(
                     item.ExternalId,
                     providerEtag,
                     payload.Title,
-                    null,
+                    payload.Description,
                     payload.Start,
                     payload.End,
                     payload.Location,
-                    payload.Attendees
+                    payload.Attendees,
+                    existingAllDay,
+                    driveAttachments
                 );
 
                 var updatedEvent = await _calendarGateway.UpdateEventAsync(conn, "primary", item.ExternalId, evDto, ct);
@@ -189,6 +215,10 @@ public class ItemWriteBackService : IItemWriteBackService
                 var metaDictEvent = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
                 if (updatedEvent.Location != null) metaDictEvent["location"] = updatedEvent.Location;
                 if (updatedEvent.Attendees != null) metaDictEvent["attendees"] = updatedEvent.Attendees;
+                if (payload.CalendarType != null) metaDictEvent["calendarType"] = payload.CalendarType;
+                if (payload.Description != null) metaDictEvent["description"] = payload.Description;
+                if (payload.DriveItemIds != null) metaDictEvent["driveItemIds"] = payload.DriveItemIds;
+                
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEvent);
                 break;
 
@@ -233,15 +263,55 @@ public class ItemWriteBackService : IItemWriteBackService
         if (conn.UserId != userId) throw new ForbiddenException("Not your connection.");
         if (conn.ServiceType != ServiceType.GCal) throw new BusinessRuleException("Connection is not for Calendar.");
 
+        var isTask = string.Equals(payload.CalendarType, "task", StringComparison.OrdinalIgnoreCase);
+
+        // Task: End là ngày kế tiếp (all-day). Event: End bắt buộc từ payload.
+        var effectiveEnd = isTask
+            ? payload.Start.AddDays(1)
+            : payload.End ?? throw new BusinessRuleException("End time is required for events.");
+
+        var effectiveAllDay = isTask || payload.AllDay;
+
+        // Resolve Drive item IDs → CalendarDriveAttachment[]
+        IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
+        if (payload.DriveItemIds != null && payload.DriveItemIds.Count > 0)
+        {
+            var driveItems = await _items.GetByIdsAndUserAsync(payload.DriveItemIds, userId, ct);
+            driveAttachments = driveItems
+                .Where(item => item.ExternalId != null)
+                .Select(item =>
+                {
+                    string? webViewLink = null;
+                    string? mimeType = null;
+                    if (!string.IsNullOrEmpty(item.MetadataJson))
+                    {
+                        try
+                        {
+                            var meta = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.MetadataJson);
+                            if (meta != null)
+                            {
+                                if (meta.TryGetValue("webViewLink", out var wvl)) webViewLink = wvl.GetString();
+                                if (meta.TryGetValue("mimeType", out var mt)) mimeType = mt.GetString();
+                            }
+                        }
+                        catch { /* ignore parse errors */ }
+                    }
+                    return new CalendarDriveAttachment(item.ExternalId!, item.Title, mimeType, webViewLink);
+                })
+                .ToList();
+        }
+
         var evDto = new CalendarEvent(
             "",
             null,
             payload.Title,
-            null,
+            payload.Description,
             payload.Start,
-            payload.End,
-            payload.Location,
-            payload.Attendees
+            effectiveEnd,
+            isTask ? null : payload.Location,
+            isTask ? null : payload.Attendees,
+            effectiveAllDay,
+            driveAttachments
         );
 
         var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
@@ -249,6 +319,15 @@ public class ItemWriteBackService : IItemWriteBackService
         var metaDict = new Dictionary<string, object>();
         if (created.Location != null) metaDict["location"] = created.Location;
         if (created.Attendees != null) metaDict["attendees"] = created.Attendees;
+        if (created.Description != null) metaDict["description"] = created.Description;
+        metaDict["calendarType"] = isTask ? "task" : "event";
+        if (created.AllDay) metaDict["allDay"] = true;
+
+        // Lưu thông tin Drive attachments vào metadata để FE hiển thị.
+        if (driveAttachments != null && driveAttachments.Count > 0)
+        {
+            metaDict["driveAttachments"] = driveAttachments.Select(a => new { a.FileId, a.Title, a.MimeType, a.FileUrl }).ToList();
+        }
 
         var item = new Item
         {
@@ -259,8 +338,12 @@ public class ItemWriteBackService : IItemWriteBackService
             ETag = created.ETag,
             Title = created.Summary ?? "New Event",
             Snippet = created.Description ?? "",
-            OccurredAt = created.Start?.UtcDateTime ?? DateTime.UtcNow,
-            DueAt = created.End?.UtcDateTime,
+            OccurredAt = effectiveAllDay
+                ? payload.Start.UtcDateTime.Date
+                : (created.Start?.UtcDateTime ?? DateTime.UtcNow),
+            DueAt = effectiveAllDay
+                ? effectiveEnd.UtcDateTime.Date
+                : created.End?.UtcDateTime,
             MetadataJson = JsonSerializer.Serialize(metaDict)
         };
 
@@ -268,6 +351,7 @@ public class ItemWriteBackService : IItemWriteBackService
         await _items.SaveChangesAsync(ct);
         return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
+
 
     public async Task<ItemResponse> CreateTicketAsync(Guid userId, CreateTicketRequest payload, CancellationToken ct = default)
     {

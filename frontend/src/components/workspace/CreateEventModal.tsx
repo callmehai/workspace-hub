@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FileText, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { itemsApi } from '../../lib/itemsApi';
+import { GoogleDrivePickerModal } from '../drive/GoogleDrivePickerModal';
+import { DriveIcon } from '../../lib/brandIcons';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { markSeen } from '../../lib/seenStore';
@@ -15,14 +17,15 @@ interface Props {
   onClose: () => void;
 }
 
-const EMPTY = { connectionId: '', title: '', start: '', end: '', location: '', attendees: '' };
+const EMPTY = { connectionId: '', title: '', start: '', end: '', location: '', attendees: '', driveItemIds: [] as string[] };
 
 /** Modal tạo sự kiện Google Calendar — dùng chung cho cả view Danh sách lẫn Bảng. */
 export const CreateEventModal = ({ isOpen, onClose }: Props) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [form, setForm] = useState(EMPTY);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
 
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
@@ -32,6 +35,13 @@ export const CreateEventModal = ({ isOpen, onClose }: Props) => {
   const gcalConnections = connections.filter(
     (c: ConnectionDto) => c.serviceType.toLowerCase() === 'gcal' && c.status.toLowerCase() === 'active'
   );
+
+  const { data: driveFilesData } = useQuery({
+    queryKey: ['items', 'drive-files', form.connectionId],
+    queryFn: () => itemsApi.getItems({ types: ['File'], limit: 100 }),
+    enabled: isOpen && !!form.connectionId,
+  });
+  const driveFiles = driveFilesData?.items || [];
 
   const createEvent = useMutation({
     mutationFn: () => {
@@ -45,6 +55,7 @@ export const CreateEventModal = ({ isOpen, onClose }: Props) => {
         end: new Date(form.end).toISOString(),
         location: form.location || undefined,
         attendees: attendeesArray,
+        driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
       });
     },
     onSuccess: (created) => {
@@ -128,6 +139,44 @@ export const CreateEventModal = ({ isOpen, onClose }: Props) => {
             <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('item.attendeesComma')}</label>
             <input type="text" value={form.attendees} onChange={e => setForm({ ...form, attendees: e.target.value })} className={inputCls} />
           </div>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={!form.connectionId}
+              onClick={() => setDrivePickerOpen(true)}
+              className="inline-flex items-center gap-2.5 text-[13px] font-semibold text-brand-600 hover:text-brand-700 disabled:text-slate-400 dark:text-brand-400 dark:hover:text-brand-350 dark:disabled:text-slate-650 self-start transition-colors"
+            >
+              <DriveIcon className="w-5 h-5 shrink-0" />
+              <span>{lang === 'vi' ? 'Thêm tệp đính kèm từ Google Drive' : 'Add a Google Drive attachment'}</span>
+            </button>
+
+            {form.driveItemIds.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {form.driveItemIds.map(id => {
+                  const file = driveFiles.find(f => f.id === id);
+                  if (!file) return null;
+                  return (
+                    <div 
+                      key={id}
+                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-[12.5px] max-w-[280px] shadow-sm"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                      <span className="truncate flex-1 text-slate-700 dark:text-slate-200" title={file.title}>
+                        {file.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setForm(curr => ({ ...curr, driveItemIds: curr.driveItemIds.filter(x => x !== id) }))}
+                        className="p-0.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
@@ -143,6 +192,13 @@ export const CreateEventModal = ({ isOpen, onClose }: Props) => {
           </button>
         </div>
       </div>
+      <GoogleDrivePickerModal
+        open={drivePickerOpen}
+        connectionId={form.connectionId}
+        initialSelectedIds={form.driveItemIds}
+        onClose={() => setDrivePickerOpen(false)}
+        onSelect={selectedIds => setForm(curr => ({ ...curr, driveItemIds: selectedIds }))}
+      />
     </div>
   );
 };

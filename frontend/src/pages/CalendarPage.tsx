@@ -235,6 +235,9 @@ function emptyForm(date: Date, connectionId = '', startTime = '09:00'): Calendar
     endTime: `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`,
     location: '',
     attendees: '',
+    calendarType: 'event',
+    description: '',
+    driveItemIds: [],
   };
 }
 
@@ -248,6 +251,9 @@ function entryToForm(entry: CalendarEntry): CalendarEventFormValue {
     endTime: timeValue(entry.end),
     location: entry.location ?? '',
     attendees: entry.attendees.join(', '),
+    calendarType: (parseMetadata(entry.item!)?.calendarType as any) === 'task' ? 'task' : 'event',
+    description: asString(parseMetadata(entry.item!)?.description) ?? '',
+    driveItemIds: asStringArray(parseMetadata(entry.item!)?.driveItemIds) ?? [],
   };
 }
 
@@ -347,7 +353,18 @@ export function CalendarPage() {
   const currentFolder = folderId ? folders.find(folder => folder.id === folderId) ?? null : null;
 
   const entries = useMemo(() => {
-    const itemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => entry !== null);
+    const rawItemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => entry !== null);
+    
+    // Deduplicate by externalId (same Google Calendar event synced via multiple connections)
+    const seenExternalIds = new Set<string>();
+    const itemEntries = rawItemEntries.filter(entry => {
+      if (entry.item?.externalId) {
+        if (seenExternalIds.has(entry.item.externalId)) return false;
+        seenExternalIds.add(entry.item.externalId);
+      }
+      return true;
+    });
+
     const scheduledEntries = folderId || googleCalendarOnly ? [] : (scheduledPage?.value ?? []).map(scheduledToEntry);
     const queryKind: CalendarEntryKind | null = googleCalendarOnly ? 'event' : null;
     return [...itemEntries, ...scheduledEntries]
@@ -376,6 +393,9 @@ export function CalendarPage() {
         allDay: form.allDay,
         location: form.location.trim() || undefined,
         attendees: form.attendees.split(',').map(value => value.trim()).filter(Boolean),
+        calendarType: form.calendarType,
+        description: form.description.trim() || undefined,
+        driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
       });
       if (folderId) await foldersApi.addItemToFolder(folderId, { itemId: created.id });
       return created;
@@ -406,6 +426,9 @@ export function CalendarPage() {
             metadata.allDay = variables.allDay;
             if (variables.patch.location !== undefined) metadata.location = variables.patch.location;
             if (variables.patch.attendees !== undefined) metadata.attendees = variables.patch.attendees;
+            if (variables.patch.calendarType !== undefined) metadata.calendarType = variables.patch.calendarType;
+            if (variables.patch.description !== undefined) metadata.description = variables.patch.description;
+            if (variables.patch.driveItemIds !== undefined) metadata.driveItemIds = variables.patch.driveItemIds;
             return {
               ...item,
               title: variables.patch.title ?? item.title,
@@ -504,6 +527,9 @@ export function CalendarPage() {
         allDay: form.allDay,
         location: form.location.trim(),
         attendees: form.attendees.split(',').map(value => value.trim()).filter(Boolean),
+        calendarType: form.calendarType,
+        description: form.description.trim(),
+        driveItemIds: form.driveItemIds,
       },
     });
   };

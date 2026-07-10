@@ -405,6 +405,7 @@ export const Inbox = () => {
     setProjectKeyFilter('');
     setDebouncedProjectKey('');
     setAssigneeFilter('');
+    setConnectionFilter('');
     setPage(1);
   };
 

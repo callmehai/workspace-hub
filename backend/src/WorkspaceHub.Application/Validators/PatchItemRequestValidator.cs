@@ -15,7 +15,9 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
                        // Jira (SCRUM-57)
                        x.Summary != null || x.Description != null || x.Assignee != null ||
                        x.Priority != null || x.StatusTransition != null || x.Labels != null || x.Comment != null ||
-                       x.IssueType != null)
+                       x.IssueType != null ||
+                       // Event & Task edits (SCRUM-37)
+                       x.CalendarType != null || x.DriveItemIds != null)
             .WithMessage("Request body must contain at least one field to update.");
 
         RuleFor(x => x.Start)

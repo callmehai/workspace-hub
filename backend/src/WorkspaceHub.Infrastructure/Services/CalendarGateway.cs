@@ -70,18 +70,53 @@ public class CalendarGateway : ICalendarGateway
         try
         {
             using var calendar = await BuildCalendarServiceAsync(connection, ct);
-            
-            var ev = new Event
+
+            Event ev;
+            if (eventDto.AllDay)
             {
-                Summary = eventDto.Summary,
-                Description = eventDto.Description,
-                Location = eventDto.Location,
-                Attendees = eventDto.Attendees?.Select(a => new EventAttendee { Email = a }).ToList(),
-                Start = eventDto.Start.HasValue ? new EventDateTime { DateTimeDateTimeOffset = eventDto.Start.Value } : null,
-                End = eventDto.End.HasValue ? new EventDateTime { DateTimeDateTimeOffset = eventDto.End.Value } : null
-            };
-            
-            var created = await calendar.Events.Insert(ev, calendarId).ExecuteAsync(ct);
+                // All-day event: Google Calendar yêu cầu date-only format ("YYYY-MM-DD"), không có time.
+                var startDate = eventDto.Start?.ToString("yyyy-MM-dd") ?? DateTimeOffset.UtcNow.ToString("yyyy-MM-dd");
+                var endDate = eventDto.End?.ToString("yyyy-MM-dd") ?? eventDto.Start?.AddDays(1).ToString("yyyy-MM-dd") ?? DateTimeOffset.UtcNow.AddDays(1).ToString("yyyy-MM-dd");
+                ev = new Event
+                {
+                    Summary = eventDto.Summary,
+                    Description = eventDto.Description,
+                    Location = eventDto.Location,
+                    Attendees = eventDto.Attendees?.Select(a => new EventAttendee { Email = a }).ToList(),
+                    Start = new EventDateTime { Date = startDate },
+                    End = new EventDateTime { Date = endDate }
+                };
+            }
+            else
+            {
+                ev = new Event
+                {
+                    Summary = eventDto.Summary,
+                    Description = eventDto.Description,
+                    Location = eventDto.Location,
+                    Attendees = eventDto.Attendees?.Select(a => new EventAttendee { Email = a }).ToList(),
+                    Start = eventDto.Start.HasValue ? new EventDateTime { DateTimeDateTimeOffset = eventDto.Start.Value } : null,
+                    End = eventDto.End.HasValue ? new EventDateTime { DateTimeDateTimeOffset = eventDto.End.Value } : null
+                };
+            }
+
+            // Drive file attachments
+            if (eventDto.DriveAttachments != null && eventDto.DriveAttachments.Count > 0)
+            {
+                ev.Attachments = eventDto.DriveAttachments.Select(a => new EventAttachment
+                {
+                    FileId = a.FileId,
+                    Title = a.Title,
+                    MimeType = a.MimeType,
+                    FileUrl = a.FileUrl
+                }).ToList();
+            }
+
+            var insertRequest = calendar.Events.Insert(ev, calendarId);
+            if (ev.Attachments?.Count > 0)
+                insertRequest.SupportsAttachments = true;
+
+            var created = await insertRequest.ExecuteAsync(ct);
             return MapToDto(created);
         }
         catch (Google.GoogleApiException ex)
@@ -107,8 +142,15 @@ public class CalendarGateway : ICalendarGateway
 
     private static CalendarEvent MapToDto(Event ev)
     {
+        bool allDay = ev.Start?.Date != null;
         DateTimeOffset? start = ev.Start?.DateTimeDateTimeOffset ?? (ev.Start?.Date != null ? DateTimeOffset.Parse(ev.Start.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
         DateTimeOffset? end = ev.End?.DateTimeDateTimeOffset ?? (ev.End?.Date != null ? DateTimeOffset.Parse(ev.End.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
+
+        var driveAttachments = ev.Attachments?.Select(a => new CalendarDriveAttachment(
+            a.FileId ?? "",
+            a.Title,
+            a.MimeType,
+            a.FileUrl)).ToList();
 
         return new CalendarEvent(
             ev.Id,
@@ -118,6 +160,8 @@ public class CalendarGateway : ICalendarGateway
             start,
             end,
             ev.Location,
-            ev.Attendees?.Select(a => a.Email).ToList());
+            ev.Attendees?.Select(a => a.Email).ToList(),
+            allDay,
+            driveAttachments?.Count > 0 ? driveAttachments : null);
     }
 }

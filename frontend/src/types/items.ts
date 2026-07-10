@@ -97,6 +97,8 @@ export interface PatchItemRequest {
   allDay?: boolean;
   name?: string;
   statusTransition?: string;
+  calendarType?: 'event' | 'task';
+  driveItemIds?: string[];
   // ── Jira (Type=Ticket) — SCRUM-57. Content is editable (unlike Email).
   summary?: string;
   description?: string;
@@ -126,11 +128,13 @@ export interface CreateEventRequest {
   connectionId: string;
   title: string;
   start: string;
-  end: string;
+  end?: string;               // optional for tasks (backend derives end = start + 1 day)
   location?: string;
   attendees?: string[];
-  /** Calendar UI contract: true = event cả ngày. Start/end vẫn gửi để tương thích API hiện tại. */
+  description?: string;
+  calendarType?: 'event' | 'task';
   allDay?: boolean;
+  driveItemIds?: string[];    // Item IDs (Guid) of Drive files to attach
 }
 
 // ── Tags (SCRUM-70/71) ──
