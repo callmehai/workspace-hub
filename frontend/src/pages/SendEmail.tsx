@@ -26,8 +26,10 @@ export const SendEmail = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialDraftItemId = searchParams.get('draftItemId');
+  // Prefill từ trang Bạn bè ("Gửi mail cho bạn"): /send-email?to=
+  const prefillTo = searchParams.get('to')?.trim() ?? '';
 
-  const [to, setTo] = useState<string[]>([]);
+  const [to, setTo] = useState<string[]>(() => (prefillTo ? [prefillTo] : []));
   const [cc, setCc] = useState<string[]>([]);
   const [bcc, setBcc] = useState<string[]>([]);
   const [subject, setSubject] = useState('');

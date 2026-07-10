@@ -75,6 +75,7 @@ public class GoogleSignInTests
 
         var jwtFactory = new WorkspaceHub.Infrastructure.Services.JwtTokenFactory(config);
         var otp = new Mock<IOtpService>();
+        var friends = new Mock<IFriendService>();
 
         var service = new AuthService(
             users.Object,
@@ -85,7 +86,8 @@ public class GoogleSignInTests
             tokenClient.Object,
             verifier.Object,
             jwtFactory,
-            otp.Object);
+            otp.Object,
+            friends.Object);
 
         return (service, users, tokenClient, verifier, cache);
     }
