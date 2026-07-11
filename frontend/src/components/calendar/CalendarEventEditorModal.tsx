@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { CalendarDays, Loader2, X, FileText, CheckSquare } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, ExternalLink, Loader2, Trash2, X, FileText, CheckSquare } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { ConnectionDto } from '../../lib/connectionsApi';
 import { useI18n } from '../../hooks/useI18n';
@@ -7,6 +7,10 @@ import { Select } from '../Select';
 import { itemsApi } from '../../lib/itemsApi';
 import { GoogleDrivePickerModal } from '../drive/GoogleDrivePickerModal';
 import { DriveIcon } from '../../lib/brandIcons';
+import { driveItemOpenUrl, resolveGmailSuggestConnection } from '../../lib/calendarFormUtils';
+import { EmailChipsInput } from '../EmailChipsInput';
+import { DatePicker } from '../DatePicker';
+import { TimePicker } from '../TimePicker';
 
 export interface CalendarEventFormValue {
   connectionId: string;
@@ -16,10 +20,19 @@ export interface CalendarEventFormValue {
   startTime: string;
   endTime: string;
   location: string;
-  attendees: string;
+  attendees: string[];
   calendarType: 'event' | 'task';
   description: string;
   driveItemIds: string[];
+  /** Snapshot từ Google sync / write-back — hiển thị khi chưa resolve được Item Drive. */
+  driveAttachments: CalendarDriveAttachmentSnapshot[];
+}
+
+export interface CalendarDriveAttachmentSnapshot {
+  fileId: string;
+  title?: string | null;
+  mimeType?: string | null;
+  fileUrl?: string | null;
 }
 
 interface CalendarEventEditorModalProps {
@@ -27,21 +40,26 @@ interface CalendarEventEditorModalProps {
   mode: 'create' | 'edit';
   initialValue: CalendarEventFormValue;
   connections: ConnectionDto[];
+  /** Toàn bộ connections user — dùng resolve Gmail suggest. Nếu thiếu, suggest tắt. */
+  allConnections?: ConnectionDto[];
   folderName?: string | null;
   saving?: boolean;
+  htmlLink?: string;
+  onDelete?: () => void;
   onClose: () => void;
   onSubmit: (value: CalendarEventFormValue) => void;
 }
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function CalendarEventEditorModal({
   open,
   mode,
   initialValue,
   connections,
+  allConnections,
   folderName,
   saving = false,
+  htmlLink,
+  onDelete,
   onClose,
   onSubmit,
 }: CalendarEventEditorModalProps) {
@@ -49,14 +67,34 @@ export function CalendarEventEditorModal({
   const [form, setForm] = useState(initialValue);
   const [error, setError] = useState('');
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | null>(null);
 
-  // Fetch drive files for attachments
-  const { data: driveFilesData } = useQuery({
-    queryKey: ['items', 'drive-files', form.connectionId],
-    queryFn: () => itemsApi.getItems({ types: ['File'], limit: 100 }),
-    enabled: open && !!form.connectionId,
+  // Reset form khi modal mở lại (parent có thể giữ cùng key, ví dụ ItemDetail).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setForm(initialValue);
+      setOpenPicker(null);
+    }
+  }
+
+  const suggestConnectionId = useMemo(
+    () => (allConnections ? resolveGmailSuggestConnection(allConnections, form.connectionId) : undefined),
+    [allConnections, form.connectionId],
+  );
+
+  // Hiển thị chip: fetch đúng Item theo driveItemIds (không phụ thuộc top 100).
+  const { data: attachedDriveItems } = useQuery({
+    queryKey: ['calendar-attached-drive', form.driveItemIds],
+    queryFn: async () => {
+      const results = await Promise.all(
+        form.driveItemIds.map(id => itemsApi.getItemById(id).catch(() => null)),
+      );
+      return results.filter((item): item is NonNullable<typeof item> => item != null);
+    },
+    enabled: open && form.driveItemIds.length > 0,
   });
-  const driveFiles = driveFilesData?.items || [];
 
   useEffect(() => {
     if (!open) return;
@@ -79,16 +117,7 @@ export function CalendarEventEditorModal({
       setError(t('calendar.timeOrder'));
       return;
     }
-    
-    if (form.calendarType === 'event' && form.attendees) {
-      const attendees = form.attendees.split(',').map(x => x.trim()).filter(Boolean);
-      const invalid = attendees.filter(email => !EMAIL_RE.test(email));
-      if (invalid.length > 0) {
-        setError(t('calendar.invalidEmails', { emails: invalid.join(', ') }));
-        return;
-      }
-    }
-    
+
     onSubmit({ ...form, title });
   };
 
@@ -127,7 +156,7 @@ export function CalendarEventEditorModal({
         </div>
 
         <div className="max-h-[72vh] space-y-4 overflow-y-auto p-5">
-          {mode === 'create' && (
+          {mode === 'create' ? (
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
               <button 
                 type="button" 
@@ -145,6 +174,11 @@ export function CalendarEventEditorModal({
                 <CheckSquare className="w-4 h-4" />
                 {t('calendar.typeTask')}
               </button>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              {isEvent ? <CalendarDays className="h-4 w-4 text-amber-500" /> : <CheckSquare className="h-4 w-4 text-blue-500" />}
+              {isEvent ? t('calendar.typeEvent') : t('calendar.typeTask')}
             </div>
           )}
 
@@ -175,7 +209,11 @@ export function CalendarEventEditorModal({
             <input
               type="checkbox"
               checked={form.allDay}
-              onChange={event => setForm(current => ({ ...current, allDay: event.target.checked }))}
+              onChange={event => {
+                const allDay = event.target.checked;
+                setForm(current => ({ ...current, allDay }));
+                if (allDay) setOpenPicker(null);
+              }}
               className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
             <span>
@@ -187,18 +225,33 @@ export function CalendarEventEditorModal({
           <div className={`grid gap-3 ${form.allDay ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
             <div>
               <label className={labelClass}>{isEvent ? t('calendar.date') : t('calendar.taskDueDate')}</label>
-              <input type="date" className={inputClass} value={form.date} onChange={event => setForm(current => ({ ...current, date: event.target.value }))} />
+              <DatePicker
+                value={form.date}
+                onChange={date => setForm(current => ({ ...current, date }))}
+                open={openPicker === 'date'}
+                onOpenChange={next => setOpenPicker(next ? 'date' : null)}
+              />
             </div>
             {!form.allDay && (
               <>
                 <div>
                   <label className={labelClass}>{t('calendar.start')}</label>
-                  <input type="time" step={1800} className={inputClass} value={form.startTime} onChange={event => setForm(current => ({ ...current, startTime: event.target.value }))} />
+                  <TimePicker
+                    value={form.startTime}
+                    onChange={startTime => setForm(current => ({ ...current, startTime }))}
+                    open={openPicker === 'start'}
+                    onOpenChange={next => setOpenPicker(next ? 'start' : null)}
+                  />
                 </div>
                 {isEvent && (
                   <div>
                     <label className={labelClass}>{t('calendar.end')}</label>
-                    <input type="time" step={1800} className={inputClass} value={form.endTime} onChange={event => setForm(current => ({ ...current, endTime: event.target.value }))} />
+                    <TimePicker
+                      value={form.endTime}
+                      onChange={endTime => setForm(current => ({ ...current, endTime }))}
+                      open={openPicker === 'end'}
+                      onOpenChange={next => setOpenPicker(next ? 'end' : null)}
+                    />
                   </div>
                 )}
               </>
@@ -224,11 +277,18 @@ export function CalendarEventEditorModal({
 
               <div>
                 <label className={labelClass}>{t('calendar.attendees')}</label>
-                <input className={inputClass} value={form.attendees} placeholder="a@gmail.com, b@gmail.com" onChange={event => setForm(current => ({ ...current, attendees: event.target.value }))} />
+                <EmailChipsInput
+                  value={form.attendees}
+                  onChange={attendees => setForm(current => ({ ...current, attendees }))}
+                  connectionId={suggestConnectionId}
+                  placeholder={t('sendEmail.toPlaceholder')}
+                  className="mb-0"
+                />
               </div>
             </>
           )}
-          <div className="flex flex-col gap-2">
+
+          <div className="flex flex-col gap-2">
             <button
               type="button"
               disabled={!form.connectionId}
@@ -239,23 +299,46 @@ export function CalendarEventEditorModal({
               <span>{lang === 'vi' ? 'Thêm tệp đính kèm từ Google Drive' : 'Add a Google Drive attachment'}</span>
             </button>
 
-            {form.driveItemIds.length > 0 && (
+            {(form.driveItemIds.length > 0 || form.driveAttachments.length > 0) && (
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {form.driveItemIds.map(id => {
-                  const file = driveFiles.find(f => f.id === id);
-                  if (!file) return null;
+                  const file = attachedDriveItems?.find(f => f.id === id);
+                  const snapshot = file?.externalId
+                    ? form.driveAttachments.find(a => a.fileId === file.externalId)
+                    : undefined;
+                  const title = file?.title ?? snapshot?.title ?? id;
+                  const fileUrl = snapshot?.fileUrl ?? (file ? driveItemOpenUrl(file) : null);
                   return (
-                    <div 
+                    <div
                       key={id}
                       className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-[12.5px] max-w-[280px] shadow-sm"
                     >
                       <FileText className="w-3.5 h-3.5 text-brand-500 shrink-0" />
-                      <span className="truncate flex-1 text-slate-700 dark:text-slate-200" title={file.title}>
-                        {file.title}
-                      </span>
+                      {fileUrl ? (
+                        <a
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate flex-1 text-slate-700 dark:text-slate-200 hover:underline"
+                          title={title}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {title}
+                        </a>
+                      ) : (
+                        <span className="truncate flex-1 text-slate-700 dark:text-slate-200" title={title}>
+                          {title}
+                        </span>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setForm(curr => ({ ...curr, driveItemIds: curr.driveItemIds.filter(x => x !== id) }))}
+                        onClick={() => setForm(curr => ({
+                          ...curr,
+                          driveItemIds: curr.driveItemIds.filter(x => x !== id),
+                          driveAttachments: file?.externalId
+                            ? curr.driveAttachments.filter(a => a.fileId !== file.externalId)
+                            : curr.driveAttachments,
+                        }))}
                         className="p-0.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -263,6 +346,35 @@ export function CalendarEventEditorModal({
                     </div>
                   );
                 })}
+                {form.driveAttachments
+                  .filter(a => !form.driveItemIds.some(id => {
+                    const file = attachedDriveItems?.find(f => f.id === id);
+                    return file?.externalId === a.fileId;
+                  }))
+                  .map(a => (
+                    <div
+                      key={a.fileId || a.fileUrl || a.title}
+                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-[12.5px] max-w-[280px] shadow-sm"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                      {a.fileUrl ? (
+                        <a
+                          href={a.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate flex-1 text-slate-700 dark:text-slate-200 hover:underline"
+                          title={a.title ?? a.fileId}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {a.title ?? a.fileId}
+                        </a>
+                      ) : (
+                        <span className="truncate flex-1 text-slate-700 dark:text-slate-200" title={a.title ?? a.fileId}>
+                          {a.title ?? a.fileId}
+                        </span>
+                      )}
+                    </div>
+                  ))}
               </div>
             )}
           </div>
@@ -280,14 +392,40 @@ export function CalendarEventEditorModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-800/50">
-          <button type="button" onClick={onClose} disabled={saving} className="h-9 rounded-lg px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-700">
-            {t('common.cancel')}
-          </button>
-          <button type="button" onClick={submit} disabled={saving || connections.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50">
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {mode === 'create' ? (isEvent ? t('calendar.createEvent2') : t('calendar.createTask')) : t('common.save')}
-          </button>
+        <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-800/50">
+          <div className="flex gap-2">
+            {mode === 'edit' && htmlLink && (
+              <a
+                href={htmlLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12.5px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                GCal
+              </a>
+            )}
+            {mode === 'edit' && onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={saving}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 px-3 text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-500/20 dark:text-rose-400 dark:hover:bg-rose-500/10"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {t('common.delete')}
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} disabled={saving} className="h-9 rounded-lg px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-700">
+              {t('common.cancel')}
+            </button>
+            <button type="button" onClick={submit} disabled={saving || connections.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50">
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {mode === 'create' ? (isEvent ? t('calendar.createEvent2') : t('calendar.createTask')) : t('common.save')}
+            </button>
+          </div>
         </div>
       </div>
       

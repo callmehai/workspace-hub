@@ -2,6 +2,28 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-11] Calendar all-day ↔ timed write-back (Google PATCH vs UPDATE)
+
+- **Bug:** Kéo event cả ngày xuống slot có giờ (week view) → Google **400 Invalid start time** → app **502**. Nguyên nhân: `Events.Patch` merge giữ `start.date` cũ cùng `start.dateTime` mới (Google cấm lẫn hai loại).
+- **Fix:** `CalendarGateway.UpdateEventAsync` dùng **GET + `Events.Update`**; helper `ApplyUpdateTimes` thay whole `Start`/`End` (chỉ `date` hoặc chỉ `dateTime` + `TimeZone=UTC`).
+- **Docs:** `docs/superpowers/specs/2026-07-11-calendar-all-day-timed-google-update-vs-patch.md`
+- **Tests:** `ItemWriteBackServicePatchEventTests.cs` (9 case all-day/timed/task).
+
+## [2026-07-11] Calendar sync Drive attachments + gộp gateway
+
+- **Bug/gap đã fix:** Event gắn file Drive trên Google Calendar → sync về app → `metadataJson` có `driveAttachments` (map `Event.attachments[]`).
+- **Match `fileId` → `driveItemIds`:** Google Calendar `attachment.fileId` = Drive Item `ExternalId` (cùng Google file id). Sync lookup `Item` type `File` theo user + `ExternalId` → ghi `metadata.driveItemIds` (Guid nội bộ) khi file đã sync Drive; không match thì chỉ có `driveAttachments` (link hiển thị vẫn OK).
+- **Metadata merge:** Khi sync update, preserve `calendarType` (app-only); refresh attachment snapshot từ Google.
+- **Refactor:** Gộp `GoogleCalendarGateway` vào `CalendarGateway` — một `ICalendarGateway` cho sync + CRUD. Xóa `IGoogleCalendarGateway`.
+- **Docs:** `docs/superpowers/specs/2026-07-11-calendar-sync-attachments-gateway-merge-design.md`, `docs/superpowers/plans/2026-07-11-calendar-sync-attachments-gateway-merge-plan.md`.
+
+## [2026-07-10] Calendar edit + sync hoàn thiện (BE + FE)
+
+- **PATCH Event parity create:** `PatchItemRequest` thêm `allDay`; `UpdateEventAsync` mirror `InsertEventAsync` (all-day `Date`, Drive attachments); sau patch cập nhật `occurredAt`/`dueAt` + `metadata.start`/`end`/`allDay`/`description`/`driveItemIds`.
+- **Sync:** `CalendarEventDto` có `ETag`/`AllDay`; mapper dùng `Start`/`End` cho `OccurredAt`/`DueAt`; incremental sync xóa Item khi Google trả `status=cancelled`.
+- **Query lịch:** `GET /api/items?occurredFrom&occurredTo` (UTC, overlap) — Calendar FE chỉ tải event trong grid tháng/tuần (`limit` max 200).
+- **FE:** một modal `CalendarEventEditorModal` cho create/edit (Calendar, Inbox toolbar, ItemDetail); invalidate `calendar-items` sau PATCH; drag week slot → `allDay=false`.
+
 ## [2026-07-10] Calendar workspace view (FE)
 
 - **View thứ ba có kiểm soát:** thêm route `/calendar` cạnh Danh sách/Bảng; chỉ hiện nút Lịch ở **Tất cả mục**, nguồn **Google Calendar (Event)** và folder. Email/Jira/Drive chỉ có Danh sách–Bảng; nếu deep-link `/calendar?type=Email|Ticket|File` thì redirect về Danh sách đúng nguồn. View switcher và Sidebar giữ nguyên `?folder=` khi đổi view/context.

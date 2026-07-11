@@ -49,17 +49,17 @@ public class GetItemsRequestValidatorTests
     }
 
     [Fact]
-    public async Task Limit_101_ShouldHaveError()
+    public async Task Limit_201_ShouldHaveError()
     {
-        var request = new GetItemsRequest(Limit: 101);
+        var request = new GetItemsRequest(Limit: 201);
         var result = await _sut.TestValidateAsync(request);
         result.ShouldHaveValidationErrorFor(x => x.Limit);
     }
 
     [Fact]
-    public async Task Limit_100_ShouldNotHaveError()
+    public async Task Limit_200_ShouldNotHaveError()
     {
-        var request = new GetItemsRequest(Limit: 100);
+        var request = new GetItemsRequest(Limit: 200);
         var result = await _sut.TestValidateAsync(request);
         result.ShouldNotHaveValidationErrorFor(x => x.Limit);
     }

@@ -28,6 +28,8 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? gmailLabel = null,
         string? assigneeAccountId = null,
         Guid? connectionId = null,
+        DateTime? occurredFrom = null,
+        DateTime? occurredTo = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -117,6 +119,16 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         if (connectionId.HasValue)
         {
             query = query.Where(i => i.ConnectionId == connectionId.Value);
+        }
+
+        // Calendar range overlap: start < rangeEnd AND end > rangeStart (OccurredAt=start, DueAt=end).
+        if (occurredFrom.HasValue || occurredTo.HasValue)
+        {
+            var rangeStart = occurredFrom ?? DateTime.MinValue;
+            var rangeEnd = occurredTo ?? DateTime.MaxValue;
+            query = query.Where(i =>
+                i.OccurredAt < rangeEnd &&
+                (i.DueAt ?? i.OccurredAt) > rangeStart);
         }
 
         // ── Search: Title hoặc Snippet ──
@@ -249,6 +261,21 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     public async Task<List<Item>> GetByIdsAndUserAsync(IEnumerable<Guid> itemIds, Guid userId, CancellationToken ct = default)
     {
         return await Set.Where(i => itemIds.Contains(i.Id) && i.UserId == userId).ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<Item>> GetFilesByExternalIdsAsync(Guid userId, IEnumerable<string> externalIds, CancellationToken ct = default)
+    {
+        var ids = externalIds.Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        if (ids.Count == 0)
+            return [];
+
+        return await Set
+            .Where(i => i.UserId == userId
+                && i.Type == ItemType.File
+                && i.ExternalId != null
+                && ids.Contains(i.ExternalId))
+            .ToListAsync(ct);
     }
 
     /// <inheritdoc/>

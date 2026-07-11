@@ -48,7 +48,7 @@ public class ItemService : IItemService
 
         // Clamp page/limit to safe ranges (validator should catch, but defense-in-depth)
         var page = Math.Max(1, request.Page);
-        var limit = Math.Clamp(request.Limit, 1, 100);
+        var limit = Math.Clamp(request.Limit, 1, 200);
 
         // Validate folder ownership
         if (request.FolderId.HasValue)
@@ -74,6 +74,8 @@ public class ItemService : IItemService
             request.GmailLabel,
             request.Assignee,
             request.ConnectionId,
+            request.OccurredFrom,
+            request.OccurredTo,
             page,
             limit,
             ct);

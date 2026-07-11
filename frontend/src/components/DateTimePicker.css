@@ -5,10 +5,12 @@
   font-family: inherit;
   box-shadow: none;
   background: transparent;
+  width: fit-content;
 }
 
 .wh-dtp .react-datepicker__month-container {
   float: none;
+  width: fit-content;
 }
 
 /* ── Header tháng ── */
@@ -84,7 +86,110 @@
 }
 
 .wh-dtp .react-datepicker__day--outside-month {
-  color: #cbd5e1;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Thu gọn lịch — bỏ hàng trống cuối tháng */
+.wh-dtp .react-datepicker__month {
+  margin: 8px 10px 4px;
+}
+
+.wh-dtp .react-datepicker__week {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.wh-dtp .react-datepicker__day-names {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 10px;
+}
+
+/* ── Time picker 2 cột giờ / phút (TimePicker.tsx) ── */
+.wh-time-picker__columns {
+  display: flex;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dark .wh-time-picker__columns {
+  border-bottom-color: #334155;
+}
+
+.wh-time-picker__column {
+  flex: 1;
+  min-width: 0;
+}
+
+.wh-time-picker__column + .wh-time-picker__column {
+  border-left: 1px solid #f1f5f9;
+}
+
+.dark .wh-time-picker__column + .wh-time-picker__column {
+  border-left-color: #334155;
+}
+
+.wh-time-picker__caption {
+  margin: 0;
+  padding: 8px 0 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9ca3af;
+}
+
+.dark .wh-time-picker__caption {
+  color: #94a3b8;
+}
+
+.wh-time-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.wh-time-picker__item {
+  display: block;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: #374151;
+  cursor: pointer;
+  transition: background-color .12s, color .12s;
+}
+
+.wh-time-picker__item:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.wh-time-picker__item--selected {
+  background: #2563eb !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.wh-time-picker__item--selected:hover {
+  background: #1d4ed8 !important;
+  color: #fff !important;
+}
+
+.dark .wh-time-picker__item {
+  color: #e2e8f0;
+}
+
+.dark .wh-time-picker__item:hover {
+  background: rgba(37, 99, 235, 0.15);
+  color: #93c5fd;
 }
 
 /* ── Dark mode (class `dark` trên <html>; popover render qua portal vào body) ──

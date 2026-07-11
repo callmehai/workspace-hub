@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink,
-  Flag, Loader2, Mail, MapPin, Plus, RefreshCw, Search, Trash2, Users, X,
+  Flag, Loader2, Mail, MapPin, Plus, Users, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { foldersApi, itemsApi } from '../lib/itemsApi';
@@ -13,13 +13,32 @@ import type { ItemResponse, PagedResult, PatchItemRequest } from '../types/items
 import { useI18n } from '../hooks/useI18n';
 import { usePollingInterval } from '../hooks/usePollingInterval';
 import { handleApiError } from '../lib/errorUtils';
-import { WorkspaceViewSwitcher } from '../components/workspace/WorkspaceViewSwitcher';
+import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
+import { parseSourceType } from '../lib/itemVisuals';
 import {
   CalendarEventEditorModal,
   type CalendarEventFormValue,
 } from '../components/calendar/CalendarEventEditorModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ItemDetail } from '../components/ItemDetail';
+import {
+  addDays,
+  addMonths,
+  calendarFormToPatch,
+  calendarQueryRange,
+  calendarRangeToApiTimes,
+  combineLocal,
+  dateKey,
+  emptyCalendarForm,
+  formToRange,
+  itemToCalendarForm,
+  localDayStartIso,
+  pad,
+  parseDateKey,
+  parseMetadata,
+  startOfWeek,
+  timeValue,
+} from '../lib/calendarFormUtils';
 
 type CalendarRange = 'month' | 'week';
 type CalendarEntryKind = 'event' | 'scheduled' | 'jira';
@@ -48,72 +67,33 @@ interface UpdateEventVariables {
   allDay: boolean;
 }
 
+const DRAG_TYPE = 'application/x-workspace-calendar-event';
+
 const DAY_NAMES_VI = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const DAY_NAMES_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEK_START_HOUR = 7;
 const WEEK_END_HOUR = 21;
 const HALF_HOUR_HEIGHT = 28;
-const DRAG_TYPE = 'application/x-workspace-calendar-event';
 
-const ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
+const TIMED_ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
   event: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200',
   scheduled: 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-200',
   jira: 'border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-200',
 };
 
-function pad(value: number) {
-  return String(value).padStart(2, '0');
-}
+/** Cả ngày — tông khác timed để dễ phân biệt trong ô tháng. */
+const ALL_DAY_ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
+  event: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200',
+  scheduled: TIMED_ENTRY_CLASSES.scheduled,
+  jira: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/15 dark:text-fuchsia-200',
+};
 
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function parseDateKey(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function addDays(date: Date, amount: number) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + amount);
-  return result;
-}
-
-function addMonths(date: Date, amount: number) {
-  const result = new Date(date);
-  result.setDate(1);
-  result.setMonth(result.getMonth() + amount);
-  return result;
-}
-
-function startOfWeek(date: Date) {
-  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const mondayOffset = (result.getDay() + 6) % 7;
-  result.setDate(result.getDate() - mondayOffset);
-  return result;
-}
-
-function combineLocal(date: string, time: string) {
-  const [year, month, day] = date.split('-').map(Number);
-  const [hour, minute] = time.split(':').map(Number);
-  return new Date(year, month - 1, day, hour, minute, 0, 0);
-}
-
-function timeValue(date: Date) {
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+function entryChipClasses(entry: CalendarEntry): string {
+  return entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
 }
 
 function isMidnight(date: Date) {
   return date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0;
-}
-
-function parseMetadata(item: ItemResponse): Record<string, unknown> {
-  try {
-    return item.metadataJson ? JSON.parse(item.metadataJson) as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
 }
 
 function asString(value: unknown): string | undefined {
@@ -223,62 +203,21 @@ function formatWeekTitle(start: Date, lang: 'vi' | 'en') {
   return `${short.format(start)} – ${short.format(end)}, ${end.getFullYear()}`;
 }
 
-function emptyForm(date: Date, connectionId = '', startTime = '09:00'): CalendarEventFormValue {
-  const [hour, minute] = startTime.split(':').map(Number);
-  const endMinutes = Math.min(hour * 60 + minute + 60, 23 * 60 + 30);
-  return {
-    connectionId,
-    title: '',
-    date: dateKey(date),
-    allDay: false,
-    startTime,
-    endTime: `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`,
-    location: '',
-    attendees: '',
-    calendarType: 'event',
-    description: '',
-    driveItemIds: [],
-  };
-}
-
-function entryToForm(entry: CalendarEntry): CalendarEventFormValue {
-  return {
-    connectionId: entry.item?.connectionId ?? '',
-    title: entry.title,
-    date: dateKey(entry.start),
-    allDay: entry.allDay,
-    startTime: timeValue(entry.start),
-    endTime: timeValue(entry.end),
-    location: entry.location ?? '',
-    attendees: entry.attendees.join(', '),
-    calendarType: (parseMetadata(entry.item!)?.calendarType as any) === 'task' ? 'task' : 'event',
-    description: asString(parseMetadata(entry.item!)?.description) ?? '',
-    driveItemIds: asStringArray(parseMetadata(entry.item!)?.driveItemIds) ?? [],
-  };
-}
-
-function formToRange(form: CalendarEventFormValue) {
-  if (form.allDay) {
-    const start = parseDateKey(form.date);
-    return { start, end: addDays(start, 1) };
-  }
-  return {
-    start: combineLocal(form.date, form.startTime),
-    end: combineLocal(form.date, form.endTime),
-  };
-}
-
 function CalendarEntryChip({
   entry,
   compact = false,
+  showAllDayLabel = false,
   onOpen,
   onDragStart,
 }: {
   entry: CalendarEntry;
   compact?: boolean;
+  /** View tháng: hiện "Cả ngày" trước tên (tương tự giờ bắt đầu với event có giờ). */
+  showAllDayLabel?: boolean;
   onOpen: (entry: CalendarEntry) => void;
   onDragStart: (event: DragEvent, entry: CalendarEntry) => void;
 }) {
+  const { t } = useI18n();
   const Icon = entry.kind === 'scheduled' ? Mail : entry.kind === 'jira' ? Flag : CalendarDays;
   return (
     <button
@@ -287,10 +226,14 @@ function CalendarEntryChip({
       onDragStart={event => onDragStart(event, entry)}
       onClick={event => { event.stopPropagation(); onOpen(entry); }}
       title={entry.title}
-      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${ENTRY_CLASSES[entry.kind]} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
+      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
     >
       <Icon className="h-3 w-3 shrink-0 opacity-75" />
-      {!entry.allDay && <span className="shrink-0 tabular-nums text-[10px] font-medium opacity-70">{timeValue(entry.start)}</span>}
+      {entry.allDay && showAllDayLabel ? (
+        <span className="shrink-0 text-[10px] font-medium opacity-70">{t('calendar.allDay')}</span>
+      ) : !entry.allDay ? (
+        <span className="shrink-0 tabular-nums text-[10px] font-medium opacity-70">{timeValue(entry.start)}</span>
+      ) : null}
       <span className="truncate">{entry.title}</span>
     </button>
   );
@@ -303,7 +246,7 @@ export function CalendarPage() {
   const { t, lang } = useI18n();
   const pollMs = usePollingInterval(45_000);
   const folderId = searchParams.get('folder');
-  const sourceType = searchParams.get('type');
+  const sourceType = parseSourceType(searchParams.get('type'));
   const googleCalendarOnly = sourceType === 'Event' && !folderId;
   const [range, setRange] = useState<CalendarRange>('month');
   const [cursor, setCursor] = useState(() => new Date());
@@ -315,14 +258,20 @@ export function CalendarPage() {
   const [deleteEntry, setDeleteEntry] = useState<CalendarEntry | null>(null);
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; value: CalendarEventFormValue; entry?: CalendarEntry } | null>(null);
 
-  const calendarItemsKey = ['calendar-items', folderId, googleCalendarOnly ? 'event-only' : 'combined'] as const;
+  const { rangeStart, rangeEnd } = useMemo(() => calendarQueryRange(cursor, range), [cursor, range]);
+  const occurredFrom = localDayStartIso(rangeStart);
+  const occurredTo = localDayStartIso(rangeEnd);
+
+  const calendarItemsKey = ['calendar-items', folderId, googleCalendarOnly ? 'event-only' : 'combined', range, occurredFrom, occurredTo] as const;
   const { data: itemPage, isLoading: itemsLoading, isError: itemsError, isFetching } = useQuery({
     queryKey: calendarItemsKey,
     queryFn: () => itemsApi.getItems({
       folderId: folderId ?? undefined,
       types: googleCalendarOnly ? ['Event'] : ['Event', 'Ticket'],
+      occurredFrom,
+      occurredTo,
       page: 1,
-      limit: 100,
+      limit: 200,
     }),
     staleTime: 0,
     refetchInterval: pollMs,
@@ -385,14 +334,15 @@ export function CalendarPage() {
   const createMutation = useMutation({
     mutationFn: async (form: CalendarEventFormValue) => {
       const { start, end } = formToRange(form);
+      const times = calendarRangeToApiTimes(start, end, form.allDay);
       const created = await itemsApi.createEvent({
         connectionId: form.connectionId,
         title: form.title,
-        start: start.toISOString(),
-        end: end.toISOString(),
+        start: times.start,
+        end: times.end,
         allDay: form.allDay,
         location: form.location.trim() || undefined,
-        attendees: form.attendees.split(',').map(value => value.trim()).filter(Boolean),
+        attendees: form.attendees,
         calendarType: form.calendarType,
         description: form.description.trim() || undefined,
         driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
@@ -421,8 +371,9 @@ export function CalendarPage() {
           items: current.items.map(item => {
             if (item.id !== variables.item.id) return item;
             const metadata = parseMetadata(item);
-            metadata.start = variables.start.toISOString();
-            metadata.end = variables.end.toISOString();
+            const times = calendarRangeToApiTimes(variables.start, variables.end, variables.allDay);
+            metadata.start = times.start;
+            metadata.end = times.end;
             metadata.allDay = variables.allDay;
             if (variables.patch.location !== undefined) metadata.location = variables.patch.location;
             if (variables.patch.attendees !== undefined) metadata.attendees = variables.patch.attendees;
@@ -445,7 +396,7 @@ export function CalendarPage() {
       toast.success(t('calendar.updated'));
       setEditor(null);
       setSelectedEntry(null);
-      queryClient.invalidateQueries({ queryKey: ['items'] });
+      refreshCalendar();
     },
     onError: (error, variables, context) => {
       if (context?.previous) queryClient.setQueryData(calendarItemsKey, context.previous);
@@ -475,62 +426,33 @@ export function CalendarPage() {
     onError: error => handleApiError(error, t('calendar.deleteFailed'), { navigate }),
   });
 
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const relevant = connections.filter(connection =>
-        connection.status.toLowerCase() === 'active'
-        && (googleCalendarOnly
-          ? connection.serviceType.toLowerCase() === 'gcal'
-          : ['gcal', 'jira'].includes(connection.serviceType.toLowerCase())));
-      await Promise.all(relevant.map(connection => connectionsApi.syncConnection(connection.id)));
-    },
-    onSuccess: () => {
-      toast.success(t('calendar.synced'));
-      refreshCalendar();
-      queryClient.invalidateQueries({ queryKey: ['connections'] });
-    },
-    onError: error => handleApiError(error, t('calendar.syncFailed'), { navigate }),
-  });
-
   const openCreate = (day: Date, startTime = '09:00', allDay = false) => {
-    const value = emptyForm(day, firstConnectionId, startTime);
+    const value = emptyCalendarForm(day, firstConnectionId, startTime);
     value.allDay = allDay;
     setEditor({ mode: 'create', value });
   };
 
   const openEntry = (entry: CalendarEntry) => {
+    if (entry.kind === 'event' && entry.item) {
+      setEditor({ mode: 'edit', value: itemToCalendarForm(entry.item), entry });
+      return;
+    }
     setSelectedEntry(entry);
   };
 
-  const editSelected = (entry: CalendarEntry) => {
-    if (entry.kind !== 'event') return;
-    setSelectedEntry(null);
-    setEditor({ mode: 'edit', value: entryToForm(entry), entry });
-  };
-
   const submitEditor = (form: CalendarEventFormValue) => {
-    const { start, end } = formToRange(form);
     if (editor?.mode === 'create') {
       createMutation.mutate(form);
       return;
     }
     if (!editor?.entry?.item) return;
+    const { start, end } = formToRange(form);
     updateMutation.mutate({
       item: editor.entry.item,
       start,
       end,
       allDay: form.allDay,
-      patch: {
-        title: form.title,
-        start: start.toISOString(),
-        end: end.toISOString(),
-        allDay: form.allDay,
-        location: form.location.trim(),
-        attendees: form.attendees.split(',').map(value => value.trim()).filter(Boolean),
-        calendarType: form.calendarType,
-        description: form.description.trim(),
-        driveItemIds: form.driveItemIds,
-      },
+      patch: calendarFormToPatch(form),
     });
   };
 
@@ -544,7 +466,7 @@ export function CalendarPage() {
   const moveEvent = (entryId: string, targetDate: Date, targetTime?: string, forceAllDay?: boolean) => {
     const entry = entries.find(candidate => candidate.id === entryId && candidate.kind === 'event');
     if (!entry?.item) return;
-    const allDay = forceAllDay ?? entry.allDay;
+    const allDay = forceAllDay ?? (targetTime !== undefined ? false : entry.allDay);
     let start: Date;
     let end: Date;
     if (allDay) {
@@ -557,12 +479,13 @@ export function CalendarPage() {
       const duration = entry.allDay ? 60 * 60_000 : Math.max(30 * 60_000, entry.end.getTime() - entry.start.getTime());
       end = new Date(start.getTime() + duration);
     }
+    const times = calendarRangeToApiTimes(start, end, allDay);
     updateMutation.mutate({
       item: entry.item,
       start,
       end,
       allDay,
-      patch: { start: start.toISOString(), end: end.toISOString(), allDay },
+      patch: { start: times.start, end: times.end, allDay },
     });
     setDragOver(null);
   };
@@ -572,6 +495,13 @@ export function CalendarPage() {
   const title = range === 'month' ? formatMonthTitle(cursor, lang) : formatWeekTitle(startOfWeek(cursor), lang);
   const dayNames = lang === 'vi' ? DAY_NAMES_VI : DAY_NAMES_EN;
   const loading = itemsLoading || (!folderId && !googleCalendarOnly && scheduledLoading);
+
+  const calendarSubtitle = useMemo(() => {
+    if (loading) return t('common.loading');
+    if (folderId) return t('calendar.folderSubtitle');
+    if (googleCalendarOnly) return t('calendar.googleSubtitle', { n: entries.length });
+    return t('calendar.subtitle', { n: entries.length });
+  }, [loading, folderId, googleCalendarOnly, entries.length, t]);
 
   const entriesForDay = (day: Date) => entries.filter(entry => entryOccursOn(entry, day));
 
@@ -613,10 +543,10 @@ export function CalendarPage() {
                 </div>
                 <div className="space-y-1">
                   {dayEntries.slice(0, 3).map(entry => (
-                    <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} compact onOpen={openEntry} onDragStart={dragStart} />
+                    <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} compact showAllDayLabel onOpen={openEntry} onDragStart={dragStart} />
                   ))}
                   {dayEntries.length > 3 && (
-                    <button type="button" onClick={event => { event.stopPropagation(); setSelectedEntry(dayEntries[3]); }} className="w-full rounded px-1.5 py-0.5 text-left text-[11px] font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10">
+                    <button type="button" onClick={event => { event.stopPropagation(); openEntry(dayEntries[3]); }} className="w-full rounded px-1.5 py-0.5 text-left text-[11px] font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10">
                       {t('calendar.moreItems', { n: dayEntries.length - 3 })}
                     </button>
                   )}
@@ -717,7 +647,7 @@ export function CalendarPage() {
                       onDragStart={event => dragStart(event, entry)}
                       onClick={() => openEntry(entry)}
                       style={{ top: Math.max(0, top), height: entryHeight }}
-                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${ENTRY_CLASSES[entry.kind]} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                     >
                       <span className="flex items-center gap-1 truncate"><Icon className="h-3 w-3 shrink-0" />{entry.title}</span>
                       <span className="mt-0.5 block text-[10px] font-medium tabular-nums opacity-70">{timeValue(entry.start)}{entry.kind === 'event' ? ` – ${timeValue(entry.end)}` : ''}</span>
@@ -738,23 +668,28 @@ export function CalendarPage() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50 px-4 py-5 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:px-6">
-      <div className="mx-auto flex max-w-[1500px] flex-col">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2.5">
-              {currentFolder && <span className="h-3 w-3 rounded-full" style={{ backgroundColor: currentFolder.color ?? '#94a3b8' }} />}
-              <h1 className="m-0 text-[22px] font-semibold leading-tight">{currentFolder?.name ?? t('calendar.pageTitle')}</h1>
-              {isFetching && !loading && <Loader2 className="h-4 w-4 animate-spin text-brand-500" />}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button type="button" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-              <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />{t('toolbar.sync')}
-            </button>
-            <WorkspaceViewSwitcher view="calendar" folderId={folderId} sourceType={sourceType} />
-          </div>
-        </div>
+    <div className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+      <div className="max-w-[1400px] mx-auto px-6 py-5">
+
+        <WorkspaceToolbar
+          view="calendar"
+          folder={currentFolder}
+          folderId={folderId}
+          subtitle={calendarSubtitle}
+          isBackgroundFetching={isFetching && !loading}
+          statusFilter={[]}
+          onToggleStatusFilter={() => {}}
+          typeFilter={[]}
+          onToggleTypeFilter={() => {}}
+          sourceType={sourceType}
+          importantOnly={false}
+          onImportantToggle={() => {}}
+          tagFilters={[]}
+          onToggleTagFilter={() => {}}
+          onClearTagFilters={() => {}}
+          searchInput={search}
+          onSearchChange={setSearch}
+        />
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -778,11 +713,6 @@ export function CalendarPage() {
           <button type="button" onClick={() => openCreate(new Date())} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-brand-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-700">
             <Plus className="h-4 w-4" />{t('calendar.createEvent')}
           </button>
-        </div>
-
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={event => setSearch(event.target.value)} placeholder={t('calendar.search')} className="h-9 w-full rounded-[9px] border border-slate-200 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900" />
         </div>
 
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -810,12 +740,18 @@ export function CalendarPage() {
 
       {editor && (
         <CalendarEventEditorModal
+          key={editor.mode === 'edit' ? (editor.entry?.id ?? 'edit') : `create-${editor.value.date}-${editor.value.startTime}`}
           open
           mode={editor.mode}
           initialValue={editor.value}
           connections={gcalConnections}
+          allConnections={connections}
           folderName={currentFolder?.name}
           saving={createMutation.isPending || updateMutation.isPending}
+          htmlLink={editor.mode === 'edit' ? editor.entry?.htmlLink : undefined}
+          onDelete={editor.mode === 'edit' && editor.entry
+            ? () => { setEditor(null); setDeleteEntry(editor.entry!); }
+            : undefined}
           onClose={() => setEditor(null)}
           onSubmit={submitEditor}
         />
@@ -826,7 +762,7 @@ export function CalendarPage() {
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={event => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${ENTRY_CLASSES[selectedEntry.kind]}`}>
+                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${entryChipClasses(selectedEntry)}`}>
                   {selectedEntry.kind === 'event' ? t('calendar.events') : selectedEntry.kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
                 </span>
                 <h3 className="mt-2 text-[16px] font-bold leading-snug text-slate-900 dark:text-slate-100">{selectedEntry.title}</h3>
@@ -840,13 +776,6 @@ export function CalendarPage() {
               {selectedEntry.kind !== 'event' && <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">{t('calendar.readOnlyHint')}</p>}
             </div>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              {selectedEntry.kind === 'event' && (
-                <>
-                  {selectedEntry.htmlLink && <a href={selectedEntry.htmlLink} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12.5px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><ExternalLink className="h-3.5 w-3.5" />GCal</a>}
-                  <button type="button" onClick={() => setDeleteEntry(selectedEntry)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 px-3 text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-400 dark:hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" />{t('common.delete')}</button>
-                  <button type="button" onClick={() => editSelected(selectedEntry)} className="h-9 rounded-lg bg-brand-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-brand-700">{t('common.edit')}</button>
-                </>
-              )}
               {selectedEntry.kind === 'scheduled' && <button type="button" onClick={() => navigate('/scheduled-emails')} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-blue-700">{t('calendar.openScheduled')}<ExternalLink className="h-3.5 w-3.5" /></button>}
               {selectedEntry.kind === 'jira' && <button type="button" onClick={() => { setJiraItemId(selectedEntry.id); setSelectedEntry(null); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-violet-700">{t('calendar.openJira')}<ExternalLink className="h-3.5 w-3.5" /></button>}
             </div>

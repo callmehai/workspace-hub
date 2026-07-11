@@ -70,7 +70,8 @@ public class ItemWriteBackService : IItemWriteBackService
         if (!payload.IsUnread.HasValue && !payload.IsStarred.HasValue && payload.AddLabels == null && payload.RemoveLabels == null &&
             !payload.IsTrashed.HasValue && payload.Title == null && payload.Start == null &&
             payload.End == null && payload.Location == null && payload.Attendees == null &&
-            payload.Name == null)
+            payload.Name == null && payload.Description == null && payload.CalendarType == null &&
+            payload.DriveItemIds == null && !payload.AllDay.HasValue)
         {
             throw new BusinessRuleException("No fields provided for update.");
         }
@@ -166,31 +167,45 @@ public class ItemWriteBackService : IItemWriteBackService
                 break;
 
             case ItemType.Event:
-                // calendarType, description và driveItemIds được chấp nhận cho Event
                 if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.IsTrashed != null || payload.Name != null)
                     throw new BusinessRuleException("Invalid fields for Event writeback.");
-                    
-                // Ghi nhận driveAttachments nếu có driveItemIds
-                IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
-                if (payload.DriveItemIds != null && payload.DriveItemIds.Count > 0)
-                {
-                    var driveItems = await _items.GetByIdsAndUserAsync(payload.DriveItemIds, userId, ct);
-                    driveAttachments = driveItems
-                        .Select(di => {
-                            var dm = string.IsNullOrEmpty(di.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(di.MetadataJson) ?? new Dictionary<string, object>();
-                            var mt = dm.TryGetValue("mimeType", out var mv) ? mv.ToString() : null;
-                            var url = dm.TryGetValue("webViewLink", out var uv) ? uv.ToString() : null;
-                            return new CalendarDriveAttachment(di.ExternalId, di.Title, mt, url);
-                        })
-                        .ToList();
-                }
 
-                // Lấy allDay hiện tại từ metadata
-                var currentMeta = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
-                bool existingAllDay = false;
-                if (currentMeta.TryGetValue("allDay", out var adv) && adv is JsonElement jeAllDay && jeAllDay.ValueKind == JsonValueKind.True)
+                var currentMeta = ParseMetadataDict(item.MetadataJson);
+                var existingAllDay = ReadMetaAllDay(currentMeta);
+                var calendarType = payload.CalendarType
+                    ?? ReadMetaString(currentMeta, "calendarType")
+                    ?? "event";
+                var isTask = string.Equals(calendarType, "task", StringComparison.OrdinalIgnoreCase);
+                var effectiveAllDay = isTask || (payload.AllDay ?? existingAllDay);
+
+                var timeChanged = payload.Start.HasValue || payload.End.HasValue || payload.AllDay.HasValue;
+                DateTimeOffset? effectiveStart = payload.Start ?? (timeChanged ? ReadEventStart(currentMeta, item) : null);
+                DateTimeOffset? effectiveEnd = payload.End ?? (timeChanged ? ReadEventEnd(currentMeta, item) : null);
+
+                if (isTask && effectiveStart.HasValue && !payload.End.HasValue)
+                    effectiveEnd = effectiveStart.Value.AddDays(1);
+
+                IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
+                if (payload.DriveItemIds != null)
                 {
-                    existingAllDay = true;
+                    if (payload.DriveItemIds.Count > 0)
+                    {
+                        var driveItems = await _items.GetByIdsAndUserAsync(payload.DriveItemIds, userId, ct);
+                        driveAttachments = driveItems
+                            .Where(di => di.ExternalId != null)
+                            .Select(di =>
+                            {
+                                var dm = ParseMetadataDict(di.MetadataJson);
+                                var mt = ReadMetaString(dm, "mimeType");
+                                var url = ReadMetaString(dm, "webViewLink");
+                                return new CalendarDriveAttachment(di.ExternalId!, di.Title, mt, url);
+                            })
+                            .ToList();
+                    }
+                    else
+                    {
+                        driveAttachments = Array.Empty<CalendarDriveAttachment>();
+                    }
                 }
 
                 var evDto = new CalendarEvent(
@@ -198,27 +213,63 @@ public class ItemWriteBackService : IItemWriteBackService
                     providerEtag,
                     payload.Title,
                     payload.Description,
-                    payload.Start,
-                    payload.End,
-                    payload.Location,
-                    payload.Attendees,
-                    existingAllDay,
+                    effectiveStart,
+                    effectiveEnd,
+                    isTask ? null : payload.Location,
+                    isTask ? null : payload.Attendees,
+                    timeChanged ? effectiveAllDay : existingAllDay,
                     driveAttachments
                 );
 
                 var updatedEvent = await _calendarGateway.UpdateEventAsync(conn, "primary", item.ExternalId, evDto, ct);
                 newETag = updatedEvent.ETag;
-                item.Title = updatedEvent.Summary ?? "No Title";
-                item.OccurredAt = updatedEvent.Start?.UtcDateTime ?? DateTime.UtcNow;
-                if (updatedEvent.End.HasValue) item.DueAt = updatedEvent.End.Value.UtcDateTime;
+                item.Title = updatedEvent.Summary ?? item.Title;
+                if (updatedEvent.Description != null) item.Snippet = updatedEvent.Description;
 
-                var metaDictEvent = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+                if (updatedEvent.Start.HasValue)
+                    item.OccurredAt = updatedEvent.Start.Value.UtcDateTime;
+                if (updatedEvent.End.HasValue)
+                    item.DueAt = updatedEvent.End.Value.UtcDateTime;
+
+                var metaDictEvent = ParseMetadataDict(item.MetadataJson);
                 if (updatedEvent.Location != null) metaDictEvent["location"] = updatedEvent.Location;
                 if (updatedEvent.Attendees != null) metaDictEvent["attendees"] = updatedEvent.Attendees;
                 if (payload.CalendarType != null) metaDictEvent["calendarType"] = payload.CalendarType;
                 if (payload.Description != null) metaDictEvent["description"] = payload.Description;
-                if (payload.DriveItemIds != null) metaDictEvent["driveItemIds"] = payload.DriveItemIds;
-                
+                if (payload.DriveItemIds != null)
+                {
+                    metaDictEvent["driveItemIds"] = payload.DriveItemIds;
+                    if (driveAttachments != null && driveAttachments.Count > 0)
+                    {
+                        metaDictEvent["driveAttachments"] = ToDriveAttachmentMetadata(driveAttachments);
+                    }
+                    else
+                    {
+                        metaDictEvent.Remove("driveAttachments");
+                    }
+                }
+
+                if (timeChanged || updatedEvent.Start.HasValue)
+                {
+                    var allDayForMeta = updatedEvent.AllDay || effectiveAllDay;
+                    if (allDayForMeta)
+                    {
+                        metaDictEvent["allDay"] = true;
+                        if (updatedEvent.Start.HasValue)
+                            metaDictEvent["start"] = updatedEvent.Start.Value.ToString("yyyy-MM-dd");
+                        if (updatedEvent.End.HasValue)
+                            metaDictEvent["end"] = updatedEvent.End.Value.ToString("yyyy-MM-dd");
+                    }
+                    else
+                    {
+                        metaDictEvent.Remove("allDay");
+                        if (updatedEvent.Start.HasValue)
+                            metaDictEvent["start"] = updatedEvent.Start.Value.UtcDateTime.ToString("o");
+                        if (updatedEvent.End.HasValue)
+                            metaDictEvent["end"] = updatedEvent.End.Value.UtcDateTime.ToString("o");
+                    }
+                }
+
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEvent);
                 break;
 
@@ -323,10 +374,24 @@ public class ItemWriteBackService : IItemWriteBackService
         metaDict["calendarType"] = isTask ? "task" : "event";
         if (created.AllDay) metaDict["allDay"] = true;
 
+        if (effectiveAllDay)
+        {
+            metaDict["start"] = payload.Start.ToString("yyyy-MM-dd");
+            metaDict["end"] = effectiveEnd.ToString("yyyy-MM-dd");
+        }
+        else
+        {
+            metaDict["start"] = (created.Start?.UtcDateTime ?? payload.Start.UtcDateTime).ToString("o");
+            metaDict["end"] = (created.End?.UtcDateTime ?? effectiveEnd.UtcDateTime).ToString("o");
+        }
+
+        if (payload.DriveItemIds != null && payload.DriveItemIds.Count > 0)
+            metaDict["driveItemIds"] = payload.DriveItemIds;
+
         // Lưu thông tin Drive attachments vào metadata để FE hiển thị.
         if (driveAttachments != null && driveAttachments.Count > 0)
         {
-            metaDict["driveAttachments"] = driveAttachments.Select(a => new { a.FileId, a.Title, a.MimeType, a.FileUrl }).ToList();
+            metaDict["driveAttachments"] = ToDriveAttachmentMetadata(driveAttachments);
         }
 
         var item = new Item
@@ -540,4 +605,55 @@ public class ItemWriteBackService : IItemWriteBackService
         _items.Remove(item);
         await _items.SaveChangesAsync(ct);
     }
+
+    private static List<Dictionary<string, object?>> ToDriveAttachmentMetadata(IReadOnlyList<CalendarDriveAttachment> attachments)
+        => attachments.Select(a => new Dictionary<string, object?>
+        {
+            ["fileId"] = a.FileId,
+            ["title"] = a.Title,
+            ["mimeType"] = a.MimeType,
+            ["fileUrl"] = a.FileUrl,
+        }).ToList();
+
+    private static Dictionary<string, object> ParseMetadataDict(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return new Dictionary<string, object>();
+        return JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
+    }
+
+    private static bool ReadMetaAllDay(Dictionary<string, object> meta)
+    {
+        if (!meta.TryGetValue("allDay", out var val)) return false;
+        return val switch
+        {
+            JsonElement je => je.ValueKind == JsonValueKind.True,
+            bool b => b,
+            _ => false
+        };
+    }
+
+    private static string? ReadMetaString(Dictionary<string, object> meta, string key)
+    {
+        if (!meta.TryGetValue(key, out var val)) return null;
+        return val switch
+        {
+            JsonElement je when je.ValueKind == JsonValueKind.String => je.GetString(),
+            string s => s,
+            _ => val.ToString()
+        };
+    }
+
+    private static DateTimeOffset? ReadMetaDateTime(Dictionary<string, object> meta, string key, DateTime? fallbackUtc)
+    {
+        var raw = ReadMetaString(meta, key);
+        if (!string.IsNullOrEmpty(raw) && DateTimeOffset.TryParse(raw, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var dto))
+            return dto;
+        return fallbackUtc.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(fallbackUtc.Value, DateTimeKind.Utc)) : null;
+    }
+
+    private static DateTimeOffset ReadEventStart(Dictionary<string, object> meta, Item item)
+        => ReadMetaDateTime(meta, "start", item.OccurredAt) ?? new DateTimeOffset(item.OccurredAt, TimeSpan.Zero);
+
+    private static DateTimeOffset? ReadEventEnd(Dictionary<string, object> meta, Item item)
+        => ReadMetaDateTime(meta, "end", item.DueAt) ?? (item.DueAt.HasValue ? new DateTimeOffset(item.DueAt.Value, TimeSpan.Zero) : null);
 }

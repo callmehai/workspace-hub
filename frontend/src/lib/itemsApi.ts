@@ -20,6 +20,10 @@ export interface GetItemsParams {
   /** Lọc ticket Jira theo người phụ trách (accountId); "unassigned" = chưa gán. */
   assignee?: string;
   connectionId?: string;
+  /** UTC inclusive — overlap filter for calendar month/week grid */
+  occurredFrom?: string;
+  /** UTC exclusive */
+  occurredTo?: string;
   page?: number;
   limit?: number;
 }

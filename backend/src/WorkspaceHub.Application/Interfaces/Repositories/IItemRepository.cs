@@ -26,6 +26,8 @@ public interface IItemRepository : IGenericRepository<Item>
         string? gmailLabel = null,
         string? assigneeAccountId = null,
         Guid? connectionId = null,
+        DateTime? occurredFrom = null,
+        DateTime? occurredTo = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);
@@ -51,6 +53,9 @@ public interface IItemRepository : IGenericRepository<Item>
     /// Tìm danh sách Item theo IDs và User, dùng để check ownership trong bulk operations.
     /// </summary>
     Task<List<Item>> GetByIdsAndUserAsync(IEnumerable<Guid> itemIds, Guid userId, CancellationToken ct = default);
+
+    /// <summary>Drive file Items theo Google file id (ExternalId) — dùng khi sync Calendar attachment → driveItemIds.</summary>
+    Task<List<Item>> GetFilesByExternalIdsAsync(Guid userId, IEnumerable<string> externalIds, CancellationToken ct = default);
 
     /// <summary>
     /// Xóa toàn bộ Items và các liên kết (ItemFolders, TagAssignments) thuộc connectionId.

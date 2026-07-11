@@ -20,10 +20,11 @@ interface EmailChipsInputProps {
   placeholder?: string;
   /** Bật gợi ý contact từ cache Google (SCRUM-69). */
   connectionId?: string;
+  className?: string;
 }
 
 /** Nhập nhiều email dạng chip/tag + gợi ý contact khi có connectionId. */
-export function EmailChipsInput({ value, onChange, placeholder, connectionId }: EmailChipsInputProps) {
+export function EmailChipsInput({ value, onChange, placeholder, connectionId, className }: EmailChipsInputProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -148,7 +149,7 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId }: 
   const showDropdown = open && suggestEnabled && filtered.length > 0;
 
   return (
-    <div ref={wrapRef} className="relative mb-3 min-w-0">
+    <div ref={wrapRef} className={`relative min-w-0 ${className ?? 'mb-3'}`}>
       <div className="w-full min-h-9 flex flex-wrap items-center gap-1.5 px-2 py-1.5 border border-gray-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 transition-colors focus-within:ring-2 focus-within:ring-brand-500/20 focus-within:border-brand-500">
         {value.map((email, i) => (
           <span

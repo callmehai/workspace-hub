@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, type ChangeEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Search, Grid, List, FileText, Check, AlertCircle, Loader2, CloudUpload, Laptop } from 'lucide-react';
+import { X, Search, Grid, List, FileText, Check, AlertCircle, Loader2, CloudUpload } from 'lucide-react';
 import { DriveIcon } from '../../lib/brandIcons';
 import { itemsApi } from '../../lib/itemsApi';
 import { useI18n } from '../../hooks/useI18n';
@@ -113,10 +113,15 @@ export function GoogleDrivePickerModal({
         const newMockItem: ItemResponse = {
           id: `mock-file-${Date.now()}`,
           title: file.name,
+          snippet: '',
           type: 'File',
           status: 'Inbox',
           isImportant: false,
           occurredAt: new Date().toISOString(),
+          dueAt: null,
+          externalId: null,
+          folderIds: [],
+          tags: [],
           connectionId: connectionId || 'simulated-conn-id',
           metadataJson: JSON.stringify({
             mimeType: file.type || 'application/octet-stream',
@@ -264,8 +269,7 @@ export function GoogleDrivePickerModal({
                   e.preventDefault();
                   const file = e.dataTransfer.files?.[0];
                   if (file) {
-                    const mockEvent = { target: { files: [file] } } as any;
-                    handleSimulatedUpload(mockEvent);
+                    handleSimulatedUpload({ target: { files: [file] } } as unknown as ChangeEvent<HTMLInputElement>);
                   }
                 }}
               >

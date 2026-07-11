@@ -16,12 +16,17 @@ public class GetItemsRequestValidator : AbstractValidator<GetItemsRequest>
             .WithMessage("Page must be at least 1.");
 
         RuleFor(x => x.Limit)
-            .InclusiveBetween(1, 100)
-            .WithMessage("Limit must be between 1 and 100.");
+            .InclusiveBetween(1, 200)
+            .WithMessage("Limit must be between 1 and 200.");
 
         RuleFor(x => x.Search)
             .Must(s => s!.Trim().Length <= 200)
             .WithMessage("Search term cannot exceed 200 characters.")
             .When(x => !string.IsNullOrWhiteSpace(x.Search));
+
+        RuleFor(x => x.OccurredTo)
+            .GreaterThan(x => x.OccurredFrom)
+            .When(x => x.OccurredFrom.HasValue && x.OccurredTo.HasValue)
+            .WithMessage("occurredTo must be after occurredFrom.");
     }
 }

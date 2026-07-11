@@ -1,0 +1,214 @@
+import type { ItemResponse, PatchItemRequest } from '../types/items';
+import type { CalendarEventFormValue, CalendarDriveAttachmentSnapshot } from '../components/calendar/CalendarEventEditorModal';
+import type { ConnectionDto } from './connectionsApi';
+
+export function pad(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+export function dateKey(date: Date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export function parseDateKey(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+export function addDays(date: Date, amount: number) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
+}
+
+export function combineLocal(date: string, time: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
+export function timeValue(date: Date) {
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function parseMetadata(item: ItemResponse): Record<string, unknown> {
+  try {
+    return item.metadataJson ? JSON.parse(item.metadataJson) as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string');
+  return [];
+}
+
+function parseCalendarDate(value: unknown, fallback: string): Date {
+  const raw = asString(value) ?? fallback;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return parseDateKey(raw);
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? new Date(fallback) : parsed;
+}
+
+function asDriveAttachments(value: unknown): CalendarDriveAttachmentSnapshot[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap(entry => {
+    if (!entry || typeof entry !== 'object') return [];
+    const row = entry as Record<string, unknown>;
+    const fileId = asString(row.fileId) ?? asString(row.FileId);
+    if (!fileId) return [];
+    return [{
+      fileId,
+      title: asString(row.title) ?? asString(row.Title) ?? null,
+      mimeType: asString(row.mimeType) ?? asString(row.MimeType) ?? null,
+      fileUrl: asString(row.fileUrl) ?? asString(row.FileUrl) ?? null,
+    }];
+  });
+}
+
+/** URL mở file Drive từ Item (metadata.webViewLink hoặc externalId). */
+export function driveItemOpenUrl(item: { externalId?: string | null; metadataJson?: string | null }): string | null {
+  if (item.metadataJson) {
+    try {
+      const meta = JSON.parse(item.metadataJson) as Record<string, unknown>;
+      const link = asString(meta.webViewLink) ?? asString(meta.WebViewLink);
+      if (link) return link;
+    } catch { /* ignore */ }
+  }
+  if (item.externalId) return `https://drive.google.com/file/d/${item.externalId}/view`;
+  return null;
+}
+
+/** Gmail connection để gợi ý contact — ưu tiên cùng Google account với GCal đang chọn. */
+export function resolveGmailSuggestConnection(
+  allConnections: ConnectionDto[],
+  gcalConnectionId: string,
+): string | undefined {
+  const activeGmail = allConnections.filter(
+    c => c.serviceType.toLowerCase() === 'gmail' && c.status.toLowerCase() === 'active',
+  );
+  if (activeGmail.length === 0) return undefined;
+  const gcal = allConnections.find(c => c.id === gcalConnectionId);
+  if (gcal) {
+    const sameAccount = activeGmail.find(g => g.providerAccountId === gcal.providerAccountId);
+    if (sameAccount) return sameAccount.id;
+  }
+  return activeGmail[0]?.id;
+}
+
+export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09:00'): CalendarEventFormValue {
+  const [hour, minute] = startTime.split(':').map(Number);
+  const endMinutes = Math.min(hour * 60 + minute + 60, 23 * 60 + 30);
+  return {
+    connectionId,
+    title: '',
+    date: dateKey(date),
+    allDay: false,
+    startTime,
+    endTime: `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`,
+    location: '',
+    attendees: [],
+    calendarType: 'event',
+    description: '',
+    driveItemIds: [],
+    driveAttachments: [],
+  };
+}
+
+export function itemToCalendarForm(item: ItemResponse): CalendarEventFormValue {
+  const metadata = parseMetadata(item);
+  const rawStart = metadata.start ?? item.occurredAt;
+  const rawEnd = metadata.end ?? item.dueAt ?? item.occurredAt;
+  const start = parseCalendarDate(rawStart, item.occurredAt);
+  const end = parseCalendarDate(rawEnd, item.dueAt ?? item.occurredAt);
+  const explicitAllDay = metadata.allDay === true || metadata.isAllDay === true;
+  const rawStartString = asString(rawStart);
+  const dateOnly = Boolean(rawStartString && /^\d{4}-\d{2}-\d{2}$/.test(rawStartString));
+
+  return {
+    connectionId: item.connectionId ?? '',
+    title: item.title,
+    date: dateKey(start),
+    allDay: explicitAllDay || dateOnly,
+    startTime: timeValue(start),
+    endTime: timeValue(end > start ? end : new Date(start.getTime() + 60 * 60_000)),
+    location: asString(metadata.location) ?? '',
+    attendees: asStringArray(metadata.attendees),
+    calendarType: asString(metadata.calendarType) === 'task' ? 'task' : 'event',
+    description: asString(metadata.description) ?? item.snippet ?? '',
+    driveItemIds: asStringArray(metadata.driveItemIds),
+    driveAttachments: asDriveAttachments(metadata.driveAttachments),
+  };
+}
+
+export function formToRange(form: CalendarEventFormValue) {
+  if (form.allDay) {
+    const start = parseDateKey(form.date);
+    return { start, end: addDays(start, 1) };
+  }
+  return {
+    start: combineLocal(form.date, form.startTime),
+    end: combineLocal(form.date, form.endTime),
+  };
+}
+
+/** All-day events use date-only strings (Google Calendar contract); timed events use ISO UTC. */
+export function calendarRangeToApiTimes(start: Date, end: Date, allDay: boolean) {
+  if (allDay) {
+    return { start: dateKey(start), end: dateKey(end) };
+  }
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+export function calendarFormToPatch(form: CalendarEventFormValue): PatchItemRequest {
+  const { start, end } = formToRange(form);
+  const times = calendarRangeToApiTimes(start, end, form.allDay);
+  return {
+    title: form.title,
+    start: times.start,
+    end: times.end,
+    allDay: form.allDay,
+    location: form.location.trim(),
+    attendees: form.attendees,
+    calendarType: form.calendarType,
+    description: form.description.trim(),
+    driveItemIds: form.driveItemIds,
+  };
+}
+
+export function startOfWeek(date: Date) {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const mondayOffset = (result.getDay() + 6) % 7;
+  result.setDate(result.getDate() - mondayOffset);
+  return result;
+}
+
+export function addMonths(date: Date, amount: number) {
+  const result = new Date(date);
+  result.setDate(1);
+  result.setMonth(result.getMonth() + amount);
+  return result;
+}
+
+/** Local-day start as ISO (for occurredFrom/occurredTo query). */
+export function localDayStartIso(date: Date): string {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
+}
+
+export function calendarQueryRange(cursor: Date, range: 'month' | 'week') {
+  if (range === 'month') {
+    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const offset = (first.getDay() + 6) % 7;
+    const gridStart = addDays(first, -offset);
+    const dayCount = Math.ceil((offset + new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()) / 7) * 7;
+    const gridEnd = addDays(gridStart, dayCount);
+    return { rangeStart: gridStart, rangeEnd: gridEnd };
+  }
+  const weekStart = startOfWeek(cursor);
+  return { rangeStart: weekStart, rangeEnd: addDays(weekStart, 7) };
+}

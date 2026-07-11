@@ -1,9 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   Star, Search, RefreshCw, Plus, Tag, Settings2,
-  FolderPlus, Briefcase, UserRound, Users, Loader2, ChevronDown, Check,
+  FolderPlus, Briefcase, UserRound, Loader2, ChevronDown, Check,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
@@ -13,10 +13,12 @@ import { itemsApi } from '../../lib/itemsApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
+import { markSeen } from '../../lib/seenStore';
 import { TYPE_FILTERS, STATUS_FILTERS, typeIcon, integrationLabelKey } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse, TagResponse } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
-import { CreateEventModal } from './CreateEventModal';
+import { CalendarEventEditorModal, type CalendarEventFormValue } from '../calendar/CalendarEventEditorModal';
+import { emptyCalendarForm, formToRange, calendarRangeToApiTimes } from '../../lib/calendarFormUtils';
 import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
 import { CreateDriveFolderModal } from '../drive/CreateDriveFolderModal';
@@ -229,6 +231,36 @@ export const WorkspaceToolbar = ({
   const jiraConns = connections.filter(
     (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
   );
+  const gcalConnections = connections.filter(
+    (c: ConnectionDto) => c.serviceType.toLowerCase() === 'gcal' && c.status.toLowerCase() === 'active'
+  );
+
+  const createEventMutation = useMutation({
+    mutationFn: (form: CalendarEventFormValue) => {
+      const { start, end } = formToRange(form);
+      const times = calendarRangeToApiTimes(start, end, form.allDay);
+      return itemsApi.createEvent({
+        connectionId: form.connectionId,
+        title: form.title,
+        start: times.start,
+        end: times.end,
+        allDay: form.allDay,
+        location: form.location.trim() || undefined,
+        attendees: form.attendees,
+        calendarType: form.calendarType,
+        description: form.description.trim() || undefined,
+        driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
+      });
+    },
+    onSuccess: (created) => {
+      markSeen(created.id);
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+      setIsEventOpen(false);
+      toast.success(t('createEvent.created'));
+    },
+    onError: (err) => handleApiError(err, t('createEvent.createFail'), { navigate }),
+  });
 
   const projectQueries = useQueries({
     queries: jiraConns.map((c: ConnectionDto) => ({
@@ -273,6 +305,10 @@ export const WorkspaceToolbar = ({
         toast.success(t('toolbar.syncDone'), { id: toastId });
         queryClient.invalidateQueries({ queryKey: ['items'] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
+        if (view === 'calendar') {
+          queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+          queryClient.invalidateQueries({ queryKey: ['calendar-scheduled-emails'] });
+        }
       } catch (err) {
         toast.error(t('integrations.syncErrorToast'), { id: toastId });
         handleApiError(err, t('integrations.syncErrorToast'), { navigate });
@@ -290,7 +326,8 @@ export const WorkspaceToolbar = ({
   const showEvent = !sourceType || sourceType === 'Event';
   const showTicket = !sourceType || sourceType === 'Ticket';
   const showDriveFolder = hasActiveDrive && (!sourceType || sourceType === 'File');
-  const showCreateRow = showNote || showEvent || showTicket || showDriveFolder;
+  const isCalendarView = view === 'calendar';
+  const showCreateRow = !isCalendarView && (showNote || showEvent || showTicket || showDriveFolder);
 
   return (
     <>
@@ -333,7 +370,8 @@ export const WorkspaceToolbar = ({
         </div>
       </div>
 
-      {/* ── Hàng 2: filter CHIA TẦNG — Tier 1: Trạng thái · Loại · | Tier 2: Lọc thêm (Quan trọng + Tag) ── */}
+      {/* ── Hàng 2: filter — ẩn ở view Lịch (CalendarPage có filter riêng) ── */}
+      {!isCalendarView && (
       <div className="mb-4 space-y-2.5">
         {/* Tier 1 — facet chính: trạng thái & loại item */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -422,6 +460,7 @@ export const WorkspaceToolbar = ({
           )}
         </div>
       </div>
+      )}
 
       {/* ── Hàng 3: search full-width — vị trí + kích thước GIỐNG HỆT 2 view ── */}
       <div className="flex gap-2 mb-4">
@@ -431,7 +470,7 @@ export const WorkspaceToolbar = ({
             type="text"
             value={searchInput}
             onChange={e => onSearchChange(e.target.value)}
-            placeholder={t('toolbar.search')}
+            placeholder={isCalendarView ? t('calendar.search') : t('toolbar.search')}
             className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
@@ -470,7 +509,17 @@ export const WorkspaceToolbar = ({
       </div>
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
-      <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
+      <CalendarEventEditorModal
+        key={isEventOpen ? (gcalConnections[0]?.id ?? 'new') : 'closed'}
+        open={isEventOpen}
+        mode="create"
+        initialValue={emptyCalendarForm(new Date(), gcalConnections[0]?.id ?? '')}
+        connections={gcalConnections}
+        allConnections={connections}
+        saving={createEventMutation.isPending}
+        onClose={() => setIsEventOpen(false)}
+        onSubmit={form => createEventMutation.mutate(form)}
+      />
       <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
       <CreateDriveFolderModal isOpen={isDriveFolderOpen} onClose={() => setIsDriveFolderOpen(false)} />

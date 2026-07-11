@@ -273,7 +273,7 @@ export const CreateTicketModal = ({ isOpen, onClose }: Props) => {
               placeholder={t('createTicket.selectAccount')}
               options={jiraConnections.map((c) => {
                 const siteName = siteNameByConn.get(c.id);
-                const userName = c.profileEmail || c.profileName || c.providerAccountId;
+                const userName = c.providerAccountId;
                 return {
                   value: c.id,
                   label: siteName ? `${siteName} (${userName})` : userName,

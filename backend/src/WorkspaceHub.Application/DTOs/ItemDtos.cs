@@ -19,6 +19,8 @@ public record GetItemsRequest(
     string? GmailLabel = null,
     string? Assignee = null,      // Jira accountId; "unassigned" = ticket chưa gán người
     Guid? ConnectionId = null,    // Lọc item theo connection (Drive/Gmail/…)
+    DateTime? OccurredFrom = null, // UTC inclusive — overlap filter (Event calendar range)
+    DateTime? OccurredTo = null,   // UTC exclusive
     int Page = 1,
     int Limit = 20);
 
@@ -61,6 +63,7 @@ public record PatchItemRequest(
     string? IssueType = null,           // đổi loại issue (Task/Bug/Story...) qua PUT /issue
     // ── Google Calendar & Tasks (Type=Event) — SCRUM-37
     string? CalendarType = null,        // "event" | "task"
+    bool? AllDay = null,
     List<Guid>? DriveItemIds = null     // danh sách file đính kèm từ Drive
 );
 

@@ -57,4 +57,16 @@ public class PatchItemRequestValidatorTests
     {
         _validator.Validate(new PatchItemRequest(Labels: new List<string> { "backend" })).IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public void AllDayOnly_Passes()
+    {
+        _validator.Validate(new PatchItemRequest(AllDay: true)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DescriptionOnly_Passes()
+    {
+        _validator.Validate(new PatchItemRequest(Description: "updated notes")).IsValid.Should().BeTrue();
+    }
 }

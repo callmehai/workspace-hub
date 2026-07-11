@@ -25,6 +25,8 @@ import { typeLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
+import { CalendarEventEditorModal, type CalendarEventFormValue } from './calendar/CalendarEventEditorModal';
+import { calendarFormToPatch, itemToCalendarForm } from '../lib/calendarFormUtils';
 
 interface ItemDetailProps {
   itemId: string;
@@ -76,7 +78,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
   const seenSet = useSeenSet();
 
-  const [isEditing, setIsEditing] = useState(false);
   const [isAddingToFolder, setIsAddingToFolder] = useState(false);
   const addFolderRef = useRef<HTMLDivElement>(null);
   const [isAddingTag, setIsAddingTag] = useState(false);
@@ -114,13 +115,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     };
   }, [isAddingTag]);
 
-  const [eventForm, setEventForm] = useState({
-    title: '',
-    start: '',
-    end: '',
-    location: '',
-    attendees: ''
-  });
+  const [eventEditorOpen, setEventEditorOpen] = useState(false);
 
   // ── Kéo cạnh trái để đổi độ rộng drawer (nhớ qua localStorage) ──
   const DRAWER_MIN = 420;
@@ -183,6 +178,15 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     queryFn: () => foldersApi.getFolders()
   });
 
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+    enabled: !!item && item.type === 'Event',
+  });
+  const gcalConnections = connections.filter(
+    c => c.serviceType.toLowerCase() === 'gcal' && c.status.toLowerCase() === 'active',
+  );
+
   // Mutate item (writeback PATCH)
   const patchMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -205,7 +209,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       if (!variables._isAutoRead) {
         toast.success(t('item.saved'));
       }
-      setIsEditing(false);
       setIsRenamingFile(false);
 
       // Instant UI update
@@ -217,6 +220,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       // Still invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      if (updatedItem.type === 'Event') {
+        queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+      }
     },
     onError: (err, variables, context) => {
       // rollback optimistic read/unread
@@ -474,53 +480,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     if (item.dueAt) rows.push({ label: 'Due date', value: new Date(item.dueAt).toLocaleString(dl) });
   }
 
-  // Event form edits
-  const startEditingEvent = () => {
-    let startVal = '';
-    let endVal = '';
-    if (metadata.start) startVal = new Date(metadata.start).toISOString().slice(0, 16);
-    if (metadata.end) endVal = new Date(metadata.end).toISOString().slice(0, 16);
+  // Event edit opens full modal (parity with Calendar create)
+  const openEventEditor = () => setEventEditorOpen(true);
 
-    setEventForm({
-      title: item.title,
-      start: startVal || new Date(item.occurredAt).toISOString().slice(0, 16),
-      end: endVal,
-      location: metadata.location || '',
-      attendees: metadata.attendees ? metadata.attendees.join(', ') : ''
-    });
-    setIsEditing(true);
-  };
-
-  const handleSaveEvent = () => {
-    if (!eventForm.title || !eventForm.start || !eventForm.end) {
-      toast.error(t('item.eventNeedFields'));
-      return;
-    }
-    const startIso = new Date(eventForm.start).toISOString();
-    const endIso = new Date(eventForm.end).toISOString();
-
-    if (new Date(startIso) >= new Date(endIso)) {
-      toast.error(t('item.eventTimeOrder'));
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const attendeesArray = eventForm.attendees
-      ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
-      : [];
-
-    const invalidEmails = attendeesArray.filter(email => !emailRegex.test(email));
-    if (invalidEmails.length > 0) {
-      toast.error(t('item.invalidEmails', { emails: invalidEmails.join(', ') }));
-      return;
-    }
-
-    patchMutation.mutate({
-      title: eventForm.title,
-      start: startIso,
-      end: endIso,
-      location: eventForm.location || undefined,
-      attendees: attendeesArray
+  const handleSaveEventFromModal = (form: CalendarEventFormValue) => {
+    patchMutation.mutate(calendarFormToPatch(form), {
+      onSuccess: () => setEventEditorOpen(false),
     });
   };
 
@@ -719,75 +684,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           </div>
 
           {/* Form edit for Event */}
-          {isEditing && item.type === 'Event' ? (
-            <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] p-4 bg-slate-50/50 dark:bg-slate-800/50 space-y-4 mb-[18px]">
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('item.editEvent')}</h3>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.eventTitle')}</label>
-                <input
-                  type="text"
-                  value={eventForm.title}
-                  onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.startLocal')}</label>
-                  <input
-                    type="datetime-local"
-                    value={eventForm.start}
-                    onChange={e => setEventForm({ ...eventForm, start: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.endLocal')}</label>
-                  <input
-                    type="datetime-local"
-                    value={eventForm.end}
-                    onChange={e => setEventForm({ ...eventForm, end: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.location')}</label>
-                <input
-                  type="text"
-                  value={eventForm.location}
-                  onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.attendeesComma')}</label>
-                <input
-                  type="text"
-                  value={eventForm.attendees}
-                  onChange={e => setEventForm({ ...eventForm, attendees: e.target.value })}
-                  placeholder="vd1@gmail.com, vd2@gmail.com"
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleSaveEvent}
-                  disabled={patchMutation.isPending}
-                  className="px-3.5 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700 transition-colors flex items-center gap-1.5"
-                >
-                  {patchMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{t('common.save')}</span>
-                </button>
-              </div>
-            </div>
-          ) : item.type === 'Ticket' ? (
+          {item.type === 'Ticket' ? (
             /* ── Ticket: inline edit từng field + comment + attachment ── */
             <JiraTicketPanel
               item={item}
@@ -891,9 +788,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
           {item.type === 'Event' && (
             <>
-              {!isEditing && (
+              {!eventEditorOpen && (
                 <button
-                  onClick={startEditingEvent}
+                  onClick={openEventEditor}
                   className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
                 >
                   <Edit3 className="w-4 h-4" /><span>{t('item.editEventBtn')}</span>
@@ -1044,6 +941,20 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         defaultConnectionId={item.connectionId ?? undefined}
         defaultParentItemId={fileIsDriveFolder ? item.id : null}
       />
+
+      {item.type === 'Event' && (
+        <CalendarEventEditorModal
+          key={item.id}
+          open={eventEditorOpen}
+          mode="edit"
+          initialValue={itemToCalendarForm(item)}
+          connections={gcalConnections}
+          allConnections={connections}
+          saving={patchMutation.isPending}
+          onClose={() => setEventEditorOpen(false)}
+          onSubmit={handleSaveEventFromModal}
+        />
+      )}
     </div>
   );
 };
