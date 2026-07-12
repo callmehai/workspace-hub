@@ -21,3 +21,6 @@ public record GmailMessage(
     string? BodyPlain = null);
 
 public record GmailMessageList(IReadOnlyList<string> MessageIds, string? NextPageToken);
+
+public record GmailDraftResult(string DraftId, string MessageId, string ThreadId);
+

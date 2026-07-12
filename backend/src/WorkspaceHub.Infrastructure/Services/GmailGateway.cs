@@ -85,20 +85,19 @@ public class GmailGateway : IGmailGateway
 
         var toList = string.IsNullOrEmpty(toHeader)
             ? (IReadOnlyList<string>)new List<string>()
-            : toHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
+            : toHeader.Split(',').Select(x => ExtractEmail(DecodeMimeHeader(x.Trim())!)).Where(x => !string.IsNullOrEmpty(x)).ToList();
 
         var ccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Cc", StringComparison.OrdinalIgnoreCase))?.Value;
         var ccList = string.IsNullOrEmpty(ccHeader)
             ? (IReadOnlyList<string>)new List<string>()
-            : ccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
+            : ccHeader.Split(',').Select(x => ExtractEmail(DecodeMimeHeader(x.Trim())!)).Where(x => !string.IsNullOrEmpty(x)).ToList();
 
         var bccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Bcc", StringComparison.OrdinalIgnoreCase))?.Value;
         var bccList = string.IsNullOrEmpty(bccHeader)
             ? (IReadOnlyList<string>)new List<string>()
-            : bccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
+            : bccHeader.Split(',').Select(x => ExtractEmail(DecodeMimeHeader(x.Trim())!)).Where(x => !string.IsNullOrEmpty(x)).ToList();
 
         var rfc822MessageId = headers?.FirstOrDefault(h => h.Name.Equals("Message-ID", StringComparison.OrdinalIgnoreCase))?.Value;
-
         bool hasAttachment = msg.Payload != null && CheckHasAttachment(msg.Payload);
 
         // Extract body HTML/plain for forwarding
@@ -210,6 +209,23 @@ public class GmailGateway : IGmailGateway
         }
     }
 
+    public async Task DeleteDraftAsync(Connection connection, string draftId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            await gmail.Users.Drafts.Delete("me", draftId).ExecuteAsync(ct);
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Already deleted
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", draftId);
+        }
+    }
+
     public async Task TrashThreadAsync(Connection connection, string threadId, CancellationToken ct = default)
     {
         try
@@ -220,6 +236,32 @@ public class GmailGateway : IGmailGateway
         catch (Google.GoogleApiException ex)
         {
             throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Thread", threadId);
+        }
+    }
+
+    public async Task DeleteThreadAsync(Connection connection, string threadId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            await gmail.Users.Threads.Delete("me", threadId).ExecuteAsync(ct);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Thread", threadId);
+        }
+    }
+
+    public async Task DeleteMessageAsync(Connection connection, string messageId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            await gmail.Users.Messages.Delete("me", messageId).ExecuteAsync(ct);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", messageId);
         }
     }
 
@@ -325,9 +367,9 @@ public class GmailGateway : IGmailGateway
                     var ccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Cc", StringComparison.OrdinalIgnoreCase))?.Value;
                     var bccHeader = headers?.FirstOrDefault(h => h.Name.Equals("Bcc", StringComparison.OrdinalIgnoreCase))?.Value;
 
-                    var toList = string.IsNullOrEmpty(toHeader) ? new List<string>() : toHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
-                    var ccList = string.IsNullOrEmpty(ccHeader) ? new List<string>() : ccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
-                    var bccList = string.IsNullOrEmpty(bccHeader) ? new List<string>() : bccHeader.Split(',').Select(x => DecodeMimeHeader(x.Trim())!).ToList();
+                    var toList = string.IsNullOrEmpty(toHeader) ? new List<string>() : toHeader.Split(',').Select(x => ExtractEmail(DecodeMimeHeader(x.Trim())!)).Where(x => !string.IsNullOrEmpty(x)).ToList();
+                    var ccList = string.IsNullOrEmpty(ccHeader) ? new List<string>() : ccHeader.Split(',').Select(x => ExtractEmail(DecodeMimeHeader(x.Trim())!)).Where(x => !string.IsNullOrEmpty(x)).ToList();
+                    var bccList = string.IsNullOrEmpty(bccHeader) ? new List<string>() : bccHeader.Split(',').Select(x => ExtractEmail(DecodeMimeHeader(x.Trim())!)).Where(x => !string.IsNullOrEmpty(x)).ToList();
 
                     string? html = null;
                     string? plain = null;
@@ -405,6 +447,116 @@ public class GmailGateway : IGmailGateway
         catch (Google.GoogleApiException ex)
         {
             throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Message", "send_in_thread");
+        }
+    }
+
+    public async Task<GmailDraftResult> CreateDraftAsync(
+        Connection connection,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var raw = BuildMimeMessage(connection.ProviderAccountId, to, cc, bcc, subject ?? "", bodyHtml ?? "", inReplyToMessageId, attachments);
+            var message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw };
+            if (!string.IsNullOrEmpty(threadId))
+            {
+                message.ThreadId = threadId;
+            }
+            var draft = new Google.Apis.Gmail.v1.Data.Draft { Message = message };
+            var created = await gmail.Users.Drafts.Create(draft, "me").ExecuteAsync(ct);
+            return new GmailDraftResult(created.Id, created.Message.Id, created.Message.ThreadId);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", "create");
+        }
+    }
+
+    public async Task<GmailDraftResult> UpdateDraftAsync(
+        Connection connection,
+        string draftId,
+        IReadOnlyList<string> to,
+        IReadOnlyList<string> cc,
+        IReadOnlyList<string> bcc,
+        string subject,
+        string bodyHtml,
+        string? threadId = null,
+        string? inReplyToMessageId = null,
+        IReadOnlyList<GmailAttachmentData>? attachments = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var raw = BuildMimeMessage(connection.ProviderAccountId, to, cc, bcc, subject ?? "", bodyHtml ?? "", inReplyToMessageId, attachments);
+            var message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw };
+            if (!string.IsNullOrEmpty(threadId))
+            {
+                message.ThreadId = threadId;
+            }
+            var draft = new Google.Apis.Gmail.v1.Data.Draft { Message = message };
+            var updated = await gmail.Users.Drafts.Update(draft, "me", draftId).ExecuteAsync(ct);
+            return new GmailDraftResult(updated.Id, updated.Message.Id, updated.Message.ThreadId);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", draftId);
+        }
+    }
+
+    public async Task<string> SendDraftAsync(Connection connection, string draftId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var draft = new Google.Apis.Gmail.v1.Data.Draft { Id = draftId };
+            var sent = await gmail.Users.Drafts.Send(draft, "me").ExecuteAsync(ct);
+            return sent.Id;
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", draftId);
+        }
+    }
+
+    public async Task<string?> GetDraftIdByMessageIdAsync(Connection connection, string messageId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var gmail = await BuildGmailServiceAsync(connection, ct);
+            var request = gmail.Users.Drafts.List("me");
+            string? pageToken = null;
+            do
+            {
+                request.PageToken = pageToken;
+                var response = await request.ExecuteAsync(ct);
+                if (response.Drafts != null)
+                {
+                    foreach (var draft in response.Drafts)
+                    {
+                        if (draft.Message?.Id == messageId)
+                        {
+                            return draft.Id;
+                        }
+                    }
+                }
+                pageToken = response.NextPageToken;
+            } while (!string.IsNullOrEmpty(pageToken));
+
+            return null;
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Gmail", "Draft", "list_by_message");
         }
     }
 
@@ -657,5 +809,12 @@ public class GmailGateway : IGmailGateway
             case 3: base64 += "="; break;
         }
         return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+    }
+
+    private static string ExtractEmail(string address)
+    {
+        if (string.IsNullOrEmpty(address)) return string.Empty;
+        var match = System.Text.RegularExpressions.Regex.Match(address, @"<([^>]+)>");
+        return match.Success ? match.Groups[1].Value.Trim() : address.Trim();
     }
 }

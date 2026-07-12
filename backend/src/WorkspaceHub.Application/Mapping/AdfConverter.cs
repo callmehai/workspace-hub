@@ -104,9 +104,9 @@ public static class AdfConverter
         or "codeBlock" or "rule" or "panel"
         or "bulletList" or "orderedList";
 
-    // ═══════════════════ Markdown subset ⇄ ADF (cho comment rich) ═══════════════════
-    // Subset hỗ trợ: **đậm**, *nghiêng* / _nghiêng_, ~~gạch~~, [text](url),
-    //   bullet list "- ", ordered list "1. ".
+    // ═══════════════════ Markdown subset ⇄ ADF (comment rich + description) ═══════════════════
+    // Subset hỗ trợ: **đậm**, *nghiêng* / _nghiêng_, ~~gạch~~, `code`, [text](url),
+    //   bullet list "- ", ordered list "1. ", heading "#"→"######", code block ``` fenced.
     // Attachment trong comment: KHÔNG dùng ADF media node (Jira validate attachment id → ATTACHMENT_VALIDATION_ERROR).
     //   Thay bằng marker TEXT `[[attach:ID]]` (Jira lưu như text; FE render thành chip tải file).
 
@@ -133,6 +133,39 @@ public static class AdfConverter
         while (i < lines.Length)
         {
             var line = lines[i];
+
+            // Fenced code block ``` ... ``` → codeBlock node (giữ nguyên text bên trong, không parse inline).
+            if (line.TrimStart().StartsWith("```"))
+            {
+                var codeLines = new List<string>();
+                i++; // bỏ dòng mở ```
+                while (i < lines.Length && !lines[i].TrimStart().StartsWith("```")) { codeLines.Add(lines[i]); i++; }
+                if (i < lines.Length) i++; // bỏ dòng đóng ```
+                content.Add(new
+                {
+                    type = "codeBlock",
+                    content = codeLines.Count == 0
+                        ? Array.Empty<object>()
+                        : new object[] { new { type = "text", text = string.Join("\n", codeLines) } }
+                });
+                continue;
+            }
+
+            // Heading "# " → "###### " → heading node level 1-6.
+            var heading = System.Text.RegularExpressions.Regex.Match(line, @"^(#{1,6})\s+(.*)$");
+            if (heading.Success)
+            {
+                var hInline = ParseInline(heading.Groups[2].Value);
+                content.Add(new
+                {
+                    type = "heading",
+                    attrs = new { level = heading.Groups[1].Value.Length },
+                    content = hInline.Count == 0 ? Array.Empty<object>() : hInline.ToArray()
+                });
+                i++;
+                continue;
+            }
+
             var bullet = System.Text.RegularExpressions.Regex.Match(line, @"^\s*[-*]\s+(.*)$");
             var ordered = System.Text.RegularExpressions.Regex.Match(line, @"^\s*\d+\.\s+(.*)$");
 
@@ -219,6 +252,11 @@ public static class AdfConverter
                 i += link.Length;
                 continue;
             }
+            // `code` inline — parse TRƯỚC các mark khác để nội dung trong backtick giữ nguyên ký tự * _ ~.
+            if (text[i] == '`' && Closing(text, i + 1, "`") is int c && c > 0)
+            {
+                AddMarked(text.Substring(i + 1, c - (i + 1)), "code"); i = c + 1; continue;
+            }
             if (Starts(text, i, "**") && Closing(text, i + 2, "**") is int b && b > 0)
             {
                 AddMarked(text.Substring(i + 2, b - (i + 2)), "strong"); i = b + 2; continue;
@@ -278,6 +316,23 @@ public static class AdfConverter
             case "mention" when node.TryGetProperty("attrs", out var mn) && mn.TryGetProperty("text", out var mnt) && mnt.ValueKind == JsonValueKind.String:
                 sb.Append(mnt.GetString());
                 return;
+            case "codeBlock":
+            {
+                // Fenced block — text bên trong giữ nguyên (không marks).
+                var inner = new StringBuilder();
+                if (node.TryGetProperty("content", out var cbc) && cbc.ValueKind == JsonValueKind.Array)
+                    foreach (var child in cbc.EnumerateArray()) WalkMarkdown(child, inner);
+                sb.Append("```\n").Append(inner.ToString().TrimEnd('\n')).Append("\n```\n");
+                return;
+            }
+            case "heading":
+            {
+                // "#"×level + space — FE render heading, round-trip về ADF heading khi sửa.
+                var level = node.TryGetProperty("attrs", out var ha) && ha.TryGetProperty("level", out var hl) && hl.ValueKind == JsonValueKind.Number
+                    ? Math.Clamp(hl.GetInt32(), 1, 6) : 2;
+                sb.Append(new string('#', level)).Append(' ');
+                break; // rơi xuống duyệt content như block thường
+            }
         }
 
         var prefix = type switch { "bulletList" => "- ", "orderedList" => "1. ", _ => null };
@@ -307,7 +362,7 @@ public static class AdfConverter
             return text;
 
         string? href = null;
-        bool strong = false, em = false, strike = false;
+        bool strong = false, em = false, strike = false, code = false;
         foreach (var m in marks.EnumerateArray())
         {
             var mt = m.TryGetProperty("type", out var mte) && mte.ValueKind == JsonValueKind.String ? mte.GetString() : null;
@@ -316,10 +371,12 @@ public static class AdfConverter
                 case "strong": strong = true; break;
                 case "em": em = true; break;
                 case "strike": strike = true; break;
+                case "code": code = true; break;
                 case "link" when m.TryGetProperty("attrs", out var la) && la.TryGetProperty("href", out var lh) && lh.ValueKind == JsonValueKind.String:
                     href = lh.GetString(); break;
             }
         }
+        if (code) return href != null ? $"[`{text}`]({href})" : $"`{text}`"; // code loại trừ mark trang trí khác
         if (strong) text = $"**{text}**";
         if (em) text = $"*{text}*";
         if (strike) text = $"~~{text}~~";

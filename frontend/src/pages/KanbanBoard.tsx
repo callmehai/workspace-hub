@@ -7,7 +7,7 @@ import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey, parseSourceType } from '../lib/itemVisuals';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
-import { isItemUnread } from '../lib/itemMeta';
+import { isItemUnread, isDraftEmail } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
 import { Plus, Star, GripVertical, AlertCircle } from 'lucide-react';
@@ -384,7 +384,13 @@ export const KanbanBoard = () => {
                             draggable={!(updateStatus.isPending && updateStatus.variables?.id === item.id)}
                             onDragStart={(e) => handleDragStart(e, item.id)}
                             onDragEnd={handleDragEnd}
-                            onClick={() => setSelectedItemId(item.id)}
+                            onClick={() => {
+                               if (isDraftEmail(item)) {
+                                 navigate(`/send-email?draftItemId=${item.id}`);
+                               } else {
+                                 setSelectedItemId(item.id);
+                               }
+                             }}
                             className={`shrink-0 border rounded-xl p-3 cursor-pointer group hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all relative overflow-hidden ${
                               draggingId === item.id ? 'opacity-40 shadow-none' : 'opacity-100 shadow-sm'
                             } ${

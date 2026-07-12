@@ -1,26 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FolderPlus, FolderMinus, Tag, X } from 'lucide-react';
-import { foldersApi } from '../lib/itemsApi';
+import { FolderPlus, FolderMinus, Tag, X, Trash2 } from 'lucide-react';
+import { foldersApi, itemsApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
 import { handleApiError } from '../lib/errorUtils';
 import { type FolderResponse, type TagResponse } from '../types/items';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../hooks/useI18n';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface BulkActionBarProps {
   selectedItemIds: Set<string>;
   onClearSelection: () => void;
+  mailbox?: string;
 }
 
-export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, onClearSelection }) => {
+export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, onClearSelection, mailbox }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const [isAdding, setIsAdding] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const [isTagging, setIsTagging] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
 
   // Hết selection (sau khi hành động xong / bấm X) → reset dropdown, tránh lần sau
@@ -105,6 +108,35 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
     },
     onError: (err) => handleApiError(err, t('bulk.removeFail'), { navigate })
   });
+
+  const deleteBulkMutation = useMutation({
+    mutationFn: async () => {
+      const results = await Promise.allSettled(Array.from(selectedItemIds).map(id => itemsApi.deleteItem(id)));
+      const failed = results.filter(r => r.status === 'rejected');
+      if (failed.length === results.length && results.length > 0) {
+        throw new Error('All failed');
+      }
+      return failed.length; // return failed count
+    },
+    onSuccess: (failedCount) => {
+      if (failedCount > 0) {
+        toast.success(t('bulk.partialDelete') || 'Đã xoá một phần, một số mục bị lỗi.');
+      } else {
+        toast.success(t('bulk.deletedN', { n: selectedItemIds.size }));
+      }
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      selectedItemIds.forEach(id => {
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      });
+      onClearSelection();
+    },
+    onError: (err) => handleApiError(err, t('bulk.deleteFail'), { navigate })
+  });
+
+  const isTrashOrSpam = mailbox === 'TRASH' || mailbox === 'SPAM';
+  const deleteConfirmMsg = isTrashOrSpam
+    ? t('bulk.deletePermanentlyConfirm', { n: selectedItemIds.size })
+    : t('bulk.deleteConfirm', { n: selectedItemIds.size });
 
   if (selectedItemIds.size === 0) return null;
 
@@ -233,6 +265,18 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
             </div>
           )}
         </div>
+
+        {/* Xoá / Xoá vĩnh viễn hàng loạt */}
+        <button
+          onClick={() => setDeleteConfirmOpen(true)}
+          disabled={deleteBulkMutation.isPending}
+          className="flex items-center gap-2 text-[13px] font-semibold px-3 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 transition-all disabled:opacity-50"
+        >
+          <Trash2 className="w-4 h-4" />
+          {mailbox === 'TRASH' || mailbox === 'SPAM'
+            ? t('bulk.deletePermanently')
+            : t('bulk.delete')}
+        </button>
       </div>
 
       <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
@@ -244,6 +288,18 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
       >
         <X className="w-5 h-5" />
       </button>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        tone="danger"
+        message={deleteConfirmMsg}
+        confirmLabel={isTrashOrSpam ? t('bulk.deletePermanently') : t('bulk.delete')}
+        loading={deleteBulkMutation.isPending}
+        onConfirm={() =>
+          deleteBulkMutation.mutate(undefined, { onSettled: () => setDeleteConfirmOpen(false) })
+        }
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   );
 };

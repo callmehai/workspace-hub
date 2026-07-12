@@ -22,7 +22,9 @@ public record EmailThreadMessageDto(
     bool IsUnread,
     bool IsStarred,
     bool HasAttachment,
-    IReadOnlyList<EmailAttachmentDto> Attachments);
+    IReadOnlyList<string> Labels,
+    IReadOnlyList<EmailAttachmentDto> Attachments,
+    Guid? ItemId = null);
 
 /// <summary>Thông tin 1 attachment (metadata, không có data binary).</summary>
 public record EmailAttachmentDto(

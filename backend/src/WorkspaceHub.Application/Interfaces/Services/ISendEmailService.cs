@@ -1,3 +1,4 @@
+using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.DTOs.Emails;
 
 namespace WorkspaceHub.Application.Interfaces.Services;
@@ -30,4 +31,12 @@ public interface ISendEmailService
     /// <summary>Tải toàn bộ attachment của 1 message trong thread, đóng gói thành .zip (bytes).</summary>
     Task<byte[]> GetAttachmentsZipAsync(
         Guid userId, Guid itemId, string messageId, CancellationToken ct = default);
+
+    Task<ItemResponse> SaveDraftAsync(Guid userId, SaveDraftRequest request, Guid? existingItemId, CancellationToken ct = default);
+    
+    Task<SendEmailResult> SendDraftAsync(Guid userId, Guid itemId, CancellationToken ct = default);
+
+    Task DiscardDraftAsync(Guid userId, Guid itemId, CancellationToken ct = default);
 }
+
+
