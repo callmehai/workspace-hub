@@ -94,6 +94,7 @@ export const AdminDashboard = () => {
   });
 
   const handleToggleActive = (user: AdminUserDto) => {
+    // BE cũng enforce: không khoá Admin đang active (ToggleUserActiveAsync).
     if (user.role === 'Admin' && user.isActive) return;
     setToggleTarget(user);
   };
