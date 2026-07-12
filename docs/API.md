@@ -101,8 +101,9 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 `GET /api/admin/users/{id}`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
-- `GET /api/integrations` — catalog cho user. **OData ⊕** (target — $filter isEnabled/provider, $orderby).
-- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (422). ✅ SCRUM-48.
+- `GET /api/integrations` — catalog cho user đăng nhập (`id`, `key`, `displayName`, `isEnabled`). ✅ SCRUM-61.
+- `GET /api/admin/integrations` — Admin list catalog (`id`, `key`, `displayName`, `isEnabled`). ✅ SCRUM-61.
+- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (**422** `message = "integrations.connectDisabled"` — FE dịch qua i18n). ✅ SCRUM-40.
   - Request: `{ "isEnabled": true | false }`
   - Response 200: `{ "id", "key", "displayName", "isEnabled" }`
   - 404 key không tồn tại · 403 không phải Admin
