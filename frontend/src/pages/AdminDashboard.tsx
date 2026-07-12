@@ -93,7 +93,10 @@ export const AdminDashboard = () => {
     onError: (err) => handleApiError(err, t('admin.integrationToggleFail')),
   });
 
-  const handleToggleActive = (user: AdminUserDto) => setToggleTarget(user);
+  const handleToggleActive = (user: AdminUserDto) => {
+    if (user.role === 'Admin' && user.isActive) return;
+    setToggleTarget(user);
+  };
   const handleIntegrationToggle = (integration: AdminIntegrationDto) => setIntegrationToggleTarget(integration);
 
   useEffect(() => {
@@ -290,7 +293,9 @@ export const AdminDashboard = () => {
                   <td colSpan={5} className="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">{t('admin.noUsers')}</td>
                 </tr>
               ) : (
-                usersData?.items.map((u) => (
+                usersData?.items.map((u) => {
+                  const cannotDeactivate = u.role === 'Admin' && u.isActive;
+                  return (
                   <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -312,10 +317,11 @@ export const AdminDashboard = () => {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => handleToggleActive(u)}
-                          disabled={toggleActiveMutation.isPending}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50
+                          disabled={toggleActiveMutation.isPending || cannotDeactivate}
+                          className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50
+                            ${cannotDeactivate ? 'cursor-not-allowed' : 'cursor-pointer'}
                             ${u.isActive ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}
-                          title={u.isActive ? t('admin.clickToLock') : t('admin.clickToUnlock')}
+                          title={cannotDeactivate ? undefined : u.isActive ? t('admin.clickToLock') : t('admin.clickToUnlock')}
                         >
                           <span
                             className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
@@ -334,7 +340,8 @@ export const AdminDashboard = () => {
                       {format(new Date(u.createdAt), 'dd MMM yyyy, HH:mm', { locale: dfLocale })}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
