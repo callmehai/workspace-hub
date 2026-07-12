@@ -79,7 +79,7 @@ public class ItemWriteBackServicePatchEventTests
     [Fact]
     public async Task PatchEvent_AllDayToTimed_SendsTimedDtoToGateway()
     {
-        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","calendarType":"event"}""");
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");
         SetupItemAndConn(item);
         SetupCalendarGetAndUpdate(new CalendarEvent(
             "google-ev-1", "\"etag-2\"", "Meeting", "notes", TimedStart, TimedEnd, AllDay: false));
@@ -102,7 +102,7 @@ public class ItemWriteBackServicePatchEventTests
     [Fact]
     public async Task PatchEvent_AllDayToTimed_UpdatesMetadataToIsoTimes()
     {
-        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","calendarType":"event"}""");
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");
         SetupItemAndConn(item);
         SetupCalendarGetAndUpdate(new CalendarEvent(
             "google-ev-1", "\"etag-2\"", "Meeting", "notes", TimedStart, TimedEnd, AllDay: false));
@@ -120,7 +120,7 @@ public class ItemWriteBackServicePatchEventTests
     public async Task PatchEvent_TimedToAllDay_SendsAllDayDtoToGateway()
     {
         var item = EventItem("""
-            {"start":"2026-07-06T00:30:00.0000000Z","end":"2026-07-06T01:30:00.0000000Z","calendarType":"event"}
+            {"start":"2026-07-06T00:30:00.0000000Z","end":"2026-07-06T01:30:00.0000000Z"}
             """);
         item.OccurredAt = TimedStart.UtcDateTime;
         item.DueAt = TimedEnd.UtcDateTime;
@@ -147,7 +147,7 @@ public class ItemWriteBackServicePatchEventTests
     public async Task PatchEvent_TimedToAllDay_UpdatesMetadataToDateOnly()
     {
         var item = EventItem("""
-            {"start":"2026-07-06T00:30:00.0000000Z","end":"2026-07-06T01:30:00.0000000Z","calendarType":"event"}
+            {"start":"2026-07-06T00:30:00.0000000Z","end":"2026-07-06T01:30:00.0000000Z"}
             """);
         item.OccurredAt = TimedStart.UtcDateTime;
         item.DueAt = TimedEnd.UtcDateTime;
@@ -172,7 +172,7 @@ public class ItemWriteBackServicePatchEventTests
     public async Task PatchEvent_TimedToTimed_UpdatesTimesWithoutChangingAllDay()
     {
         var item = EventItem("""
-            {"start":"2026-07-06T00:30:00.0000000Z","end":"2026-07-06T01:30:00.0000000Z","calendarType":"event"}
+            {"start":"2026-07-06T00:30:00.0000000Z","end":"2026-07-06T01:30:00.0000000Z"}
             """);
         item.OccurredAt = TimedStart.UtcDateTime;
         item.DueAt = TimedEnd.UtcDateTime;
@@ -201,7 +201,7 @@ public class ItemWriteBackServicePatchEventTests
     [Fact]
     public async Task PatchEvent_AllDayToAllDay_MovesDates()
     {
-        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","calendarType":"event"}""");
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");
         SetupItemAndConn(item);
 
         var newStart = new DateTimeOffset(2026, 7, 10, 0, 0, 0, TimeSpan.Zero);
@@ -227,7 +227,7 @@ public class ItemWriteBackServicePatchEventTests
     [Fact]
     public async Task PatchEvent_TitleOnly_DoesNotSendTimeChangeToGateway()
     {
-        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","calendarType":"event"}""");
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");
         SetupItemAndConn(item);
         SetupCalendarGetAndUpdate(new CalendarEvent(
             "google-ev-1", "\"etag-2\"", "New title", "notes", AllDayStart, AllDayEnd, AllDay: true));
@@ -246,29 +246,9 @@ public class ItemWriteBackServicePatchEventTests
     }
 
     [Fact]
-    public async Task PatchEvent_TaskWithAllDayFalse_StillForcesAllDayOnGateway()
+    public async Task PatchEvent_AllDayFalse_SendsTimedToGateway()
     {
-        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","calendarType":"task"}""");
-        SetupItemAndConn(item);
-        SetupCalendarGetAndUpdate(new CalendarEvent(
-            "google-ev-1", "\"etag-2\"", "Task", null, TimedStart, TimedEnd, AllDay: true));
-
-        CalendarEvent? captured = null;
-        _calendar.Setup(m => m.UpdateEventAsync(
-                It.IsAny<Connection>(), "primary", "google-ev-1", It.IsAny<CalendarEvent>(), It.IsAny<CancellationToken>()))
-            .Callback<Connection, string, string, CalendarEvent, CancellationToken>((_, _, _, dto, _) => captured = dto)
-            .ReturnsAsync(new CalendarEvent("google-ev-1", "\"etag-2\"", "Task", null, TimedStart, TimedEnd, AllDay: true));
-
-        await _service.PatchItemAsync(item.Id, _userId, new PatchItemRequest(
-            Start: TimedStart, End: TimedEnd, AllDay: false));
-
-        captured!.AllDay.Should().BeTrue("task luôn all-day trên Google Calendar");
-    }
-
-    [Fact]
-    public async Task PatchEvent_EventTypeWithAllDayFalse_UsesTimedNotTaskOverride()
-    {
-        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","calendarType":"event"}""");
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");
         SetupItemAndConn(item);
         SetupCalendarGetAndUpdate(new CalendarEvent(
             "google-ev-1", "\"etag-2\"", "Meeting", null, TimedStart, TimedEnd, AllDay: false));

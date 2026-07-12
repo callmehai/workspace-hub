@@ -2,6 +2,15 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-12] Gỡ bỏ khái niệm "task" khỏi Calendar — chỉ Google Calendar Event
+
+- **Lý do:** "task" chỉ là nhãn app-only (`metadata.calendarType="task"`) trên `ItemType.Event`, **không** dùng Google Tasks API. Gây phức tạp (nhánh `isTask` rải BE, merge metadata, toggle UI) mà không có giá trị thật.
+- **BE:** xóa `CalendarType` khỏi `PatchItemRequest`/`CreateEventRequest`; `End` **luôn bắt buộc** khi create (all-day FE gửi ngày kế); bỏ mọi nhánh `isTask` trong `ItemWriteBackService` (luôn cho location/attendees); xóa `CalendarSyncMetadataMerge` → sync ghi thẳng metadata Google.
+- **FE:** bỏ toggle Event/Task + `calendarType` khỏi modal/form utils/types, xóa i18n keys `typeEvent`/`typeTask`/`taskDueDate`/`taskNotes`/`createTask`…
+- **DB:** không migration — row cũ có `calendarType` bị ignore, hiển thị như all-day event thường; sync sau ghi đè metadata.
+- **Docs:** `docs/superpowers/specs/2026-07-12-remove-calendar-task-design.md`.
+- **Tests:** bỏ `PatchEvent_TaskWithAllDayFalse_*` + `CalendarSyncMetadataMergeTests`; 334/334 pass.
+
 ## [2026-07-11] Calendar all-day ↔ timed write-back (Google PATCH vs UPDATE)
 
 - **Bug:** Kéo event cả ngày xuống slot có giờ (week view) → Google **400 Invalid start time** → app **502**. Nguyên nhân: `Events.Patch` merge giữ `start.date` cũ cùng `start.dateTime` mới (Google cấm lẫn hai loại).

@@ -16,8 +16,8 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
                        x.Summary != null || x.Description != null || x.Assignee != null ||
                        x.Priority != null || x.StatusTransition != null || x.Labels != null || x.Comment != null ||
                        x.IssueType != null ||
-                       // Event & Task edits (SCRUM-37)
-                       x.CalendarType != null || x.AllDay.HasValue || x.DriveItemIds != null)
+                       // Event edits (SCRUM-37)
+                       x.AllDay.HasValue || x.DriveItemIds != null)
             .WithMessage("Request body must contain at least one field to update.");
 
         RuleFor(x => x.Start)

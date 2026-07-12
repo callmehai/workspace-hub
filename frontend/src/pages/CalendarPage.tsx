@@ -343,7 +343,6 @@ export function CalendarPage() {
         allDay: form.allDay,
         location: form.location.trim() || undefined,
         attendees: form.attendees,
-        calendarType: form.calendarType,
         description: form.description.trim() || undefined,
         driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
       });
@@ -377,7 +376,6 @@ export function CalendarPage() {
             metadata.allDay = variables.allDay;
             if (variables.patch.location !== undefined) metadata.location = variables.patch.location;
             if (variables.patch.attendees !== undefined) metadata.attendees = variables.patch.attendees;
-            if (variables.patch.calendarType !== undefined) metadata.calendarType = variables.patch.calendarType;
             if (variables.patch.description !== undefined) metadata.description = variables.patch.description;
             if (variables.patch.driveItemIds !== undefined) metadata.driveItemIds = variables.patch.driveItemIds;
             return {

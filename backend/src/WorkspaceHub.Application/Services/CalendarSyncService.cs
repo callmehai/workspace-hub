@@ -55,7 +55,7 @@ public class CalendarSyncService : ICalendarSyncService
                 {
                     existing.Title = mapped.Title;
                     existing.Snippet = mapped.Snippet;
-                    existing.MetadataJson = CalendarSyncMetadataMerge.MergeForUpdate(existing.MetadataJson, mapped.MetadataJson);
+                    existing.MetadataJson = mapped.MetadataJson;
                     existing.ETag = mapped.ETag;
                     existing.OccurredAt = mapped.OccurredAt;
                     existing.DueAt = mapped.DueAt;

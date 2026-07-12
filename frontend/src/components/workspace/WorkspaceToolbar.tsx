@@ -247,7 +247,6 @@ export const WorkspaceToolbar = ({
         allDay: form.allDay,
         location: form.location.trim() || undefined,
         attendees: form.attendees,
-        calendarType: form.calendarType,
         description: form.description.trim() || undefined,
         driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
       });

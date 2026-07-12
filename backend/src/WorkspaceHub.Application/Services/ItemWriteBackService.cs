@@ -70,7 +70,7 @@ public class ItemWriteBackService : IItemWriteBackService
         if (!payload.IsUnread.HasValue && !payload.IsStarred.HasValue && payload.AddLabels == null && payload.RemoveLabels == null &&
             !payload.IsTrashed.HasValue && payload.Title == null && payload.Start == null &&
             payload.End == null && payload.Location == null && payload.Attendees == null &&
-            payload.Name == null && payload.Description == null && payload.CalendarType == null &&
+            payload.Name == null && payload.Description == null &&
             payload.DriveItemIds == null && !payload.AllDay.HasValue)
         {
             throw new BusinessRuleException("No fields provided for update.");
@@ -172,18 +172,11 @@ public class ItemWriteBackService : IItemWriteBackService
 
                 var currentMeta = ParseMetadataDict(item.MetadataJson);
                 var existingAllDay = ReadMetaAllDay(currentMeta);
-                var calendarType = payload.CalendarType
-                    ?? ReadMetaString(currentMeta, "calendarType")
-                    ?? "event";
-                var isTask = string.Equals(calendarType, "task", StringComparison.OrdinalIgnoreCase);
-                var effectiveAllDay = isTask || (payload.AllDay ?? existingAllDay);
+                var effectiveAllDay = payload.AllDay ?? existingAllDay;
 
                 var timeChanged = payload.Start.HasValue || payload.End.HasValue || payload.AllDay.HasValue;
                 DateTimeOffset? effectiveStart = payload.Start ?? (timeChanged ? ReadEventStart(currentMeta, item) : null);
                 DateTimeOffset? effectiveEnd = payload.End ?? (timeChanged ? ReadEventEnd(currentMeta, item) : null);
-
-                if (isTask && effectiveStart.HasValue && !payload.End.HasValue)
-                    effectiveEnd = effectiveStart.Value.AddDays(1);
 
                 IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
                 if (payload.DriveItemIds != null)
@@ -215,8 +208,8 @@ public class ItemWriteBackService : IItemWriteBackService
                     payload.Description,
                     effectiveStart,
                     effectiveEnd,
-                    isTask ? null : payload.Location,
-                    isTask ? null : payload.Attendees,
+                    payload.Location,
+                    payload.Attendees,
                     timeChanged ? effectiveAllDay : existingAllDay,
                     driveAttachments
                 );
@@ -234,7 +227,6 @@ public class ItemWriteBackService : IItemWriteBackService
                 var metaDictEvent = ParseMetadataDict(item.MetadataJson);
                 if (updatedEvent.Location != null) metaDictEvent["location"] = updatedEvent.Location;
                 if (updatedEvent.Attendees != null) metaDictEvent["attendees"] = updatedEvent.Attendees;
-                if (payload.CalendarType != null) metaDictEvent["calendarType"] = payload.CalendarType;
                 if (payload.Description != null) metaDictEvent["description"] = payload.Description;
                 if (payload.DriveItemIds != null)
                 {
@@ -314,14 +306,8 @@ public class ItemWriteBackService : IItemWriteBackService
         if (conn.UserId != userId) throw new ForbiddenException("Not your connection.");
         if (conn.ServiceType != ServiceType.GCal) throw new BusinessRuleException("Connection is not for Calendar.");
 
-        var isTask = string.Equals(payload.CalendarType, "task", StringComparison.OrdinalIgnoreCase);
-
-        // Task: End là ngày kế tiếp (all-day). Event: End bắt buộc từ payload.
-        var effectiveEnd = isTask
-            ? payload.Start.AddDays(1)
-            : payload.End ?? throw new BusinessRuleException("End time is required for events.");
-
-        var effectiveAllDay = isTask || payload.AllDay;
+        var effectiveEnd = payload.End;
+        var effectiveAllDay = payload.AllDay;
 
         // Resolve Drive item IDs → CalendarDriveAttachment[]
         IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
@@ -359,8 +345,8 @@ public class ItemWriteBackService : IItemWriteBackService
             payload.Description,
             payload.Start,
             effectiveEnd,
-            isTask ? null : payload.Location,
-            isTask ? null : payload.Attendees,
+            payload.Location,
+            payload.Attendees,
             effectiveAllDay,
             driveAttachments
         );
@@ -371,7 +357,6 @@ public class ItemWriteBackService : IItemWriteBackService
         if (created.Location != null) metaDict["location"] = created.Location;
         if (created.Attendees != null) metaDict["attendees"] = created.Attendees;
         if (created.Description != null) metaDict["description"] = created.Description;
-        metaDict["calendarType"] = isTask ? "task" : "event";
         if (created.AllDay) metaDict["allDay"] = true;
 
         if (effectiveAllDay)

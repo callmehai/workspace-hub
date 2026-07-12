@@ -113,7 +113,6 @@ export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09
     endTime: `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`,
     location: '',
     attendees: [],
-    calendarType: 'event',
     description: '',
     driveItemIds: [],
     driveAttachments: [],
@@ -139,7 +138,6 @@ export function itemToCalendarForm(item: ItemResponse): CalendarEventFormValue {
     endTime: timeValue(end > start ? end : new Date(start.getTime() + 60 * 60_000)),
     location: asString(metadata.location) ?? '',
     attendees: asStringArray(metadata.attendees),
-    calendarType: asString(metadata.calendarType) === 'task' ? 'task' : 'event',
     description: asString(metadata.description) ?? item.snippet ?? '',
     driveItemIds: asStringArray(metadata.driveItemIds),
     driveAttachments: asDriveAttachments(metadata.driveAttachments),
@@ -175,7 +173,6 @@ export function calendarFormToPatch(form: CalendarEventFormValue): PatchItemRequ
     allDay: form.allDay,
     location: form.location.trim(),
     attendees: form.attendees,
-    calendarType: form.calendarType,
     description: form.description.trim(),
     driveItemIds: form.driveItemIds,
   };

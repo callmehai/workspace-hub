@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ExternalLink, Loader2, Trash2, X, FileText, CheckSquare } from 'lucide-react';
+import { CalendarDays, ExternalLink, Loader2, Trash2, X, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { ConnectionDto } from '../../lib/connectionsApi';
 import { useI18n } from '../../hooks/useI18n';
@@ -21,7 +21,6 @@ export interface CalendarEventFormValue {
   endTime: string;
   location: string;
   attendees: string[];
-  calendarType: 'event' | 'task';
   description: string;
   driveItemIds: string[];
   /** Snapshot từ Google sync / write-back — hiển thị khi chưa resolve được Item Drive. */
@@ -125,7 +124,6 @@ export function CalendarEventEditorModal({
   const inputClass = `${baseInputClass} h-9`;
   const textareaClass = `${baseInputClass} h-20 py-2 resize-none hide-scrollbar`;
   const labelClass = 'mb-1.5 block text-[12px] font-semibold text-slate-500 dark:text-slate-400';
-  const isEvent = form.calendarType === 'event';
 
   return (
     <div
@@ -140,8 +138,8 @@ export function CalendarEventEditorModal({
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
           <div className="flex items-center gap-3">
-            <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${isEvent ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300'}`}>
-              {isEvent ? <CalendarDays className="h-5 w-5" /> : <CheckSquare className="h-5 w-5" />}
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
+              <CalendarDays className="h-5 w-5" />
             </span>
             <div>
               <h2 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100">
@@ -156,32 +154,6 @@ export function CalendarEventEditorModal({
         </div>
 
         <div className="max-h-[72vh] space-y-4 overflow-y-auto p-5">
-          {mode === 'create' ? (
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-              <button 
-                type="button" 
-                className={`flex flex-1 items-center justify-center gap-2 py-1.5 text-[13px] font-medium rounded-md transition-colors ${form.calendarType === 'event' ? 'bg-white shadow text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
-                onClick={() => setForm(f => ({...f, calendarType: 'event'}))}
-              >
-                <CalendarDays className="w-4 h-4" />
-                {t('calendar.typeEvent')}
-              </button>
-              <button 
-                type="button" 
-                className={`flex flex-1 items-center justify-center gap-2 py-1.5 text-[13px] font-medium rounded-md transition-colors ${form.calendarType === 'task' ? 'bg-white shadow text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
-                onClick={() => setForm(f => ({...f, calendarType: 'task'}))}
-              >
-                <CheckSquare className="w-4 h-4" />
-                {t('calendar.typeTask')}
-              </button>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-              {isEvent ? <CalendarDays className="h-4 w-4 text-amber-500" /> : <CheckSquare className="h-4 w-4 text-blue-500" />}
-              {isEvent ? t('calendar.typeEvent') : t('calendar.typeTask')}
-            </div>
-          )}
-
           <div>
             <label className={labelClass}>{t('calendar.account')}</label>
             <Select
@@ -224,7 +196,7 @@ export function CalendarEventEditorModal({
 
           <div className={`grid gap-3 ${form.allDay ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
             <div>
-              <label className={labelClass}>{isEvent ? t('calendar.date') : t('calendar.taskDueDate')}</label>
+              <label className={labelClass}>{t('calendar.date')}</label>
               <DatePicker
                 value={form.date}
                 onChange={date => setForm(current => ({ ...current, date }))}
@@ -243,50 +215,44 @@ export function CalendarEventEditorModal({
                     onOpenChange={next => setOpenPicker(next ? 'start' : null)}
                   />
                 </div>
-                {isEvent && (
-                  <div>
-                    <label className={labelClass}>{t('calendar.end')}</label>
-                    <TimePicker
-                      value={form.endTime}
-                      onChange={endTime => setForm(current => ({ ...current, endTime }))}
-                      open={openPicker === 'end'}
-                      onOpenChange={next => setOpenPicker(next ? 'end' : null)}
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className={labelClass}>{t('calendar.end')}</label>
+                  <TimePicker
+                    value={form.endTime}
+                    onChange={endTime => setForm(current => ({ ...current, endTime }))}
+                    open={openPicker === 'end'}
+                    onOpenChange={next => setOpenPicker(next ? 'end' : null)}
+                  />
+                </div>
               </>
             )}
           </div>
 
           <div>
-            <label className={labelClass}>{isEvent ? t('calendar.description') : t('calendar.taskNotes')}</label>
+            <label className={labelClass}>{t('calendar.description')}</label>
             <textarea 
               className={textareaClass} 
               value={form.description} 
-              placeholder={isEvent ? t('calendar.descriptionPlaceholder') : t('calendar.taskNotesPlaceholder')} 
+              placeholder={t('calendar.descriptionPlaceholder')} 
               onChange={event => setForm(current => ({ ...current, description: event.target.value }))} 
             />
           </div>
 
-          {isEvent && (
-            <>
-              <div>
-                <label className={labelClass}>{t('calendar.location')}</label>
-                <input className={inputClass} value={form.location} placeholder={t('calendar.optional')} onChange={event => setForm(current => ({ ...current, location: event.target.value }))} />
-              </div>
+          <div>
+            <label className={labelClass}>{t('calendar.location')}</label>
+            <input className={inputClass} value={form.location} placeholder={t('calendar.optional')} onChange={event => setForm(current => ({ ...current, location: event.target.value }))} />
+          </div>
 
-              <div>
-                <label className={labelClass}>{t('calendar.attendees')}</label>
-                <EmailChipsInput
-                  value={form.attendees}
-                  onChange={attendees => setForm(current => ({ ...current, attendees }))}
-                  connectionId={suggestConnectionId}
-                  placeholder={t('sendEmail.toPlaceholder')}
-                  className="mb-0"
-                />
-              </div>
-            </>
-          )}
+          <div>
+            <label className={labelClass}>{t('calendar.attendees')}</label>
+            <EmailChipsInput
+              value={form.attendees}
+              onChange={attendees => setForm(current => ({ ...current, attendees }))}
+              connectionId={suggestConnectionId}
+              placeholder={t('sendEmail.toPlaceholder')}
+              className="mb-0"
+            />
+          </div>
 
           <div className="flex flex-col gap-2">
             <button
@@ -423,7 +389,7 @@ export function CalendarEventEditorModal({
             </button>
             <button type="button" onClick={submit} disabled={saving || connections.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50">
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {mode === 'create' ? (isEvent ? t('calendar.createEvent2') : t('calendar.createTask')) : t('common.save')}
+              {mode === 'create' ? t('calendar.createEvent2') : t('common.save')}
             </button>
           </div>
         </div>
