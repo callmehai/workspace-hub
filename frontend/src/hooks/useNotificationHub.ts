@@ -189,7 +189,9 @@ async function startHubWithRetry(userId: string): Promise<void> {
   const abortHandle = { userId, aborted: false };
   connectAbortHandle = abortHandle;
 
-  const shouldAbort = () => abortHandle.aborted || activeUserId !== userId;
+  // activeUserId === null lúc mới bắt đầu — chỉ abort khi đã gán user khác (đổi account), không phải lần connect đầu.
+  const shouldAbort = () =>
+    abortHandle.aborted || (activeUserId !== null && activeUserId !== userId);
   let failedAttempts = 0;
 
   while (!shouldAbort()) {
@@ -372,8 +374,6 @@ export function useNotificationHub(): void {
 
     return () => {
       disposed = true;
-      // abortHubConnect chỉ hợp lệ khi có đúng 1 subscriber (MainLayout) — nhiều call site sẽ cần ref-count.
-      abortHubConnect(userId);
       subscribers.delete(handler);
       document.removeEventListener('visibilitychange', onTabVisible);
     };
