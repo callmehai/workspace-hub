@@ -237,6 +237,8 @@ public class ItemWriteBackService : IItemWriteBackService
                     metaDictEvent["recurrence"] = updatedEvent.Recurrence;
                 else
                     metaDictEvent.Remove("recurrence");
+                metaDictEvent["organizerEmail"] = updatedEvent.OrganizerEmail ?? conn.ProviderAccountId;
+                metaDictEvent["selfResponseStatus"] = updatedEvent.SelfResponseStatus ?? "accepted";
                 if (payload.DriveItemIds != null)
                 {
                     metaDictEvent["driveItemIds"] = payload.DriveItemIds;
@@ -388,6 +390,8 @@ public class ItemWriteBackService : IItemWriteBackService
         if (created.Attendees != null) metaDict["attendees"] = created.Attendees;
         if (created.Description != null) metaDict["description"] = created.Description;
         if (created.Recurrence != null && created.Recurrence.Count > 0) metaDict["recurrence"] = created.Recurrence;
+        metaDict["organizerEmail"] = created.OrganizerEmail ?? conn.ProviderAccountId;
+        metaDict["selfResponseStatus"] = created.SelfResponseStatus ?? "accepted";
         if (created.AllDay) metaDict["allDay"] = true;
 
         if (effectiveAllDay)

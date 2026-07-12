@@ -92,7 +92,25 @@ const ALL_DAY_ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
 };
 
 function entryChipClasses(entry: CalendarEntry): string {
-  return entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
+  const baseClass = entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
+  if (entry.kind === 'event' && entry.item) {
+    const metadata = parseMetadata(entry.item);
+    const selfResponse = metadata.selfResponseStatus;
+    
+    // Nếu từ chối tham gia -> Gạch ngang và mờ đi (declined)
+    if (selfResponse === 'declined') {
+      return `${baseClass} line-through opacity-45`;
+    }
+    // Nếu là event được mời nhưng chưa trả lời (needsAction) -> Viền đứt nét hoặc style nhạt hơn
+    if (selfResponse === 'needsAction') {
+      return `${baseClass} border-dashed border-2`;
+    }
+    // Nếu là event được mời nhưng trả lời là "có thể" (tentative) -> Hơi mờ hơn chút
+    if (selfResponse === 'tentative') {
+      return `${baseClass} opacity-80`;
+    }
+  }
+  return baseClass;
 }
 
 function isMidnight(date: Date) {
@@ -257,6 +275,7 @@ export function CalendarPage() {
   const [jiraItemId, setJiraItemId] = useState<string | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<CalendarEntry | null>(null);
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; value: CalendarEventFormValue; entry?: CalendarEntry } | null>(null);
+  const [moreDay, setMoreDay] = useState<Date | null>(null);
 
   const { rangeStart, rangeEnd } = useMemo(() => calendarQueryRange(cursor, range), [cursor, range]);
   const occurredFrom = localDayStartIso(rangeStart);
@@ -355,6 +374,7 @@ export function CalendarPage() {
       setEditor(null);
       refreshCalendar();
       queryClient.invalidateQueries({ queryKey: ['folders'] });
+      window.location.reload();
     },
     onError: error => handleApiError(error, t('calendar.createFailed'), { navigate }),
   });
@@ -396,6 +416,7 @@ export function CalendarPage() {
       setEditor(null);
       setSelectedEntry(null);
       refreshCalendar();
+      window.location.reload();
     },
     onError: (error, variables, context) => {
       if (context?.previous) queryClient.setQueryData(calendarItemsKey, context.previous);
@@ -421,6 +442,7 @@ export function CalendarPage() {
       setDeleteEntry(null);
       setSelectedEntry(null);
       refreshCalendar();
+      window.location.reload();
     },
     onError: error => handleApiError(error, t('calendar.deleteFailed'), { navigate }),
   });
@@ -541,7 +563,7 @@ export function CalendarPage() {
                     <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} compact showAllDayLabel onOpen={openEntry} onDragStart={dragStart} />
                   ))}
                   {dayEntries.length > 3 && (
-                    <button type="button" onClick={event => { event.stopPropagation(); openEntry(dayEntries[3]); }} className="w-full rounded px-1.5 py-0.5 text-left text-[11px] font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10">
+                    <button type="button" onClick={event => { event.stopPropagation(); setMoreDay(day); }} className="w-full rounded px-1.5 py-0.5 text-left text-[11px] font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10">
                       {t('calendar.moreItems', { n: dayEntries.length - 3 })}
                     </button>
                   )}
@@ -806,6 +828,100 @@ export function CalendarPage() {
       />
 
       {jiraItemId && <ItemDetail itemId={jiraItemId} onClose={() => setJiraItemId(null)} />}
+
+      {/* Popup / Overlay hiển thị tất cả các event trong ngày khi click "Mục khác" */}
+      {moreDay && (() => {
+        const dayEntries = entriesForDay(moreDay);
+        
+        const getDayLabel = (date: Date) => {
+          const day = date.getDay(); // 0 = CN, 1 = T2, etc.
+          if (lang === 'vi') {
+            const viMap = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+            return viMap[day];
+          }
+          const enMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          return enMap[day];
+        };
+
+        const dayLabel = getDayLabel(moreDay);
+        const dateNum = moreDay.getDate();
+
+        return (
+          <div className="fixed inset-0 z-[8500] flex items-center justify-center bg-slate-900/35 backdrop-blur-[2px]" onClick={() => setMoreDay(null)}>
+            <div 
+              className="w-full max-w-sm rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-950 flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-150 overflow-hidden" 
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="relative flex flex-col items-center pb-4 border-b border-slate-100 dark:border-slate-800">
+                <button 
+                  type="button" 
+                  onClick={() => setMoreDay(null)} 
+                  className="absolute right-0 top-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                
+                <span className="text-[14px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{dayLabel}</span>
+                <div className="mt-2 flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 text-white text-[20px] font-bold shadow-md shadow-brand-500/10">
+                  {dateNum}
+                </div>
+              </div>
+
+              {/* Event List */}
+              <div className="flex-1 overflow-y-auto py-4 space-y-1.5 max-h-[40vh] hide-scrollbar">
+                {dayEntries.length > 0 ? (
+                  dayEntries.map(entry => {
+                    const metadata = entry.item ? parseMetadata(entry.item) : null;
+                    const selfResponse = metadata?.selfResponseStatus;
+                    const isDeclined = selfResponse === 'declined';
+                    
+                    let dotClass = 'w-3 h-3 rounded-full shrink-0 ';
+                    if (entry.kind === 'event') {
+                      if (selfResponse === 'declined') {
+                        dotClass += 'bg-rose-500';
+                      } else if (selfResponse === 'tentative') {
+                        dotClass += 'bg-transparent border border-amber-500';
+                      } else if (selfResponse === 'needsAction') {
+                        dotClass += 'bg-transparent border border-amber-500 border-dashed';
+                      } else {
+                        dotClass += 'bg-amber-500';
+                      }
+                    } else if (entry.kind === 'scheduled') {
+                      dotClass += 'bg-blue-500';
+                    } else {
+                      dotClass += 'bg-violet-500';
+                    }
+
+                    return (
+                      <button
+                        key={`${entry.kind}-${entry.id}`}
+                        onClick={() => {
+                          setMoreDay(null);
+                          openEntry(entry);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                      >
+                        <div className={dotClass} />
+                        <span className="shrink-0 text-[12px] font-semibold text-slate-400 dark:text-slate-500">
+                          {entry.allDay ? t('calendar.allDay') : timeValue(entry.start)}
+                        </span>
+                        <span className={`truncate font-semibold text-slate-805 dark:text-slate-200 ${isDeclined ? 'line-through opacity-50' : ''}`}>
+                          {entry.title}
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="py-8 text-center text-xs text-slate-400 italic">
+                    {lang === 'vi' ? 'Không có sự kiện' : 'No events'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -17,6 +17,8 @@ public class CalendarEventDto
     public List<CalendarDriveAttachment> DriveAttachments { get; set; } = new();
     public List<CalendarEventReminder> Reminders { get; set; } = new();
     public List<string> Recurrence { get; set; } = new();
+    public string? OrganizerEmail { get; set; }
+    public string? SelfResponseStatus { get; set; }
 }
 
 public class CalendarSyncResult

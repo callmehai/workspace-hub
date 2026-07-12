@@ -20,6 +20,8 @@ public class CalendarItemMapper : ICalendarItemMapper
             metadata["end"] = ev.AllDay ? ev.End.Value.ToString("yyyy-MM-dd") : ev.End.Value.UtcDateTime.ToString("o");
         if (ev.AllDay) metadata["allDay"] = true;
         if (!string.IsNullOrEmpty(ev.Location)) metadata["location"] = ev.Location;
+        if (!string.IsNullOrEmpty(ev.OrganizerEmail)) metadata["organizerEmail"] = ev.OrganizerEmail;
+        if (!string.IsNullOrEmpty(ev.SelfResponseStatus)) metadata["selfResponseStatus"] = ev.SelfResponseStatus;
         if (ev.Attendees.Count > 0) metadata["attendees"] = ev.Attendees;
         if (!string.IsNullOrEmpty(ev.MeetUrl)) metadata["meetUrl"] = ev.MeetUrl;
         if (!string.IsNullOrEmpty(ev.HtmlLink)) metadata["htmlLink"] = ev.HtmlLink;

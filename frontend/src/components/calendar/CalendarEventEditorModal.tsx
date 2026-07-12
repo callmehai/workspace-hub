@@ -17,6 +17,7 @@ export interface CalendarEventFormValue {
   connectionId: string;
   title: string;
   date: string;
+  endDate: string;
   allDay: boolean;
   startTime: string;
   endTime: string;
@@ -27,6 +28,7 @@ export interface CalendarEventFormValue {
   /** Snapshot từ Google sync / write-back — hiển thị khi chưa resolve được Item Drive. */
   driveAttachments: CalendarDriveAttachmentSnapshot[];
   reminders?: EventReminderFormValue[];
+  recurrence?: string[];
 }
 
 export interface EventReminderFormValue {
@@ -76,7 +78,75 @@ export function CalendarEventEditorModal({
   const [form, setForm] = useState(initialValue);
   const [error, setError] = useState('');
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
-  const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | null>(null);
+  const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | 'end-date' | null>(null);
+
+  const recurrenceOptions = useMemo(() => {
+    if (!form.date) return [];
+    const dateParts = form.date.split('-').map(Number);
+    const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    if (isNaN(dateObj.getTime())) return [];
+
+    const dayOfWeek = dateObj.getDay();
+    const dayOfMonth = dateObj.getDate();
+    const month = dateObj.getMonth();
+    
+    const dayNamesVi = ['Chủ Nhật', 'thứ Hai', 'thứ Ba', 'thứ Tư', 'thứ Năm', 'thứ Sáu', 'thứ Bảy'];
+    const dayNamesEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const rruleDays = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+    
+    const dayNameVi = dayNamesVi[dayOfWeek];
+    const dayNameEn = dayNamesEn[dayOfWeek];
+    const rruleDay = rruleDays[dayOfWeek];
+    const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    return [
+      {
+        id: 'none',
+        label: lang === 'vi' ? 'Không lặp lại' : 'Do not repeat',
+        rrule: [],
+      },
+      {
+        id: 'daily',
+        label: lang === 'vi' ? 'Hàng ngày' : 'Daily',
+        rrule: ['RRULE:FREQ=DAILY'],
+      },
+      {
+        id: 'weekly',
+        label: lang === 'vi' ? `Hàng tuần vào ${dayNameVi}` : `Weekly on ${dayNameEn}`,
+        rrule: [`RRULE:FREQ=WEEKLY;BYDAY=${rruleDay}`],
+      },
+      {
+        id: 'monthly',
+        label: lang === 'vi' ? `Hàng tháng vào ngày ${dayOfMonth}` : `Monthly on day ${dayOfMonth}`,
+        rrule: [`RRULE:FREQ=MONTHLY;BYMONTHDAY=${dayOfMonth}`],
+      },
+      {
+        id: 'annually',
+        label: lang === 'vi' ? `Hàng năm vào ngày ${dayOfMonth} tháng ${month + 1}` : `Annually on ${monthNamesEn[month]} ${dayOfMonth}`,
+        rrule: ['RRULE:FREQ=YEARLY'],
+      },
+      {
+        id: 'weekday',
+        label: lang === 'vi' ? 'Mọi ngày trong tuần (từ thứ Hai tới thứ Sáu)' : 'Every weekday (Monday to Friday)',
+        rrule: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+      },
+    ];
+  }, [form.date, lang]);
+
+  const selectedRecurrenceOption = useMemo(() => {
+    const currentRrule = form.recurrence?.[0] || '';
+    if (!currentRrule) return 'none';
+    const matched = recurrenceOptions.find(opt => opt.rrule[0] === currentRrule);
+    return matched ? matched.id : 'none';
+  }, [form.recurrence, recurrenceOptions]);
+
+  const handleRecurrenceChange = (optionId: string) => {
+    const option = recurrenceOptions.find(opt => opt.id === optionId);
+    setForm(curr => ({
+      ...curr,
+      recurrence: option ? option.rrule : []
+    }));
+  };
 
   // Reset form khi modal mở lại (parent có thể giữ cùng key, ví dụ ItemDetail).
   const [prevOpen, setPrevOpen] = useState(open);
@@ -187,36 +257,56 @@ export function CalendarEventEditorModal({
             <input className={inputClass} value={form.title} autoFocus onChange={event => setForm(current => ({ ...current, title: event.target.value }))} />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-[13px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-            <input
-              type="checkbox"
-              checked={form.allDay}
-              onChange={event => {
-                const allDay = event.target.checked;
-                setForm(current => ({ ...current, allDay }));
-                if (allDay) setOpenPicker(null);
-              }}
-              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-            />
-            <span>
-              {t('calendar.allDay')}
-              <span className="ml-1.5 text-[11.5px] font-normal text-slate-400">{t('calendar.allDayHint')}</span>
-            </span>
-          </label>
-
-          <div className={`grid gap-3 ${form.allDay ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
-            <div>
-              <label className={labelClass}>{t('calendar.date')}</label>
-              <DatePicker
-                value={form.date}
-                onChange={date => setForm(current => ({ ...current, date }))}
-                open={openPicker === 'date'}
-                onOpenChange={next => setOpenPicker(next ? 'date' : null)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-[13px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+              <input
+                type="checkbox"
+                checked={form.allDay}
+                onChange={event => {
+                  const allDay = event.target.checked;
+                  setForm(current => ({ ...current, allDay }));
+                  if (allDay) setOpenPicker(null);
+                }}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
               />
+              <span>
+                {t('calendar.allDay')}
+                <span className="ml-1.5 text-[11.5px] font-normal text-slate-400">{t('calendar.allDayHint')}</span>
+              </span>
+            </label>
+
+            <div>
+              <select
+                value={selectedRecurrenceOption}
+                onChange={e => handleRecurrenceChange(e.target.value)}
+                className="w-full h-[46px] rounded-xl border border-slate-200 bg-white px-3.5 text-[13px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                {recurrenceOptions.map(opt => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
             </div>
-            {!form.allDay && (
-              <>
-                <div>
+          </div>
+
+          <div className="space-y-3">
+            {/* Start Date & Time */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-full sm:w-auto min-w-[135px] flex-1 sm:flex-none">
+                <label className={labelClass}>{lang === 'vi' ? 'Ngày bắt đầu' : 'Start Date'}</label>
+                <DatePicker
+                  value={form.date}
+                  onChange={date => setForm(current => ({ 
+                    ...current, 
+                    date,
+                    endDate: current.endDate < date ? date : current.endDate
+                  }))}
+                  open={openPicker === 'date'}
+                  onOpenChange={next => setOpenPicker(next ? 'date' : null)}
+                />
+              </div>
+
+              {!form.allDay && (
+                <div className="w-full sm:w-auto min-w-[95px] flex-1 sm:flex-none">
                   <label className={labelClass}>{t('calendar.start')}</label>
                   <TimePicker
                     value={form.startTime}
@@ -225,7 +315,30 @@ export function CalendarEventEditorModal({
                     onOpenChange={next => setOpenPicker(next ? 'start' : null)}
                   />
                 </div>
-                <div>
+              )}
+
+              <div className="pt-5 text-sm font-semibold text-slate-400 dark:text-slate-500">
+                {lang === 'vi' ? 'tới' : 'to'}
+              </div>
+            </div>
+
+            {/* End Date & Time */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-full sm:w-auto min-w-[135px] flex-1 sm:flex-none">
+                <label className={labelClass}>{lang === 'vi' ? 'Ngày kết thúc' : 'End Date'}</label>
+                <DatePicker
+                  value={form.endDate || form.date}
+                  onChange={endDate => setForm(current => ({ 
+                    ...current, 
+                    endDate: endDate < current.date ? current.date : endDate
+                  }))}
+                  open={openPicker === 'end-date'}
+                  onOpenChange={next => setOpenPicker(next ? 'end-date' : null)}
+                />
+              </div>
+
+              {!form.allDay && (
+                <div className="w-full sm:w-auto min-w-[95px] flex-1 sm:flex-none">
                   <label className={labelClass}>{t('calendar.end')}</label>
                   <TimePicker
                     value={form.endTime}
@@ -234,8 +347,8 @@ export function CalendarEventEditorModal({
                     onOpenChange={next => setOpenPicker(next ? 'end' : null)}
                   />
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
 
           <div>
@@ -394,10 +507,10 @@ export function CalendarEventEditorModal({
                 form.reminders.map((reminder, idx) => {
                   const showTimeOfDay = reminder.offsetUnit === 'Days' || reminder.offsetUnit === 'Weeks';
                   return (
-                    <div key={idx} className="flex flex-wrap items-center gap-2 p-2.5 rounded-lg border border-slate-150 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/30">
+                    <div key={idx} className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
                       {/* Reminder Type */}
                       <select
-                        value={reminder.reminderType}
+                        value={reminder.reminderType === 'Both' ? 'Notification' : reminder.reminderType}
                         onChange={e => {
                           const val = e.target.value as any;
                           setForm(curr => {
@@ -406,11 +519,10 @@ export function CalendarEventEditorModal({
                             return { ...curr, reminders: updated };
                           });
                         }}
-                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-medium focus:outline-none"
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
                       >
-                        <option value="Notification">{lang === 'vi' ? 'In-App' : 'In-App'}</option>
+                        <option value="Notification">{lang === 'vi' ? 'Thông báo' : 'Notification'}</option>
                         <option value="Email">Email</option>
-                        <option value="Both">{lang === 'vi' ? 'Cả hai' : 'Both'}</option>
                       </select>
 
                       {/* Offset Value */}
@@ -427,7 +539,7 @@ export function CalendarEventEditorModal({
                             return { ...curr, reminders: updated };
                           });
                         }}
-                        className="w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-medium text-center focus:outline-none"
+                        className="w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-semibold text-center text-slate-700 dark:text-slate-200 focus:outline-none"
                       />
 
                       {/* Offset Unit */}
@@ -445,7 +557,7 @@ export function CalendarEventEditorModal({
                             return { ...curr, reminders: updated };
                           });
                         }}
-                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-medium focus:outline-none"
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
                       >
                         <option value="Minutes">{lang === 'vi' ? 'phút' : 'minutes'}</option>
                         <option value="Hours">{lang === 'vi' ? 'giờ' : 'hours'}</option>
@@ -455,11 +567,10 @@ export function CalendarEventEditorModal({
 
                       {/* Time of Day */}
                       {showTimeOfDay && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <span className="text-xs text-slate-400 dark:text-slate-500">{lang === 'vi' ? 'lúc' : 'at'}</span>
                           <input
-                            type="text"
-                            placeholder="09:00"
+                            type="time"
                             value={reminder.timeOfDay || '09:00'}
                             onChange={e => {
                               const val = e.target.value;
@@ -469,7 +580,7 @@ export function CalendarEventEditorModal({
                                 return { ...curr, reminders: updated };
                               });
                             }}
-                            className="w-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 text-xs font-medium text-center focus:outline-none"
+                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
                           />
                         </div>
                       )}
@@ -485,9 +596,9 @@ export function CalendarEventEditorModal({
                             reminders: (curr.reminders || []).filter((_, i) => i !== idx)
                           }));
                         }}
-                        className="p-1 rounded text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors"
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   );

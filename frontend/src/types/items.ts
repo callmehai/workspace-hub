@@ -107,6 +107,7 @@ export interface PatchItemRequest {
   comment?: string;            // adds a new comment (separate operation)
   issueType?: string;          // change issue type (Task/Bug/Story...) via PUT /issue
   reminders?: EventReminderDto[];
+  recurrence?: string[];
 }
 
 export interface EventReminderDto {
@@ -142,6 +143,7 @@ export interface CreateEventRequest {
   allDay?: boolean;
   driveItemIds?: string[];    // Item IDs (Guid) of Drive files to attach
   reminders?: EventReminderDto[];
+  recurrence?: string[];
 }
 
 // ── Tags (SCRUM-70/71) ──

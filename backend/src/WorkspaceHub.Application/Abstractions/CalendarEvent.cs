@@ -32,4 +32,6 @@ public record CalendarEvent(
     string? MeetUrl = null,
     string? HtmlLink = null,
     IReadOnlyList<CalendarEventReminder>? Reminders = null,
-    IReadOnlyList<string>? Recurrence = null);
+    IReadOnlyList<string>? Recurrence = null,
+    string? OrganizerEmail = null,
+    string? SelfResponseStatus = null);

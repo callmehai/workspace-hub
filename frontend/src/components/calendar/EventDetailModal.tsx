@@ -116,6 +116,8 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
   // Find user's current RSVP
   const currentUserEmail = detail.owningCalendarName;
+  const organizerEmail = detail.organizerEmail;
+  const isOwner = !organizerEmail || organizerEmail.toLowerCase() === currentUserEmail?.toLowerCase();
   const userRsvp = detail.attendees?.find((a: any) => a.email.toLowerCase() === currentUserEmail?.toLowerCase());
   const currentResponse = userRsvp?.responseStatus || 'needsAction';
 
@@ -201,15 +203,92 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Title & Time */}
             <div>
-              <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span className="w-3 h-3 rounded bg-amber-500 block shrink-0" />
                 <span className="text-[12.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('calendar.event')}</span>
+                
+                {/* Badge phân biệt Event bản thân tạo hay được mời */}
+                {isOwner ? (
+                  <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-150 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-300 rounded-full text-[10.5px] font-bold">
+                    {lang === 'vi' ? 'Bản thân tạo' : 'Created by you'}
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-150 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300 rounded-full text-[10.5px] font-bold">
+                    {lang === 'vi' ? 'Được mời' : 'Invited'}
+                  </span>
+                )}
+
+                {/* Badge trạng thái tham dự nếu là event được mời */}
+                {!isOwner && (
+                  <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${
+                    currentResponse === 'accepted'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-150 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300'
+                      : currentResponse === 'declined'
+                        ? 'bg-rose-50 text-rose-700 border-rose-150 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-350'
+                        : currentResponse === 'tentative'
+                          ? 'bg-amber-50 text-amber-700 border-amber-150 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300'
+                          : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
+                  }`}>
+                    {currentResponse === 'accepted' && (lang === 'vi' ? 'Đang tham dự' : 'Attending')}
+                    {currentResponse === 'declined' && (lang === 'vi' ? 'Không tham dự' : 'Not attending')}
+                    {currentResponse === 'tentative' && (lang === 'vi' ? 'Có thể tham dự' : 'Maybe attending')}
+                    {currentResponse === 'needsAction' && (lang === 'vi' ? 'Chưa trả lời' : 'No response')}
+                  </span>
+                )}
               </div>
               <h2 className="text-[20px] font-bold text-slate-900 dark:text-slate-50 leading-snug">{detail.title}</h2>
               <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-2">
                 <Calendar className="w-4.5 h-4.5 text-slate-400 shrink-0" />
                 <span>{dateString}</span>
               </p>
+              {(() => {
+                const recurrence = detail.recurrence;
+                if (!recurrence || recurrence.length === 0) return null;
+                const rule = recurrence[0];
+                if (!rule.startsWith('RRULE:')) return null;
+
+                const isVi = lang === 'vi';
+                let summary = '';
+                if (rule.includes('FREQ=DAILY')) {
+                  summary = isVi ? 'Lặp lại hàng ngày' : 'Repeats daily';
+                } else if (rule.includes('FREQ=WEEKLY')) {
+                  if (rule.includes('BYDAY=MO,TU,WE,TH,FR')) {
+                    summary = isVi ? 'Lặp lại mọi ngày trong tuần (từ thứ Hai tới thứ Sáu)' : 'Repeats every weekday (Monday to Friday)';
+                  } else {
+                    const byDayMatch = rule.match(/BYDAY=([A-Z,]+)/);
+                    if (byDayMatch) {
+                      const days = byDayMatch[1].split(',');
+                      const dayMapVi: Record<string, string> = { SU: 'Chủ Nhật', MO: 'thứ Hai', TU: 'thứ Ba', WE: 'thứ Tư', TH: 'thứ Năm', FR: 'thứ Sáu', SA: 'thứ Bảy' };
+                      const dayMapEn: Record<string, string> = { SU: 'Sunday', MO: 'Monday', TU: 'Tuesday', WE: 'Wednesday', TH: 'Thursday', FR: 'Friday', SA: 'Saturday' };
+                      const dayLabels = days.map((d: string) => isVi ? dayMapVi[d] : dayMapEn[d]).filter(Boolean);
+                      if (dayLabels.length > 0) {
+                        summary = isVi 
+                          ? `Lặp lại hàng tuần vào ${dayLabels.join(', ')}` 
+                          : `Repeats weekly on ${dayLabels.join(', ')}`;
+                      }
+                    } else {
+                      summary = isVi ? 'Lặp lại hàng tuần' : 'Repeats weekly';
+                    }
+                  }
+                } else if (rule.includes('FREQ=MONTHLY')) {
+                  const byMonthDayMatch = rule.match(/BYMONTHDAY=(\d+)/);
+                  if (byMonthDayMatch) {
+                    summary = isVi ? `Lặp lại hàng tháng vào ngày ${byMonthDayMatch[1]}` : `Repeats monthly on day ${byMonthDayMatch[1]}`;
+                  } else {
+                    summary = isVi ? 'Lặp lại hàng tháng' : 'Repeats monthly';
+                  }
+                } else if (rule.includes('FREQ=YEARLY')) {
+                  summary = isVi ? 'Lặp lại hàng năm' : 'Repeats annually';
+                } else {
+                  summary = isVi ? 'Lặp lại định kỳ' : 'Repeats periodically';
+                }
+
+                return (
+                  <p className="mt-1 ml-6.5 text-[12px] font-semibold text-brand-600 dark:text-brand-400">
+                    {summary}
+                  </p>
+                );
+              })()}
             </div>
 
             {/* Invite via Link Pill Button */}
@@ -395,9 +474,10 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
           </div>
 
           {/* RSVP Bar (Fixed at bottom) */}
-          <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200/85 dark:border-slate-800 shrink-0 space-y-3">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('calendar.joinQuestion')}</span>
+          {!isOwner && (
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200/85 dark:border-slate-800 shrink-0 space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('calendar.joinQuestion')}</span>
               
               {/* RSVP Actions buttons */}
               <div className="flex gap-2">
@@ -470,8 +550,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
+    </div>
 
       {isEmailModalOpen && (
         <SendEventEmailModal

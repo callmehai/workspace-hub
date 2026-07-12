@@ -67,6 +67,7 @@ public class CalendarGateway : ICalendarGateway
                         var end = ParseEventDateTime(item.End);
                         var allDay = item.Start?.Date != null;
 
+                        var selfAttendee = item.Attendees?.FirstOrDefault(a => a.Self == true);
                         eventsDto.Add(new CalendarEventDto
                         {
                             Id = item.Id ?? string.Empty,
@@ -88,6 +89,8 @@ public class CalendarGateway : ICalendarGateway
                                 ? item.Reminders.Overrides.Select(r => new CalendarEventReminder(r.Method ?? "popup", r.Minutes ?? 0)).ToList()
                                 : new List<CalendarEventReminder>(),
                             Recurrence = item.Recurrence != null ? item.Recurrence.ToList() : new List<string>(),
+                            OrganizerEmail = item.Organizer?.Email,
+                            SelfResponseStatus = selfAttendee?.ResponseStatus ?? (item.Organizer?.Self == true ? "accepted" : "needsAction"),
                         });
                     }
                 }
@@ -387,6 +390,8 @@ public class CalendarGateway : ICalendarGateway
         }
 
         var recurrenceList = ev.Recurrence != null ? ev.Recurrence.ToList() : null;
+        var selfAttendee = ev.Attendees?.FirstOrDefault(a => a.Self == true);
+        var selfResponse = selfAttendee?.ResponseStatus ?? (ev.Organizer?.Self == true ? "accepted" : "needsAction");
 
         return new CalendarEvent(
             ev.Id,
@@ -403,7 +408,9 @@ public class CalendarGateway : ICalendarGateway
             ev.HangoutLink,
             ev.HtmlLink,
             remindersList.Count > 0 ? remindersList : null,
-            recurrenceList);
+            recurrenceList,
+            ev.Organizer?.Email,
+            selfResponse);
     }
 
     private static readonly Regex DriveFileIdFromPathRegex = new(@"/d/([a-zA-Z0-9_-]+)", RegexOptions.Compiled);

@@ -146,6 +146,7 @@ export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09
     connectionId,
     title: '',
     date: dateKey(date),
+    endDate: dateKey(date),
     allDay: false,
     startTime,
     endTime: `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`,
@@ -154,7 +155,10 @@ export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09
     description: '',
     driveItemIds: [],
     driveAttachments: [],
-    reminders: [],
+    reminders: [
+      { reminderType: 'Notification', offsetValue: 30, offsetUnit: 'Minutes' }
+    ],
+    recurrence: [],
   };
 }
 
@@ -167,11 +171,13 @@ export function itemToCalendarForm(item: ItemResponse): CalendarEventFormValue {
   const explicitAllDay = metadata.allDay === true || metadata.isAllDay === true;
   const rawStartString = asString(rawStart);
   const dateOnly = Boolean(rawStartString && /^\d{4}-\d{2}-\d{2}$/.test(rawStartString));
+  const displayEnd = (explicitAllDay || dateOnly) ? (end > start ? addDays(end, -1) : start) : end;
 
   return {
     connectionId: item.connectionId ?? '',
     title: item.title,
     date: dateKey(start),
+    endDate: dateKey(displayEnd > start ? displayEnd : start),
     allDay: explicitAllDay || dateOnly,
     startTime: timeValue(start),
     endTime: timeValue(end > start ? end : new Date(start.getTime() + 60 * 60_000)),
@@ -181,18 +187,21 @@ export function itemToCalendarForm(item: ItemResponse): CalendarEventFormValue {
     driveItemIds: asStringArray(metadata.driveItemIds),
     driveAttachments: asDriveAttachments(metadata.driveAttachments),
     reminders: (item as any).reminders ?? [],
+    recurrence: asStringArray(metadata.recurrence),
   };
 }
 
 export function formToRange(form: CalendarEventFormValue) {
+  const endD = form.endDate ? parseDateKey(form.endDate) : parseDateKey(form.date);
   if (form.allDay) {
     const start = parseDateKey(form.date);
-    return { start, end: addDays(start, 1) };
+    const end = endD >= start ? endD : start;
+    return { start, end: addDays(end, 1) };
   }
-  return {
-    start: combineLocal(form.date, form.startTime),
-    end: combineLocal(form.date, form.endTime),
-  };
+  const start = combineLocal(form.date, form.startTime);
+  const rawEnd = combineLocal(form.endDate || form.date, form.endTime);
+  const end = rawEnd >= start ? rawEnd : new Date(start.getTime() + 60 * 60_000);
+  return { start, end };
 }
 
 /** All-day events use date-only strings (Google Calendar contract); timed events use ISO UTC. */
@@ -216,6 +225,7 @@ export function calendarFormToPatch(form: CalendarEventFormValue): PatchItemRequ
     description: form.description.trim(),
     driveItemIds: form.driveItemIds,
     reminders: form.reminders,
+    recurrence: form.recurrence,
   };
 }
 
