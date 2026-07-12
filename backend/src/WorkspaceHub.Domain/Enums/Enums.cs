@@ -102,5 +102,23 @@ public enum NotificationType
     ImportantEmail,
     SyncError,
     ScheduleSent,
-    ItemSynced
+    ItemSynced,
+    CalendarReminder
+}
+
+/// <summary>Kênh gửi nhắc nhở.</summary>
+public enum ReminderType
+{
+    Notification,
+    Email,
+    Both
+}
+
+/// <summary>Đơn vị thời gian nhắc nhở.</summary>
+public enum ReminderUnit
+{
+    Minutes,
+    Hours,
+    Days,
+    Weeks
 }

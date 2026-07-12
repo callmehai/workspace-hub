@@ -59,6 +59,7 @@ public class CalendarSyncService : ICalendarSyncService
                     existing.ETag = mapped.ETag;
                     existing.OccurredAt = mapped.OccurredAt;
                     existing.DueAt = mapped.DueAt;
+                    SyncLocalReminders(existing, ev.Reminders);
                     anyUpdated = true;
                     // Keep Status intact to avoid resetting Kanban columns.
                 }
@@ -66,6 +67,7 @@ public class CalendarSyncService : ICalendarSyncService
                 continue;
             }
 
+            SyncLocalReminders(mapped, ev.Reminders);
             newItems.Add(mapped);
             existingItems[ev.Id] = mapped;
             created++;
@@ -147,6 +149,26 @@ public class CalendarSyncService : ICalendarSyncService
         catch (JsonException)
         {
             return false;
+        }
+    }
+
+    private static void SyncLocalReminders(Item item, List<CalendarEventReminder> gcalReminders)
+    {
+        item.Reminders.Clear();
+        foreach (var r in gcalReminders)
+        {
+            var type = string.Equals(r.Method, "email", StringComparison.OrdinalIgnoreCase)
+                ? ReminderType.Email
+                : ReminderType.Notification;
+
+            item.Reminders.Add(new EventReminder
+            {
+                ReminderType = type,
+                OffsetValue = r.Minutes,
+                OffsetUnit = ReminderUnit.Minutes,
+                TimeOfDay = null,
+                IsSent = false
+            });
         }
     }
 }

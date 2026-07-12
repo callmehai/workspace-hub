@@ -63,7 +63,9 @@ public record PatchItemRequest(
     string? IssueType = null,           // đổi loại issue (Task/Bug/Story...) qua PUT /issue
     // ── Google Calendar (Type=Event) — SCRUM-37
     bool? AllDay = null,
-    List<Guid>? DriveItemIds = null     // danh sách file đính kèm từ Drive
+    List<Guid>? DriveItemIds = null,     // danh sách file đính kèm từ Drive
+    List<EventReminderDto>? Reminders = null,
+    List<string>? Recurrence = null
 );
 
 public record CreateEventRequest(
@@ -75,7 +77,9 @@ public record CreateEventRequest(
     List<string>? Attendees = null,
     string? Description = null,
     bool AllDay = false,
-    List<Guid>? DriveItemIds = null     // ID Item Drive trong DB — BE resolve ra fileId/title/mimeType
+    List<Guid>? DriveItemIds = null,     // ID Item Drive trong DB — BE resolve ra fileId/title/mimeType
+    List<EventReminderDto>? Reminders = null,
+    List<string>? Recurrence = null
 );
 
 /// <summary>
@@ -133,5 +137,61 @@ public record ItemTag(
     Guid Id,
     string Name,
     string Color);
+
+// ───────────────────────── Calendar RSVP & Reminders DTOs ─────────────────────────
+
+public record EventReminderDto(
+    Guid? Id,
+    ReminderType ReminderType,
+    int OffsetValue,
+    ReminderUnit OffsetUnit,
+    string? TimeOfDay
+);
+
+public record CalendarEventAttendeeDto(
+    string Email,
+    string? DisplayName,
+    string? ResponseStatus,
+    string? Comment,
+    bool Organizer
+);
+
+public record CalendarDriveAttachmentDto(
+    string FileId,
+    string? Title,
+    string? MimeType,
+    string? FileUrl
+);
+
+public record CalendarEventDetailResponse(
+    Guid Id,
+    string Title,
+    string? Description,
+    DateTimeOffset? Start,
+    DateTimeOffset? End,
+    bool AllDay,
+    string? Location,
+    string? MeetUrl,
+    string? HtmlLink,
+    string? OrganizerEmail,
+    string? OrganizerDisplayName,
+    List<CalendarEventAttendeeDto> Attendees,
+    List<CalendarDriveAttachmentDto> DriveAttachments,
+    string? OwningCalendarName,
+    List<EventReminderDto> Reminders,
+    List<string> Recurrence
+);
+
+public record RsvpRequest(
+    string Response, // "accepted" | "declined" | "tentative"
+    string? Comment
+);
+
+public record SendEmailToGuestsRequest(
+    List<string> RecipientEmails,
+    string Subject,
+    string BodyHtml,
+    bool SendCopyToMe
+);
 
 

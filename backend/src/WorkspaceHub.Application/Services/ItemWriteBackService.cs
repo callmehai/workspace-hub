@@ -211,7 +211,12 @@ public class ItemWriteBackService : IItemWriteBackService
                     payload.Location,
                     payload.Attendees,
                     timeChanged ? effectiveAllDay : existingAllDay,
-                    driveAttachments
+                    driveAttachments,
+                    null, // fullAttendees (only used for read)
+                    null, // meetUrl (only used for read)
+                    null, // htmlLink (only used for read)
+                    MapToGoogleReminders(payload.Reminders),
+                    payload.Recurrence
                 );
 
                 var updatedEvent = await _calendarGateway.UpdateEventAsync(conn, "primary", item.ExternalId, evDto, ct);
@@ -228,6 +233,10 @@ public class ItemWriteBackService : IItemWriteBackService
                 if (updatedEvent.Location != null) metaDictEvent["location"] = updatedEvent.Location;
                 if (updatedEvent.Attendees != null) metaDictEvent["attendees"] = updatedEvent.Attendees;
                 if (payload.Description != null) metaDictEvent["description"] = payload.Description;
+                if (updatedEvent.Recurrence != null && updatedEvent.Recurrence.Count > 0)
+                    metaDictEvent["recurrence"] = updatedEvent.Recurrence;
+                else
+                    metaDictEvent.Remove("recurrence");
                 if (payload.DriveItemIds != null)
                 {
                     metaDictEvent["driveItemIds"] = payload.DriveItemIds;
@@ -259,6 +268,22 @@ public class ItemWriteBackService : IItemWriteBackService
                             metaDictEvent["start"] = updatedEvent.Start.Value.UtcDateTime.ToString("o");
                         if (updatedEvent.End.HasValue)
                             metaDictEvent["end"] = updatedEvent.End.Value.UtcDateTime.ToString("o");
+                    }
+                }
+
+                if (payload.Reminders != null)
+                {
+                    item.Reminders.Clear();
+                    foreach (var r in payload.Reminders)
+                    {
+                        item.Reminders.Add(new EventReminder
+                        {
+                            ReminderType = r.ReminderType,
+                            OffsetValue = r.OffsetValue,
+                            OffsetUnit = r.OffsetUnit,
+                            TimeOfDay = r.TimeOfDay,
+                            IsSent = false
+                        });
                     }
                 }
 
@@ -348,7 +373,12 @@ public class ItemWriteBackService : IItemWriteBackService
             payload.Location,
             payload.Attendees,
             effectiveAllDay,
-            driveAttachments
+            driveAttachments,
+            null, // fullAttendees
+            null, // meetUrl
+            null, // htmlLink
+            MapToGoogleReminders(payload.Reminders),
+            payload.Recurrence
         );
 
         var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
@@ -357,6 +387,7 @@ public class ItemWriteBackService : IItemWriteBackService
         if (created.Location != null) metaDict["location"] = created.Location;
         if (created.Attendees != null) metaDict["attendees"] = created.Attendees;
         if (created.Description != null) metaDict["description"] = created.Description;
+        if (created.Recurrence != null && created.Recurrence.Count > 0) metaDict["recurrence"] = created.Recurrence;
         if (created.AllDay) metaDict["allDay"] = true;
 
         if (effectiveAllDay)
@@ -396,6 +427,21 @@ public class ItemWriteBackService : IItemWriteBackService
                 : created.End?.UtcDateTime,
             MetadataJson = JsonSerializer.Serialize(metaDict)
         };
+
+        if (payload.Reminders != null)
+        {
+            foreach (var r in payload.Reminders)
+            {
+                item.Reminders.Add(new EventReminder
+                {
+                    ReminderType = r.ReminderType,
+                    OffsetValue = r.OffsetValue,
+                    OffsetUnit = r.OffsetUnit,
+                    TimeOfDay = r.TimeOfDay,
+                    IsSent = false
+                });
+            }
+        }
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
@@ -642,4 +688,24 @@ public class ItemWriteBackService : IItemWriteBackService
 
     private static DateTimeOffset? ReadEventEnd(Dictionary<string, object> meta, Item item)
         => ReadMetaDateTime(meta, "end", item.DueAt) ?? (item.DueAt.HasValue ? new DateTimeOffset(item.DueAt.Value, TimeSpan.Zero) : null);
+
+    private static List<CalendarEventReminder>? MapToGoogleReminders(IReadOnlyList<EventReminderDto>? localReminders)
+    {
+        if (localReminders == null) return null;
+        var list = new List<CalendarEventReminder>();
+        foreach (var r in localReminders)
+        {
+            var method = string.Equals(r.ReminderType.ToString(), "Email", StringComparison.OrdinalIgnoreCase) ? "email" : "popup";
+            int minutes = r.OffsetUnit.ToString().ToLower() switch
+            {
+                "minutes" => r.OffsetValue,
+                "hours" => r.OffsetValue * 60,
+                "days" => r.OffsetValue * 1440,
+                "weeks" => r.OffsetValue * 10080,
+                _ => r.OffsetValue
+            };
+            list.Add(new CalendarEventReminder(method, minutes));
+        }
+        return list;
+    }
 }

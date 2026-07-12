@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ExternalLink, Loader2, Trash2, X, FileText } from 'lucide-react';
+import { CalendarDays, ExternalLink, Loader2, Trash2, X, FileText, Plus, Bell } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { ConnectionDto } from '../../lib/connectionsApi';
 import { useI18n } from '../../hooks/useI18n';
@@ -8,6 +8,7 @@ import { itemsApi } from '../../lib/itemsApi';
 import { GoogleDrivePickerModal } from '../drive/GoogleDrivePickerModal';
 import { DriveIcon } from '../../lib/brandIcons';
 import { driveItemOpenUrl, resolveGmailSuggestConnection } from '../../lib/calendarFormUtils';
+import toast from 'react-hot-toast';
 import { EmailChipsInput } from '../EmailChipsInput';
 import { DatePicker } from '../DatePicker';
 import { TimePicker } from '../TimePicker';
@@ -25,6 +26,15 @@ export interface CalendarEventFormValue {
   driveItemIds: string[];
   /** Snapshot từ Google sync / write-back — hiển thị khi chưa resolve được Item Drive. */
   driveAttachments: CalendarDriveAttachmentSnapshot[];
+  reminders?: EventReminderFormValue[];
+}
+
+export interface EventReminderFormValue {
+  id?: string;
+  reminderType: 'Notification' | 'Email' | 'Both';
+  offsetValue: number;
+  offsetUnit: 'Minutes' | 'Hours' | 'Days' | 'Weeks';
+  timeOfDay?: string; // "HH:mm" e.g., "09:00"
 }
 
 export interface CalendarDriveAttachmentSnapshot {
@@ -343,6 +353,147 @@ export function CalendarEventEditorModal({
                   ))}
               </div>
             )}
+          </div>
+
+          {/* Reminders list */}
+          <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Bell className="w-4 h-4 text-slate-400" />
+                <span>{lang === 'vi' ? 'Nhắc nhở sự kiện' : 'Event Reminders'}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentReminders = form.reminders || [];
+                  if (currentReminders.length >= 5) {
+                    toast.error(lang === 'vi' ? 'Tối đa 5 nhắc nhở' : 'Maximum 5 reminders');
+                    return;
+                  }
+                  setForm(curr => ({
+                    ...curr,
+                    reminders: [
+                      ...currentReminders,
+                      { reminderType: 'Notification', offsetValue: 15, offsetUnit: 'Minutes' }
+                    ]
+                  }));
+                }}
+                className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-350 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{lang === 'vi' ? 'Thêm nhắc nhở' : 'Add Reminder'}</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {(!form.reminders || form.reminders.length === 0) ? (
+                <span className="text-xs text-slate-400 dark:text-slate-500 italic block">
+                  {lang === 'vi' ? 'Chưa cấu hình nhắc nhở.' : 'No reminders configured.'}
+                </span>
+              ) : (
+                form.reminders.map((reminder, idx) => {
+                  const showTimeOfDay = reminder.offsetUnit === 'Days' || reminder.offsetUnit === 'Weeks';
+                  return (
+                    <div key={idx} className="flex flex-wrap items-center gap-2 p-2.5 rounded-lg border border-slate-150 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/30">
+                      {/* Reminder Type */}
+                      <select
+                        value={reminder.reminderType}
+                        onChange={e => {
+                          const val = e.target.value as any;
+                          setForm(curr => {
+                            const updated = [...(curr.reminders || [])];
+                            updated[idx] = { ...updated[idx], reminderType: val };
+                            return { ...curr, reminders: updated };
+                          });
+                        }}
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-medium focus:outline-none"
+                      >
+                        <option value="Notification">{lang === 'vi' ? 'In-App' : 'In-App'}</option>
+                        <option value="Email">Email</option>
+                        <option value="Both">{lang === 'vi' ? 'Cả hai' : 'Both'}</option>
+                      </select>
+
+                      {/* Offset Value */}
+                      <input
+                        type="number"
+                        min="1"
+                        max="999"
+                        value={reminder.offsetValue}
+                        onChange={e => {
+                          const val = parseInt(e.target.value) || 1;
+                          setForm(curr => {
+                            const updated = [...(curr.reminders || [])];
+                            updated[idx] = { ...updated[idx], offsetValue: val };
+                            return { ...curr, reminders: updated };
+                          });
+                        }}
+                        className="w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-medium text-center focus:outline-none"
+                      />
+
+                      {/* Offset Unit */}
+                      <select
+                        value={reminder.offsetUnit}
+                        onChange={e => {
+                          const val = e.target.value as any;
+                          setForm(curr => {
+                            const updated = [...(curr.reminders || [])];
+                            updated[idx] = { 
+                              ...updated[idx], 
+                              offsetUnit: val,
+                              timeOfDay: (val === 'Days' || val === 'Weeks') ? '09:00' : undefined
+                            };
+                            return { ...curr, reminders: updated };
+                          });
+                        }}
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-medium focus:outline-none"
+                      >
+                        <option value="Minutes">{lang === 'vi' ? 'phút' : 'minutes'}</option>
+                        <option value="Hours">{lang === 'vi' ? 'giờ' : 'hours'}</option>
+                        <option value="Days">{lang === 'vi' ? 'ngày' : 'days'}</option>
+                        <option value="Weeks">{lang === 'vi' ? 'tuần' : 'weeks'}</option>
+                      </select>
+
+                      {/* Time of Day */}
+                      {showTimeOfDay && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">{lang === 'vi' ? 'lúc' : 'at'}</span>
+                          <input
+                            type="text"
+                            placeholder="09:00"
+                            value={reminder.timeOfDay || '09:00'}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setForm(curr => {
+                                const updated = [...(curr.reminders || [])];
+                                updated[idx] = { ...updated[idx], timeOfDay: val };
+                                return { ...curr, reminders: updated };
+                              });
+                            }}
+                            className="w-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 text-xs font-medium text-center focus:outline-none"
+                          />
+                        </div>
+                      )}
+
+                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">{lang === 'vi' ? 'trước' : 'before'}</span>
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm(curr => ({
+                            ...curr,
+                            reminders: (curr.reminders || []).filter((_, i) => i !== idx)
+                          }));
+                        }}
+                        className="p-1 rounded text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {folderName && (

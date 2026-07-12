@@ -238,6 +238,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         // Tracked (KHÔNG AsNoTracking) để cập nhật item persist khi SaveChanges.
         var items = await Set
             .Include(i => i.ItemFolders)
+            .Include(i => i.Reminders)
             .Where(i => i.ConnectionId == connectionId && i.ExternalId != null)
             .ToListAsync(ct);
 
@@ -256,6 +257,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             .Include(i => i.ItemFolders)
             .Include(i => i.TagAssignments)
                 .ThenInclude(ta => ta.Tag)
+            .Include(i => i.Reminders)
             .FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
     }
 

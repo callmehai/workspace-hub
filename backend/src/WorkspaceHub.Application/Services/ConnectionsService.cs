@@ -159,8 +159,10 @@ public class ConnectionsService : IConnectionsService
                 userId, provider, svcType, tokenResult.ProviderAccountId, ct);
 
             if (existing is not null)
-                throw new ConflictException(
-                    $"Bạn đã kết nối {svcType} với tài khoản '{tokenResult.ProviderAccountId}' rồi. Hãy ngắt kết nối trước.");
+            {
+                // Tự động ngắt kết nối cũ (xoá sạch Items, ScheduledEmails liên quan) để tránh lỗi/trùng lặp
+                await DisconnectAsync(existing.Id, userId, ct);
+            }
 
             var connection = new Connection
             {

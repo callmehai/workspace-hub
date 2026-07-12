@@ -187,6 +187,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     c => c.serviceType.toLowerCase() === 'gcal' && c.status.toLowerCase() === 'active',
   );
 
+  const { data: calendarDetail } = useQuery({
+    queryKey: ['calendar-event-detail', itemId],
+    queryFn: () => itemsApi.getCalendarEventDetail(itemId),
+    enabled: !!item && item.type === 'Event',
+  });
+
   // Mutate item (writeback PATCH)
   const patchMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -948,7 +954,10 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           key={item.id}
           open={eventEditorOpen}
           mode="edit"
-          initialValue={itemToCalendarForm(item)}
+          initialValue={{
+            ...itemToCalendarForm(item),
+            reminders: calendarDetail?.reminders ?? [],
+          }}
           connections={gcalConnections}
           allConnections={connections}
           saving={patchMutation.isPending}

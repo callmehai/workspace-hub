@@ -21,6 +21,7 @@ import {
 } from '../components/calendar/CalendarEventEditorModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ItemDetail } from '../components/ItemDetail';
+import { EventDetailModal } from '../components/calendar/EventDetailModal';
 import {
   addDays,
   addMonths,
@@ -344,6 +345,7 @@ export function CalendarPage() {
         attendees: form.attendees,
         description: form.description.trim() || undefined,
         driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
+        reminders: form.reminders,
       });
       if (folderId) await foldersApi.addItemToFolder(folderId, { itemId: created.id });
       return created;
@@ -430,10 +432,6 @@ export function CalendarPage() {
   };
 
   const openEntry = (entry: CalendarEntry) => {
-    if (entry.kind === 'event' && entry.item) {
-      setEditor({ mode: 'edit', value: itemToCalendarForm(entry.item), entry });
-      return;
-    }
     setSelectedEntry(entry);
   };
 
@@ -754,13 +752,32 @@ export function CalendarPage() {
         />
       )}
 
-      {selectedEntry && (
+      {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && (
+        <EventDetailModal
+          itemId={selectedEntry.id}
+          onClose={() => setSelectedEntry(null)}
+          onEdit={(detailedItem) => {
+            const entry = selectedEntry;
+            setSelectedEntry(null);
+            const formVal = itemToCalendarForm(entry.item!);
+            formVal.reminders = detailedItem.reminders ?? [];
+            setEditor({ mode: 'edit', value: formVal, entry });
+          }}
+          onDelete={() => {
+            const entry = selectedEntry;
+            setSelectedEntry(null);
+            setDeleteEntry(entry);
+          }}
+        />
+      )}
+
+      {selectedEntry && selectedEntry.kind !== 'event' && (
         <div className="fixed inset-0 z-[8000] flex items-center justify-center bg-slate-900/35 p-4 backdrop-blur-[2px]" onMouseDown={() => setSelectedEntry(null)}>
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={event => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${entryChipClasses(selectedEntry)}`}>
-                  {selectedEntry.kind === 'event' ? t('calendar.events') : selectedEntry.kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
+                  {selectedEntry.kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
                 </span>
                 <h3 className="mt-2 text-[16px] font-bold leading-snug text-slate-900 dark:text-slate-100">{selectedEntry.title}</h3>
               </div>

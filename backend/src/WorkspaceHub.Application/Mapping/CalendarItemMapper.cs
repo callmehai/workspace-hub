@@ -25,6 +25,8 @@ public class CalendarItemMapper : ICalendarItemMapper
         if (!string.IsNullOrEmpty(ev.HtmlLink)) metadata["htmlLink"] = ev.HtmlLink;
         if (!string.IsNullOrEmpty(ev.Snippet)) metadata["description"] = ev.Snippet;
 
+        if (ev.Recurrence != null && ev.Recurrence.Count > 0) metadata["recurrence"] = ev.Recurrence;
+
         if (ev.DriveAttachments.Count > 0)
         {
             metadata["driveAttachments"] = ev.DriveAttachments

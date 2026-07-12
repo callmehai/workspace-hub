@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Linq;
+using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -19,6 +20,9 @@ public class ItemServiceTests
     private readonly Mock<IItemRepository> _repoMock;
     private readonly Mock<IFolderRepository> _folderRepoMock;
     private readonly Mock<IConnectionHealthChecker> _healthCheckerMock;
+    private readonly Mock<IConnectionRepository> _connectionRepoMock;
+    private readonly Mock<ICalendarGateway> _calendarGatewayMock;
+    private readonly Mock<ISendEmailService> _sendEmailServiceMock;
     private readonly Mock<ILogger<ItemService>> _loggerMock;
     private readonly ItemService _sut; // System Under Test
     private readonly Guid _userId = Guid.NewGuid();
@@ -28,8 +32,18 @@ public class ItemServiceTests
         _repoMock = new Mock<IItemRepository>();
         _folderRepoMock = new Mock<IFolderRepository>();
         _healthCheckerMock = new Mock<IConnectionHealthChecker>();
+        _connectionRepoMock = new Mock<IConnectionRepository>();
+        _calendarGatewayMock = new Mock<ICalendarGateway>();
+        _sendEmailServiceMock = new Mock<ISendEmailService>();
         _loggerMock = new Mock<ILogger<ItemService>>();
-        _sut = new ItemService(_repoMock.Object, _folderRepoMock.Object, _healthCheckerMock.Object, _loggerMock.Object);
+        _sut = new ItemService(
+            _repoMock.Object,
+            _folderRepoMock.Object,
+            _healthCheckerMock.Object,
+            _connectionRepoMock.Object,
+            _calendarGatewayMock.Object,
+            _sendEmailServiceMock.Object,
+            _loggerMock.Object);
     }
 
     // ───────────── Helper ─────────────

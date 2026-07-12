@@ -96,7 +96,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const handleSourceClick = (type: string) => {
     // Chỉ Google Calendar có view Lịch. Từ /calendar mà chuyển sang Email/Jira/Drive
     // thì về Danh sách của nguồn đó, tránh một calendar rỗng/không đúng ngữ nghĩa.
-    const targetPath = location.pathname === '/calendar' && type !== 'Event' ? '/' : viewPath;
+    const targetPath = type === 'Event' ? '/calendar' : (location.pathname === '/calendar' ? '/' : viewPath);
     navigate(`${targetPath}?type=${type}`);
     onMobileClose?.();
   };

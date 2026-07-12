@@ -31,6 +31,7 @@ public class AppDbContext : DbContext
     public DbSet<GoogleContact> GoogleContacts => Set<GoogleContact>();
     public DbSet<ScheduledEmail> ScheduledEmails => Set<ScheduledEmail>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<EventReminder> EventReminders => Set<EventReminder>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder cfg)
     {
@@ -48,6 +49,8 @@ public class AppDbContext : DbContext
         cfg.Properties<GoogleContactSource>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<NotificationType>().HaveConversion<string>().HaveMaxLength(30);
         cfg.Properties<AuthProvider>().HaveConversion<string>().HaveMaxLength(10);
+        cfg.Properties<ReminderType>().HaveConversion<string>().HaveMaxLength(20);
+        cfg.Properties<ReminderUnit>().HaveConversion<string>().HaveMaxLength(20);
 
         // DateTime → luôn UTC.
         cfg.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
@@ -273,6 +276,16 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.User)
                 .WithMany(u => u.Notifications)
                 .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<EventReminder>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TimeOfDay).HasMaxLength(10);
+            e.HasOne(x => x.EventItem)
+                .WithMany(i => i.Reminders)
+                .HasForeignKey(x => x.EventItemId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

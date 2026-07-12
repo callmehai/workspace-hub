@@ -84,6 +84,10 @@ public class CalendarGateway : ICalendarGateway
                             MeetUrl = item.HangoutLink,
                             HtmlLink = item.HtmlLink,
                             DriveAttachments = MapAttachments(item.Attachments),
+                            Reminders = item.Reminders?.UseDefault == false && item.Reminders.Overrides != null
+                                ? item.Reminders.Overrides.Select(r => new CalendarEventReminder(r.Method ?? "popup", r.Minutes ?? 0)).ToList()
+                                : new List<CalendarEventReminder>(),
+                            Recurrence = item.Recurrence != null ? item.Recurrence.ToList() : new List<string>(),
                         });
                     }
                 }
@@ -140,6 +144,30 @@ public class CalendarGateway : ICalendarGateway
                     MimeType = a.MimeType,
                     FileUrl = a.FileUrl
                 }).ToList();
+            }
+
+            // Reminders
+            if (eventDto.Reminders != null)
+            {
+                existing.Reminders = new Event.RemindersData
+                {
+                    UseDefault = false,
+                    Overrides = eventDto.Reminders.Select(r => new Google.Apis.Calendar.v3.Data.EventReminder
+                    {
+                        Method = r.Method,
+                        Minutes = r.Minutes
+                    }).ToList()
+                };
+            }
+            else
+            {
+                existing.Reminders = new Event.RemindersData { UseDefault = true };
+            }
+
+            // Recurrence
+            if (eventDto.Recurrence != null)
+            {
+                existing.Recurrence = eventDto.Recurrence.Count > 0 ? eventDto.Recurrence.ToList() : null;
             }
 
             var request = calendar.Events.Update(existing, calendarId, eventId);
@@ -202,6 +230,30 @@ public class CalendarGateway : ICalendarGateway
                 }).ToList();
             }
 
+            // Reminders
+            if (eventDto.Reminders != null)
+            {
+                ev.Reminders = new Event.RemindersData
+                {
+                    UseDefault = false,
+                    Overrides = eventDto.Reminders.Select(r => new Google.Apis.Calendar.v3.Data.EventReminder
+                    {
+                        Method = r.Method,
+                        Minutes = r.Minutes
+                    }).ToList()
+                };
+            }
+            else
+            {
+                ev.Reminders = new Event.RemindersData { UseDefault = true };
+            }
+
+            // Recurrence
+            if (eventDto.Recurrence != null && eventDto.Recurrence.Count > 0)
+            {
+                ev.Recurrence = eventDto.Recurrence.ToList();
+            }
+
             var insertRequest = calendar.Events.Insert(ev, calendarId);
             if (ev.Attachments?.Count > 0)
                 insertRequest.SupportsAttachments = true;
@@ -221,6 +273,40 @@ public class CalendarGateway : ICalendarGateway
         {
             using var calendar = await BuildCalendarServiceAsync(connection, ct);
             await calendar.Events.Delete(calendarId, eventId).ExecuteAsync(ct);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
+        }
+    }
+
+    public async Task RsvpEventAsync(Connection connection, string calendarId, string eventId, string responseStatus, string? comment, CancellationToken ct = default)
+    {
+        try
+        {
+            using var service = await BuildCalendarServiceAsync(connection, ct);
+            var ev = await service.Events.Get(calendarId, eventId).ExecuteAsync(ct);
+
+            if (ev.Attendees == null)
+            {
+                ev.Attendees = new List<EventAttendee>();
+            }
+
+            var attendee = ev.Attendees.FirstOrDefault(a => string.Equals(a.Email, connection.ProviderAccountId, StringComparison.OrdinalIgnoreCase));
+            if (attendee == null)
+            {
+                attendee = new EventAttendee { Email = connection.ProviderAccountId };
+                ev.Attendees.Add(attendee);
+            }
+
+            attendee.ResponseStatus = responseStatus;
+            if (comment != null)
+            {
+                attendee.Comment = comment;
+            }
+
+            var request = service.Events.Update(ev, calendarId, eventId);
+            await request.ExecuteAsync(ct);
         }
         catch (Google.GoogleApiException ex)
         {
@@ -280,6 +366,27 @@ public class CalendarGateway : ICalendarGateway
         DateTimeOffset? end = ev.End?.DateTimeDateTimeOffset ?? (ev.End?.Date != null ? DateTimeOffset.Parse(ev.End.Date, null, System.Globalization.DateTimeStyles.AssumeUniversal) : null);
 
         var driveAttachments = MapAttachments(ev.Attachments);
+        var fullAttendees = ev.Attendees?.Select(a => new CalendarEventAttendee(
+            a.Email ?? string.Empty,
+            a.DisplayName,
+            a.ResponseStatus,
+            a.Comment,
+            a.Organizer ?? false
+        )).ToList();
+
+        var remindersList = new List<CalendarEventReminder>();
+        if (ev.Reminders?.UseDefault == false && ev.Reminders.Overrides != null)
+        {
+            foreach (var r in ev.Reminders.Overrides)
+            {
+                remindersList.Add(new CalendarEventReminder(
+                    r.Method ?? "popup",
+                    r.Minutes ?? 0
+                ));
+            }
+        }
+
+        var recurrenceList = ev.Recurrence != null ? ev.Recurrence.ToList() : null;
 
         return new CalendarEvent(
             ev.Id,
@@ -291,7 +398,12 @@ public class CalendarGateway : ICalendarGateway
             ev.Location,
             ev.Attendees?.Select(a => a.Email).ToList(),
             allDay,
-            driveAttachments.Count > 0 ? driveAttachments : null);
+            driveAttachments.Count > 0 ? driveAttachments : null,
+            fullAttendees,
+            ev.HangoutLink,
+            ev.HtmlLink,
+            remindersList.Count > 0 ? remindersList : null,
+            recurrenceList);
     }
 
     private static readonly Regex DriveFileIdFromPathRegex = new(@"/d/([a-zA-Z0-9_-]+)", RegexOptions.Compiled);

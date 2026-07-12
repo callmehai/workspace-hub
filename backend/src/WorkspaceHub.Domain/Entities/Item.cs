@@ -26,4 +26,5 @@ public class Item
     public Connection? Connection { get; set; }
     public ICollection<ItemFolder> ItemFolders { get; set; } = new List<ItemFolder>();
     public ICollection<TagAssignment> TagAssignments { get; set; } = new List<TagAssignment>();
+    public ICollection<EventReminder> Reminders { get; set; } = new List<EventReminder>();
 }

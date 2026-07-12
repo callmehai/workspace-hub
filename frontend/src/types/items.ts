@@ -106,6 +106,14 @@ export interface PatchItemRequest {
   labels?: string[];           // replaces all labels (no spaces allowed per Jira)
   comment?: string;            // adds a new comment (separate operation)
   issueType?: string;          // change issue type (Task/Bug/Story...) via PUT /issue
+  reminders?: EventReminderDto[];
+}
+
+export interface EventReminderDto {
+  reminderType: 'Notification' | 'Email' | 'Both';
+  offsetValue: number;
+  offsetUnit: 'Minutes' | 'Hours' | 'Days' | 'Weeks';
+  timeOfDay?: string; // "HH:mm" e.g., "09:00"
 }
 
 /**
@@ -133,6 +141,7 @@ export interface CreateEventRequest {
   description?: string;
   allDay?: boolean;
   driveItemIds?: string[];    // Item IDs (Guid) of Drive files to attach
+  reminders?: EventReminderDto[];
 }
 
 // ── Tags (SCRUM-70/71) ──

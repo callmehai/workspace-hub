@@ -155,6 +155,19 @@ export const itemsApi = {
     a.remove();
     window.URL.revokeObjectURL(url);
   },
+
+  getCalendarEventDetail: async (id: string): Promise<any> => {
+    const response = await api.get(`/items/${id}/calendar-details`);
+    return response.data;
+  },
+
+  rsvpEvent: async (id: string, responseStatus: string, comment?: string): Promise<void> => {
+    await api.patch(`/items/${id}/rsvp`, { response: responseStatus, comment });
+  },
+
+  sendEmailToGuests: async (id: string, request: { recipientEmails: string[], subject: string, bodyHtml: string, sendCopyToMe: boolean }): Promise<void> => {
+    await api.post(`/items/${id}/send-email-guests`, request);
+  },
 };
 
 export const foldersApi = {

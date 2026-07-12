@@ -1,4 +1,4 @@
-﻿namespace WorkspaceHub.Application.Abstractions;
+namespace WorkspaceHub.Application.Abstractions;
 
 public class CalendarEventDto
 {
@@ -15,6 +15,8 @@ public class CalendarEventDto
     /// <summary>Link mở event trong Google Calendar (event.htmlLink) — cho nút "Mở trong Calendar".</summary>
     public string? HtmlLink { get; set; }
     public List<CalendarDriveAttachment> DriveAttachments { get; set; } = new();
+    public List<CalendarEventReminder> Reminders { get; set; } = new();
+    public List<string> Recurrence { get; set; } = new();
 }
 
 public class CalendarSyncResult
