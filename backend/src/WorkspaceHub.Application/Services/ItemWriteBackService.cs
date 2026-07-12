@@ -502,6 +502,7 @@ public class ItemWriteBackService : IItemWriteBackService
         item.MetadataJson = mapped.MetadataJson;
         item.ETag = mapped.ETag;
         item.OccurredAt = mapped.OccurredAt;
+        item.DueAt = mapped.DueAt;
         item.Status = mapped.Status;
 
         await _items.SaveChangesAsync(ct);

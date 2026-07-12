@@ -26,7 +26,7 @@ import type { TranslationKey } from '../i18n/translations';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
 import { CalendarEventEditorModal, type CalendarEventFormValue } from './calendar/CalendarEventEditorModal';
-import { calendarFormToPatch, itemToCalendarForm } from '../lib/calendarFormUtils';
+import { calendarFormToPatch, formatJiraDueDate, itemToCalendarForm } from '../lib/calendarFormUtils';
 
 interface ItemDetailProps {
   itemId: string;
@@ -477,7 +477,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         )
       });
     }
-    if (item.dueAt) rows.push({ label: 'Due date', value: new Date(item.dueAt).toLocaleString(dl) });
+    const dueDateLabel = formatJiraDueDate(item, metadata, lang);
+    if (dueDateLabel) rows.push({ label: 'Due date', value: dueDateLabel });
   }
 
   // Event edit opens full modal (parity with Calendar create)

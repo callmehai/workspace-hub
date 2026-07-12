@@ -31,7 +31,9 @@ import {
   dateKey,
   emptyCalendarForm,
   formToRange,
+  formatCalendarDateOnly,
   itemToCalendarForm,
+  jiraDeadlineToCalendarRange,
   localDayStartIso,
   pad,
   parseDateKey,
@@ -142,18 +144,15 @@ function itemToEntry(item: ItemResponse): CalendarEntry | null {
   }
 
   if (item.type === 'Ticket') {
-    const rawDue = item.dueAt ?? asString(metadata.dueDate) ?? asString(metadata.duedate);
-    if (!rawDue) return null;
-    const start = parseCalendarDate(rawDue, item.occurredAt);
-    const raw = String(rawDue);
-    const allDay = /^\d{4}-\d{2}-\d{2}$/.test(raw) || isMidnight(start);
+    const range = jiraDeadlineToCalendarRange(item, metadata);
+    if (!range) return null;
     return {
       id: item.id,
       kind: 'jira',
       title: asString(metadata.issueKey) ? `${metadata.issueKey} · ${item.title}` : item.title,
-      start,
-      end: allDay ? addDays(start, 1) : new Date(start.getTime() + 30 * 60_000),
-      allDay,
+      start: range.start,
+      end: range.end,
+      allDay: true,
       folderIds: item.folderIds ?? [],
       item,
       attendees: [],
@@ -768,13 +767,12 @@ export function CalendarPage() {
               <button type="button" onClick={() => setSelectedEntry(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
             </div>
             <div className="space-y-2.5 text-[12.5px] text-slate-600 dark:text-slate-300">
-              <div className="flex gap-2"><Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>{selectedEntry.allDay ? t('calendar.allDay') : `${selectedEntry.start.toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-US')} – ${timeValue(selectedEntry.end)}`}</span></div>
+              <div className="flex gap-2"><Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>{selectedEntry.kind === 'jira' ? formatCalendarDateOnly(selectedEntry.start, lang) : selectedEntry.allDay ? t('calendar.allDay') : `${selectedEntry.start.toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-US')} – ${timeValue(selectedEntry.end)}`}</span></div>
               {selectedEntry.location && <div className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>{selectedEntry.location}</span></div>}
               {selectedEntry.attendees.length > 0 && <div className="flex gap-2"><Users className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span className="break-all">{selectedEntry.attendees.join(', ')}</span></div>}
-              {selectedEntry.kind !== 'event' && <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">{t('calendar.readOnlyHint')}</p>}
             </div>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              {selectedEntry.kind === 'scheduled' && <button type="button" onClick={() => navigate('/scheduled-emails')} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-blue-700">{t('calendar.openScheduled')}<ExternalLink className="h-3.5 w-3.5" /></button>}
+              {selectedEntry.kind === 'scheduled' && <button type="button" onClick={() => navigate(`/scheduled-emails?open=${selectedEntry.id}`)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-blue-700">{t('calendar.openScheduled')}<ExternalLink className="h-3.5 w-3.5" /></button>}
               {selectedEntry.kind === 'jira' && <button type="button" onClick={() => { setJiraItemId(selectedEntry.id); setSelectedEntry(null); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-violet-700">{t('calendar.openJira')}<ExternalLink className="h-3.5 w-3.5" /></button>}
             </div>
           </div>

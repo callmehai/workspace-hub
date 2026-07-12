@@ -122,11 +122,13 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         }
 
         // Calendar range overlap: start < rangeEnd AND end > rangeStart (OccurredAt=start, DueAt=end).
+        // Ticket chỉ hiện trên lịch khi có deadline (DueAt); không dùng OccurredAt=updated làm mốc lịch.
         if (occurredFrom.HasValue || occurredTo.HasValue)
         {
             var rangeStart = occurredFrom ?? DateTime.MinValue;
             var rangeEnd = occurredTo ?? DateTime.MaxValue;
             query = query.Where(i =>
+                (i.Type != ItemType.Ticket || i.DueAt.HasValue) &&
                 i.OccurredAt < rangeEnd &&
                 (i.DueAt ?? i.OccurredAt) > rangeStart);
         }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
@@ -24,6 +25,8 @@ public class JiraItemMapper : IJiraItemMapper
             ? $"{siteUrl}/browse/{issue.Key}"
             : issue.IssueUrl;
 
+        var (occurredAt, dueAt, dueDateIso) = MapDueCalendarFields(issue.DueDate, issue.Updated);
+
         var metadata = new
         {
             issueKey = issue.Key,
@@ -35,7 +38,8 @@ public class JiraItemMapper : IJiraItemMapper
             priority = issue.PriorityName,
             issueType = issue.IssueTypeName,
             description,           // description ĐẦY ĐỦ cho drawer (Snippet chỉ 200 ký tự cho list)
-            issueUrl
+            issueUrl,
+            dueDate = dueDateIso
         };
 
         var mappedStatus = ItemStatus.Inbox;
@@ -75,10 +79,31 @@ public class JiraItemMapper : IJiraItemMapper
             // Jira không trả HTTP ETag — dùng fields.updated làm version-token cho conflict (SCRUM-57).
             ETag = issue.Updated?.UtcDateTime.ToString("O"),
             Status = mappedStatus,
-            OccurredAt = issue.Updated?.UtcDateTime ?? DateTime.UtcNow,
+            OccurredAt = occurredAt,
+            DueAt = dueAt,
             IsImportant = false,
             IsArchived = false,
             MetadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
         };
+    }
+
+    /// <summary>
+    /// Ticket có deadline → OccurredAt/DueAt cho calendar overlap (all-day: end exclusive +1 ngày).
+    /// Không có deadline → OccurredAt = updated (list/Kanban), DueAt null (FE calendar bỏ qua).
+    /// </summary>
+    private static (DateTime OccurredAt, DateTime? DueAt, string? DueDateIso) MapDueCalendarFields(
+        DateTimeOffset? dueDate,
+        DateTimeOffset? updated)
+    {
+        if (!dueDate.HasValue)
+        {
+            return (updated?.UtcDateTime ?? DateTime.UtcNow, null, null);
+        }
+
+        var dueUtc = dueDate.Value.UtcDateTime;
+        var start = new DateTime(dueUtc.Year, dueUtc.Month, dueUtc.Day, 0, 0, 0, DateTimeKind.Utc);
+        var end = start.AddDays(1);
+        var iso = start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return (start, end, iso);
     }
 }

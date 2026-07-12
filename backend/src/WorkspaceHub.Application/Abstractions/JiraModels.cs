@@ -5,7 +5,8 @@ namespace WorkspaceHub.Application.Abstractions;
 /// <summary>
 /// 1 issue Jira đã chuẩn hoá từ REST response (Application không phụ thuộc shape raw của Atlassian).
 /// Description giữ nguyên ADF (JsonElement) — convert sang text/markdown ở mapper.
-/// Updated = <c>fields.updated</c>: vừa là OccurredAt vừa là version-token cho conflict (Jira không trả HTTP ETag).
+/// Updated = <c>fields.updated</c>: version-token cho conflict (Jira không trả HTTP ETag).
+/// DueDate = <c>fields.duedate</c>: deadline issue (date-only từ Jira) — dùng cho calendar.
 /// </summary>
 public record JiraIssue(
     string Id,
@@ -21,7 +22,8 @@ public record JiraIssue(
     string? IssueTypeName,
     string? IssueUrl,
     DateTimeOffset? Updated,
-    string? StatusCategoryKey = null);
+    string? StatusCategoryKey = null,
+    DateTimeOffset? DueDate = null);
 
 /// <summary>
 /// Kết quả 1 trang search JQL. NextPageToken null = hết trang (API mới /search/jql dùng token thay startAt).

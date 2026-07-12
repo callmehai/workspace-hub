@@ -101,6 +101,44 @@ export function resolveGmailSuggestConnection(
   return activeGmail[0]?.id;
 }
 
+export function formatCalendarDateOnly(date: Date, lang: 'vi' | 'en') {
+  return date.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+/** Jira duedate = date-only — luôn all-day theo ngày lịch; không dùng dueAt (end exclusive UTC). */
+export function jiraDeadlineToCalendarRange(
+  item: ItemResponse,
+  metadata: Record<string, unknown>,
+): { start: Date; end: Date } | null {
+  const dueDateOnly = asString(metadata.dueDate) ?? asString(metadata.duedate);
+  if (!dueDateOnly && !item.dueAt) return null;
+
+  if (dueDateOnly && /^\d{4}-\d{2}-\d{2}$/.test(dueDateOnly)) {
+    const start = parseDateKey(dueDateOnly);
+    return { start, end: addDays(start, 1) };
+  }
+
+  // Fallback: BE lưu OccurredAt = UTC midnight ngày due — lấy phần ngày UTC, tránh lệch +7h local.
+  const anchor = item.occurredAt ?? item.dueAt;
+  if (!anchor) return null;
+  const d = new Date(anchor);
+  const start = parseDateKey(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`);
+  return { start, end: addDays(start, 1) };
+}
+
+export function formatJiraDueDate(
+  item: ItemResponse,
+  metadata: Record<string, unknown>,
+  lang: 'vi' | 'en',
+): string | null {
+  const range = jiraDeadlineToCalendarRange(item, metadata);
+  return range ? formatCalendarDateOnly(range.start, lang) : null;
+}
+
 export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09:00'): CalendarEventFormValue {
   const [hour, minute] = startTime.split(':').map(Number);
   const endMinutes = Math.min(hour * 60 + minute + 60, 23 * 60 + 30);

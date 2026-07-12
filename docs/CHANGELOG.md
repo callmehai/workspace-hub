@@ -2,6 +2,14 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-12] Jira deadline trên Calendar — sync `fields.duedate`
+
+- **Gap:** FE overlay Jira đã có (violet, read-only) nhưng `JiraItemMapper` không map `fields.duedate` → `DueAt`/`metadata.dueDate` luôn null → ticket không lên lịch; overlap query còn match ticket theo `OccurredAt=updated` (sai).
+- **BE:** `JiraGateway` request thêm field `duedate`; `JiraIssue.DueDate`; mapper: có due → `OccurredAt`=start ngày UTC, `DueAt`=end exclusive (+1 ngày, all-day), `metadata.dueDate`=`yyyy-MM-dd`; không due → `OccurredAt=updated`, `DueAt=null`. `JiraSyncService` + `PatchTicketAsync` cập nhật `DueAt` khi re-sync/remap.
+- **Query:** `ItemRepository` calendar overlap loại Ticket không có `DueAt` (chỉ deadline mới lên lịch).
+- **Re-sync:** ticket đã sync trước đó cần sync lại connection Jira để populate deadline.
+- **Tests:** `JiraItemMapperTests` (+2 case due date).
+
 ## [2026-07-12] Gỡ bỏ khái niệm "task" khỏi Calendar — chỉ Google Calendar Event
 
 - **Lý do:** "task" chỉ là nhãn app-only (`metadata.calendarType="task"`) trên `ItemType.Event`, **không** dùng Google Tasks API. Gây phức tạp (nhánh `isTask` rải BE, merge metadata, toggle UI) mà không có giá trị thật.

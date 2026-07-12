@@ -21,6 +21,7 @@ import { useI18n } from '../../hooks/useI18n';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { RichCommentBox } from './RichCommentBox';
 import { renderRichText } from './miniMarkdown';
+import { formatJiraDueDate } from '../../lib/calendarFormUtils';
 
 type TFn = ReturnType<typeof useI18n>['t'];
 type Nav = ReturnType<typeof useNavigate>;
@@ -144,6 +145,7 @@ export function JiraTicketPanel({ item, metadata, onPatch, isPatching }: Props) 
   const curAssigneeId = (metadata.assigneeAccountId as string) ?? '';
   const curStatus = (metadata.status as string) ?? '';
   const curType = (metadata.issueType as string) ?? '';
+  const dueDateLabel = formatJiraDueDate(item, metadata, lang);
 
   const savePatch = async (patch: PatchItemRequest) => {
     try {
@@ -297,7 +299,7 @@ export function JiraTicketPanel({ item, metadata, onPatch, isPatching }: Props) 
           onSelect={(v) => { if (v) savePatch({ statusTransition: v }); }}
         />
 
-        {item.dueAt && <ReadRow label="Due date">{new Date(item.dueAt).toLocaleString(dl)}</ReadRow>}
+        {dueDateLabel && <ReadRow label="Due date">{dueDateLabel}</ReadRow>}
       </div>
 
       {/* ─────────── Description ─────────── */}
