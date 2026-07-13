@@ -372,6 +372,7 @@ export function CalendarPage() {
         description: form.description.trim() || undefined,
         driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
         reminders: form.reminders,
+        recurrence: form.recurrence,
       });
       if (folderId) await foldersApi.addItemToFolder(folderId, { itemId: created.id });
       return created;
@@ -808,6 +809,7 @@ export function CalendarPage() {
             setSelectedEntryAnchor(null);
             const formVal = itemToCalendarForm(entry.item!);
             formVal.reminders = detailedItem.reminders ?? [];
+            formVal.recurrence = detailedItem.recurrence ?? formVal.recurrence ?? [];
             setEditor({ mode: 'edit', value: formVal, entry });
           }}
           onDelete={() => {
