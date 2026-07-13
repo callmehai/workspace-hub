@@ -1,5 +1,5 @@
 import api from './api';
-import type { AdminStatsDto, AdminUserDto, GetAdminUsersRequest, PagedResult } from '../types/admin';
+import type { AdminIntegrationDto, AdminStatsDto, AdminUserDto, GetAdminUsersRequest, PagedResult } from '../types/admin';
 
 export const adminApi = {
   getStats: async (): Promise<AdminStatsDto> => {
@@ -14,6 +14,16 @@ export const adminApi = {
 
   toggleUserActive: async (id: string): Promise<AdminUserDto> => {
     const response = await api.post<AdminUserDto>(`/admin/users/${id}/toggle-active`);
+    return response.data;
+  },
+
+  getIntegrations: async (): Promise<AdminIntegrationDto[]> => {
+    const response = await api.get<AdminIntegrationDto[]>('/admin/integrations');
+    return response.data;
+  },
+
+  toggleIntegration: async (key: string, isEnabled: boolean): Promise<AdminIntegrationDto> => {
+    const response = await api.patch<AdminIntegrationDto>(`/admin/integrations/${key}/enable`, { isEnabled });
     return response.data;
   },
 };

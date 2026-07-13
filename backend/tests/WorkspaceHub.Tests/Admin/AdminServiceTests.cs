@@ -421,6 +421,32 @@ public class AdminServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ToggleUserActiveAsync_ThrowsBusinessRuleException_WhenDeactivatingActiveAdmin()
+    {
+        var targetAdmin = CreateUser("other-admin@test.com", role: UserRole.Admin, isActive: true);
+        var actingAdminId = Guid.NewGuid();
+        await _db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.BusinessRuleException>(() =>
+            _sut.ToggleUserActiveAsync(targetAdmin.Id, actingAdminId));
+
+        var inDb = await _db.Users.FindAsync(targetAdmin.Id);
+        Assert.True(inDb!.IsActive);
+    }
+
+    [Fact]
+    public async Task ToggleUserActiveAsync_AllowsUnlockingLockedAdmin()
+    {
+        var targetAdmin = CreateUser("locked-admin@test.com", role: UserRole.Admin, isActive: false);
+        var actingAdminId = Guid.NewGuid();
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.ToggleUserActiveAsync(targetAdmin.Id, actingAdminId);
+
+        Assert.True(result.IsActive);
+    }
+
+    [Fact]
     public async Task ToggleUserActiveAsync_ThrowsNotFoundException_WhenUserDoesNotExist()
     {
         // Arrange

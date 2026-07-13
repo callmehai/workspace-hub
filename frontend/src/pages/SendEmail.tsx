@@ -178,6 +178,8 @@ export const SendEmail = () => {
       console.error('Failed to auto-save draft', err);
     }
   });
+  
+  const { mutate: mutateSaveDraft } = saveDraftMutation;
 
   const triggerSaveDraft = React.useCallback(async () => {
     if (isDiscardedRef.current) return;
@@ -204,8 +206,8 @@ export const SendEmail = () => {
       inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
     };
 
-    saveDraftMutation.mutate({ id: draftItemId, data: payload });
-  }, [draftItemId, lastSavedState]);
+    mutateSaveDraft({ id: draftItemId, data: payload });
+  }, [mutateSaveDraft]);
 
   const triggerSaveDraftImmediate = React.useCallback(() => {
     if (isDiscardedRef.current) return;

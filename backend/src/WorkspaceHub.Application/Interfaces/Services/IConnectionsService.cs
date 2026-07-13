@@ -26,6 +26,8 @@ public interface IConnectionsService
         Guid userId,
         CancellationToken ct = default);
 
+    Task<IReadOnlyList<IntegrationResponse>> GetIntegrationsAsync(CancellationToken ct = default);
+
     Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default);
 
     /// <summary>

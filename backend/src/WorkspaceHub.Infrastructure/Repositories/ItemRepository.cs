@@ -28,6 +28,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? gmailLabel = null,
         string? assigneeAccountId = null,
         Guid? connectionId = null,
+        string? driveParentId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -117,6 +118,20 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         if (connectionId.HasValue)
         {
             query = query.Where(i => i.ConnectionId == connectionId.Value);
+        }
+
+        // DriveParentId filter — hierarchical Google Drive view (SCRUM-79 extension)
+        if (driveParentId != null && driveParentId != "root")
+        {
+            // Thư mục cụ thể: CHỈ hiển thị các file/folder Drive nằm trong thư mục này
+            var parentToken = $"\"{driveParentId.Trim()}\"";
+            query = query.Where(i => i.Type == ItemType.File && i.MetadataJson != null && i.MetadataJson.Contains(parentToken));
+        }
+        else if (driveParentId == "root" || (folderId == null && driveParentId == null && string.IsNullOrEmpty(search)))
+        {
+            // Root (All items): hiển thị item Drive NẾU nó được đánh dấu là TopLevel (đã tính toán trong DriveSyncService)
+            // Bỏ qua filter này nếu đang browse Workspace Folder (folderId != null) hoặc đang Search.
+            query = query.Where(i => i.Type != ItemType.File || (i.MetadataJson != null && i.MetadataJson.Contains("\"isTopLevel\":true")));
         }
 
         // ── Search: Title hoặc Snippet ──
