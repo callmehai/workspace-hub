@@ -381,7 +381,6 @@ export function CalendarPage() {
       setEditor(null);
       refreshCalendar();
       queryClient.invalidateQueries({ queryKey: ['folders'] });
-      window.location.reload();
     },
     onError: error => handleApiError(error, t('calendar.createFailed'), { navigate }),
   });
@@ -424,7 +423,6 @@ export function CalendarPage() {
       setSelectedEntry(null);
       setSelectedEntryAnchor(null);
       refreshCalendar();
-      window.location.reload();
     },
     onError: (error, variables, context) => {
       if (context?.previous) queryClient.setQueryData(calendarItemsKey, context.previous);
@@ -451,7 +449,6 @@ export function CalendarPage() {
       setSelectedEntry(null);
       setSelectedEntryAnchor(null);
       refreshCalendar();
-      window.location.reload();
     },
     onError: error => handleApiError(error, t('calendar.deleteFailed'), { navigate }),
   });

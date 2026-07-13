@@ -228,7 +228,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       queryClient.invalidateQueries({ queryKey: ['items'] });
       if (updatedItem.type === 'Event') {
         queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-        window.location.reload();
       }
     },
     onError: (err, variables, context) => {
