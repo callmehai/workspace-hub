@@ -13,7 +13,7 @@ interface SendEventEmailModalProps {
   eventLocation: string;
   eventTime: string;
   eventMeetUrl: string;
-  guests: { email: string; displayName?: string }[];
+  guests: { email: string; displayName?: string | null }[];
   onClose: () => void;
 }
 

@@ -3,7 +3,8 @@ export type NotificationType =
   | 'ImportantEmail'
   | 'SyncError'
   | 'ScheduleSent'
-  | 'ItemSynced';
+  | 'ItemSynced'
+  | 'CalendarReminder';
 
 export interface NotificationDto {
   id: string;

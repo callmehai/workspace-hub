@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ExternalLink, Loader2, Trash2, X, FileText, Plus, Bell } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { ConnectionDto } from '../../lib/connectionsApi';
@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { EmailChipsInput } from '../EmailChipsInput';
 import { DatePicker } from '../DatePicker';
 import { TimePicker } from '../TimePicker';
+import type { ReminderType } from '../../types/items';
 
 export interface CalendarEventFormValue {
   connectionId: string;
@@ -32,8 +33,8 @@ export interface CalendarEventFormValue {
 }
 
 export interface EventReminderFormValue {
-  id?: string;
-  reminderType: 'Notification' | 'Email' | 'Both';
+  id?: string | null;
+  reminderType: ReminderType;
   offsetValue: number;
   offsetUnit: 'Minutes' | 'Hours' | 'Days' | 'Weeks';
   timeOfDay?: string; // "HH:mm" e.g., "09:00"
@@ -487,7 +488,7 @@ export function CalendarEventEditorModal({
                     ...curr,
                     reminders: [
                       ...currentReminders,
-                      { reminderType: 'Notification', offsetValue: 15, offsetUnit: 'Minutes' }
+                      { reminderType: 'GooglePopup', offsetValue: 15, offsetUnit: 'Minutes' }
                     ]
                   }));
                 }}
@@ -508,11 +509,11 @@ export function CalendarEventEditorModal({
                   const showTimeOfDay = reminder.offsetUnit === 'Days' || reminder.offsetUnit === 'Weeks';
                   return (
                     <div key={idx} className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-                      {/* Reminder Type */}
+                      {/* Reminder type */}
                       <select
-                        value={reminder.reminderType === 'Both' ? 'Notification' : reminder.reminderType}
+                        value={reminder.reminderType ?? 'GooglePopup'}
                         onChange={e => {
-                          const val = e.target.value as any;
+                          const val = e.target.value as ReminderType;
                           setForm(curr => {
                             const updated = [...(curr.reminders || [])];
                             updated[idx] = { ...updated[idx], reminderType: val };
@@ -521,8 +522,9 @@ export function CalendarEventEditorModal({
                         }}
                         className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
                       >
-                        <option value="Notification">{lang === 'vi' ? 'Thông báo' : 'Notification'}</option>
-                        <option value="Email">Email</option>
+                        <option value="InApp">{lang === 'vi' ? 'Trong ứng dụng' : 'In app'}</option>
+                        <option value="GooglePopup">Google popup</option>
+                        <option value="GoogleEmail">Google email</option>
                       </select>
 
                       {/* Offset Value */}
@@ -546,7 +548,7 @@ export function CalendarEventEditorModal({
                       <select
                         value={reminder.offsetUnit}
                         onChange={e => {
-                          const val = e.target.value as any;
+                          const val = e.target.value as EventReminderFormValue['offsetUnit'];
                           setForm(curr => {
                             const updated = [...(curr.reminders || [])];
                             updated[idx] = { 

@@ -154,16 +154,29 @@ public class CalendarSyncService : ICalendarSyncService
 
     private static void SyncLocalReminders(Item item, List<CalendarEventReminder> gcalReminders)
     {
-        item.Reminders.Clear();
-        foreach (var r in gcalReminders)
-        {
-            var type = string.Equals(r.Method, "email", StringComparison.OrdinalIgnoreCase)
-                ? ReminderType.Email
-                : ReminderType.Notification;
+        var existingGoogleReminders = item.Reminders
+            .Where(IsGoogleReminder)
+            .ToList();
 
+        foreach (var reminder in existingGoogleReminders)
+        {
+            item.Reminders.Remove(reminder);
+        }
+
+        var syncedGoogleReminders = gcalReminders
+            .Select(r => new
+            {
+                ReminderType = MapGoogleReminderType(r.Method),
+                Minutes = Math.Max(0, r.Minutes)
+            })
+            .Distinct()
+            .ToList();
+
+        foreach (var r in syncedGoogleReminders)
+        {
             item.Reminders.Add(new EventReminder
             {
-                ReminderType = type,
+                ReminderType = r.ReminderType,
                 OffsetValue = r.Minutes,
                 OffsetUnit = ReminderUnit.Minutes,
                 TimeOfDay = null,
@@ -171,4 +184,12 @@ public class CalendarSyncService : ICalendarSyncService
             });
         }
     }
+
+    private static bool IsGoogleReminder(EventReminder reminder)
+        => reminder.ReminderType is ReminderType.GooglePopup or ReminderType.GoogleEmail;
+
+    private static ReminderType MapGoogleReminderType(string? method)
+        => string.Equals(method, "email", StringComparison.OrdinalIgnoreCase)
+            ? ReminderType.GoogleEmail
+            : ReminderType.GooglePopup;
 }

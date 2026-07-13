@@ -49,7 +49,6 @@ public class AppDbContext : DbContext
         cfg.Properties<GoogleContactSource>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<NotificationType>().HaveConversion<string>().HaveMaxLength(30);
         cfg.Properties<AuthProvider>().HaveConversion<string>().HaveMaxLength(10);
-        cfg.Properties<ReminderType>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<ReminderUnit>().HaveConversion<string>().HaveMaxLength(20);
 
         // DateTime → luôn UTC.
@@ -282,6 +281,7 @@ public class AppDbContext : DbContext
         b.Entity<EventReminder>(e =>
         {
             e.HasKey(x => x.Id);
+            e.Property(x => x.ReminderType).HasMaxLength(20).HasConversion<string>();
             e.Property(x => x.TimeOfDay).HasMaxLength(10);
             e.HasOne(x => x.EventItem)
                 .WithMany(i => i.Reminders)

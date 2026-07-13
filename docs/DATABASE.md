@@ -15,6 +15,7 @@ Users 1──n ImportantContacts
 Connections 1──n GoogleContacts
 Users 1──n ScheduledEmails ──n──1 Connections
 Users 1──n Notifications
+Items 1──n EventReminders
 Integrations 1──n Connections
 Folders 1──n FolderShares ──n──1 Users
 ```
@@ -140,7 +141,15 @@ Không đổi cấu trúc.
 - TagAssignments composite PK (TagId, ItemId). Gắn/gỡ: `POST /api/tags/{id}/items`, `DELETE /api/tags/{id}/items/{itemId}` (SCRUM-70). Item→TagAssignment NoAction (tránh 2 đường cascade từ User); xoá Tag cascade dọn junction, Item giữ nguyên.
 - ImportantContacts (Type: Email / **JiraAccount** — ✅ SCRUM-60, Identifier=email (Email) / accountId (JiraAccount); UNIQUE(UserId,Type,Identifier)). CRUD: `GET/POST /api/importantcontacts`, `DELETE /{id}`. Enum lưu string nên thêm JiraAccount KHÔNG cần migration.
 - **GoogleContacts** (✅ SCRUM-69) — cache contact Google theo Connection Gmail (gợi ý To/Cc/Bcc). Cột: `ConnectionId` FK→Connections **CASCADE**, `Email` (nvarchar 320, lưu lower-case), `DisplayName`, `Source` enum string (`Contact` / `OtherContact`), `ExternalResourceName`, `SyncedAt` UTC. UNIQUE(ConnectionId, Email). Sync **kèm mỗi lần sync Gmail** (`connections.list` + `otherContacts.list`); full replace mỗi lần. Nguồn kích sync: cron định kỳ (SCRUM-72, ~60s), `POST /api/connections/{id}/sync`, hoặc lazy khi GET items. Khác ImportantContacts — không user-managed.
-- Notifications (Type: share_invite/important_email/sync_error/schedule_sent; **phase Jira (SCRUM-60, optional) thêm type cho Jira** — vd jira_assigned/jira_mention; tương lai thêm friend_request/automation_triggered nếu làm).
+- Notifications (Type: share_invite/important_email/sync_error/schedule_sent/item_synced/calendar_reminder; **phase Jira (SCRUM-60, optional) thêm type cho Jira** — vd jira_assigned/jira_mention; tương lai thêm friend_request/automation_triggered nếu làm).
+
+## EventReminders
+Nhắc nhở sự kiện lịch. Mỗi row = một `ReminderType` + một mốc offset trước event. Giá trị: `GooglePopup`, `GoogleEmail`, `InApp` (enum string, `nvarchar(20)`). Cùng event có thể có nhiều row trùng loại.
+
+- Migration `ReplaceEventReminderTypeWithChannels` **giữ tên cột** `ReminderType`, chỉ đổi giá trị: `Notification`→`InApp`, `Email`→`GoogleEmail`, `Both`→tách 2 row (`GooglePopup` + `InApp`).
+
+- `GooglePopup`/`GoogleEmail`: map sang Google Calendar reminder override `popup`/`email`.
+- `InApp`: Workspace Hub tự tạo `NotificationType.CalendarReminder` qua SignalR/toast/dropdown.
 
 ## ScheduledEmails
 Đổi tham chiếu sang Connections.

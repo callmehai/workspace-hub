@@ -2,15 +2,15 @@ using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Domain.Entities;
 
-/// <summary>Cấu hình nhắc nhở sự kiện lịch (Google Calendar-parity).</summary>
+/// <summary>Calendar event reminder configuration — one row = one ReminderType + one offset.</summary>
 public class EventReminder
 {
     public Guid Id { get; set; }
     public Guid EventItemId { get; set; } // FK -> Items.Id
-    public ReminderType ReminderType { get; set; }
+    public ReminderType ReminderType { get; set; } = ReminderType.GooglePopup;
     public int OffsetValue { get; set; }
     public ReminderUnit OffsetUnit { get; set; }
-    public string? TimeOfDay { get; set; } // "HH:mm" (ví dụ "23:30") cho Days/Weeks
+    public string? TimeOfDay { get; set; } // "HH:mm", for Days/Weeks reminders.
     public bool IsSent { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

@@ -280,7 +280,7 @@ public class ItemWriteBackService : IItemWriteBackService
                     {
                         item.Reminders.Add(new EventReminder
                         {
-                            ReminderType = r.ReminderType,
+                            ReminderType = NormalizeReminderType(r.ReminderType),
                             OffsetValue = r.OffsetValue,
                             OffsetUnit = r.OffsetUnit,
                             TimeOfDay = r.TimeOfDay,
@@ -438,7 +438,7 @@ public class ItemWriteBackService : IItemWriteBackService
             {
                 item.Reminders.Add(new EventReminder
                 {
-                    ReminderType = r.ReminderType,
+                    ReminderType = NormalizeReminderType(r.ReminderType),
                     OffsetValue = r.OffsetValue,
                     OffsetUnit = r.OffsetUnit,
                     TimeOfDay = r.TimeOfDay,
@@ -699,7 +699,6 @@ public class ItemWriteBackService : IItemWriteBackService
         var list = new List<CalendarEventReminder>();
         foreach (var r in localReminders)
         {
-            var method = string.Equals(r.ReminderType.ToString(), "Email", StringComparison.OrdinalIgnoreCase) ? "email" : "popup";
             int minutes = r.OffsetUnit.ToString().ToLower() switch
             {
                 "minutes" => r.OffsetValue,
@@ -708,8 +707,16 @@ public class ItemWriteBackService : IItemWriteBackService
                 "weeks" => r.OffsetValue * 10080,
                 _ => r.OffsetValue
             };
-            list.Add(new CalendarEventReminder(method, minutes));
+
+            var reminderType = NormalizeReminderType(r.ReminderType);
+            if (reminderType == ReminderType.GooglePopup)
+                list.Add(new CalendarEventReminder("popup", minutes));
+            else if (reminderType == ReminderType.GoogleEmail)
+                list.Add(new CalendarEventReminder("email", minutes));
         }
         return list;
     }
+
+    private static ReminderType NormalizeReminderType(ReminderType reminderType)
+        => Enum.IsDefined(reminderType) ? reminderType : ReminderType.GooglePopup;
 }

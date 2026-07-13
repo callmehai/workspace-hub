@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { AxiosError } from 'axios';
-import { connectionsApi } from '../../lib/connectionsApi';
+import { connectionsApi, type OAuthCallbackResponse } from '../../lib/connectionsApi';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../hooks/useI18n';
 
 // Module-level cache to ensure the API call is made exactly once per redirect,
 // and to share the mutation state across double-mounts in React 18 Strict Mode.
-let activePromise: Promise<any> | null = null;
+let activePromise: Promise<OAuthCallbackResponse> | null = null;
 let activeStatus: 'idle' | 'pending' | 'success' | 'error' = 'idle';
 let activeErrorMsg: string | null = null;
 let currentCode: string | null = null;
@@ -59,11 +59,12 @@ export const OAuthCallback = () => {
       notifyListeners();
 
       activePromise = connectionsApi.oauthCallback({ code, state })
-        .then(() => {
+        .then((response) => {
           activeStatus = 'success';
           notifyListeners();
           toast.success(t('oauth.connected'));
           navigate('/integrations');
+          return response;
         })
         .catch((err) => {
           activeStatus = 'error';
@@ -72,6 +73,7 @@ export const OAuthCallback = () => {
           activeErrorMsg = message;
           notifyListeners();
           toast.error(message);
+          throw err;
         });
     } else if (activeStatus === 'success') {
       navigate('/integrations');

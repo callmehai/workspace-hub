@@ -106,12 +106,12 @@ public enum NotificationType
     CalendarReminder
 }
 
-/// <summary>Kênh gửi nhắc nhở.</summary>
+/// <summary>Kênh nhắc nhở — lưu cột <c>ReminderType</c> (enum string).</summary>
 public enum ReminderType
 {
-    Notification,
-    Email,
-    Both
+    GooglePopup,
+    GoogleEmail,
+    InApp
 }
 
 /// <summary>Đơn vị thời gian nhắc nhở.</summary>

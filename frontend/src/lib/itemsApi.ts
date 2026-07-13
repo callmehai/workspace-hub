@@ -3,7 +3,7 @@ import type {
   PagedResult, ItemResponse, UpdateItemStatusRequest, CreateNoteRequest, 
   FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType,
   PatchItemRequest, CreateEventRequest, CreateFolderRequest, UpdateFolderRequest,
-  CreateTicketRequest
+  CreateTicketRequest, CalendarEventDetailResponse,
 } from '../types/items';
 
 export interface GetItemsParams {
@@ -156,7 +156,7 @@ export const itemsApi = {
     window.URL.revokeObjectURL(url);
   },
 
-  getCalendarEventDetail: async (id: string): Promise<any> => {
+  getCalendarEventDetail: async (id: string): Promise<CalendarEventDetailResponse> => {
     const response = await api.get(`/items/${id}/calendar-details`);
     return response.data;
   },

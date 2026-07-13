@@ -200,12 +200,14 @@ export const ScheduledEmails = () => {
     queryFn: () => scheduledEmailsApi.getScheduledEmailById(openId!),
     enabled: !!openId,
   });
+  const emailForModal = selectedEmail ?? (openId ? openedEmail ?? null : null);
+
   useEffect(() => {
-    if (!openedEmail) return;
-    setSelectedEmail(openedEmail);
-    searchParams.delete('open');
-    setSearchParams(searchParams, { replace: true });
-  }, [openedEmail]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!openId || !openedEmail) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('open');
+    setSearchParams(next, { replace: true });
+  }, [openId, openedEmail, searchParams, setSearchParams]);
 
   // Fetch connections for the dropdown
   const { data: connections = [] } = useQuery({
@@ -353,10 +355,10 @@ export const ScheduledEmails = () => {
 
   return (
     <>
-      {selectedEmail && (
+      {emailForModal && (
         <DetailModal
-          email={selectedEmail}
-          connectionName={connections.find(c => c.id === selectedEmail.connectionId)?.providerAccountId || 'Unknown'}
+          email={emailForModal}
+          connectionName={connections.find(c => c.id === emailForModal.connectionId)?.providerAccountId || 'Unknown'}
           onClose={() => setSelectedEmail(null)}
           onCancel={(id) => cancelMutation.mutate(id, { onSuccess: () => setSelectedEmail(null) })}
           isCancelling={cancelMutation.isPending}

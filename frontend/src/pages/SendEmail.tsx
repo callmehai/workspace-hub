@@ -205,7 +205,7 @@ export const SendEmail = () => {
     };
 
     saveDraftMutation.mutate({ id: draftItemId, data: payload });
-  }, [draftItemId, lastSavedState]);
+  }, [saveDraftMutation]);
 
   const triggerSaveDraftImmediate = React.useCallback(() => {
     if (isDiscardedRef.current) return;

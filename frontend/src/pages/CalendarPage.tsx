@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent } from 'react';
+import { useMemo, useState, type DragEvent, type MouseEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -21,7 +21,7 @@ import {
 } from '../components/calendar/CalendarEventEditorModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ItemDetail } from '../components/ItemDetail';
-import { EventDetailModal } from '../components/calendar/EventDetailModal';
+import { EventDetailPopup } from '../components/calendar/EventDetailPopup';
 import {
   addDays,
   addMonths,
@@ -42,6 +42,12 @@ import {
   startOfWeek,
   timeValue,
 } from '../lib/calendarFormUtils';
+import {
+  calendarEntryAccentDot,
+  LAYER_LEGEND_DOTS,
+  LAYER_TOGGLE_ACTIVE,
+  LAYER_TOGGLE_INACTIVE,
+} from '../lib/calendarEntryVisuals';
 
 type CalendarRange = 'month' | 'week';
 type CalendarEntryKind = 'event' | 'scheduled' | 'jira';
@@ -232,7 +238,7 @@ function CalendarEntryChip({
   compact?: boolean;
   /** View tháng: hiện "Cả ngày" trước tên (tương tự giờ bắt đầu với event có giờ). */
   showAllDayLabel?: boolean;
-  onOpen: (entry: CalendarEntry) => void;
+  onOpen: (entry: CalendarEntry, event: MouseEvent<HTMLElement>) => void;
   onDragStart: (event: DragEvent, entry: CalendarEntry) => void;
 }) {
   const { t } = useI18n();
@@ -242,7 +248,7 @@ function CalendarEntryChip({
       type="button"
       draggable={entry.kind === 'event'}
       onDragStart={event => onDragStart(event, entry)}
-      onClick={event => { event.stopPropagation(); onOpen(entry); }}
+      onClick={event => { event.stopPropagation(); onOpen(entry, event); }}
       title={entry.title}
       className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
     >
@@ -272,6 +278,7 @@ export function CalendarPage() {
   const [layers, setLayers] = useState<Record<CalendarEntryKind, boolean>>({ event: true, scheduled: true, jira: true });
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
+  const [selectedEntryAnchor, setSelectedEntryAnchor] = useState<DOMRect | null>(null);
   const [jiraItemId, setJiraItemId] = useState<string | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<CalendarEntry | null>(null);
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; value: CalendarEventFormValue; entry?: CalendarEntry } | null>(null);
@@ -415,6 +422,7 @@ export function CalendarPage() {
       toast.success(t('calendar.updated'));
       setEditor(null);
       setSelectedEntry(null);
+      setSelectedEntryAnchor(null);
       refreshCalendar();
       window.location.reload();
     },
@@ -441,6 +449,7 @@ export function CalendarPage() {
       toast.success(t('calendar.deleted'));
       setDeleteEntry(null);
       setSelectedEntry(null);
+      setSelectedEntryAnchor(null);
       refreshCalendar();
       window.location.reload();
     },
@@ -453,8 +462,9 @@ export function CalendarPage() {
     setEditor({ mode: 'create', value });
   };
 
-  const openEntry = (entry: CalendarEntry) => {
+  const openEntry = (entry: CalendarEntry, event?: MouseEvent<HTMLElement>) => {
     setSelectedEntry(entry);
+    setSelectedEntryAnchor(event?.currentTarget.getBoundingClientRect() ?? null);
   };
 
   const submitEditor = (form: CalendarEventFormValue) => {
@@ -662,7 +672,7 @@ export function CalendarPage() {
                       key={`${entry.kind}-${entry.id}`}
                       draggable={entry.kind === 'event'}
                       onDragStart={event => dragStart(event, entry)}
-                      onClick={() => openEntry(entry)}
+                      onClick={event => openEntry(entry, event)}
                       style={{ top: Math.max(0, top), height: entryHeight }}
                       className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                     >
@@ -715,17 +725,29 @@ export function CalendarPage() {
             </span>
             {googleCalendarOnly ? (
               <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 text-[12.5px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200">
+                <span className="inline-flex items-center gap-0.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-amber-500" />
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" />
+                </span>
                 <CalendarDays className="h-3.5 w-3.5" />{t('calendar.googleScope')}
               </span>
-            ) : ([
-              ['event', t('calendar.events'), 'bg-amber-500'],
-              ['scheduled', t('calendar.scheduledEmails'), 'bg-blue-500'],
-              ['jira', t('calendar.jiraDeadlines'), 'bg-violet-500'],
-            ] as const).filter(([kind]) => !folderId || kind !== 'scheduled').map(([kind, label, dot]) => (
-              <button key={kind} type="button" onClick={() => setLayers(current => ({ ...current, [kind]: !current[kind] }))} className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition ${layers[kind] ? 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/15 dark:text-brand-300' : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'}`}>
-                <span className={`h-2.5 w-2.5 rounded-[3px] ${dot}`} />{label}
-              </button>
-            ))}
+            ) : (['event', 'scheduled', 'jira'] as const)
+              .filter(kind => !folderId || kind !== 'scheduled')
+              .map(kind => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setLayers(current => ({ ...current, [kind]: !current[kind] }))}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition ${layers[kind] ? LAYER_TOGGLE_ACTIVE[kind] : LAYER_TOGGLE_INACTIVE}`}
+                >
+                  <span className="inline-flex items-center gap-0.5">
+                    {LAYER_LEGEND_DOTS[kind].map(dot => (
+                      <span key={dot} className={`h-2.5 w-2.5 rounded-[3px] ${dot}`} />
+                    ))}
+                  </span>
+                  {kind === 'event' ? t('calendar.events') : kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
+                </button>
+              ))}
           </div>
           <button type="button" onClick={() => openCreate(new Date())} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-brand-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-700">
             <Plus className="h-4 w-4" />{t('calendar.createEvent')}
@@ -775,12 +797,18 @@ export function CalendarPage() {
       )}
 
       {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && (
-        <EventDetailModal
+        <EventDetailPopup
           itemId={selectedEntry.id}
-          onClose={() => setSelectedEntry(null)}
+          accentDotClass={calendarEntryAccentDot('event', selectedEntry.allDay)}
+          anchorRect={selectedEntryAnchor}
+          onClose={() => {
+            setSelectedEntry(null);
+            setSelectedEntryAnchor(null);
+          }}
           onEdit={(detailedItem) => {
             const entry = selectedEntry;
             setSelectedEntry(null);
+            setSelectedEntryAnchor(null);
             const formVal = itemToCalendarForm(entry.item!);
             formVal.reminders = detailedItem.reminders ?? [];
             setEditor({ mode: 'edit', value: formVal, entry });
@@ -788,22 +816,26 @@ export function CalendarPage() {
           onDelete={() => {
             const entry = selectedEntry;
             setSelectedEntry(null);
+            setSelectedEntryAnchor(null);
             setDeleteEntry(entry);
           }}
         />
       )}
 
       {selectedEntry && selectedEntry.kind !== 'event' && (
-        <div className="fixed inset-0 z-[8000] flex items-center justify-center bg-slate-900/35 p-4 backdrop-blur-[2px]" onMouseDown={() => setSelectedEntry(null)}>
+        <div className="fixed inset-0 z-[8000] flex items-center justify-center bg-slate-900/35 p-4 backdrop-blur-[2px]" onMouseDown={() => { setSelectedEntry(null); setSelectedEntryAnchor(null); }}>
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={event => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
+              <div className="grid grid-cols-[14px_minmax(0,1fr)] gap-3">
+                <span className={`mt-1.5 h-3 w-3 shrink-0 rounded ${calendarEntryAccentDot(selectedEntry.kind, selectedEntry.allDay)}`} />
+                <div>
                 <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${entryChipClasses(selectedEntry)}`}>
                   {selectedEntry.kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
                 </span>
                 <h3 className="mt-2 text-[16px] font-bold leading-snug text-slate-900 dark:text-slate-100">{selectedEntry.title}</h3>
+                </div>
               </div>
-              <button type="button" onClick={() => setSelectedEntry(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { setSelectedEntry(null); setSelectedEntryAnchor(null); }} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
             </div>
             <div className="space-y-2.5 text-[12.5px] text-slate-600 dark:text-slate-300">
               <div className="flex gap-2"><Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>{selectedEntry.kind === 'jira' ? formatCalendarDateOnly(selectedEntry.start, lang) : selectedEntry.allDay ? t('calendar.allDay') : `${selectedEntry.start.toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-US')} – ${timeValue(selectedEntry.end)}`}</span></div>
@@ -812,7 +844,7 @@ export function CalendarPage() {
             </div>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               {selectedEntry.kind === 'scheduled' && <button type="button" onClick={() => navigate(`/scheduled-emails?open=${selectedEntry.id}`)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-blue-700">{t('calendar.openScheduled')}<ExternalLink className="h-3.5 w-3.5" /></button>}
-              {selectedEntry.kind === 'jira' && <button type="button" onClick={() => { setJiraItemId(selectedEntry.id); setSelectedEntry(null); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-violet-700">{t('calendar.openJira')}<ExternalLink className="h-3.5 w-3.5" /></button>}
+              {selectedEntry.kind === 'jira' && <button type="button" onClick={() => { setJiraItemId(selectedEntry.id); setSelectedEntry(null); setSelectedEntryAnchor(null); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-fuchsia-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-fuchsia-700">{t('calendar.openJira')}<ExternalLink className="h-3.5 w-3.5" /></button>}
             </div>
           </div>
         </div>
@@ -877,20 +909,16 @@ export function CalendarPage() {
                     const isDeclined = selfResponse === 'declined';
                     
                     let dotClass = 'w-3 h-3 rounded-full shrink-0 ';
-                    if (entry.kind === 'event') {
-                      if (selfResponse === 'declined') {
-                        dotClass += 'bg-rose-500';
-                      } else if (selfResponse === 'tentative') {
-                        dotClass += 'bg-transparent border border-amber-500';
-                      } else if (selfResponse === 'needsAction') {
-                        dotClass += 'bg-transparent border border-amber-500 border-dashed';
-                      } else {
-                        dotClass += 'bg-amber-500';
-                      }
-                    } else if (entry.kind === 'scheduled') {
-                      dotClass += 'bg-blue-500';
+                    if (entry.kind === 'event' && selfResponse === 'declined') {
+                      dotClass += 'bg-rose-500';
+                    } else if (entry.kind === 'event' && selfResponse === 'tentative') {
+                      const outline = entry.allDay ? 'border-emerald-500' : 'border-amber-500';
+                      dotClass += `bg-transparent border ${outline}`;
+                    } else if (entry.kind === 'event' && selfResponse === 'needsAction') {
+                      const outline = entry.allDay ? 'border-emerald-500' : 'border-amber-500';
+                      dotClass += `bg-transparent border border-dashed ${outline}`;
                     } else {
-                      dotClass += 'bg-violet-500';
+                      dotClass += calendarEntryAccentDot(entry.kind, entry.allDay);
                     }
 
                     return (

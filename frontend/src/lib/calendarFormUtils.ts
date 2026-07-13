@@ -156,7 +156,8 @@ export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09
     driveItemIds: [],
     driveAttachments: [],
     reminders: [
-      { reminderType: 'Notification', offsetValue: 30, offsetUnit: 'Minutes' }
+      { reminderType: 'GooglePopup', offsetValue: 30, offsetUnit: 'Minutes' },
+      { reminderType: 'InApp', offsetValue: 30, offsetUnit: 'Minutes' },
     ],
     recurrence: [],
   };
@@ -186,7 +187,7 @@ export function itemToCalendarForm(item: ItemResponse): CalendarEventFormValue {
     description: asString(metadata.description) ?? item.snippet ?? '',
     driveItemIds: asStringArray(metadata.driveItemIds),
     driveAttachments: asDriveAttachments(metadata.driveAttachments),
-    reminders: (item as any).reminders ?? [],
+    reminders: item.reminders ?? [],
     recurrence: asStringArray(metadata.recurrence),
   };
 }

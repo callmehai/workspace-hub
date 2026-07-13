@@ -32,6 +32,8 @@ export interface ItemResponse {
   threadId?: string | null;
   /** Số message trong thread (Email gộp thread). 1 = thư đơn. */
   threadCount?: number;
+  /** Populated when item is hydrated from calendar-details (not on list API). */
+  reminders?: EventReminderDto[];
 }
 
 export interface UpdateItemStatusRequest {
@@ -111,10 +113,48 @@ export interface PatchItemRequest {
 }
 
 export interface EventReminderDto {
-  reminderType: 'Notification' | 'Email' | 'Both';
+  id?: string | null;
+  reminderType: ReminderType;
   offsetValue: number;
   offsetUnit: 'Minutes' | 'Hours' | 'Days' | 'Weeks';
   timeOfDay?: string; // "HH:mm" e.g., "09:00"
+}
+
+export type ReminderType = 'GooglePopup' | 'GoogleEmail' | 'InApp';
+
+export interface CalendarEventAttendeeDto {
+  email: string;
+  displayName?: string | null;
+  responseStatus?: string | null;
+  comment?: string | null;
+  organizer?: boolean;
+}
+
+export interface CalendarDriveAttachmentDto {
+  fileId: string;
+  title?: string | null;
+  mimeType?: string | null;
+  fileUrl?: string | null;
+}
+
+/** GET /api/items/{id}/calendar-details */
+export interface CalendarEventDetailResponse {
+  id: string;
+  title: string;
+  description?: string | null;
+  start?: string | null;
+  end?: string | null;
+  allDay: boolean;
+  location?: string | null;
+  meetUrl?: string | null;
+  htmlLink?: string | null;
+  organizerEmail?: string | null;
+  organizerDisplayName?: string | null;
+  attendees: CalendarEventAttendeeDto[];
+  driveAttachments: CalendarDriveAttachmentDto[];
+  owningCalendarName?: string | null;
+  reminders: EventReminderDto[];
+  recurrence: string[];
 }
 
 /**
