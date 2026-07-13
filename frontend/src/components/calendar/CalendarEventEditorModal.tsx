@@ -1,22 +1,15 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
-  BriefcaseBusiness,
   CalendarDays,
-  Check,
-  ChevronDown,
-  Clock3,
   ExternalLink,
   FileText,
   Loader2,
-  LockKeyhole,
   MapPin,
   Paperclip,
-  Palette,
   Plus,
   Trash2,
   Users,
-  Video,
   X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -68,20 +61,6 @@ export interface CalendarDriveAttachmentSnapshot {
 
 type CustomRecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 type CustomRecurrenceEnd = 'never' | 'until' | 'count';
-
-const GOOGLE_EVENT_COLORS = [
-  { id: '1', color: '#7986cb', label: 'Lavender' },
-  { id: '2', color: '#33b679', label: 'Sage' },
-  { id: '3', color: '#8e24aa', label: 'Grape' },
-  { id: '4', color: '#e67c73', label: 'Flamingo' },
-  { id: '5', color: '#f6bf26', label: 'Banana' },
-  { id: '6', color: '#f4511e', label: 'Tangerine' },
-  { id: '7', color: '#039be5', label: 'Peacock' },
-  { id: '8', color: '#616161', label: 'Graphite' },
-  { id: '9', color: '#3f51b5', label: 'Blueberry' },
-  { id: '10', color: '#0b8043', label: 'Basil' },
-  { id: '11', color: '#d50000', label: 'Tomato' },
-] as const;
 
 interface CustomRecurrenceValue {
   frequency: CustomRecurrenceFrequency;
@@ -186,12 +165,6 @@ export function CalendarEventEditorModal({
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
   const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | 'end-date' | null>(null);
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'find-time'>('details');
-  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
-  const [addGoogleMeet, setAddGoogleMeet] = useState(false);
-  const [eventColorId, setEventColorId] = useState('7');
-  const [availability, setAvailability] = useState<'busy' | 'free'>('busy');
-  const [visibility, setVisibility] = useState<'default' | 'public' | 'private'>('default');
   const [guestPermissions, setGuestPermissions] = useState({
     modifyEvent: false,
     inviteOthers: true,
@@ -288,12 +261,6 @@ export function CalendarEventEditorModal({
       setOpenPicker(null);
       setCustomRecurrence(parseCustomRecurrence(initialValue.recurrence, initialValue.date));
       setCustomRecurrenceOpen(false);
-      setActiveTab('details');
-      setMoreActionsOpen(false);
-      setAddGoogleMeet(false);
-      setEventColorId('7');
-      setAvailability('busy');
-      setVisibility('default');
       setGuestPermissions({ modifyEvent: false, inviteOthers: true, seeGuestList: true });
     }
   }
@@ -323,16 +290,6 @@ export function CalendarEventEditorModal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, saving, onClose]);
-
-  useEffect(() => {
-    if (!moreActionsOpen) return;
-    const closeMenu = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('[data-calendar-actions]')) setMoreActionsOpen(false);
-    };
-    window.addEventListener('mousedown', closeMenu);
-    return () => window.removeEventListener('mousedown', closeMenu);
-  }, [moreActionsOpen]);
 
   if (!open) return null;
 
@@ -405,13 +362,6 @@ export function CalendarEventEditorModal({
   const textareaClass = `${baseInputClass} min-h-36 py-3 resize-y hide-scrollbar`;
   const labelClass = 'mb-1.5 block text-[12px] font-semibold text-slate-500 dark:text-slate-400';
   const rowIconClass = 'mt-2.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500';
-  const previewHours = Array.from({ length: 12 }, (_, index) => index + 8);
-  const startParts = form.startTime.split(':').map(Number);
-  const endParts = form.endTime.split(':').map(Number);
-  const previewStartMinutes = Math.max(0, ((startParts[0] || 8) - 8) * 60 + (startParts[1] || 0));
-  const previewEndMinutes = Math.max(previewStartMinutes + 30, ((endParts[0] || 9) - 8) * 60 + (endParts[1] || 0));
-  const previewEventTop = Math.min(690, previewStartMinutes);
-  const previewEventHeight = Math.max(30, Math.min(720 - previewEventTop, previewEndMinutes - previewStartMinutes));
 
   return (
     <div
@@ -422,7 +372,7 @@ export function CalendarEventEditorModal({
         role="dialog"
         aria-modal="true"
         aria-label={mode === 'create' ? t('calendar.createTitle') : t('calendar.editTitle')}
-        className="flex max-h-[94vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="flex h-[900px] max-h-[94vh] w-[1240px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         onMouseDown={event => event.stopPropagation()}
       >
         <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
@@ -446,6 +396,18 @@ export function CalendarEventEditorModal({
             />
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              {mode === 'edit' && onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={saving}
+                  aria-label={t('common.delete')}
+                  title={t('common.delete')}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                >
+                  <Trash2 className="h-4.5 w-4.5" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={submit}
@@ -455,61 +417,6 @@ export function CalendarEventEditorModal({
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {t('common.save')}
               </button>
-
-              <div className="relative" data-calendar-actions>
-                <button
-                  type="button"
-                  onClick={() => setMoreActionsOpen(current => !current)}
-                  disabled={saving}
-                  aria-expanded={moreActionsOpen}
-                  aria-label={lang === 'vi' ? 'Thao tác khác' : 'More actions'}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800 sm:px-3"
-                >
-                  <span className="hidden sm:inline">{lang === 'vi' ? 'Thao tác khác' : 'More actions'}</span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${moreActionsOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {moreActionsOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-850">
-                    {mode === 'edit' && htmlLink && (
-                      <a
-                        href={htmlLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={() => setMoreActionsOpen(false)}
-                        className="flex w-full items-center gap-3 px-3.5 py-2.5 text-[13px] text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                      >
-                        <ExternalLink className="h-4 w-4 text-slate-400" />
-                        {lang === 'vi' ? 'Mở trong Google Calendar' : 'Open in Google Calendar'}
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm(current => ({ ...current, title: `${current.title} (${lang === 'vi' ? 'bản sao' : 'copy'})` }));
-                        setMoreActionsOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[13px] text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                    >
-                      <CalendarDays className="h-4 w-4 text-slate-400" />
-                      {lang === 'vi' ? 'Nhân bản sự kiện' : 'Duplicate event'}
-                    </button>
-                    {mode === 'edit' && onDelete && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMoreActionsOpen(false);
-                          onDelete();
-                        }}
-                        className="flex w-full items-center gap-3 border-t border-slate-100 px-3.5 py-2.5 text-left text-[13px] text-rose-600 hover:bg-rose-50 dark:border-slate-800 dark:text-rose-400 dark:hover:bg-rose-500/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        {t('common.delete')}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
@@ -579,16 +486,14 @@ export function CalendarEventEditorModal({
               />
                 <span>{t('calendar.allDay')}</span>
               </label>
-              <select
+              <div className="w-full sm:w-[320px]">
+              <Select
                 value={selectedRecurrenceOption}
-                onChange={e => handleRecurrenceChange(e.target.value)}
-                aria-label={lang === 'vi' ? 'Lặp lại' : 'Repeat'}
-                className="h-9 max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              >
-                {recurrenceOptions.map(opt => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
+                onChange={handleRecurrenceChange}
+                options={recurrenceOptions.map(option => ({ value: option.id, label: option.label }))}
+                className="h-9 bg-slate-50 text-[13px] dark:bg-slate-800"
+              />
+              </div>
             </div>
           </div>
         </header>
@@ -597,56 +502,12 @@ export function CalendarEventEditorModal({
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="border-b border-slate-200 px-5 pt-4 dark:border-slate-800 sm:px-6">
-                <div className="flex items-center gap-6">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('details')}
-                    className={`border-b-2 pb-3 text-[13px] font-semibold transition ${activeTab === 'details'
-                      ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}
-                  >
-                    {lang === 'vi' ? 'Chi tiết sự kiện' : 'Event details'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('find-time')}
-                    className={`border-b-2 pb-3 text-[13px] font-semibold transition ${activeTab === 'find-time'
-                      ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <Clock3 className="h-3.5 w-3.5" />
-                      {lang === 'vi' ? 'Tìm thời gian' : 'Find a time'}
-                    </span>
-                  </button>
+                <div className="inline-flex border-b-2 border-brand-600 pb-3 text-[13px] font-semibold text-brand-700 dark:border-brand-400 dark:text-brand-300">
+                  {lang === 'vi' ? 'Chi tiết sự kiện' : 'Event details'}
                 </div>
               </div>
 
-              {activeTab === 'details' ? (
               <div className="space-y-5 p-5 sm:p-6">
-                <div className="flex gap-4">
-                  <Video className={`${rowIconClass} ${addGoogleMeet ? 'text-emerald-500 dark:text-emerald-400' : ''}`} />
-                  <div className="min-w-0 flex-1 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setAddGoogleMeet(current => !current)}
-                      className={`inline-flex h-10 w-full items-center justify-between rounded-lg border px-3 text-left text-[13px] font-semibold transition ${addGoogleMeet
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
-                        : 'border-transparent text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10'}`}
-                    >
-                      <span>{addGoogleMeet
-                        ? (lang === 'vi' ? 'Đã thêm hội nghị Google Meet' : 'Google Meet conferencing added')
-                        : (lang === 'vi' ? 'Thêm hội nghị truyền hình Google Meet' : 'Add Google Meet video conferencing')}</span>
-                      {addGoogleMeet && <Check className="h-4 w-4" />}
-                    </button>
-                    {addGoogleMeet && (
-                      <p className="mt-1.5 px-3 text-[11.5px] text-slate-500 dark:text-slate-400">
-                        {lang === 'vi' ? 'Đường dẫn Meet sẽ được tạo sau khi kết nối backend.' : 'The Meet link will be generated after backend integration.'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
                 <div className="flex gap-4">
                   <MapPin className={rowIconClass} />
                   <div className="min-w-0 flex-1">
@@ -686,56 +547,66 @@ export function CalendarEventEditorModal({
                       {(form.reminders || []).map((reminder, index) => {
                         const showTimeOfDay = reminder.offsetUnit === 'Days' || reminder.offsetUnit === 'Weeks';
                         return (
-                          <div key={`${reminder.id ?? 'new'}-${index}`} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
-                            <select
+                          <div key={`${reminder.id ?? 'new'}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 dark:border-slate-700 dark:bg-slate-800/60">
+                            <div className="grid items-center gap-2 sm:grid-cols-[minmax(160px,1fr)_82px_minmax(150px,1fr)_36px]">
+                            <Select
                               value={reminder.reminderType ?? 'GooglePopup'}
-                              onChange={event => updateReminder(index, { reminderType: event.target.value as ReminderType })}
-                              className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                            >
-                              <option value="InApp">{lang === 'vi' ? 'Trong ứng dụng' : 'In app'}</option>
-                              <option value="GooglePopup">Google popup</option>
-                              <option value="GoogleEmail">Google email</option>
-                            </select>
+                              onChange={value => updateReminder(index, { reminderType: value as ReminderType })}
+                              options={[
+                                { value: 'InApp', label: lang === 'vi' ? 'Thông báo trong ứng dụng' : 'In-app notification' },
+                                { value: 'GooglePopup', label: lang === 'vi' ? 'Thông báo Google' : 'Google notification' },
+                                { value: 'GoogleEmail', label: 'Email' },
+                              ]}
+                              className="h-10 bg-white text-[12.5px] dark:bg-slate-900"
+                            />
                             <input
                               type="number"
                               min="1"
                               max="999"
                               value={reminder.offsetValue}
                               onChange={event => updateReminder(index, { offsetValue: Number.parseInt(event.target.value, 10) || 1 })}
-                              className="h-8 w-16 rounded-md border border-slate-200 bg-white px-2 text-center text-[12px] font-medium text-slate-700 outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                              aria-label={lang === 'vi' ? 'Thời lượng nhắc trước' : 'Reminder lead time'}
+                              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-center text-[13px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                             />
-                            <select
+                            <Select
                               value={reminder.offsetUnit}
-                              onChange={event => {
-                                const offsetUnit = event.target.value as EventReminderFormValue['offsetUnit'];
+                              onChange={value => {
+                                const offsetUnit = value as EventReminderFormValue['offsetUnit'];
                                 updateReminder(index, {
                                   offsetUnit,
                                   timeOfDay: offsetUnit === 'Days' || offsetUnit === 'Weeks' ? (reminder.timeOfDay || '09:00') : undefined,
                                 });
                               }}
-                              className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                            >
-                              <option value="Minutes">{lang === 'vi' ? 'phút trước' : 'minutes before'}</option>
-                              <option value="Hours">{lang === 'vi' ? 'giờ trước' : 'hours before'}</option>
-                              <option value="Days">{lang === 'vi' ? 'ngày trước' : 'days before'}</option>
-                              <option value="Weeks">{lang === 'vi' ? 'tuần trước' : 'weeks before'}</option>
-                            </select>
-                            {showTimeOfDay && (
-                              <input
-                                type="time"
-                                value={reminder.timeOfDay || '09:00'}
-                                onChange={event => updateReminder(index, { timeOfDay: event.target.value })}
-                                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                              />
-                            )}
+                              options={[
+                                { value: 'Minutes', label: lang === 'vi' ? 'phút trước' : 'minutes before' },
+                                { value: 'Hours', label: lang === 'vi' ? 'giờ trước' : 'hours before' },
+                                { value: 'Days', label: lang === 'vi' ? 'ngày trước' : 'days before' },
+                                { value: 'Weeks', label: lang === 'vi' ? 'tuần trước' : 'weeks before' },
+                              ]}
+                              className="h-10 bg-white text-[12.5px] dark:bg-slate-900"
+                            />
                             <button
                               type="button"
                               onClick={() => removeReminder(index)}
                               aria-label={lang === 'vi' ? 'Xóa thông báo' : 'Remove notification'}
-                              className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                             >
                               <X className="h-4 w-4" />
                             </button>
+                            </div>
+                            {showTimeOfDay && (
+                              <div className="mt-2 flex items-center gap-2 border-t border-slate-200 pt-2 dark:border-slate-700">
+                                <span className="text-[12px] text-slate-500 dark:text-slate-400">
+                                  {lang === 'vi' ? 'Vào lúc' : 'At'}
+                                </span>
+                                <input
+                                  type="time"
+                                  value={reminder.timeOfDay || '09:00'}
+                                  onChange={event => updateReminder(index, { timeOfDay: event.target.value })}
+                                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[12.5px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -747,89 +618,20 @@ export function CalendarEventEditorModal({
                   <CalendarDays className={rowIconClass} />
                   <div className="min-w-0 flex-1">
                     <label className={labelClass}>{t('calendar.account')}</label>
-                    <div className="flex items-start gap-2">
-                      <Select
-                        value={form.connectionId}
-                        onChange={connectionId => setForm(current => ({ ...current, connectionId }))}
-                        options={connections.map(connection => ({
-                          value: connection.id,
-                          label: `${connection.providerAccountId} · Google Calendar`,
-                        }))}
-                        placeholder={t('calendar.selectAccount')}
-                        disabled={mode === 'edit'}
-                        className="h-10 min-w-0 flex-1"
-                      />
-                      <details className="group relative shrink-0">
-                        <summary
-                          aria-label={lang === 'vi' ? 'Màu sự kiện' : 'Event color'}
-                          className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-slate-600 transition hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-750"
-                        >
-                          <span
-                            className="h-5 w-5 rounded-full shadow-sm ring-2 ring-white dark:ring-slate-700"
-                            style={{ backgroundColor: GOOGLE_EVENT_COLORS.find(color => color.id === eventColorId)?.color }}
-                          />
-                          <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                        </summary>
-                        <div className="absolute right-0 top-11 z-30 w-52 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-850">
-                          <div className="mb-2 flex items-center gap-2 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
-                            <Palette className="h-3.5 w-3.5" />
-                            {lang === 'vi' ? 'Màu sự kiện' : 'Event color'}
-                          </div>
-                          <div className="grid grid-cols-6 gap-2">
-                            {GOOGLE_EVENT_COLORS.map(color => (
-                              <button
-                                type="button"
-                                key={color.id}
-                                title={color.label}
-                                onClick={event => {
-                                  setEventColorId(color.id);
-                                  (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
-                                }}
-                                className="flex h-7 w-7 items-center justify-center rounded-full transition hover:scale-110 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
-                                style={{ backgroundColor: color.color }}
-                              >
-                                {eventColorId === color.id && <Check className="h-4 w-4 text-white" />}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </details>
-                    </div>
+                    <Select
+                      value={form.connectionId}
+                      onChange={connectionId => setForm(current => ({ ...current, connectionId }))}
+                      options={connections.map(connection => ({
+                        value: connection.id,
+                        label: `${connection.providerAccountId} · Google Calendar`,
+                      }))}
+                      placeholder={t('calendar.selectAccount')}
+                      disabled={mode === 'edit'}
+                      className="h-10 bg-slate-50 text-[13px] dark:bg-slate-800"
+                    />
                     {connections.length === 0 && (
                       <p className="mt-1.5 text-[12px] text-amber-600 dark:text-amber-400">{t('calendar.noConnection')}</p>
                     )}
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  <BriefcaseBusiness className={rowIconClass} />
-                  <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
-                    <div>
-                      <label className={labelClass}>{lang === 'vi' ? 'Hiển thị là' : 'Show me as'}</label>
-                      <select
-                        value={availability}
-                        onChange={event => setAvailability(event.target.value as 'busy' | 'free')}
-                        className={inputClass}
-                      >
-                        <option value="busy">{lang === 'vi' ? 'Bận' : 'Busy'}</option>
-                        <option value="free">{lang === 'vi' ? 'Rảnh' : 'Free'}</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelClass}>{lang === 'vi' ? 'Chế độ hiển thị' : 'Visibility'}</label>
-                      <div className="relative">
-                        <LockKeyhole className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <select
-                          value={visibility}
-                          onChange={event => setVisibility(event.target.value as 'default' | 'public' | 'private')}
-                          className={`${inputClass} pl-9`}
-                        >
-                          <option value="default">{lang === 'vi' ? 'Chế độ mặc định' : 'Default visibility'}</option>
-                          <option value="public">{lang === 'vi' ? 'Công khai' : 'Public'}</option>
-                          <option value="private">{lang === 'vi' ? 'Riêng tư' : 'Private'}</option>
-                        </select>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
@@ -943,80 +745,6 @@ export function CalendarEventEditorModal({
                   </div>
                 )}
               </div>
-              ) : (
-                <div className="p-5 sm:p-6">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">
-                        {lang === 'vi' ? 'Lịch trống của khách mời' : 'Guest availability'}
-                      </h3>
-                      <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                        {form.date} · {form.allDay ? (lang === 'vi' ? 'Cả ngày' : 'All day') : `${form.startTime} – ${form.endTime}`}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-amber-50 px-3 py-1.5 text-[11.5px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-                      {lang === 'vi' ? 'Bản xem trước giao diện' : 'UI preview'}
-                    </span>
-                  </div>
-
-                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 px-3.5 py-3 text-[12px] leading-relaxed text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-                    {lang === 'vi'
-                      ? 'Dữ liệu bận/rảnh thực tế sẽ hiển thị tại đây sau khi kết nối Google Calendar API.'
-                      : 'Live free/busy data will appear here after Google Calendar API integration.'}
-                  </div>
-
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                    <div className="grid min-w-[676px] grid-cols-[116px_minmax(560px,1fr)] border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/70">
-                      <div className="border-r border-slate-200 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                        {lang === 'vi' ? 'Người tham dự' : 'Attendee'}
-                      </div>
-                      <div className="grid grid-cols-12">
-                        {previewHours.map(hour => (
-                          <div key={hour} className="border-r border-slate-200 px-1 py-2.5 text-center text-[10.5px] text-slate-500 last:border-r-0 dark:border-slate-700 dark:text-slate-400">
-                            {String(hour).padStart(2, '0')}:00
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      {[
-                        connections.find(connection => connection.id === form.connectionId)?.providerAccountId || (lang === 'vi' ? 'Lịch của tôi' : 'My calendar'),
-                        ...form.attendees,
-                      ].map((attendee, index) => (
-                        <div key={`${attendee}-${index}`} className="grid min-w-[676px] grid-cols-[116px_minmax(560px,1fr)] border-b border-slate-100 last:border-b-0 dark:border-slate-800">
-                          <div className="flex min-h-14 items-center gap-2 border-r border-slate-200 px-3 dark:border-slate-700">
-                            <span className={`h-7 w-7 shrink-0 rounded-full text-center text-[11px] font-bold leading-7 text-white ${index === 0 ? 'bg-brand-500' : 'bg-slate-400'}`}>
-                              {attendee.charAt(0).toUpperCase()}
-                            </span>
-                            <span className="truncate text-[11.5px] font-medium text-slate-700 dark:text-slate-200" title={attendee}>{attendee}</span>
-                          </div>
-                          <div className="relative grid min-h-14 grid-cols-12 bg-white dark:bg-slate-900">
-                            {previewHours.map(hour => <div key={hour} className="border-r border-slate-100 last:border-r-0 dark:border-slate-800" />)}
-                            {!form.allDay && index === 0 && (
-                              <div
-                                className="absolute bottom-1.5 top-1.5 rounded-md border border-brand-500 bg-brand-100/90 px-2 py-1 text-[10.5px] font-semibold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"
-                                style={{
-                                  left: `${(previewEventTop / 720) * 100}%`,
-                                  width: `${Math.max(4.2, (previewEventHeight / 720) * 100)}%`,
-                                }}
-                              >
-                                <span className="block truncate">{form.title || (lang === 'vi' ? 'Sự kiện mới' : 'New event')}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {form.attendees.length === 0 && (
-                    <div className="mt-4 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-[12px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-                      <Users className="h-4 w-4" />
-                      {lang === 'vi' ? 'Thêm khách mời ở cột bên phải để xem họ trong lịch.' : 'Add guests on the right to include them in the schedule.'}
-                    </div>
-                  )}
-                </div>
-              )}
             </section>
 
             <aside className="self-start overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:sticky lg:top-0">
@@ -1068,12 +796,6 @@ export function CalendarEventEditorModal({
                       </label>
                     ))}
                   </div>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 px-3.5 py-3 text-[12px] leading-relaxed text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-                  {lang === 'vi'
-                    ? 'Các quyền mới đang ở chế độ xem trước UI và chưa được lưu xuống Google Calendar.'
-                    : 'The new permission controls are UI-only and are not saved to Google Calendar yet.'}
                 </div>
 
                 {mode === 'edit' && htmlLink && (
@@ -1139,19 +861,22 @@ export function CalendarEventEditorModal({
                     }))}
                     className="h-10 w-20 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
-                  <select
+                  <div className="min-w-0 flex-1">
+                  <Select
                     value={customRecurrence.frequency}
-                    onChange={event => setCustomRecurrence(current => ({
+                    onChange={value => setCustomRecurrence(current => ({
                       ...current,
-                      frequency: event.target.value as CustomRecurrenceFrequency,
+                      frequency: value as CustomRecurrenceFrequency,
                     }))}
-                    className="h-10 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                  >
-                    <option value="DAILY">{lang === 'vi' ? 'ngày' : 'day(s)'}</option>
-                    <option value="WEEKLY">{lang === 'vi' ? 'tuần' : 'week(s)'}</option>
-                    <option value="MONTHLY">{lang === 'vi' ? 'tháng' : 'month(s)'}</option>
-                    <option value="YEARLY">{lang === 'vi' ? 'năm' : 'year(s)'}</option>
-                  </select>
+                    options={[
+                      { value: 'DAILY', label: lang === 'vi' ? 'ngày' : 'day(s)' },
+                      { value: 'WEEKLY', label: lang === 'vi' ? 'tuần' : 'week(s)' },
+                      { value: 'MONTHLY', label: lang === 'vi' ? 'tháng' : 'month(s)' },
+                      { value: 'YEARLY', label: lang === 'vi' ? 'năm' : 'year(s)' },
+                    ]}
+                    className="h-10 bg-slate-50 text-[13px] dark:bg-slate-800"
+                  />
+                  </div>
                 </div>
               </div>
 
