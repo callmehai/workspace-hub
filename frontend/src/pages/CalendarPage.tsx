@@ -22,6 +22,8 @@ import {
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ItemDetail } from '../components/ItemDetail';
 import { EventDetailPopup } from '../components/calendar/EventDetailPopup';
+import { CalendarInvitationDialog } from '../components/calendar/CalendarInvitationDialog';
+import { calendarInvitationsApi, type CalendarInvitation, type CalendarInvitationStatus } from '../lib/calendarInvitationsApi';
 import {
   addDays,
   addMonths,
@@ -66,6 +68,8 @@ interface CalendarEntry {
   attendees: string[];
   htmlLink?: string;
   meetUrl?: string;
+  invitation?: CalendarInvitation;
+  canModify?: boolean;
 }
 
 interface UpdateEventVariables {
@@ -202,6 +206,21 @@ function scheduledToEntry(email: ScheduledEmailDto): CalendarEntry {
   };
 }
 
+function invitationToEntry(invitation: CalendarInvitation): CalendarEntry {
+  return {
+    id: `invitation-${invitation.id}`,
+    kind: 'event',
+    title: invitation.title,
+    start: new Date(invitation.start),
+    end: new Date(invitation.end),
+    allDay: invitation.allDay,
+    folderIds: [],
+    location: invitation.location ?? undefined,
+    attendees: invitation.attendees,
+    invitation,
+  };
+}
+
 function entryOccursOn(entry: CalendarEntry, day: Date) {
   const key = dateKey(day);
   if (!entry.allDay) return dateKey(entry.start) === key;
@@ -246,11 +265,11 @@ function CalendarEntryChip({
   return (
     <button
       type="button"
-      draggable={entry.kind === 'event'}
+      draggable={entry.kind === 'event' && Boolean(entry.item) && entry.canModify !== false}
       onDragStart={event => onDragStart(event, entry)}
       onClick={event => { event.stopPropagation(); onOpen(entry, event); }}
       title={entry.title}
-      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
+      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry)} ${entry.kind === 'event' && entry.item && entry.canModify !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
     >
       <Icon className="h-3 w-3 shrink-0 opacity-75" />
       {entry.allDay && showAllDayLabel ? (
@@ -272,6 +291,7 @@ export function CalendarPage() {
   const folderId = searchParams.get('folder');
   const sourceType = parseSourceType(searchParams.get('type'));
   const googleCalendarOnly = sourceType === 'Event' && !folderId;
+  const invitationId = searchParams.get('invitation');
   const [range, setRange] = useState<CalendarRange>('month');
   const [cursor, setCursor] = useState(() => new Date());
   const [search, setSearch] = useState('');
@@ -281,7 +301,13 @@ export function CalendarPage() {
   const [selectedEntryAnchor, setSelectedEntryAnchor] = useState<DOMRect | null>(null);
   const [jiraItemId, setJiraItemId] = useState<string | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<CalendarEntry | null>(null);
-  const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; value: CalendarEventFormValue; entry?: CalendarEntry } | null>(null);
+  const [editor, setEditor] = useState<{
+    mode: 'create' | 'edit';
+    value: CalendarEventFormValue;
+    entry?: CalendarEntry;
+    canInviteOthers?: boolean;
+    canManageGuestPermissions?: boolean;
+  } | null>(null);
   const [moreDay, setMoreDay] = useState<Date | null>(null);
 
   const { rangeStart, rangeEnd } = useMemo(() => calendarQueryRange(cursor, range), [cursor, range]);
@@ -323,12 +349,43 @@ export function CalendarPage() {
     queryFn: connectionsApi.getConnections,
   });
 
+  const { data: invitations = [] } = useQuery({
+    queryKey: ['calendar-invitations', occurredFrom, occurredTo],
+    queryFn: () => calendarInvitationsApi.list(occurredFrom, occurredTo),
+    enabled: !folderId,
+    staleTime: 0,
+    refetchInterval: pollMs,
+  });
+
+  const { data: linkedInvitation } = useQuery({
+    queryKey: ['calendar-invitation', invitationId],
+    queryFn: () => calendarInvitationsApi.get(invitationId!),
+    enabled: Boolean(invitationId),
+  });
+
   const gcalConnections = connections.filter(connection =>
     connection.serviceType.toLowerCase() === 'gcal' && connection.status.toLowerCase() === 'active');
   const currentFolder = folderId ? folders.find(folder => folder.id === folderId) ?? null : null;
 
   const entries = useMemo(() => {
-    const rawItemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => entry !== null);
+    const invitationByICalUid = new Map(invitations.filter(x => x.iCalUid).map(x => [x.iCalUid!, x]));
+    const rawItemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => {
+      if (entry === null) return false;
+      const iCalUid = entry.item ? asString(parseMetadata(entry.item).iCalUid) : undefined;
+      const invitation = iCalUid ? invitationByICalUid.get(iCalUid) : undefined;
+      return !invitation || invitation.status === 'Accepted' || invitation.status === 'Tentative';
+    }).map(entry => {
+      if (!entry.item || entry.kind !== 'event') return entry;
+      const metadata = parseMetadata(entry.item);
+      const connection = connections.find(candidate => candidate.id === entry.item?.connectionId);
+      const organizerEmail = asString(metadata.organizerEmail);
+      return {
+        ...entry,
+        canModify: !organizerEmail
+          || organizerEmail.toLowerCase() === connection?.providerAccountId?.toLowerCase()
+          || metadata.guestsCanModify === true,
+      };
+    });
     
     // Deduplicate by externalId (same Google Calendar event synced via multiple connections)
     const seenExternalIds = new Set<string>();
@@ -340,14 +397,23 @@ export function CalendarPage() {
       return true;
     });
 
+    const seenICalUids = new Set(itemEntries
+      .map(entry => entry.item ? asString(parseMetadata(entry.item).iCalUid) : undefined)
+      .filter((value): value is string => Boolean(value)));
+    const invitationEntries = folderId ? [] : invitations
+      .filter(invitation => invitation.status === 'Accepted' || invitation.status === 'Tentative')
+      .filter(invitation => !invitation.iCalUid || !seenICalUids.has(invitation.iCalUid))
+      .map(invitationToEntry);
     const scheduledEntries = folderId || googleCalendarOnly ? [] : (scheduledPage?.value ?? []).map(scheduledToEntry);
     const queryKind: CalendarEntryKind | null = googleCalendarOnly ? 'event' : null;
-    return [...itemEntries, ...scheduledEntries]
+    return [...itemEntries, ...invitationEntries, ...scheduledEntries]
       .filter(entry => layers[entry.kind])
       .filter(entry => !queryKind || entry.kind === queryKind)
       .filter(entry => !search.trim() || entry.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
       .sort((left, right) => left.start.getTime() - right.start.getTime());
-  }, [itemPage, scheduledPage, folderId, googleCalendarOnly, layers, search]);
+  }, [itemPage, scheduledPage, invitations, connections, folderId, googleCalendarOnly, layers, search]);
+
+  const pendingInvitations = invitations.filter(invitation => invitation.status === 'NeedsAction');
 
   const firstConnectionId = gcalConnections[0]?.id ?? '';
 
@@ -373,6 +439,9 @@ export function CalendarPage() {
         driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
         reminders: form.reminders,
         recurrence: form.recurrence,
+        guestsCanModify: form.guestsCanModify,
+        guestsCanInviteOthers: form.guestsCanInviteOthers,
+        guestsCanSeeOtherGuests: form.guestsCanSeeOtherGuests,
       });
       if (folderId) await foldersApi.addItemToFolder(folderId, { itemId: created.id });
       return created;
@@ -454,6 +523,24 @@ export function CalendarPage() {
     onError: error => handleApiError(error, t('calendar.deleteFailed'), { navigate }),
   });
 
+  const respondInvitationMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: Exclude<CalendarInvitationStatus, 'NeedsAction'> }) =>
+      calendarInvitationsApi.respond(id, status),
+    onSuccess: invitation => {
+      toast.success(lang === 'vi' ? 'Đã lưu phản hồi lời mời' : 'Invitation response saved');
+      queryClient.invalidateQueries({ queryKey: ['calendar-invitations'] });
+      queryClient.setQueryData(['calendar-invitation', invitation.id], invitation);
+      refreshCalendar();
+      setSelectedEntry(null);
+      if (invitationId) {
+        const next = new URLSearchParams(searchParams);
+        next.delete('invitation');
+        navigate({ search: next.toString() }, { replace: true });
+      }
+    },
+    onError: error => handleApiError(error, lang === 'vi' ? 'Không thể phản hồi lời mời' : 'Could not respond to invitation', { navigate }),
+  });
+
   const openCreate = (day: Date, startTime = '09:00', allDay = false) => {
     const value = emptyCalendarForm(day, firstConnectionId, startTime);
     value.allDay = allDay;
@@ -482,7 +569,7 @@ export function CalendarPage() {
   };
 
   const dragStart = (event: DragEvent, entry: CalendarEntry) => {
-    if (entry.kind !== 'event') return;
+    if (entry.kind !== 'event' || entry.canModify === false) return;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData(DRAG_TYPE, entry.id);
     event.dataTransfer.setData('text/plain', entry.id);
@@ -527,6 +614,17 @@ export function CalendarPage() {
     if (googleCalendarOnly) return t('calendar.googleSubtitle', { n: entries.length });
     return t('calendar.subtitle', { n: entries.length });
   }, [loading, folderId, googleCalendarOnly, entries.length, t]);
+
+  const activeInvitation = selectedEntry?.invitation ?? linkedInvitation ?? null;
+  const closeInvitation = () => {
+    setSelectedEntry(null);
+    setSelectedEntryAnchor(null);
+    if (invitationId) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('invitation');
+      navigate({ search: next.toString() }, { replace: true });
+    }
+  };
 
   const entriesForDay = (day: Date) => entries.filter(entry => entryOccursOn(entry, day));
 
@@ -716,6 +814,19 @@ export function CalendarPage() {
           onSearchChange={setSearch}
         />
 
+        {pendingInvitations.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setSelectedEntry(invitationToEntry(pendingInvitations[0]))}
+            className="mb-3 inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200 dark:hover:bg-brand-500/15"
+          >
+            <Users className="h-4 w-4" />
+            {lang === 'vi'
+              ? `${pendingInvitations.length} lời mời lịch đang chờ phản hồi`
+              : `${pendingInvitations.length} calendar invitation(s) waiting`}
+          </button>
+        )}
+
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -786,9 +897,11 @@ export function CalendarPage() {
           folderName={currentFolder?.name}
           saving={createMutation.isPending || updateMutation.isPending}
           htmlLink={editor.mode === 'edit' ? editor.entry?.htmlLink : undefined}
-          onDelete={editor.mode === 'edit' && editor.entry
+          onDelete={editor.mode === 'edit' && editor.entry && editor.canManageGuestPermissions !== false
             ? () => { setEditor(null); setDeleteEntry(editor.entry!); }
             : undefined}
+          canInviteOthers={editor.canInviteOthers}
+          canManageGuestPermissions={editor.canManageGuestPermissions}
           onClose={() => setEditor(null)}
           onSubmit={submitEditor}
         />
@@ -810,7 +923,16 @@ export function CalendarPage() {
             const formVal = itemToCalendarForm(entry.item!);
             formVal.reminders = detailedItem.reminders ?? [];
             formVal.recurrence = detailedItem.recurrence ?? formVal.recurrence ?? [];
-            setEditor({ mode: 'edit', value: formVal, entry });
+            formVal.guestsCanModify = detailedItem.guestsCanModify;
+            formVal.guestsCanInviteOthers = detailedItem.guestsCanInviteOthers;
+            formVal.guestsCanSeeOtherGuests = detailedItem.guestsCanSeeOtherGuests;
+            setEditor({
+              mode: 'edit',
+              value: formVal,
+              entry,
+              canInviteOthers: detailedItem.canInviteOthers,
+              canManageGuestPermissions: detailedItem.isOrganizer,
+            });
           }}
           onDelete={() => {
             const entry = selectedEntry;
@@ -818,6 +940,15 @@ export function CalendarPage() {
             setSelectedEntryAnchor(null);
             setDeleteEntry(entry);
           }}
+        />
+      )}
+
+      {activeInvitation && (
+        <CalendarInvitationDialog
+          invitation={activeInvitation}
+          saving={respondInvitationMutation.isPending}
+          onClose={closeInvitation}
+          onRespond={status => respondInvitationMutation.mutate({ id: activeInvitation.id, status })}
         />
       )}
 

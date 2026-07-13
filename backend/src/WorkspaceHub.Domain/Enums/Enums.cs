@@ -103,7 +103,17 @@ public enum NotificationType
     SyncError,
     ScheduleSent,
     ItemSynced,
-    CalendarReminder
+    CalendarReminder,
+    CalendarInvite
+}
+
+/// <summary>Trạng thái phản hồi lời mời Calendar, tương ứng responseStatus của Google.</summary>
+public enum CalendarInvitationStatus
+{
+    NeedsAction,
+    Accepted,
+    Tentative,
+    Declined
 }
 
 /// <summary>Kênh nhắc nhở — lưu cột <c>ReminderType</c> (enum string).</summary>

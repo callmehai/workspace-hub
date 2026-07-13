@@ -91,6 +91,12 @@ public class CalendarGateway : ICalendarGateway
                             Recurrence = item.Recurrence != null ? item.Recurrence.ToList() : new List<string>(),
                             OrganizerEmail = item.Organizer?.Email,
                             SelfResponseStatus = selfAttendee?.ResponseStatus ?? (item.Organizer?.Self == true ? "accepted" : "needsAction"),
+                            ICalUid = item.ICalUID,
+                            FullAttendees = item.Attendees?.Select(a => new CalendarEventAttendee(
+                                a.Email ?? string.Empty, a.DisplayName, a.ResponseStatus, a.Comment, a.Organizer ?? false)).ToList() ?? [],
+                            GuestsCanModify = item.GuestsCanModify ?? false,
+                            GuestsCanInviteOthers = item.GuestsCanInviteOthers ?? true,
+                            GuestsCanSeeOtherGuests = item.GuestsCanSeeOtherGuests ?? true,
                         });
                     }
                 }
@@ -129,12 +135,16 @@ public class CalendarGateway : ICalendarGateway
             using var calendar = await BuildCalendarServiceAsync(connection, ct);
 
             var existing = await calendar.Events.Get(calendarId, eventId).ExecuteAsync(ct);
+            var shouldNotifyGuests = eventDto.Attendees != null || existing.Attendees?.Count > 0;
 
             if (eventDto.Summary != null) existing.Summary = eventDto.Summary;
             if (eventDto.Description != null) existing.Description = eventDto.Description;
             if (eventDto.Location != null) existing.Location = eventDto.Location;
             if (eventDto.Attendees != null)
                 existing.Attendees = eventDto.Attendees.Select(a => new EventAttendee { Email = a }).ToList();
+            if (eventDto.GuestsCanModify.HasValue) existing.GuestsCanModify = eventDto.GuestsCanModify.Value;
+            if (eventDto.GuestsCanInviteOthers.HasValue) existing.GuestsCanInviteOthers = eventDto.GuestsCanInviteOthers.Value;
+            if (eventDto.GuestsCanSeeOtherGuests.HasValue) existing.GuestsCanSeeOtherGuests = eventDto.GuestsCanSeeOtherGuests.Value;
 
             ApplyUpdateTimes(existing, eventDto);
 
@@ -174,6 +184,8 @@ public class CalendarGateway : ICalendarGateway
             }
 
             var request = calendar.Events.Update(existing, calendarId, eventId);
+            if (shouldNotifyGuests)
+                request.SendUpdates = EventsResource.UpdateRequest.SendUpdatesEnum.All;
             if (eventDto.DriveAttachments != null)
                 request.SupportsAttachments = true;
 
@@ -221,6 +233,10 @@ public class CalendarGateway : ICalendarGateway
                 };
             }
 
+            ev.GuestsCanModify = eventDto.GuestsCanModify ?? false;
+            ev.GuestsCanInviteOthers = eventDto.GuestsCanInviteOthers ?? true;
+            ev.GuestsCanSeeOtherGuests = eventDto.GuestsCanSeeOtherGuests ?? true;
+
             // Drive file attachments
             if (eventDto.DriveAttachments != null && eventDto.DriveAttachments.Count > 0)
             {
@@ -258,6 +274,8 @@ public class CalendarGateway : ICalendarGateway
             }
 
             var insertRequest = calendar.Events.Insert(ev, calendarId);
+            if (ev.Attendees?.Count > 0)
+                insertRequest.SendUpdates = EventsResource.InsertRequest.SendUpdatesEnum.All;
             if (ev.Attachments?.Count > 0)
                 insertRequest.SupportsAttachments = true;
 
@@ -275,7 +293,9 @@ public class CalendarGateway : ICalendarGateway
         try
         {
             using var calendar = await BuildCalendarServiceAsync(connection, ct);
-            await calendar.Events.Delete(calendarId, eventId).ExecuteAsync(ct);
+            var request = calendar.Events.Delete(calendarId, eventId);
+            request.SendUpdates = EventsResource.DeleteRequest.SendUpdatesEnum.All;
+            await request.ExecuteAsync(ct);
         }
         catch (Google.GoogleApiException ex)
         {
@@ -309,11 +329,32 @@ public class CalendarGateway : ICalendarGateway
             }
 
             var request = service.Events.Update(ev, calendarId, eventId);
+            request.SendUpdates = EventsResource.UpdateRequest.SendUpdatesEnum.All;
             await request.ExecuteAsync(ct);
         }
         catch (Google.GoogleApiException ex)
         {
             throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", eventId);
+        }
+    }
+
+    public async Task<CalendarEvent?> FindEventByICalUidAsync(Connection connection, string calendarId, string iCalUid, CancellationToken ct = default)
+    {
+        try
+        {
+            using var service = await BuildCalendarServiceAsync(connection, ct);
+            var request = service.Events.List(calendarId);
+            request.ICalUID = iCalUid;
+            request.SingleEvents = true;
+            request.ShowDeleted = false;
+            request.MaxResults = 10;
+            var response = await request.ExecuteAsync(ct);
+            var ev = response.Items?.FirstOrDefault(x => !string.Equals(x.Status, "cancelled", StringComparison.OrdinalIgnoreCase));
+            return ev == null ? null : MapToDto(ev);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Calendar", "Event", iCalUid);
         }
     }
 
@@ -410,7 +451,11 @@ public class CalendarGateway : ICalendarGateway
             remindersList.Count > 0 ? remindersList : null,
             recurrenceList,
             ev.Organizer?.Email,
-            selfResponse);
+            selfResponse,
+            ev.ICalUID,
+            ev.GuestsCanModify ?? false,
+            ev.GuestsCanInviteOthers ?? true,
+            ev.GuestsCanSeeOtherGuests ?? true);
     }
 
     private static readonly Regex DriveFileIdFromPathRegex = new(@"/d/([a-zA-Z0-9_-]+)", RegexOptions.Compiled);

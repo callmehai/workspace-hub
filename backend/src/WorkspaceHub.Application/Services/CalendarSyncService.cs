@@ -14,23 +14,27 @@ public class CalendarSyncService : ICalendarSyncService
     private readonly ICalendarItemMapper _mapper;
     private readonly IItemRepository _items;
     private readonly IConnectionRepository _connections;
+    private readonly ICalendarInvitationService _calendarInvitations;
 
     public CalendarSyncService(
         ICalendarGateway gateway,
         ICalendarItemMapper mapper,
         IItemRepository items,
-        IConnectionRepository connections)
+        IConnectionRepository connections,
+        ICalendarInvitationService calendarInvitations)
     {
         _gateway = gateway;
         _mapper = mapper;
         _items = items;
         _connections = connections;
+        _calendarInvitations = calendarInvitations;
     }
 
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, CancellationToken ct = default)
     {
         var existingItems = await _items.GetTrackedByConnectionIdAsync(connection.Id, ct);
         var newItems = new List<Item>();
+        var reconciliations = new List<(Item Item, CalendarEventDto Event)>();
 
         string? syncToken = connection.CursorType == CursorType.SyncToken ? connection.CursorValue : null;
         var result = await _gateway.SyncEventsAsync(connection, syncToken, ct);
@@ -64,12 +68,14 @@ public class CalendarSyncService : ICalendarSyncService
                     // Keep Status intact to avoid resetting Kanban columns.
                 }
                 skipped++;
+                reconciliations.Add((existing, ev));
                 continue;
             }
 
             SyncLocalReminders(mapped, ev.Reminders);
             newItems.Add(mapped);
             existingItems[ev.Id] = mapped;
+            reconciliations.Add((mapped, ev));
             created++;
         }
 
@@ -86,6 +92,9 @@ public class CalendarSyncService : ICalendarSyncService
             if (existingItems.Remove(cancelledId, out var toDelete))
                 _items.Remove(toDelete);
         }
+
+        foreach (var (localItem, calendarEvent) in reconciliations)
+            await _calendarInvitations.ReconcileSyncedEventAsync(connection, localItem, calendarEvent, ct);
 
         connection.CursorType = CursorType.SyncToken;
         connection.CursorValue = result.NextSyncToken;

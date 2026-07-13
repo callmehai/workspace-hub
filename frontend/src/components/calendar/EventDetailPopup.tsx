@@ -251,12 +251,16 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   return shell(
     <>
       <div className="flex items-center justify-end gap-2.5 px-4 py-3.5">
-        <button type="button" onClick={() => onEdit(detail)} title={t('common.edit')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={onDelete} title={t('common.delete')} className="rounded-full p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-300">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {detail.canEdit && (
+          <button type="button" onClick={() => onEdit(detail)} title={t('common.edit')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Pencil className="h-4 w-4" />
+          </button>
+        )}
+        {detail.isOrganizer && (
+          <button type="button" onClick={onDelete} title={t('common.delete')} className="rounded-full p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-300">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
         <button type="button" onClick={() => setIsEmailPopupOpen(true)} title={t('calendar.emailGuests')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
           <Mail className="h-4 w-4" />
         </button>

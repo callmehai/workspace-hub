@@ -16,9 +16,13 @@ public class CreateEventRequestValidator : AbstractValidator<CreateEventRequest>
             .GreaterThan(x => x.Start).WithMessage("End time must be after Start time.");
 
         RuleFor(x => x.Attendees)
-            .Must(attendees => attendees!.All(a => !string.IsNullOrWhiteSpace(a)))
+            .Must(attendees => attendees!.Count <= 200 && attendees.All(a => !string.IsNullOrWhiteSpace(a)))
             .When(x => x.Attendees != null)
-            .WithMessage("Attendees list cannot contain empty emails.");
+            .WithMessage("Attendees must contain at most 200 non-empty emails.");
+
+        RuleForEach(x => x.Attendees)
+            .EmailAddress().WithMessage("Each attendee must be a valid email address.")
+            .When(x => x.Attendees != null);
 
         RuleFor(x => x.DriveItemIds)
             .Must(ids => ids == null || ids.Count <= 20)

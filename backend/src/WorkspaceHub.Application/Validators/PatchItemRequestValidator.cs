@@ -17,7 +17,8 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
                        x.Priority != null || x.StatusTransition != null || x.Labels != null || x.Comment != null ||
                        x.IssueType != null ||
                        // Event edits (SCRUM-37)
-                       x.AllDay.HasValue || x.DriveItemIds != null || x.Reminders != null)
+                       x.AllDay.HasValue || x.DriveItemIds != null || x.Reminders != null || x.Recurrence != null ||
+                       x.GuestsCanModify.HasValue || x.GuestsCanInviteOthers.HasValue || x.GuestsCanSeeOtherGuests.HasValue)
             .WithMessage("Request body must contain at least one field to update.");
 
         RuleFor(x => x.Start)
@@ -36,9 +37,13 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .WithMessage("RemoveLabels list cannot contain empty label IDs.");
 
         RuleFor(x => x.Attendees)
-            .Must(attendees => attendees!.All(a => !string.IsNullOrWhiteSpace(a)))
+            .Must(attendees => attendees!.Count <= 200 && attendees.All(a => !string.IsNullOrWhiteSpace(a)))
             .When(x => x.Attendees != null)
-            .WithMessage("Attendees list cannot contain empty emails.");
+            .WithMessage("Attendees must contain at most 200 non-empty emails.");
+
+        RuleForEach(x => x.Attendees)
+            .EmailAddress().WithMessage("Each attendee must be a valid email address.")
+            .When(x => x.Attendees != null);
 
         RuleFor(x => x.Name)
             .Must(name => name != null && name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) < 0)

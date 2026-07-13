@@ -20,6 +20,7 @@ public class ItemWriteBackService : IItemWriteBackService
     private readonly IDriveGateway _driveGateway;
     private readonly IJiraGateway _jiraGateway;
     private readonly IJiraItemMapper _jiraMapper;
+    private readonly ICalendarInvitationService? _calendarInvitations;
 
     public ItemWriteBackService(
         IItemRepository items,
@@ -29,7 +30,8 @@ public class ItemWriteBackService : IItemWriteBackService
         ICalendarGateway calendarGateway,
         IDriveGateway driveGateway,
         IJiraGateway jiraGateway,
-        IJiraItemMapper jiraMapper)
+        IJiraItemMapper jiraMapper,
+        ICalendarInvitationService? calendarInvitations = null)
     {
         _items = items;
         _connections = connections;
@@ -39,6 +41,7 @@ public class ItemWriteBackService : IItemWriteBackService
         _driveGateway = driveGateway;
         _jiraGateway = jiraGateway;
         _jiraMapper = jiraMapper;
+        _calendarInvitations = calendarInvitations;
     }
 
     private async Task<Connection> GetConnectionAsync(Guid? connectionId, CancellationToken ct)
@@ -71,7 +74,9 @@ public class ItemWriteBackService : IItemWriteBackService
             !payload.IsTrashed.HasValue && payload.Title == null && payload.Start == null &&
             payload.End == null && payload.Location == null && payload.Attendees == null &&
             payload.Name == null && payload.Description == null &&
-            payload.DriveItemIds == null && !payload.AllDay.HasValue)
+            payload.DriveItemIds == null && !payload.AllDay.HasValue && payload.Reminders == null &&
+            payload.Recurrence == null && !payload.GuestsCanModify.HasValue &&
+            !payload.GuestsCanInviteOthers.HasValue && !payload.GuestsCanSeeOtherGuests.HasValue)
         {
             throw new BusinessRuleException("No fields provided for update.");
         }
@@ -171,6 +176,19 @@ public class ItemWriteBackService : IItemWriteBackService
                     throw new BusinessRuleException("Invalid fields for Event writeback.");
 
                 var currentMeta = ParseMetadataDict(item.MetadataJson);
+                var organizerEmail = ReadMetaString(currentMeta, "organizerEmail") ?? conn.ProviderAccountId;
+                var isOrganizer = string.Equals(organizerEmail, conn.ProviderAccountId, StringComparison.OrdinalIgnoreCase);
+                if (!isOrganizer)
+                {
+                    var guestsCanModify = ReadMetaBool(currentMeta, "guestsCanModify");
+                    var guestsCanInviteOthers = ReadMetaBool(currentMeta, "guestsCanInviteOthers", true);
+                    if (!guestsCanModify)
+                        throw new ForbiddenException("Organizer does not allow guests to modify this event.");
+                    if (payload.Attendees != null && !guestsCanInviteOthers)
+                        throw new ForbiddenException("Organizer does not allow guests to invite other people.");
+                    if (payload.GuestsCanModify.HasValue || payload.GuestsCanInviteOthers.HasValue || payload.GuestsCanSeeOtherGuests.HasValue)
+                        throw new ForbiddenException("Only the organizer can change guest permissions.");
+                }
                 var existingAllDay = ReadMetaAllDay(currentMeta);
                 var effectiveAllDay = payload.AllDay ?? existingAllDay;
 
@@ -216,7 +234,13 @@ public class ItemWriteBackService : IItemWriteBackService
                     null, // meetUrl (only used for read)
                     null, // htmlLink (only used for read)
                     MapToGoogleReminders(payload.Reminders),
-                    payload.Recurrence
+                    payload.Recurrence,
+                    OrganizerEmail: null,
+                    SelfResponseStatus: null,
+                    ICalUid: null,
+                    GuestsCanModify: payload.GuestsCanModify,
+                    GuestsCanInviteOthers: payload.GuestsCanInviteOthers,
+                    GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests
                 );
 
                 var updatedEvent = await _calendarGateway.UpdateEventAsync(conn, "primary", item.ExternalId, evDto, ct);
@@ -239,6 +263,10 @@ public class ItemWriteBackService : IItemWriteBackService
                     metaDictEvent.Remove("recurrence");
                 metaDictEvent["organizerEmail"] = updatedEvent.OrganizerEmail ?? conn.ProviderAccountId;
                 metaDictEvent["selfResponseStatus"] = updatedEvent.SelfResponseStatus ?? "accepted";
+                if (!string.IsNullOrWhiteSpace(updatedEvent.ICalUid)) metaDictEvent["iCalUid"] = updatedEvent.ICalUid;
+                metaDictEvent["guestsCanModify"] = updatedEvent.GuestsCanModify ?? false;
+                metaDictEvent["guestsCanInviteOthers"] = updatedEvent.GuestsCanInviteOthers ?? true;
+                metaDictEvent["guestsCanSeeOtherGuests"] = updatedEvent.GuestsCanSeeOtherGuests ?? true;
                 if (payload.DriveItemIds != null)
                 {
                     metaDictEvent["driveItemIds"] = payload.DriveItemIds;
@@ -323,6 +351,16 @@ public class ItemWriteBackService : IItemWriteBackService
         if (newETag != null) item.ETag = newETag;
         
         await _items.SaveChangesAsync(ct);
+        if (_calendarInvitations != null && item.Type == ItemType.Event && item.ConnectionId != null && item.ExternalId != null)
+        {
+            var meta = ParseMetadataDict(item.MetadataJson);
+            var organizer = ReadMetaString(meta, "organizerEmail");
+            if (string.IsNullOrWhiteSpace(organizer) || string.Equals(organizer, conn.ProviderAccountId, StringComparison.OrdinalIgnoreCase))
+            {
+                var live = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
+                await _calendarInvitations.ReconcileOrganizerEventAsync(item, live, ct);
+            }
+        }
         return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
 
@@ -380,7 +418,13 @@ public class ItemWriteBackService : IItemWriteBackService
             null, // meetUrl
             null, // htmlLink
             MapToGoogleReminders(payload.Reminders),
-            payload.Recurrence
+            payload.Recurrence,
+            OrganizerEmail: null,
+            SelfResponseStatus: null,
+            ICalUid: null,
+            GuestsCanModify: payload.GuestsCanModify,
+            GuestsCanInviteOthers: payload.GuestsCanInviteOthers,
+            GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests
         );
 
         var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
@@ -392,6 +436,10 @@ public class ItemWriteBackService : IItemWriteBackService
         if (created.Recurrence != null && created.Recurrence.Count > 0) metaDict["recurrence"] = created.Recurrence;
         metaDict["organizerEmail"] = created.OrganizerEmail ?? conn.ProviderAccountId;
         metaDict["selfResponseStatus"] = created.SelfResponseStatus ?? "accepted";
+        if (!string.IsNullOrWhiteSpace(created.ICalUid)) metaDict["iCalUid"] = created.ICalUid;
+        metaDict["guestsCanModify"] = created.GuestsCanModify ?? payload.GuestsCanModify;
+        metaDict["guestsCanInviteOthers"] = created.GuestsCanInviteOthers ?? payload.GuestsCanInviteOthers;
+        metaDict["guestsCanSeeOtherGuests"] = created.GuestsCanSeeOtherGuests ?? payload.GuestsCanSeeOtherGuests;
         if (created.AllDay) metaDict["allDay"] = true;
 
         if (effectiveAllDay)
@@ -449,6 +497,8 @@ public class ItemWriteBackService : IItemWriteBackService
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
+        if (_calendarInvitations != null)
+            await _calendarInvitations.ReconcileOrganizerEventAsync(item, created, ct);
         return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
 
@@ -668,6 +718,17 @@ public class ItemWriteBackService : IItemWriteBackService
         };
     }
 
+    private static bool ReadMetaBool(Dictionary<string, object> meta, string key, bool fallback = false)
+    {
+        if (!meta.TryGetValue(key, out var value)) return fallback;
+        return value switch
+        {
+            bool b => b,
+            JsonElement element when element.ValueKind is JsonValueKind.True or JsonValueKind.False => element.GetBoolean(),
+            _ => fallback
+        };
+    }
+
     private static string? ReadMetaString(Dictionary<string, object> meta, string key)
     {
         if (!meta.TryGetValue(key, out var val)) return null;
@@ -675,7 +736,7 @@ public class ItemWriteBackService : IItemWriteBackService
         {
             JsonElement je when je.ValueKind == JsonValueKind.String => je.GetString(),
             string s => s,
-            _ => val.ToString()
+            _ => val?.ToString()
         };
     }
 

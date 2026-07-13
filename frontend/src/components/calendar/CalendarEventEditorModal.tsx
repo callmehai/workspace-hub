@@ -42,6 +42,9 @@ export interface CalendarEventFormValue {
   driveAttachments: CalendarDriveAttachmentSnapshot[];
   reminders?: EventReminderFormValue[];
   recurrence?: string[];
+  guestsCanModify: boolean;
+  guestsCanInviteOthers: boolean;
+  guestsCanSeeOtherGuests: boolean;
 }
 
 export interface EventReminderFormValue {
@@ -142,6 +145,8 @@ interface CalendarEventEditorModalProps {
   saving?: boolean;
   htmlLink?: string;
   onDelete?: () => void;
+  canInviteOthers?: boolean;
+  canManageGuestPermissions?: boolean;
   onClose: () => void;
   onSubmit: (value: CalendarEventFormValue) => void;
 }
@@ -156,6 +161,8 @@ export function CalendarEventEditorModal({
   saving = false,
   htmlLink,
   onDelete,
+  canInviteOthers = true,
+  canManageGuestPermissions = true,
   onClose,
   onSubmit,
 }: CalendarEventEditorModalProps) {
@@ -165,11 +172,6 @@ export function CalendarEventEditorModal({
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
   const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | 'end-date' | null>(null);
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
-  const [guestPermissions, setGuestPermissions] = useState({
-    modifyEvent: false,
-    inviteOthers: true,
-    seeGuestList: true,
-  });
   const [customRecurrence, setCustomRecurrence] = useState<CustomRecurrenceValue>(
     () => parseCustomRecurrence(initialValue.recurrence, initialValue.date),
   );
@@ -261,7 +263,6 @@ export function CalendarEventEditorModal({
       setOpenPicker(null);
       setCustomRecurrence(parseCustomRecurrence(initialValue.recurrence, initialValue.date));
       setCustomRecurrenceOpen(false);
-      setGuestPermissions({ modifyEvent: false, inviteOthers: true, seeGuestList: true });
     }
   }
 
@@ -760,24 +761,30 @@ export function CalendarEventEditorModal({
               <div className="space-y-4 p-5">
                 <div>
                   <label className={labelClass}>{lang === 'vi' ? 'Thêm khách mời' : 'Add guests'}</label>
-                  <EmailChipsInput
-                    value={form.attendees}
-                    onChange={attendees => setForm(current => ({ ...current, attendees }))}
-                    connectionId={suggestConnectionId}
-                    placeholder={lang === 'vi' ? 'Nhập email khách mời' : 'Enter guest email'}
-                    className="mb-0"
-                  />
+                  {canInviteOthers ? (
+                    <EmailChipsInput
+                      value={form.attendees}
+                      onChange={attendees => setForm(current => ({ ...current, attendees }))}
+                      connectionId={suggestConnectionId}
+                      placeholder={lang === 'vi' ? 'Nhập email khách mời' : 'Enter guest email'}
+                      className="mb-0"
+                    />
+                  ) : (
+                    <div className="flex min-h-10 flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
+                      {form.attendees.map(email => <span key={email} className="rounded-lg bg-white px-2 py-1 text-xs text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">{email}</span>)}
+                    </div>
+                  )}
                 </div>
 
-                <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
+                {canManageGuestPermissions && <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
                   <h4 className="mb-2.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200">
                     {lang === 'vi' ? 'Quyền của khách' : 'Guest permissions'}
                   </h4>
                   <div className="space-y-1">
                     {[
-                      { key: 'modifyEvent', vi: 'Sửa đổi sự kiện', en: 'Modify event' },
-                      { key: 'inviteOthers', vi: 'Mời người khác', en: 'Invite others' },
-                      { key: 'seeGuestList', vi: 'Xem danh sách khách', en: 'See guest list' },
+                      { key: 'guestsCanModify', vi: 'Sửa đổi sự kiện', en: 'Modify event' },
+                      { key: 'guestsCanInviteOthers', vi: 'Mời người khác', en: 'Invite others' },
+                      { key: 'guestsCanSeeOtherGuests', vi: 'Xem danh sách khách', en: 'See guest list' },
                     ].map(permission => (
                       <label
                         key={permission.key}
@@ -785,8 +792,8 @@ export function CalendarEventEditorModal({
                       >
                         <input
                           type="checkbox"
-                          checked={guestPermissions[permission.key as keyof typeof guestPermissions]}
-                          onChange={event => setGuestPermissions(current => ({
+                          checked={form[permission.key as 'guestsCanModify' | 'guestsCanInviteOthers' | 'guestsCanSeeOtherGuests']}
+                          onChange={event => setForm(current => ({
                             ...current,
                             [permission.key]: event.target.checked,
                           }))}
@@ -796,7 +803,7 @@ export function CalendarEventEditorModal({
                       </label>
                     ))}
                   </div>
-                </div>
+                </div>}
 
                 {mode === 'edit' && htmlLink && (
                   <a

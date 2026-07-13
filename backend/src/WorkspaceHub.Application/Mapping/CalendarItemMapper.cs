@@ -22,6 +22,10 @@ public class CalendarItemMapper : ICalendarItemMapper
         if (!string.IsNullOrEmpty(ev.Location)) metadata["location"] = ev.Location;
         if (!string.IsNullOrEmpty(ev.OrganizerEmail)) metadata["organizerEmail"] = ev.OrganizerEmail;
         if (!string.IsNullOrEmpty(ev.SelfResponseStatus)) metadata["selfResponseStatus"] = ev.SelfResponseStatus;
+        if (!string.IsNullOrEmpty(ev.ICalUid)) metadata["iCalUid"] = ev.ICalUid;
+        metadata["guestsCanModify"] = ev.GuestsCanModify;
+        metadata["guestsCanInviteOthers"] = ev.GuestsCanInviteOthers;
+        metadata["guestsCanSeeOtherGuests"] = ev.GuestsCanSeeOtherGuests;
         if (ev.Attendees.Count > 0) metadata["attendees"] = ev.Attendees;
         if (!string.IsNullOrEmpty(ev.MeetUrl)) metadata["meetUrl"] = ev.MeetUrl;
         if (!string.IsNullOrEmpty(ev.HtmlLink)) metadata["htmlLink"] = ev.HtmlLink;

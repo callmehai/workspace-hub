@@ -2,6 +2,13 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-13] Calendar invitations + RSVP trong app + guest permissions
+
+- Google Calendar là nguồn sự thật của event; create/update có attendees dùng `sendUpdates=all`, vì vậy email mời do Google Calendar gửi. Gmail chỉ được tái sử dụng cho contact suggestions, không gửi email mời trùng.
+- Thêm `CalendarInvitations` để user nội bộ nhận notification và phản hồi `Accepted/Tentative/Declined` ngay trong WorkspaceHub. Event được reconcile giữa organizer/invitee bằng `iCalUID`; nếu invitee chưa connect GCal thì lưu `GoogleSyncPending` nhưng event accepted/tentative vẫn hiện trong app.
+- Sync hai chiều cập nhật attendee response và liên kết `InviteeItemId`; thay đổi attendee từ phía Google cũng tạo/gỡ invitation nội bộ ở lần sync kế tiếp.
+- Ba quyền Google (`guestsCanModify`, `guestsCanInviteOthers`, `guestsCanSeeOtherGuests`) được lưu metadata, ghi/đọc Google và enforce ở backend. UI ẩn sửa/xóa/guest list tương ứng; organizer luôn có toàn quyền.
+
 ## [2026-07-12] Jira deadline trên Calendar — sync `fields.duedate`
 
 - **Gap:** FE overlay Jira đã có (violet, read-only) nhưng `JiraItemMapper` không map `fields.duedate` → `DueAt`/`metadata.dueDate` luôn null → ticket không lên lịch; overlap query còn match ticket theo `OccurredAt=updated` (sai).
