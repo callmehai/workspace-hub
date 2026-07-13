@@ -20,6 +20,7 @@ export interface GetItemsParams {
   /** Lọc ticket Jira theo người phụ trách (accountId); "unassigned" = chưa gán. */
   assignee?: string;
   connectionId?: string;
+  driveParentId?: string;
   page?: number;
   limit?: number;
 }
