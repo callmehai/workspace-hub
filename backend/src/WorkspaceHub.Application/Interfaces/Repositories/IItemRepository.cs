@@ -28,6 +28,7 @@ public interface IItemRepository : IGenericRepository<Item>
         Guid? connectionId = null,
         DateTime? occurredFrom = null,
         DateTime? occurredTo = null,
+        string? driveParentId = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);

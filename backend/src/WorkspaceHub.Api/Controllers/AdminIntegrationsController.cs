@@ -21,6 +21,13 @@ public class AdminIntegrationsController : ApiControllerBase
         _validator = validator;
     }
 
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<IntegrationResponse>>> List(CancellationToken ct)
+    {
+        var result = await _connectionsService.GetIntegrationsAsync(ct);
+        return Ok(result);
+    }
+
     [HttpPatch("{key}/enable")]
     public async Task<ActionResult<IntegrationResponse>> Toggle(
         string key,

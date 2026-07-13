@@ -21,6 +21,7 @@ public record GetItemsRequest(
     Guid? ConnectionId = null,    // Lọc item theo connection (Drive/Gmail/…)
     DateTime? OccurredFrom = null, // UTC inclusive — overlap filter (Event calendar range)
     DateTime? OccurredTo = null,   // UTC exclusive
+    string? DriveParentId = null, // Lọc item theo thư mục cha Drive
     int Page = 1,
     int Limit = 20);
 

@@ -87,6 +87,7 @@ public class ItemService : IItemService
             request.ConnectionId,
             request.OccurredFrom,
             request.OccurredTo,
+            request.DriveParentId,
             page,
             limit,
             ct);

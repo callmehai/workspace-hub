@@ -24,6 +24,7 @@ export interface GetItemsParams {
   occurredFrom?: string;
   /** UTC exclusive */
   occurredTo?: string;
+  driveParentId?: string;
   page?: number;
   limit?: number;
 }

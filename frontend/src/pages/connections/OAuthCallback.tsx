@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { AxiosError } from 'axios';
+import { isAxiosError } from 'axios';
 import { connectionsApi, type OAuthCallbackResponse } from '../../lib/connectionsApi';
+import type { ApiErrorResponse } from '../../lib/errorUtils';
+import type { TranslationKey } from '../../i18n/translations';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../hooks/useI18n';
@@ -69,7 +72,16 @@ export const OAuthCallback = () => {
         .catch((err) => {
           activeStatus = 'error';
           console.error(err);
-          const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || t('oauth.failed');
+          const msg = isAxiosError(err)
+            ? (err.response?.data as ApiErrorResponse | undefined)?.message?.trim()
+            : (err as AxiosError<{ message?: string }>)?.response?.data?.message?.trim();
+          if (msg?.startsWith('integrations.')) {
+            activeErrorMsg = t(msg as TranslationKey, { name: t('integrations.title') });
+            notifyListeners();
+            toast.error(activeErrorMsg);
+            throw err;
+          }
+          const message = msg || t('oauth.failed');
           activeErrorMsg = message;
           notifyListeners();
           toast.error(message);

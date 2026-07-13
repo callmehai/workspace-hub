@@ -196,6 +196,7 @@ interface WorkspaceToolbarProps {
   onAssigneeChange?: (v: string) => void;
   searchInput: string;
   onSearchChange: (v: string) => void;
+  currentDriveFolderId?: string;
 }
 
 export const WorkspaceToolbar = ({
@@ -208,6 +209,7 @@ export const WorkspaceToolbar = ({
   projectKeyFilter, onProjectKeyChange,
   assigneeFilter, onAssigneeChange,
   searchInput, onSearchChange,
+  currentDriveFolderId,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -521,7 +523,7 @@ export const WorkspaceToolbar = ({
       />
       <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
-      <CreateDriveFolderModal isOpen={isDriveFolderOpen} onClose={() => setIsDriveFolderOpen(false)} />
+      <CreateDriveFolderModal isOpen={isDriveFolderOpen} onClose={() => setIsDriveFolderOpen(false)} defaultParentItemId={currentDriveFolderId} />
     </>
   );
 };
