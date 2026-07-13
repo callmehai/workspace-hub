@@ -91,7 +91,7 @@
 | SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do (board) — **thực tế đã deploy** lên AWS Lightsail (`app.workspace-hub.space`, Docker Compose + CI/CD auto-deploy develop); còn lại: chốt OAuth redirect prod cho từng account, đóng ticket. Xem `docs/DEPLOY.md`. |
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
-| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | 🔄 In Progress |
+| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | 🔄 In Progress — `GET /api/admin/integrations` + `adminApi.getIntegrations`/`toggleIntegration`; section **Tích hợp dịch vụ** trên `AdminDashboard` (toggle + ConfirmDialog bật/tắt Google/Atlassian). |
 | SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
 | SCRUM-67 | FE: Highlight email chưa đọc (đồng bộ trạng thái read/unread với Gmail; fix payload sai → 409) — **không thêm cột DB** | Vũ | ⏳ To Do |
 | SCRUM-68 | Notifications in-app (chuông + badge unread + dropdown mark-as-read; BE API list phân trang + cập nhật trạng thái đọc) | Khánh | 🔄 In Progress |

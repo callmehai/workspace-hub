@@ -74,7 +74,7 @@ public class ConnectionsService : IConnectionsService
             ?? throw new NotFoundException($"Integration '{integrationKey}' không tồn tại");
 
         if (!integration.IsEnabled)
-            throw new BusinessRuleException("Integration đang bị disabled");
+            throw new BusinessRuleException("integrations.connectDisabled");
 
         if (!_strategies.TryGetValue(integrationKey, out var strategy))
             throw new BusinessRuleException($"Provider '{integrationKey}' chưa được hỗ trợ");
@@ -187,6 +187,16 @@ public class ConnectionsService : IConnectionsService
         await _connections.SaveChangesAsync(ct);
 
         return new CompleteConnectionResponse(integrationKey, tokenResult.ProviderAccountId, results);
+    }
+
+    public async Task<IReadOnlyList<IntegrationResponse>> GetIntegrationsAsync(CancellationToken ct = default)
+    {
+        var integrations = await _integrations.ListAsync(ct);
+        return integrations
+            .OrderBy(i => i.DisplayName)
+            .Select(i => new IntegrationResponse(i.Id, i.Key, i.DisplayName, i.IsEnabled))
+            .ToList()
+            .AsReadOnly();
     }
 
     public async Task<IntegrationResponse> ToggleIntegrationAsync(string key, bool isEnabled, CancellationToken ct = default)
