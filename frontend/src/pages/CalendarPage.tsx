@@ -23,6 +23,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ItemDetail } from '../components/ItemDetail';
 import { EventDetailPopup } from '../components/calendar/EventDetailPopup';
 import { CalendarInvitationDialog } from '../components/calendar/CalendarInvitationDialog';
+import { CalendarGuestNotificationDialog } from '../components/calendar/CalendarGuestNotificationDialog';
 import { calendarInvitationsApi, type CalendarInvitation, type CalendarInvitationStatus } from '../lib/calendarInvitationsApi';
 import {
   addDays,
@@ -206,6 +207,17 @@ function scheduledToEntry(email: ScheduledEmailDto): CalendarEntry {
   };
 }
 
+interface CreateEventVariables {
+  form: CalendarEventFormValue;
+  sendUpdates: boolean;
+}
+
+interface PendingGuestSubmit {
+  form: CalendarEventFormValue;
+  addedCount: number;
+  removedCount: number;
+}
+
 function invitationToEntry(invitation: CalendarInvitation): CalendarEntry {
   return {
     id: `invitation-${invitation.id}`,
@@ -308,6 +320,7 @@ export function CalendarPage() {
     canInviteOthers?: boolean;
     canManageGuestPermissions?: boolean;
   } | null>(null);
+  const [pendingGuestSubmit, setPendingGuestSubmit] = useState<PendingGuestSubmit | null>(null);
   const [moreDay, setMoreDay] = useState<Date | null>(null);
 
   const { rangeStart, rangeEnd } = useMemo(() => calendarQueryRange(cursor, range), [cursor, range]);
@@ -424,7 +437,7 @@ export function CalendarPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: async (form: CalendarEventFormValue) => {
+    mutationFn: async ({ form, sendUpdates }: CreateEventVariables) => {
       const { start, end } = formToRange(form);
       const times = calendarRangeToApiTimes(start, end, form.allDay);
       const created = await itemsApi.createEvent({
@@ -442,12 +455,14 @@ export function CalendarPage() {
         guestsCanModify: form.guestsCanModify,
         guestsCanInviteOthers: form.guestsCanInviteOthers,
         guestsCanSeeOtherGuests: form.guestsCanSeeOtherGuests,
+        sendUpdates,
       });
       if (folderId) await foldersApi.addItemToFolder(folderId, { itemId: created.id });
       return created;
     },
     onSuccess: () => {
       toast.success(t('calendar.created'));
+      setPendingGuestSubmit(null);
       setEditor(null);
       refreshCalendar();
       queryClient.invalidateQueries({ queryKey: ['folders'] });
@@ -489,6 +504,7 @@ export function CalendarPage() {
     },
     onSuccess: () => {
       toast.success(t('calendar.updated'));
+      setPendingGuestSubmit(null);
       setEditor(null);
       setSelectedEntry(null);
       setSelectedEntryAnchor(null);
@@ -552,9 +568,9 @@ export function CalendarPage() {
     setSelectedEntryAnchor(event?.currentTarget.getBoundingClientRect() ?? null);
   };
 
-  const submitEditor = (form: CalendarEventFormValue) => {
+  const executeEditorSubmit = (form: CalendarEventFormValue, sendUpdates: boolean) => {
     if (editor?.mode === 'create') {
-      createMutation.mutate(form);
+      createMutation.mutate({ form, sendUpdates });
       return;
     }
     if (!editor?.entry?.item) return;
@@ -564,8 +580,31 @@ export function CalendarPage() {
       start,
       end,
       allDay: form.allDay,
-      patch: calendarFormToPatch(form),
+      patch: { ...calendarFormToPatch(form), sendUpdates },
     });
+  };
+
+  const submitEditor = (form: CalendarEventFormValue) => {
+    if (!editor) return;
+
+    const previousGuests = new Set(editor.value.attendees.map(email => email.trim().toLocaleLowerCase()));
+    const nextGuests = new Set(form.attendees.map(email => email.trim().toLocaleLowerCase()));
+    const addedCount = [...nextGuests].filter(email => !previousGuests.has(email)).length;
+    const removedCount = [...previousGuests].filter(email => !nextGuests.has(email)).length;
+
+    if (addedCount > 0 || removedCount > 0) {
+      setPendingGuestSubmit({ form, addedCount, removedCount });
+      return;
+    }
+
+    executeEditorSubmit(form, true);
+  };
+
+  const submitPendingGuestChanges = (sendUpdates: boolean) => {
+    if (!pendingGuestSubmit) return;
+    const { form } = pendingGuestSubmit;
+    setPendingGuestSubmit(null);
+    executeEditorSubmit(form, sendUpdates);
   };
 
   const dragStart = (event: DragEvent, entry: CalendarEntry) => {
@@ -902,10 +941,23 @@ export function CalendarPage() {
             : undefined}
           canInviteOthers={editor.canInviteOthers}
           canManageGuestPermissions={editor.canManageGuestPermissions}
-          onClose={() => setEditor(null)}
+          onClose={() => {
+            setPendingGuestSubmit(null);
+            setEditor(null);
+          }}
           onSubmit={submitEditor}
         />
       )}
+
+      <CalendarGuestNotificationDialog
+        open={pendingGuestSubmit !== null}
+        addedCount={pendingGuestSubmit?.addedCount ?? 0}
+        removedCount={pendingGuestSubmit?.removedCount ?? 0}
+        saving={createMutation.isPending || updateMutation.isPending}
+        onBack={() => setPendingGuestSubmit(null)}
+        onDontSend={() => submitPendingGuestChanges(false)}
+        onSend={() => submitPendingGuestChanges(true)}
+      />
 
       {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && (
         <EventDetailPopup
@@ -923,6 +975,11 @@ export function CalendarPage() {
             const formVal = itemToCalendarForm(entry.item!);
             formVal.reminders = detailedItem.reminders ?? [];
             formVal.recurrence = detailedItem.recurrence ?? formVal.recurrence ?? [];
+            if (detailedItem.canSeeGuestList) {
+              formVal.attendees = detailedItem.attendees
+                .filter(attendee => !attendee.organizer && attendee.email.trim().length > 0)
+                .map(attendee => attendee.email);
+            }
             formVal.guestsCanModify = detailedItem.guestsCanModify;
             formVal.guestsCanInviteOthers = detailedItem.guestsCanInviteOthers;
             formVal.guestsCanSeeOtherGuests = detailedItem.guestsCanSeeOtherGuests;

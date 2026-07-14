@@ -135,7 +135,7 @@ public class CalendarGateway : ICalendarGateway
             using var calendar = await BuildCalendarServiceAsync(connection, ct);
 
             var existing = await calendar.Events.Get(calendarId, eventId).ExecuteAsync(ct);
-            var shouldNotifyGuests = eventDto.Attendees != null || existing.Attendees?.Count > 0;
+            var hasGuestUpdates = eventDto.Attendees != null || existing.Attendees?.Count > 0;
 
             if (eventDto.Summary != null) existing.Summary = eventDto.Summary;
             if (eventDto.Description != null) existing.Description = eventDto.Description;
@@ -184,8 +184,12 @@ public class CalendarGateway : ICalendarGateway
             }
 
             var request = calendar.Events.Update(existing, calendarId, eventId);
-            if (shouldNotifyGuests)
-                request.SendUpdates = EventsResource.UpdateRequest.SendUpdatesEnum.All;
+            if (hasGuestUpdates)
+            {
+                request.SendUpdates = eventDto.SendUpdates
+                    ? EventsResource.UpdateRequest.SendUpdatesEnum.All
+                    : EventsResource.UpdateRequest.SendUpdatesEnum.None;
+            }
             if (eventDto.DriveAttachments != null)
                 request.SupportsAttachments = true;
 
@@ -275,7 +279,11 @@ public class CalendarGateway : ICalendarGateway
 
             var insertRequest = calendar.Events.Insert(ev, calendarId);
             if (ev.Attendees?.Count > 0)
-                insertRequest.SendUpdates = EventsResource.InsertRequest.SendUpdatesEnum.All;
+            {
+                insertRequest.SendUpdates = eventDto.SendUpdates
+                    ? EventsResource.InsertRequest.SendUpdatesEnum.All
+                    : EventsResource.InsertRequest.SendUpdatesEnum.None;
+            }
             if (ev.Attachments?.Count > 0)
                 insertRequest.SupportsAttachments = true;
 

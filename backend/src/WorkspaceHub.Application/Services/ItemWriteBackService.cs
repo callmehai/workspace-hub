@@ -112,7 +112,7 @@ public class ItemWriteBackService : IItemWriteBackService
         switch (item.Type)
         {
             case ItemType.Email:
-                if (payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null || payload.Name != null)
+                if (payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null || payload.Name != null || payload.SendUpdates.HasValue)
                     throw new BusinessRuleException("Invalid fields for Email writeback.");
 
                 var addLabels = new List<string>();
@@ -240,7 +240,8 @@ public class ItemWriteBackService : IItemWriteBackService
                     ICalUid: null,
                     GuestsCanModify: payload.GuestsCanModify,
                     GuestsCanInviteOthers: payload.GuestsCanInviteOthers,
-                    GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests
+                    GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests,
+                    SendUpdates: payload.SendUpdates ?? true
                 );
 
                 var updatedEvent = await _calendarGateway.UpdateEventAsync(conn, "primary", item.ExternalId, evDto, ct);
@@ -255,7 +256,17 @@ public class ItemWriteBackService : IItemWriteBackService
 
                 var metaDictEvent = ParseMetadataDict(item.MetadataJson);
                 if (updatedEvent.Location != null) metaDictEvent["location"] = updatedEvent.Location;
-                if (updatedEvent.Attendees != null) metaDictEvent["attendees"] = updatedEvent.Attendees;
+                if (payload.Attendees != null)
+                {
+                    if (updatedEvent.Attendees is { Count: > 0 })
+                        metaDictEvent["attendees"] = updatedEvent.Attendees;
+                    else
+                        metaDictEvent.Remove("attendees");
+                }
+                else if (updatedEvent.Attendees is { Count: > 0 })
+                {
+                    metaDictEvent["attendees"] = updatedEvent.Attendees;
+                }
                 if (payload.Description != null) metaDictEvent["description"] = payload.Description;
                 if (updatedEvent.Recurrence != null && updatedEvent.Recurrence.Count > 0)
                     metaDictEvent["recurrence"] = updatedEvent.Recurrence;
@@ -321,7 +332,7 @@ public class ItemWriteBackService : IItemWriteBackService
                 break;
 
             case ItemType.File:
-                if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null)
+                if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null || payload.SendUpdates.HasValue)
                     throw new BusinessRuleException("Invalid fields for File writeback.");
                     
                 // Thiết kế: Chấp nhận rủi ro partial write nếu update Name thành công nhưng Trash thất bại.
@@ -424,14 +435,15 @@ public class ItemWriteBackService : IItemWriteBackService
             ICalUid: null,
             GuestsCanModify: payload.GuestsCanModify,
             GuestsCanInviteOthers: payload.GuestsCanInviteOthers,
-            GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests
+            GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests,
+            SendUpdates: payload.SendUpdates
         );
 
         var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
 
         var metaDict = new Dictionary<string, object>();
         if (created.Location != null) metaDict["location"] = created.Location;
-        if (created.Attendees != null) metaDict["attendees"] = created.Attendees;
+        if (created.Attendees is { Count: > 0 }) metaDict["attendees"] = created.Attendees;
         if (created.Description != null) metaDict["description"] = created.Description;
         if (created.Recurrence != null && created.Recurrence.Count > 0) metaDict["recurrence"] = created.Recurrence;
         metaDict["organizerEmail"] = created.OrganizerEmail ?? conn.ProviderAccountId;
@@ -548,7 +560,7 @@ public class ItemWriteBackService : IItemWriteBackService
         // Reject field của Google (Email/Event/File) gửi nhầm vào ticket.
         if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null ||
             payload.IsTrashed != null || payload.Title != null || payload.Start != null || payload.End != null ||
-            payload.Location != null || payload.Attendees != null || payload.Name != null)
+            payload.Location != null || payload.Attendees != null || payload.Name != null || payload.SendUpdates.HasValue)
         {
             throw new BusinessRuleException("Invalid fields for Jira ticket writeback.");
         }

@@ -38,4 +38,5 @@ public record CalendarEvent(
     string? ICalUid = null,
     bool? GuestsCanModify = null,
     bool? GuestsCanInviteOthers = null,
-    bool? GuestsCanSeeOtherGuests = null);
+    bool? GuestsCanSeeOtherGuests = null,
+    bool SendUpdates = true);

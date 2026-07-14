@@ -69,7 +69,8 @@ public record PatchItemRequest(
     List<string>? Recurrence = null,
     bool? GuestsCanModify = null,
     bool? GuestsCanInviteOthers = null,
-    bool? GuestsCanSeeOtherGuests = null
+    bool? GuestsCanSeeOtherGuests = null,
+    bool? SendUpdates = null
 );
 
 public record CreateEventRequest(
@@ -86,7 +87,8 @@ public record CreateEventRequest(
     List<string>? Recurrence = null,
     bool GuestsCanModify = false,
     bool GuestsCanInviteOthers = true,
-    bool GuestsCanSeeOtherGuests = true
+    bool GuestsCanSeeOtherGuests = true,
+    bool SendUpdates = true
 );
 
 /// <summary>

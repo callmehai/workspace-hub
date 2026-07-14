@@ -2,6 +2,14 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-14] Calendar guest email prompt + dọn attendee metadata cũ
+
+- Khi create/edit làm thay đổi danh sách khách, FE hiển thị hộp thoại ba lựa chọn giống Google Calendar: quay lại chỉnh sửa, lưu nhưng không gửi email, hoặc gửi email. API nhận `sendUpdates`; Calendar gateway map sang Google `none|all` (mặc định vẫn là `all` để tương thích client cũ).
+- `sendUpdates=false` chỉ tắt email do Google Calendar gửi; invitation và notification in-app vẫn được reconcile để user WorkspaceHub nhận lời mời trong app.
+- `EmailChipsInput` chốt email đang gõ ngay ở sự kiện blur, trước click Lưu của form cha; bỏ delay 150 ms từng làm email cuối chưa kịp vào payload attendees.
+- Fix lỗi xóa khách cuối cùng: Google trả `attendees=null`, backend nay xóa khóa `attendees` khỏi metadata local thay vì giữ danh sách cũ. Khi mở editor, FE ưu tiên attendee live từ endpoint calendar details để tự sửa cả snapshot cũ trước lần sync tiếp theo.
+- Thêm unit test cho việc truyền lựa chọn không gửi email và dọn metadata khi attendee cuối cùng bị xóa.
+
 ## [2026-07-13] Calendar invitations + RSVP trong app + guest permissions
 
 - Google Calendar là nguồn sự thật của event; create/update có attendees dùng `sendUpdates=all`, vì vậy email mời do Google Calendar gửi. Gmail chỉ được tái sử dụng cho contact suggestions, không gửi email mời trùng.

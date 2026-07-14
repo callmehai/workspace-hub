@@ -113,6 +113,8 @@ export interface PatchItemRequest {
   guestsCanModify?: boolean;
   guestsCanInviteOthers?: boolean;
   guestsCanSeeOtherGuests?: boolean;
+  /** Whether Google Calendar should email attendees about this update. */
+  sendUpdates?: boolean;
 }
 
 export interface EventReminderDto {
@@ -198,6 +200,8 @@ export interface CreateEventRequest {
   guestsCanModify?: boolean;
   guestsCanInviteOthers?: boolean;
   guestsCanSeeOtherGuests?: boolean;
+  /** Whether Google Calendar should email invitations to attendees. Defaults to true. */
+  sendUpdates?: boolean;
 }
 
 // ── Tags (SCRUM-70/71) ──
