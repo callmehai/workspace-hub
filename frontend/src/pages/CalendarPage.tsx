@@ -82,6 +82,7 @@ interface UpdateEventVariables {
 }
 
 const DRAG_TYPE = 'application/x-workspace-calendar-event';
+const CONFLICT_RECOVERY_DELAY_MS = 2_000;
 
 const DAY_NAMES_VI = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const DAY_NAMES_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -514,14 +515,16 @@ export function CalendarPage() {
       if (context?.previous) queryClient.setQueryData(calendarItemsKey, context.previous);
       handleApiError(error, t('calendar.updateFailed'), {
         navigate,
+        conflictMessage: t('calendar.conflictReload'),
         onConflict: () => {
-          toast(t('calendar.conflictReload'));
-          if (variables.item.connectionId) {
-            connectionsApi.syncConnection(variables.item.connectionId)
-              .finally(() => refreshCalendar());
-          } else {
-            refreshCalendar();
-          }
+          window.setTimeout(() => {
+            if (variables.item.connectionId) {
+              connectionsApi.syncConnection(variables.item.connectionId)
+                .finally(() => refreshCalendar());
+            } else {
+              refreshCalendar();
+            }
+          }, CONFLICT_RECOVERY_DELAY_MS);
         },
       });
     },
