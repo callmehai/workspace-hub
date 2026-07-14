@@ -19,6 +19,11 @@ public class CalendarEventDto
     public List<string> Recurrence { get; set; } = new();
     public string? OrganizerEmail { get; set; }
     public string? SelfResponseStatus { get; set; }
+    public string? ICalUid { get; set; }
+    public List<CalendarEventAttendee> FullAttendees { get; set; } = new();
+    public bool GuestsCanModify { get; set; }
+    public bool GuestsCanInviteOthers { get; set; } = true;
+    public bool GuestsCanSeeOtherGuests { get; set; } = true;
 }
 
 public class CalendarSyncResult

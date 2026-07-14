@@ -1,5 +1,17 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ExternalLink, Loader2, Trash2, X, FileText, Plus, Bell } from 'lucide-react';
+import {
+  Bell,
+  CalendarDays,
+  ExternalLink,
+  FileText,
+  Loader2,
+  MapPin,
+  Paperclip,
+  Plus,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { ConnectionDto } from '../../lib/connectionsApi';
 import { useI18n } from '../../hooks/useI18n';
@@ -30,6 +42,9 @@ export interface CalendarEventFormValue {
   driveAttachments: CalendarDriveAttachmentSnapshot[];
   reminders?: EventReminderFormValue[];
   recurrence?: string[];
+  guestsCanModify: boolean;
+  guestsCanInviteOthers: boolean;
+  guestsCanSeeOtherGuests: boolean;
 }
 
 export interface EventReminderFormValue {
@@ -47,6 +62,78 @@ export interface CalendarDriveAttachmentSnapshot {
   fileUrl?: string | null;
 }
 
+type CustomRecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+type CustomRecurrenceEnd = 'never' | 'until' | 'count';
+
+interface CustomRecurrenceValue {
+  frequency: CustomRecurrenceFrequency;
+  interval: number;
+  weekDays: string[];
+  endType: CustomRecurrenceEnd;
+  until: string;
+  count: number;
+}
+
+const RRULE_WEEK_DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
+
+function rruleDayForDate(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  const value = new Date(year, month - 1, day).getDay();
+  return ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][value] || 'MO';
+}
+
+function defaultCustomRecurrence(date: string): CustomRecurrenceValue {
+  return {
+    frequency: 'WEEKLY',
+    interval: 1,
+    weekDays: [rruleDayForDate(date)],
+    endType: 'never',
+    until: date,
+    count: 10,
+  };
+}
+
+function parseCustomRecurrence(recurrence: string[] | undefined, date: string): CustomRecurrenceValue {
+  const fallback = defaultCustomRecurrence(date);
+  const raw = recurrence?.find(value => value.startsWith('RRULE:'))?.slice(6);
+  if (!raw) return fallback;
+
+  const fields = Object.fromEntries(raw.split(';').map(part => {
+    const [key, ...value] = part.split('=');
+    return [key, value.join('=')];
+  }));
+  const frequency = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(fields.FREQ)
+    ? fields.FREQ as CustomRecurrenceFrequency
+    : fallback.frequency;
+  const untilRaw = fields.UNTIL?.slice(0, 8);
+  const until = untilRaw?.length === 8
+    ? `${untilRaw.slice(0, 4)}-${untilRaw.slice(4, 6)}-${untilRaw.slice(6, 8)}`
+    : date;
+
+  return {
+    frequency,
+    interval: Math.max(1, Number.parseInt(fields.INTERVAL || '1', 10) || 1),
+    weekDays: fields.BYDAY?.split(',').filter(Boolean) || [rruleDayForDate(date)],
+    endType: fields.COUNT ? 'count' : fields.UNTIL ? 'until' : 'never',
+    until,
+    count: Math.max(1, Number.parseInt(fields.COUNT || '10', 10) || 10),
+  };
+}
+
+function buildCustomRecurrence(value: CustomRecurrenceValue) {
+  const parts = [`FREQ=${value.frequency}`, `INTERVAL=${Math.max(1, value.interval)}`];
+  if (value.frequency === 'WEEKLY' && value.weekDays.length > 0) {
+    parts.push(`BYDAY=${RRULE_WEEK_DAYS.filter(day => value.weekDays.includes(day)).join(',')}`);
+  }
+  if (value.endType === 'until' && value.until) {
+    parts.push(`UNTIL=${value.until.replaceAll('-', '')}T235959Z`);
+  }
+  if (value.endType === 'count') {
+    parts.push(`COUNT=${Math.max(1, value.count)}`);
+  }
+  return [`RRULE:${parts.join(';')}`];
+}
+
 interface CalendarEventEditorModalProps {
   open: boolean;
   mode: 'create' | 'edit';
@@ -58,6 +145,8 @@ interface CalendarEventEditorModalProps {
   saving?: boolean;
   htmlLink?: string;
   onDelete?: () => void;
+  canInviteOthers?: boolean;
+  canManageGuestPermissions?: boolean;
   onClose: () => void;
   onSubmit: (value: CalendarEventFormValue) => void;
 }
@@ -72,6 +161,8 @@ export function CalendarEventEditorModal({
   saving = false,
   htmlLink,
   onDelete,
+  canInviteOthers = true,
+  canManageGuestPermissions = true,
   onClose,
   onSubmit,
 }: CalendarEventEditorModalProps) {
@@ -80,6 +171,10 @@ export function CalendarEventEditorModal({
   const [error, setError] = useState('');
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
   const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | 'end-date' | null>(null);
+  const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
+  const [customRecurrence, setCustomRecurrence] = useState<CustomRecurrenceValue>(
+    () => parseCustomRecurrence(initialValue.recurrence, initialValue.date),
+  );
 
   const recurrenceOptions = useMemo(() => {
     if (!form.date) return [];
@@ -131,21 +226,31 @@ export function CalendarEventEditorModal({
         label: lang === 'vi' ? 'Mọi ngày trong tuần (từ thứ Hai tới thứ Sáu)' : 'Every weekday (Monday to Friday)',
         rrule: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
       },
+      {
+        id: 'custom',
+        label: lang === 'vi' ? 'Tùy chỉnh…' : 'Custom…',
+        rrule: null,
+      },
     ];
   }, [form.date, lang]);
 
   const selectedRecurrenceOption = useMemo(() => {
     const currentRrule = form.recurrence?.[0] || '';
     if (!currentRrule) return 'none';
-    const matched = recurrenceOptions.find(opt => opt.rrule[0] === currentRrule);
-    return matched ? matched.id : 'none';
+    const matched = recurrenceOptions.find(opt => opt.rrule?.[0] === currentRrule);
+    return matched ? matched.id : 'custom';
   }, [form.recurrence, recurrenceOptions]);
 
   const handleRecurrenceChange = (optionId: string) => {
+    if (optionId === 'custom') {
+      setCustomRecurrence(parseCustomRecurrence(form.recurrence, form.date));
+      setCustomRecurrenceOpen(true);
+      return;
+    }
     const option = recurrenceOptions.find(opt => opt.id === optionId);
     setForm(curr => ({
       ...curr,
-      recurrence: option ? option.rrule : []
+      recurrence: option?.rrule || [],
     }));
   };
 
@@ -156,6 +261,8 @@ export function CalendarEventEditorModal({
     if (open) {
       setForm(initialValue);
       setOpenPicker(null);
+      setCustomRecurrence(parseCustomRecurrence(initialValue.recurrence, initialValue.date));
+      setCustomRecurrenceOpen(false);
     }
   }
 
@@ -189,125 +296,148 @@ export function CalendarEventEditorModal({
 
   const submit = () => {
     const title = form.title.trim();
-    if (!form.connectionId || !title || !form.date) {
+    const endDate = form.endDate || form.date;
+    if (!form.connectionId || !title || !form.date || !endDate) {
       setError(t('calendar.requiredFields'));
       return;
     }
-    if (!form.allDay && (!form.startTime || !form.endTime || form.endTime <= form.startTime)) {
+    if (endDate < form.date || (!form.allDay && (
+      !form.startTime
+      || !form.endTime
+      || (endDate === form.date && form.endTime <= form.startTime)
+    ))) {
       setError(t('calendar.timeOrder'));
       return;
     }
 
+    setError('');
     onSubmit({ ...form, title });
   };
 
-  const baseInputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100';
+  const addReminder = () => {
+    const reminders = form.reminders || [];
+    if (reminders.length >= 5) {
+      toast.error(lang === 'vi' ? 'Tối đa 5 nhắc nhở' : 'Maximum 5 reminders');
+      return;
+    }
+    setForm(current => ({
+      ...current,
+      reminders: [
+        ...(current.reminders || []),
+        { reminderType: 'GooglePopup', offsetValue: 15, offsetUnit: 'Minutes' },
+      ],
+    }));
+  };
+
+  const updateReminder = (index: number, patch: Partial<EventReminderFormValue>) => {
+    setForm(current => ({
+      ...current,
+      reminders: (current.reminders || []).map((reminder, reminderIndex) => (
+        reminderIndex === index ? { ...reminder, ...patch } : reminder
+      )),
+    }));
+  };
+
+  const removeReminder = (index: number) => {
+    setForm(current => ({
+      ...current,
+      reminders: (current.reminders || []).filter((_, reminderIndex) => reminderIndex !== index),
+    }));
+  };
+
+  const applyCustomRecurrence = () => {
+    if (customRecurrence.frequency === 'WEEKLY' && customRecurrence.weekDays.length === 0) {
+      toast.error(lang === 'vi' ? 'Chọn ít nhất một ngày trong tuần' : 'Select at least one weekday');
+      return;
+    }
+    if (customRecurrence.endType === 'until' && customRecurrence.until < form.date) {
+      toast.error(lang === 'vi' ? 'Ngày kết thúc lặp phải từ ngày bắt đầu' : 'Repeat end date must follow the start date');
+      return;
+    }
+    setForm(current => ({ ...current, recurrence: buildCustomRecurrence(customRecurrence) }));
+    setCustomRecurrenceOpen(false);
+  };
+
+  const baseInputClass = 'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-850';
   const inputClass = `${baseInputClass} h-9`;
-  const textareaClass = `${baseInputClass} h-20 py-2 resize-none hide-scrollbar`;
+  const textareaClass = `${baseInputClass} min-h-36 py-3 resize-y hide-scrollbar`;
   const labelClass = 'mb-1.5 block text-[12px] font-semibold text-slate-500 dark:text-slate-400';
+  const rowIconClass = 'mt-2.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500';
 
   return (
     <div
-      className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[9000] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-[2px] sm:p-5"
       onMouseDown={() => { if (!saving) onClose(); }}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        aria-label={mode === 'create' ? t('calendar.createTitle') : t('calendar.editTitle')}
+        className="flex h-[900px] max-h-[94vh] w-[1240px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         onMouseDown={event => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
-              <CalendarDays className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100">
-                {mode === 'create' ? t('calendar.createTitle') : t('calendar.editTitle')}
-              </h2>
-              <p className="text-[11.5px] text-slate-400 dark:text-slate-500">{t('calendar.writeBackHint')}</p>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-            <X className="h-4.5 w-4.5" />
-          </button>
-        </div>
+        <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              aria-label={t('common.cancel')}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
 
-        <div className="max-h-[72vh] space-y-4 overflow-y-auto p-5">
-          <div>
-            <label className={labelClass}>{t('calendar.account')}</label>
-            <Select
-              value={form.connectionId}
-              onChange={connectionId => setForm(current => ({ ...current, connectionId }))}
-              options={connections.map(connection => ({
-                value: connection.id,
-                label: `${connection.providerAccountId} · Google Calendar`,
-              }))}
-              placeholder={t('calendar.selectAccount')}
-              disabled={mode === 'edit'}
-              className="h-9"
+            <input
+              value={form.title}
+              autoFocus
+              onChange={event => setForm(current => ({ ...current, title: event.target.value }))}
+              placeholder={lang === 'vi' ? 'Thêm tiêu đề' : 'Add title'}
+              className="min-w-0 flex-1 border-0 border-b-2 border-slate-300 bg-transparent px-0 py-2 text-[19px] font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-brand-600 dark:border-slate-700 dark:text-slate-100 dark:focus:border-brand-400 sm:text-[22px]"
             />
-            {connections.length === 0 && (
-              <p className="mt-1.5 text-[12px] text-amber-600 dark:text-amber-400">{t('calendar.noConnection')}</p>
-            )}
-          </div>
 
-          <div>
-            <label className={labelClass}>{t('calendar.eventTitle')}</label>
-            <input className={inputClass} value={form.title} autoFocus onChange={event => setForm(current => ({ ...current, title: event.target.value }))} />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-[13px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-              <input
-                type="checkbox"
-                checked={form.allDay}
-                onChange={event => {
-                  const allDay = event.target.checked;
-                  setForm(current => ({ ...current, allDay }));
-                  if (allDay) setOpenPicker(null);
-                }}
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-              />
-              <span>
-                {t('calendar.allDay')}
-                <span className="ml-1.5 text-[11.5px] font-normal text-slate-400">{t('calendar.allDayHint')}</span>
-              </span>
-            </label>
-
-            <div>
-              <select
-                value={selectedRecurrenceOption}
-                onChange={e => handleRecurrenceChange(e.target.value)}
-                className="w-full h-[46px] rounded-xl border border-slate-200 bg-white px-3.5 text-[13px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              {mode === 'edit' && onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={saving}
+                  aria-label={t('common.delete')}
+                  title={t('common.delete')}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                >
+                  <Trash2 className="h-4.5 w-4.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={submit}
+                disabled={saving || connections.length === 0}
+                className="inline-flex h-10 items-center gap-1.5 rounded-full bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
               >
-                {recurrenceOptions.map(opt => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('common.save')}
+              </button>
             </div>
           </div>
 
-          <div className="space-y-3">
-            {/* Start Date & Time */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="w-full sm:w-auto min-w-[135px] flex-1 sm:flex-none">
-                <label className={labelClass}>{lang === 'vi' ? 'Ngày bắt đầu' : 'Start Date'}</label>
+          <div className="ml-12 mt-4 space-y-3 sm:ml-13">
+            <div className="flex flex-wrap items-end gap-2.5">
+              <div className="min-w-[136px] flex-1 sm:max-w-[170px]">
+                <label className={labelClass}>{lang === 'vi' ? 'Bắt đầu' : 'Start'}</label>
                 <DatePicker
                   value={form.date}
-                  onChange={date => setForm(current => ({ 
-                    ...current, 
+                  onChange={date => setForm(current => ({
+                    ...current,
                     date,
-                    endDate: current.endDate < date ? date : current.endDate
+                    endDate: current.endDate < date ? date : current.endDate,
                   }))}
                   open={openPicker === 'date'}
                   onOpenChange={next => setOpenPicker(next ? 'date' : null)}
                 />
               </div>
-
               {!form.allDay && (
-                <div className="w-full sm:w-auto min-w-[95px] flex-1 sm:flex-none">
+                <div className="w-[106px]">
                   <label className={labelClass}>{t('calendar.start')}</label>
                   <TimePicker
                     value={form.startTime}
@@ -317,29 +447,21 @@ export function CalendarEventEditorModal({
                   />
                 </div>
               )}
-
-              <div className="pt-5 text-sm font-semibold text-slate-400 dark:text-slate-500">
-                {lang === 'vi' ? 'tới' : 'to'}
-              </div>
-            </div>
-
-            {/* End Date & Time */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="w-full sm:w-auto min-w-[135px] flex-1 sm:flex-none">
-                <label className={labelClass}>{lang === 'vi' ? 'Ngày kết thúc' : 'End Date'}</label>
+              <span className="pb-2 text-sm font-medium text-slate-400">–</span>
+              <div className="min-w-[136px] flex-1 sm:max-w-[170px]">
+                <label className={labelClass}>{lang === 'vi' ? 'Kết thúc' : 'End'}</label>
                 <DatePicker
                   value={form.endDate || form.date}
-                  onChange={endDate => setForm(current => ({ 
-                    ...current, 
-                    endDate: endDate < current.date ? current.date : endDate
+                  onChange={endDate => setForm(current => ({
+                    ...current,
+                    endDate: endDate < current.date ? current.date : endDate,
                   }))}
                   open={openPicker === 'end-date'}
                   onOpenChange={next => setOpenPicker(next ? 'end-date' : null)}
                 />
               </div>
-
               {!form.allDay && (
-                <div className="w-full sm:w-auto min-w-[95px] flex-1 sm:flex-none">
+                <div className="w-[106px]">
                   <label className={labelClass}>{t('calendar.end')}</label>
                   <TimePicker
                     value={form.endTime}
@@ -350,47 +472,185 @@ export function CalendarEventEditorModal({
                 </div>
               )}
             </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] font-medium text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                checked={form.allDay}
+                onChange={event => {
+                  const allDay = event.target.checked;
+                  setForm(current => ({ ...current, allDay }));
+                  if (allDay) setOpenPicker(null);
+                }}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+                <span>{t('calendar.allDay')}</span>
+              </label>
+              <div className="w-full sm:w-[320px]">
+              <Select
+                value={selectedRecurrenceOption}
+                onChange={handleRecurrenceChange}
+                options={recurrenceOptions.map(option => ({ value: option.id, label: option.label }))}
+                className="h-9 bg-slate-50 text-[13px] dark:bg-slate-800"
+              />
+              </div>
+            </div>
           </div>
+        </header>
 
-          <div>
-            <label className={labelClass}>{t('calendar.description')}</label>
-            <textarea 
-              className={textareaClass} 
-              value={form.description} 
-              placeholder={t('calendar.descriptionPlaceholder')} 
-              onChange={event => setForm(current => ({ ...current, description: event.target.value }))} 
-            />
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/40 sm:p-6">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="border-b border-slate-200 px-5 pt-4 dark:border-slate-800 sm:px-6">
+                <div className="inline-flex border-b-2 border-brand-600 pb-3 text-[13px] font-semibold text-brand-700 dark:border-brand-400 dark:text-brand-300">
+                  {lang === 'vi' ? 'Chi tiết sự kiện' : 'Event details'}
+                </div>
+              </div>
 
-          <div>
-            <label className={labelClass}>{t('calendar.location')}</label>
-            <input className={inputClass} value={form.location} placeholder={t('calendar.optional')} onChange={event => setForm(current => ({ ...current, location: event.target.value }))} />
-          </div>
+              <div className="space-y-5 p-5 sm:p-6">
+                <div className="flex gap-4">
+                  <MapPin className={rowIconClass} />
+                  <div className="min-w-0 flex-1">
+                    <label className={labelClass}>{t('calendar.location')}</label>
+                    <input
+                      className={inputClass}
+                      value={form.location}
+                      placeholder={lang === 'vi' ? 'Thêm địa điểm' : 'Add location'}
+                      onChange={event => setForm(current => ({ ...current, location: event.target.value }))}
+                    />
+                  </div>
+                </div>
 
-          <div>
-            <label className={labelClass}>{t('calendar.attendees')}</label>
-            <EmailChipsInput
-              value={form.attendees}
-              onChange={attendees => setForm(current => ({ ...current, attendees }))}
-              connectionId={suggestConnectionId}
-              placeholder={t('sendEmail.toPlaceholder')}
-              className="mb-0"
-            />
-          </div>
+                <div className="flex gap-4">
+                  <Bell className={rowIconClass} />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+                        {lang === 'vi' ? 'Thông báo' : 'Notifications'}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addReminder}
+                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-brand-600 transition hover:text-brand-700 dark:text-brand-400"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        {lang === 'vi' ? 'Thêm thông báo' : 'Add notification'}
+                      </button>
+                    </div>
 
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              disabled={!form.connectionId}
-              onClick={() => setDrivePickerOpen(true)}
-              className="inline-flex items-center gap-2.5 text-[13px] font-semibold text-brand-600 hover:text-brand-700 disabled:text-slate-400 dark:text-brand-400 dark:hover:text-brand-350 dark:disabled:text-slate-650 self-start transition-colors"
-            >
-              <DriveIcon className="w-5 h-5 shrink-0" />
-              <span>{lang === 'vi' ? 'Thêm tệp đính kèm từ Google Drive' : 'Add a Google Drive attachment'}</span>
-            </button>
+                    <div className="space-y-2">
+                      {(!form.reminders || form.reminders.length === 0) && (
+                        <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-[12.5px] text-slate-400 dark:bg-slate-800/60 dark:text-slate-500">
+                          {lang === 'vi' ? 'Không có thông báo' : 'No notifications'}
+                        </p>
+                      )}
+                      {(form.reminders || []).map((reminder, index) => {
+                        const showTimeOfDay = reminder.offsetUnit === 'Days' || reminder.offsetUnit === 'Weeks';
+                        return (
+                          <div key={`${reminder.id ?? 'new'}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 dark:border-slate-700 dark:bg-slate-800/60">
+                            <div className="grid items-center gap-2 sm:grid-cols-[minmax(160px,1fr)_82px_minmax(150px,1fr)_36px]">
+                            <Select
+                              value={reminder.reminderType ?? 'GooglePopup'}
+                              onChange={value => updateReminder(index, { reminderType: value as ReminderType })}
+                              options={[
+                                { value: 'InApp', label: lang === 'vi' ? 'Thông báo trong ứng dụng' : 'In-app notification' },
+                                { value: 'GooglePopup', label: lang === 'vi' ? 'Thông báo Google' : 'Google notification' },
+                                { value: 'GoogleEmail', label: 'Email' },
+                              ]}
+                              className="h-10 bg-white text-[12.5px] dark:bg-slate-900"
+                            />
+                            <input
+                              type="number"
+                              min="1"
+                              max="999"
+                              value={reminder.offsetValue}
+                              onChange={event => updateReminder(index, { offsetValue: Number.parseInt(event.target.value, 10) || 1 })}
+                              aria-label={lang === 'vi' ? 'Thời lượng nhắc trước' : 'Reminder lead time'}
+                              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-center text-[13px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                            />
+                            <Select
+                              value={reminder.offsetUnit}
+                              onChange={value => {
+                                const offsetUnit = value as EventReminderFormValue['offsetUnit'];
+                                updateReminder(index, {
+                                  offsetUnit,
+                                  timeOfDay: offsetUnit === 'Days' || offsetUnit === 'Weeks' ? (reminder.timeOfDay || '09:00') : undefined,
+                                });
+                              }}
+                              options={[
+                                { value: 'Minutes', label: lang === 'vi' ? 'phút trước' : 'minutes before' },
+                                { value: 'Hours', label: lang === 'vi' ? 'giờ trước' : 'hours before' },
+                                { value: 'Days', label: lang === 'vi' ? 'ngày trước' : 'days before' },
+                                { value: 'Weeks', label: lang === 'vi' ? 'tuần trước' : 'weeks before' },
+                              ]}
+                              className="h-10 bg-white text-[12.5px] dark:bg-slate-900"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeReminder(index)}
+                              aria-label={lang === 'vi' ? 'Xóa thông báo' : 'Remove notification'}
+                              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            </div>
+                            {showTimeOfDay && (
+                              <div className="mt-2 flex items-center gap-2 border-t border-slate-200 pt-2 dark:border-slate-700">
+                                <span className="text-[12px] text-slate-500 dark:text-slate-400">
+                                  {lang === 'vi' ? 'Vào lúc' : 'At'}
+                                </span>
+                                <input
+                                  type="time"
+                                  value={reminder.timeOfDay || '09:00'}
+                                  onChange={event => updateReminder(index, { timeOfDay: event.target.value })}
+                                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[12.5px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
 
-            {(form.driveItemIds.length > 0 || form.driveAttachments.length > 0) && (
-              <div className="flex flex-wrap gap-2 mt-1.5">
+                <div className="flex gap-4">
+                  <CalendarDays className={rowIconClass} />
+                  <div className="min-w-0 flex-1">
+                    <label className={labelClass}>{t('calendar.account')}</label>
+                    <Select
+                      value={form.connectionId}
+                      onChange={connectionId => setForm(current => ({ ...current, connectionId }))}
+                      options={connections.map(connection => ({
+                        value: connection.id,
+                        label: `${connection.providerAccountId} · Google Calendar`,
+                      }))}
+                      placeholder={t('calendar.selectAccount')}
+                      disabled={mode === 'edit'}
+                      className="h-10 bg-slate-50 text-[13px] dark:bg-slate-800"
+                    />
+                    {connections.length === 0 && (
+                      <p className="mt-1.5 text-[12px] text-amber-600 dark:text-amber-400">{t('calendar.noConnection')}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <Paperclip className={rowIconClass} />
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      disabled={!form.connectionId}
+                      onClick={() => setDrivePickerOpen(true)}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold text-brand-600 transition hover:bg-brand-50 hover:text-brand-700 disabled:text-slate-400 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                    >
+                      <DriveIcon className="h-5 w-5 shrink-0" />
+                      <span>{lang === 'vi' ? 'Thêm tệp từ Google Drive' : 'Add Google Drive attachment'}</span>
+                    </button>
+
+                    {(form.driveItemIds.length > 0 || form.driveAttachments.length > 0) && (
+                      <div className="mt-2 flex flex-wrap gap-2">
                 {form.driveItemIds.map(id => {
                   const file = attachedDriveItems?.find(f => f.id === id);
                   const snapshot = file?.externalId
@@ -401,7 +661,7 @@ export function CalendarEventEditorModal({
                   return (
                     <div
                       key={id}
-                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-[12.5px] max-w-[280px] shadow-sm"
+                              className="inline-flex max-w-[280px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 py-1 pl-2.5 pr-1.5 text-[12.5px] dark:border-slate-700 dark:bg-slate-800"
                     >
                       <FileText className="w-3.5 h-3.5 text-brand-500 shrink-0" />
                       {fileUrl ? (
@@ -442,10 +702,7 @@ export function CalendarEventEditorModal({
                     return file?.externalId === a.fileId;
                   }))
                   .map(a => (
-                    <div
-                      key={a.fileId || a.fileUrl || a.title}
-                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-[12.5px] max-w-[280px] shadow-sm"
-                    >
+                            <div key={a.fileId || a.fileUrl || a.title} className="inline-flex max-w-[280px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 py-1 pl-2.5 pr-2.5 text-[12.5px] dark:border-slate-700 dark:bg-slate-800">
                       <FileText className="w-3.5 h-3.5 text-brand-500 shrink-0" />
                       {a.fileUrl ? (
                         <a
@@ -465,199 +722,279 @@ export function CalendarEventEditorModal({
                       )}
                     </div>
                   ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <FileText className={rowIconClass} />
+                  <div className="min-w-0 flex-1">
+                    <label className={labelClass}>{t('calendar.description')}</label>
+                    <textarea
+                      className={textareaClass}
+                      value={form.description}
+                      placeholder={t('calendar.descriptionPlaceholder')}
+                      onChange={event => setForm(current => ({ ...current, description: event.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                {folderName && (
+                  <div className="ml-9 rounded-lg bg-brand-50 px-3 py-2 text-[12px] text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+                    {t('calendar.folderAssign', { folder: folderName })}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </section>
 
-          {/* Reminders list */}
-          <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Bell className="w-4 h-4 text-slate-400" />
-                <span>{lang === 'vi' ? 'Nhắc nhở sự kiện' : 'Event Reminders'}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const currentReminders = form.reminders || [];
-                  if (currentReminders.length >= 5) {
-                    toast.error(lang === 'vi' ? 'Tối đa 5 nhắc nhở' : 'Maximum 5 reminders');
-                    return;
-                  }
-                  setForm(curr => ({
-                    ...curr,
-                    reminders: [
-                      ...currentReminders,
-                      { reminderType: 'GooglePopup', offsetValue: 15, offsetUnit: 'Minutes' }
-                    ]
-                  }));
-                }}
-                className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-350 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{lang === 'vi' ? 'Thêm nhắc nhở' : 'Add Reminder'}</span>
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {(!form.reminders || form.reminders.length === 0) ? (
-                <span className="text-xs text-slate-400 dark:text-slate-500 italic block">
-                  {lang === 'vi' ? 'Chưa cấu hình nhắc nhở.' : 'No reminders configured.'}
-                </span>
-              ) : (
-                form.reminders.map((reminder, idx) => {
-                  const showTimeOfDay = reminder.offsetUnit === 'Days' || reminder.offsetUnit === 'Weeks';
-                  return (
-                    <div key={idx} className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-                      {/* Reminder type */}
-                      <select
-                        value={reminder.reminderType ?? 'GooglePopup'}
-                        onChange={e => {
-                          const val = e.target.value as ReminderType;
-                          setForm(curr => {
-                            const updated = [...(curr.reminders || [])];
-                            updated[idx] = { ...updated[idx], reminderType: val };
-                            return { ...curr, reminders: updated };
-                          });
-                        }}
-                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
-                      >
-                        <option value="InApp">{lang === 'vi' ? 'Trong ứng dụng' : 'In app'}</option>
-                        <option value="GooglePopup">Google popup</option>
-                        <option value="GoogleEmail">Google email</option>
-                      </select>
-
-                      {/* Offset Value */}
-                      <input
-                        type="number"
-                        min="1"
-                        max="999"
-                        value={reminder.offsetValue}
-                        onChange={e => {
-                          const val = parseInt(e.target.value) || 1;
-                          setForm(curr => {
-                            const updated = [...(curr.reminders || [])];
-                            updated[idx] = { ...updated[idx], offsetValue: val };
-                            return { ...curr, reminders: updated };
-                          });
-                        }}
-                        className="w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-semibold text-center text-slate-700 dark:text-slate-200 focus:outline-none"
-                      />
-
-                      {/* Offset Unit */}
-                      <select
-                        value={reminder.offsetUnit}
-                        onChange={e => {
-                          const val = e.target.value as EventReminderFormValue['offsetUnit'];
-                          setForm(curr => {
-                            const updated = [...(curr.reminders || [])];
-                            updated[idx] = { 
-                              ...updated[idx], 
-                              offsetUnit: val,
-                              timeOfDay: (val === 'Days' || val === 'Weeks') ? '09:00' : undefined
-                            };
-                            return { ...curr, reminders: updated };
-                          });
-                        }}
-                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
-                      >
-                        <option value="Minutes">{lang === 'vi' ? 'phút' : 'minutes'}</option>
-                        <option value="Hours">{lang === 'vi' ? 'giờ' : 'hours'}</option>
-                        <option value="Days">{lang === 'vi' ? 'ngày' : 'days'}</option>
-                        <option value="Weeks">{lang === 'vi' ? 'tuần' : 'weeks'}</option>
-                      </select>
-
-                      {/* Time of Day */}
-                      {showTimeOfDay && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-slate-400 dark:text-slate-500">{lang === 'vi' ? 'lúc' : 'at'}</span>
-                          <input
-                            type="time"
-                            value={reminder.timeOfDay || '09:00'}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setForm(curr => {
-                                const updated = [...(curr.reminders || [])];
-                                updated[idx] = { ...updated[idx], timeOfDay: val };
-                                return { ...curr, reminders: updated };
-                              });
-                            }}
-                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
-                          />
-                        </div>
-                      )}
-
-                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">{lang === 'vi' ? 'trước' : 'before'}</span>
-
-                      {/* Delete Button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setForm(curr => ({
-                            ...curr,
-                            reminders: (curr.reminders || []).filter((_, i) => i !== idx)
-                          }));
-                        }}
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+            <aside className="self-start overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:sticky lg:top-0">
+              <div className="border-b border-slate-200 px-5 pt-4 dark:border-slate-800">
+                <div className="inline-flex items-center gap-2 border-b-2 border-brand-600 pb-3 text-[13px] font-semibold text-brand-700 dark:border-brand-400 dark:text-brand-300">
+                  <Users className="h-4 w-4" />
+                  {lang === 'vi' ? 'Khách mời' : 'Guests'}
+                  {form.attendees.length > 0 && (
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] dark:bg-brand-500/10">{form.attendees.length}</span>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-4 p-5">
+                <div>
+                  <label className={labelClass}>{lang === 'vi' ? 'Thêm khách mời' : 'Add guests'}</label>
+                  {canInviteOthers ? (
+                    <EmailChipsInput
+                      value={form.attendees}
+                      onChange={attendees => setForm(current => ({ ...current, attendees }))}
+                      connectionId={suggestConnectionId}
+                      placeholder={lang === 'vi' ? 'Nhập email khách mời' : 'Enter guest email'}
+                      className="mb-0"
+                    />
+                  ) : (
+                    <div className="flex min-h-10 flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
+                      {form.attendees.map(email => <span key={email} className="rounded-lg bg-white px-2 py-1 text-xs text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">{email}</span>)}
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+                  )}
+                </div>
 
-          {folderName && (
-            <div className="rounded-lg bg-brand-50 px-3 py-2 text-[12px] text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
-              {t('calendar.folderAssign', { folder: folderName })}
-            </div>
-          )}
+                {canManageGuestPermissions && <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
+                  <h4 className="mb-2.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+                    {lang === 'vi' ? 'Quyền của khách' : 'Guest permissions'}
+                  </h4>
+                  <div className="space-y-1">
+                    {[
+                      { key: 'guestsCanModify', vi: 'Sửa đổi sự kiện', en: 'Modify event' },
+                      { key: 'guestsCanInviteOthers', vi: 'Mời người khác', en: 'Invite others' },
+                      { key: 'guestsCanSeeOtherGuests', vi: 'Xem danh sách khách', en: 'See guest list' },
+                    ].map(permission => (
+                      <label
+                        key={permission.key}
+                        className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-[13px] text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800/70"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form[permission.key as 'guestsCanModify' | 'guestsCanInviteOthers' | 'guestsCanSeeOtherGuests']}
+                          onChange={event => setForm(current => ({
+                            ...current,
+                            [permission.key]: event.target.checked,
+                          }))}
+                          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                        />
+                        <span>{lang === 'vi' ? permission.vi : permission.en}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>}
+
+                {mode === 'edit' && htmlLink && (
+                  <a
+                    href={htmlLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-[12.5px] font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:hidden"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Google Calendar
+                  </a>
+                )}
+              </div>
+            </aside>
+          </div>
 
           {error && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
               {error}
             </div>
           )}
         </div>
+      </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-800/50">
-          <div className="flex gap-2">
-            {mode === 'edit' && htmlLink && (
-              <a
-                href={htmlLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12.5px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                GCal
-              </a>
-            )}
-            {mode === 'edit' && onDelete && (
+      {customRecurrenceOpen && (
+        <div
+          className="fixed inset-0 z-[9200] flex items-center justify-center bg-slate-950/35 p-4"
+          onMouseDown={() => setCustomRecurrenceOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={lang === 'vi' ? 'Lặp lại tùy chỉnh' : 'Custom recurrence'}
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+              <h3 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100">
+                {lang === 'vi' ? 'Lặp lại tùy chỉnh' : 'Custom recurrence'}
+              </h3>
               <button
                 type="button"
-                onClick={onDelete}
-                disabled={saving}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 px-3 text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-500/20 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                onClick={() => setCustomRecurrenceOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                {t('common.delete')}
+                <X className="h-4 w-4" />
               </button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} disabled={saving} className="h-9 rounded-lg px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-700">
-              {t('common.cancel')}
-            </button>
-            <button type="button" onClick={submit} disabled={saving || connections.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50">
-              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {mode === 'create' ? t('calendar.createEvent2') : t('common.save')}
-            </button>
+            </div>
+
+            <div className="space-y-5 p-5">
+              <div>
+                <label className={labelClass}>{lang === 'vi' ? 'Lặp lại mỗi' : 'Repeat every'}</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={customRecurrence.interval}
+                    onChange={event => setCustomRecurrence(current => ({
+                      ...current,
+                      interval: Math.max(1, Number.parseInt(event.target.value, 10) || 1),
+                    }))}
+                    className="h-10 w-20 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                  <div className="min-w-0 flex-1">
+                  <Select
+                    value={customRecurrence.frequency}
+                    onChange={value => setCustomRecurrence(current => ({
+                      ...current,
+                      frequency: value as CustomRecurrenceFrequency,
+                    }))}
+                    options={[
+                      { value: 'DAILY', label: lang === 'vi' ? 'ngày' : 'day(s)' },
+                      { value: 'WEEKLY', label: lang === 'vi' ? 'tuần' : 'week(s)' },
+                      { value: 'MONTHLY', label: lang === 'vi' ? 'tháng' : 'month(s)' },
+                      { value: 'YEARLY', label: lang === 'vi' ? 'năm' : 'year(s)' },
+                    ]}
+                    className="h-10 bg-slate-50 text-[13px] dark:bg-slate-800"
+                  />
+                  </div>
+                </div>
+              </div>
+
+              {customRecurrence.frequency === 'WEEKLY' && (
+                <div>
+                  <label className={labelClass}>{lang === 'vi' ? 'Lặp lại vào' : 'Repeat on'}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {RRULE_WEEK_DAYS.map((day, index) => {
+                      const labels = lang === 'vi'
+                        ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+                        : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+                      const selected = customRecurrence.weekDays.includes(day);
+                      return (
+                        <button
+                          type="button"
+                          key={day}
+                          onClick={() => setCustomRecurrence(current => ({
+                            ...current,
+                            weekDays: selected
+                              ? current.weekDays.filter(value => value !== day)
+                              : [...current.weekDays, day],
+                          }))}
+                          className={`flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-[12px] font-semibold transition ${selected
+                            ? 'bg-brand-600 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                        >
+                          {labels[index]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className={labelClass}>{lang === 'vi' ? 'Kết thúc' : 'Ends'}</label>
+                <div className="space-y-3 text-[13px] text-slate-700 dark:text-slate-200">
+                  <label className="flex cursor-pointer items-center gap-3">
+                    <input
+                      type="radio"
+                      name="recurrence-end"
+                      checked={customRecurrence.endType === 'never'}
+                      onChange={() => setCustomRecurrence(current => ({ ...current, endType: 'never' }))}
+                      className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+                    />
+                    {lang === 'vi' ? 'Không bao giờ' : 'Never'}
+                  </label>
+                  <label className="flex cursor-pointer flex-wrap items-center gap-3">
+                    <input
+                      type="radio"
+                      name="recurrence-end"
+                      checked={customRecurrence.endType === 'until'}
+                      onChange={() => setCustomRecurrence(current => ({ ...current, endType: 'until' }))}
+                      className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="min-w-16">{lang === 'vi' ? 'Vào ngày' : 'On'}</span>
+                    <input
+                      type="date"
+                      min={form.date}
+                      value={customRecurrence.until}
+                      disabled={customRecurrence.endType !== 'until'}
+                      onChange={event => setCustomRecurrence(current => ({ ...current, until: event.target.value }))}
+                      className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[12.5px] outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800"
+                    />
+                  </label>
+                  <label className="flex cursor-pointer flex-wrap items-center gap-3">
+                    <input
+                      type="radio"
+                      name="recurrence-end"
+                      checked={customRecurrence.endType === 'count'}
+                      onChange={() => setCustomRecurrence(current => ({ ...current, endType: 'count' }))}
+                      className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="min-w-16">{lang === 'vi' ? 'Sau' : 'After'}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="999"
+                      value={customRecurrence.count}
+                      disabled={customRecurrence.endType !== 'count'}
+                      onChange={event => setCustomRecurrence(current => ({
+                        ...current,
+                        count: Math.max(1, Number.parseInt(event.target.value, 10) || 1),
+                      }))}
+                      className="h-9 w-20 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-center text-[12.5px] outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800"
+                    />
+                    <span>{lang === 'vi' ? 'lần' : 'occurrences'}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-800/50">
+              <button
+                type="button"
+                onClick={() => setCustomRecurrenceOpen(false)}
+                className="h-9 rounded-lg px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={applyCustomRecurrence}
+                className="h-9 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white hover:bg-brand-700"
+              >
+                {t('common.save')}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
       
       <GoogleDrivePickerModal
         open={drivePickerOpen}

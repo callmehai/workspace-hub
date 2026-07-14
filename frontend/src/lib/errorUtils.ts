@@ -11,6 +11,7 @@ export interface ApiErrorResponse {
 
 export interface HandleApiErrorOptions {
   onConflict?: () => void;
+  conflictMessage?: string;
   navigate?: (path: string) => void;
   silent?: boolean;
 }
@@ -34,7 +35,7 @@ export const handleApiError = (
 
     if (status === 409) {
       if (!options?.silent) {
-        toast.error(data?.message || translate('errors.conflict'));
+        toast.error(options?.conflictMessage || data?.message || translate('errors.conflict'));
       }
       if (options?.onConflict) {
         options.onConflict();

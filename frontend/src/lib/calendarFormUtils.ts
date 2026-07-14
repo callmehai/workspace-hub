@@ -160,6 +160,9 @@ export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09
       { reminderType: 'InApp', offsetValue: 30, offsetUnit: 'Minutes' },
     ],
     recurrence: [],
+    guestsCanModify: false,
+    guestsCanInviteOthers: true,
+    guestsCanSeeOtherGuests: true,
   };
 }
 
@@ -189,6 +192,9 @@ export function itemToCalendarForm(item: ItemResponse): CalendarEventFormValue {
     driveAttachments: asDriveAttachments(metadata.driveAttachments),
     reminders: item.reminders ?? [],
     recurrence: asStringArray(metadata.recurrence),
+    guestsCanModify: metadata.guestsCanModify === true,
+    guestsCanInviteOthers: metadata.guestsCanInviteOthers !== false,
+    guestsCanSeeOtherGuests: metadata.guestsCanSeeOtherGuests !== false,
   };
 }
 
@@ -227,6 +233,9 @@ export function calendarFormToPatch(form: CalendarEventFormValue): PatchItemRequ
     driveItemIds: form.driveItemIds,
     reminders: form.reminders,
     recurrence: form.recurrence,
+    guestsCanModify: form.guestsCanModify,
+    guestsCanInviteOthers: form.guestsCanInviteOthers,
+    guestsCanSeeOtherGuests: form.guestsCanSeeOtherGuests,
   };
 }
 

@@ -66,7 +66,11 @@ public record PatchItemRequest(
     bool? AllDay = null,
     List<Guid>? DriveItemIds = null,     // danh sách file đính kèm từ Drive
     List<EventReminderDto>? Reminders = null,
-    List<string>? Recurrence = null
+    List<string>? Recurrence = null,
+    bool? GuestsCanModify = null,
+    bool? GuestsCanInviteOthers = null,
+    bool? GuestsCanSeeOtherGuests = null,
+    bool? SendUpdates = null
 );
 
 public record CreateEventRequest(
@@ -80,7 +84,11 @@ public record CreateEventRequest(
     bool AllDay = false,
     List<Guid>? DriveItemIds = null,     // ID Item Drive trong DB — BE resolve ra fileId/title/mimeType
     List<EventReminderDto>? Reminders = null,
-    List<string>? Recurrence = null
+    List<string>? Recurrence = null,
+    bool GuestsCanModify = false,
+    bool GuestsCanInviteOthers = true,
+    bool GuestsCanSeeOtherGuests = true,
+    bool SendUpdates = true
 );
 
 /// <summary>
@@ -180,7 +188,15 @@ public record CalendarEventDetailResponse(
     List<CalendarDriveAttachmentDto> DriveAttachments,
     string? OwningCalendarName,
     List<EventReminderDto> Reminders,
-    List<string> Recurrence
+    List<string> Recurrence,
+    string? ICalUid,
+    bool GuestsCanModify,
+    bool GuestsCanInviteOthers,
+    bool GuestsCanSeeOtherGuests,
+    bool CanEdit,
+    bool CanInviteOthers,
+    bool CanSeeGuestList,
+    bool IsOrganizer
 );
 
 public record RsvpRequest(

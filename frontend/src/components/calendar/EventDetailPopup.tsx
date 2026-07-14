@@ -44,10 +44,10 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function responseLabel(response: string, lang: 'vi' | 'en') {
-  if (response === 'accepted') return lang === 'vi' ? 'Da tham du' : 'Going';
-  if (response === 'declined') return lang === 'vi' ? 'Khong tham du' : 'Not going';
-  if (response === 'tentative') return lang === 'vi' ? 'Co the tham du' : 'Maybe';
-  return lang === 'vi' ? 'Chua tra loi' : 'No response';
+  if (response === 'accepted') return lang === 'vi' ? 'Có' : 'Yes';
+  if (response === 'declined') return lang === 'vi' ? 'Không' : 'No';
+  if (response === 'tentative') return lang === 'vi' ? 'Có thể' : 'Maybe';
+  return lang === 'vi' ? 'Chưa trả lời' : 'No response';
 }
 
 function recurrenceSummary(recurrence: string[] | undefined, lang: 'vi' | 'en') {
@@ -130,7 +130,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
       queryClient.invalidateQueries({ queryKey: ['calendar-event-detail', itemId] });
       queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
     },
-    onError: (err) => handleApiError(err, lang === 'vi' ? 'Loi cap nhat RSVP' : 'Could not update RSVP'),
+    onError: (err) => handleApiError(err, t('calendar.rsvpUpdateFailed')),
   });
 
   useLayoutEffect(() => {
@@ -251,12 +251,16 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   return shell(
     <>
       <div className="flex items-center justify-end gap-2.5 px-4 py-3.5">
-        <button type="button" onClick={() => onEdit(detail)} title={t('common.edit')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={onDelete} title={t('common.delete')} className="rounded-full p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-300">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {detail.canEdit && (
+          <button type="button" onClick={() => onEdit(detail)} title={t('common.edit')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Pencil className="h-4 w-4" />
+          </button>
+        )}
+        {detail.isOrganizer && (
+          <button type="button" onClick={onDelete} title={t('common.delete')} className="rounded-full p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-300">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
         <button type="button" onClick={() => setIsEmailPopupOpen(true)} title={t('calendar.emailGuests')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
           <Mail className="h-4 w-4" />
         </button>
@@ -265,14 +269,14 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
             <MoreVertical className="h-4 w-4" />
           </button>
           {showMoreActions && (
-            <div className="absolute right-0 top-10 z-10 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-850">
-              <button type="button" onClick={() => { handleCopyLink(); setShowMoreActions(false); }} className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
-                <Link className="h-3.5 w-3.5 text-slate-400" />
+            <div className="absolute right-0 top-10 z-10 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10">
+              <button type="button" onClick={() => { handleCopyLink(); setShowMoreActions(false); }} className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white">
+                <Link className="h-3.5 w-3.5 text-slate-400 dark:text-slate-300" />
                 {t('calendar.copyLink')}
               </button>
               {detail.htmlLink && (
-                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" onClick={() => setShowMoreActions(false)} className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
-                  <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" onClick={() => setShowMoreActions(false)} className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white">
+                  <ExternalLink className="h-3.5 w-3.5 text-slate-400 dark:text-slate-300" />
                   {t('calendar.viewGoogle')}
                 </a>
               )}

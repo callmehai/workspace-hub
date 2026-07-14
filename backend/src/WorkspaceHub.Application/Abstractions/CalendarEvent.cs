@@ -34,4 +34,9 @@ public record CalendarEvent(
     IReadOnlyList<CalendarEventReminder>? Reminders = null,
     IReadOnlyList<string>? Recurrence = null,
     string? OrganizerEmail = null,
-    string? SelfResponseStatus = null);
+    string? SelfResponseStatus = null,
+    string? ICalUid = null,
+    bool? GuestsCanModify = null,
+    bool? GuestsCanInviteOthers = null,
+    bool? GuestsCanSeeOtherGuests = null,
+    bool SendUpdates = true);

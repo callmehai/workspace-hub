@@ -2,6 +2,21 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-14] Calendar guest email prompt + dọn attendee metadata cũ
+
+- Khi create/edit làm thay đổi danh sách khách, FE hiển thị hộp thoại ba lựa chọn giống Google Calendar: quay lại chỉnh sửa, lưu nhưng không gửi email, hoặc gửi email. API nhận `sendUpdates`; Calendar gateway map sang Google `none|all` (mặc định vẫn là `all` để tương thích client cũ).
+- `sendUpdates=false` chỉ tắt email do Google Calendar gửi; invitation và notification in-app vẫn được reconcile để user WorkspaceHub nhận lời mời trong app.
+- `EmailChipsInput` chốt email đang gõ ngay ở sự kiện blur, trước click Lưu của form cha; bỏ delay 150 ms từng làm email cuối chưa kịp vào payload attendees.
+- Fix lỗi xóa khách cuối cùng: Google trả `attendees=null`, backend nay xóa khóa `attendees` khỏi metadata local thay vì giữ danh sách cũ. Khi mở editor, FE ưu tiên attendee live từ endpoint calendar details để tự sửa cả snapshot cũ trước lần sync tiếp theo.
+- Thêm unit test cho việc truyền lựa chọn không gửi email và dọn metadata khi attendee cuối cùng bị xóa.
+
+## [2026-07-13] Calendar invitations + RSVP trong app + guest permissions
+
+- Google Calendar là nguồn sự thật của event; create/update có attendees dùng `sendUpdates=all`, vì vậy email mời do Google Calendar gửi. Gmail chỉ được tái sử dụng cho contact suggestions, không gửi email mời trùng.
+- Thêm `CalendarInvitations` để user nội bộ nhận notification và phản hồi `Accepted/Tentative/Declined` ngay trong WorkspaceHub. Event được reconcile giữa organizer/invitee bằng `iCalUID`; nếu invitee chưa connect GCal thì lưu `GoogleSyncPending` nhưng event accepted/tentative vẫn hiện trong app.
+- Sync hai chiều cập nhật attendee response và liên kết `InviteeItemId`; thay đổi attendee từ phía Google cũng tạo/gỡ invitation nội bộ ở lần sync kế tiếp.
+- Ba quyền Google (`guestsCanModify`, `guestsCanInviteOthers`, `guestsCanSeeOtherGuests`) được lưu metadata, ghi/đọc Google và enforce ở backend. UI ẩn sửa/xóa/guest list tương ứng; organizer luôn có toàn quyền.
+
 ## [2026-07-12] Jira deadline trên Calendar — sync `fields.duedate`
 
 - **Gap:** FE overlay Jira đã có (violet, read-only) nhưng `JiraItemMapper` không map `fields.duedate` → `DueAt`/`metadata.dueDate` luôn null → ticket không lên lịch; overlap query còn match ticket theo `OccurredAt=updated` (sai).

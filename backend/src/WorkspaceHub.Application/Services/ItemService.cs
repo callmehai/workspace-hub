@@ -223,7 +223,7 @@ public class ItemService : IItemService
 
         var liveEvent = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
 
-        string? organizerEmail = null;
+        string? organizerEmail = liveEvent.OrganizerEmail;
         string? organizerDisplayName = null;
         if (liveEvent.FullAttendees != null)
         {
@@ -238,6 +238,17 @@ public class ItemService : IItemService
         var attendeesDto = liveEvent.FullAttendees?
             .Select(a => new CalendarEventAttendeeDto(a.Email, a.DisplayName, a.ResponseStatus, a.Comment, a.Organizer))
             .ToList() ?? new List<CalendarEventAttendeeDto>();
+
+        var isOrganizer = string.Equals(organizerEmail, conn.ProviderAccountId, StringComparison.OrdinalIgnoreCase);
+        var canEdit = isOrganizer || liveEvent.GuestsCanModify == true;
+        var canInviteOthers = isOrganizer || liveEvent.GuestsCanInviteOthers != false;
+        var canSeeGuestList = isOrganizer || liveEvent.GuestsCanSeeOtherGuests != false;
+        if (!canSeeGuestList)
+        {
+            attendeesDto = attendeesDto.Where(a =>
+                a.Organizer ||
+                string.Equals(a.Email, conn.ProviderAccountId, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
 
         var attachmentsDto = liveEvent.DriveAttachments?
             .Select(a => new CalendarDriveAttachmentDto(a.FileId, a.Title, a.MimeType, a.FileUrl))
@@ -263,7 +274,15 @@ public class ItemService : IItemService
             DriveAttachments: attachmentsDto,
             OwningCalendarName: conn.ProviderAccountId,
             Reminders: remindersDto,
-            Recurrence: liveEvent.Recurrence != null ? liveEvent.Recurrence.ToList() : new List<string>()
+            Recurrence: liveEvent.Recurrence != null ? liveEvent.Recurrence.ToList() : new List<string>(),
+            ICalUid: liveEvent.ICalUid,
+            GuestsCanModify: liveEvent.GuestsCanModify ?? false,
+            GuestsCanInviteOthers: liveEvent.GuestsCanInviteOthers ?? true,
+            GuestsCanSeeOtherGuests: liveEvent.GuestsCanSeeOtherGuests ?? true,
+            CanEdit: canEdit,
+            CanInviteOthers: canInviteOthers,
+            CanSeeGuestList: canSeeGuestList,
+            IsOrganizer: isOrganizer
         );
     }
 

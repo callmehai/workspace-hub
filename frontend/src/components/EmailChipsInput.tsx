@@ -174,7 +174,11 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId, cl
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          onBlur={() => { /* commit on blur only if no dropdown pick */ setTimeout(() => { if (draft.trim()) commit(); }, 150); }}
+          onBlur={() => {
+            // Commit synchronously before a parent form's Save click is handled.
+            // Suggestion buttons prevent mousedown focus loss, so their click flow is unaffected.
+            if (draft.trim()) commit();
+          }}
           placeholder={value.length === 0 ? placeholder : ''}
           className="flex-1 min-w-[6rem] h-6 bg-transparent outline-none text-sm text-slate-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500"
           autoComplete="off"

@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<ICalendarInvitationRepository, CalendarInvitationRepository>();
 
         services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();

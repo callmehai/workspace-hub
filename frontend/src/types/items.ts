@@ -110,6 +110,11 @@ export interface PatchItemRequest {
   issueType?: string;          // change issue type (Task/Bug/Story...) via PUT /issue
   reminders?: EventReminderDto[];
   recurrence?: string[];
+  guestsCanModify?: boolean;
+  guestsCanInviteOthers?: boolean;
+  guestsCanSeeOtherGuests?: boolean;
+  /** Whether Google Calendar should email attendees about this update. */
+  sendUpdates?: boolean;
 }
 
 export interface EventReminderDto {
@@ -155,6 +160,14 @@ export interface CalendarEventDetailResponse {
   owningCalendarName?: string | null;
   reminders: EventReminderDto[];
   recurrence: string[];
+  iCalUid?: string | null;
+  guestsCanModify: boolean;
+  guestsCanInviteOthers: boolean;
+  guestsCanSeeOtherGuests: boolean;
+  canEdit: boolean;
+  canInviteOthers: boolean;
+  canSeeGuestList: boolean;
+  isOrganizer: boolean;
 }
 
 /**
@@ -184,6 +197,11 @@ export interface CreateEventRequest {
   driveItemIds?: string[];    // Item IDs (Guid) of Drive files to attach
   reminders?: EventReminderDto[];
   recurrence?: string[];
+  guestsCanModify?: boolean;
+  guestsCanInviteOthers?: boolean;
+  guestsCanSeeOtherGuests?: boolean;
+  /** Whether Google Calendar should email invitations to attendees. Defaults to true. */
+  sendUpdates?: boolean;
 }
 
 // ── Tags (SCRUM-70/71) ──

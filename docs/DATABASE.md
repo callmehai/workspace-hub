@@ -124,7 +124,7 @@ Lõi app. Thêm ETag cho write-back. ConnectionId thay ServiceConnectionId.
 
 **MetadataJson shape:**
 - Email: `{from, to[], threadId, labels[], hasAttachment, isUnread, isStarred, webUrl}`  ← thêm isUnread/isStarred cho 2 chiều
-- Event: `{start, end, location, attendees[], meetUrl, htmlLink}` (`htmlLink` = link mở event trong Google Calendar — nút "Mở trong Calendar")
+- Event: `{start, end, allDay, location, attendees[], meetUrl, htmlLink, iCalUid, organizerEmail, selfResponseStatus, guestsCanModify, guestsCanInviteOthers, guestsCanSeeOtherGuests}` (`iCalUid` dùng reconcile cùng event giữa organizer/invitee)
 - File: `{mimeType, size, webViewLink, iconLink}`
 - Note: `{contentMarkdown}`
 - Ticket (Jira, ✅ SCRUM-55): `{issueKey, projectKey, status, assignee, priority, issueType, issueUrl}`. `ETag` = `fields.updated` (ISO-8601 UTC) làm version-token cho conflict (SCRUM-57). Description gốc là ADF → `AdfConverter.ToPlainText` lấy Snippet (đọc); ghi ngược (text→ADF) ở SCRUM-57. Xem CHANGELOG.
@@ -142,6 +142,24 @@ Không đổi cấu trúc.
 - ImportantContacts (Type: Email / **JiraAccount** — ✅ SCRUM-60, Identifier=email (Email) / accountId (JiraAccount); UNIQUE(UserId,Type,Identifier)). CRUD: `GET/POST /api/importantcontacts`, `DELETE /{id}`. Enum lưu string nên thêm JiraAccount KHÔNG cần migration.
 - **GoogleContacts** (✅ SCRUM-69) — cache contact Google theo Connection Gmail (gợi ý To/Cc/Bcc). Cột: `ConnectionId` FK→Connections **CASCADE**, `Email` (nvarchar 320, lưu lower-case), `DisplayName`, `Source` enum string (`Contact` / `OtherContact`), `ExternalResourceName`, `SyncedAt` UTC. UNIQUE(ConnectionId, Email). Sync **kèm mỗi lần sync Gmail** (`connections.list` + `otherContacts.list`); full replace mỗi lần. Nguồn kích sync: cron định kỳ (SCRUM-72, ~60s), `POST /api/connections/{id}/sync`, hoặc lazy khi GET items. Khác ImportantContacts — không user-managed.
 - Notifications (Type: share_invite/important_email/sync_error/schedule_sent/item_synced/calendar_reminder; **phase Jira (SCRUM-60, optional) thêm type cho Jira** — vd jira_assigned/jira_mention; tương lai thêm friend_request/automation_triggered nếu làm).
+
+## CalendarInvitations
+
+Bản ghi lời mời nội bộ, không thay thế Google Event. Dùng để notification + RSVP trong app khi người được mời chưa sync/chưa kết nối Google Calendar. Migration: `AddCalendarInvitations`.
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| Id | uuid PK | |
+| OrganizerItemId | uuid FK→Items | CASCADE; event snapshot của organizer |
+| OrganizerUserId / InviteeUserId | uuid FK→Users | NoAction |
+| InviteeItemId | uuid FK→Items null | Item cùng event trên GCal connection của invitee sau sync |
+| InviteeEmail | nvarchar(320) | lower-case |
+| GoogleEventId / ICalUid | nvarchar(512) | `iCalUID` là khóa reconcile chéo calendar |
+| Status | enum string | NeedsAction / Accepted / Tentative / Declined |
+| GoogleSyncPending | bool | true khi đã RSVP local nhưng chưa ghi được Google |
+| CreatedAt / UpdatedAt / RespondedAt | datetime2 | UTC |
+
+**Constraint:** UNIQUE(OrganizerItemId, InviteeEmail). **Indexes:** (InviteeUserId, Status, UpdatedAt), (ICalUid, InviteeEmail) filtered non-null.
 
 ## EventReminders
 Nhắc nhở sự kiện lịch. Mỗi row = một `ReminderType` + một mốc offset trước event. Giá trị: `GooglePopup`, `GoogleEmail`, `InApp` (enum string, `nvarchar(20)`). Cùng event có thể có nhiều row trùng loại.

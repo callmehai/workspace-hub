@@ -264,4 +264,44 @@ public class ItemWriteBackServicePatchEventTests
 
         captured!.AllDay.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task PatchEvent_RemovingLastAttendee_RemovesStaleAttendeeMetadata()
+    {
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","attendees":["guest@example.com"]}""");
+        SetupItemAndConn(item);
+        SetupCalendarGetAndUpdate(new CalendarEvent(
+            "google-ev-1", "\"etag-2\"", "Meeting", "notes", AllDayStart, AllDayEnd,
+            Attendees: null, AllDay: true));
+
+        await _service.PatchItemAsync(item.Id, _userId, new PatchItemRequest(
+            Attendees: []));
+
+        var meta = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.MetadataJson!);
+        meta.Should().NotBeNull();
+        meta!.Should().NotContainKey("attendees");
+    }
+
+    [Fact]
+    public async Task PatchEvent_DontSendGuestEmails_PassesPreferenceToGateway()
+    {
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");
+        SetupItemAndConn(item);
+
+        CalendarEvent? captured = null;
+        _calendar.Setup(m => m.GetEventAsync(It.IsAny<Connection>(), "primary", "google-ev-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CalendarEvent("google-ev-1", _etag, "Meeting", "notes", AllDayStart, AllDayEnd, AllDay: true));
+        _calendar.Setup(m => m.UpdateEventAsync(
+                It.IsAny<Connection>(), "primary", "google-ev-1", It.IsAny<CalendarEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<Connection, string, string, CalendarEvent, CancellationToken>((_, _, _, dto, _) => captured = dto)
+            .ReturnsAsync(new CalendarEvent(
+                "google-ev-1", "\"etag-2\"", "Meeting", "notes", AllDayStart, AllDayEnd,
+                Attendees: ["guest@example.com"], AllDay: true));
+
+        await _service.PatchItemAsync(item.Id, _userId, new PatchItemRequest(
+            Attendees: ["guest@example.com"], SendUpdates: false));
+
+        captured.Should().NotBeNull();
+        captured!.SendUpdates.Should().BeFalse();
+    }
 }
