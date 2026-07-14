@@ -79,6 +79,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   const { data: thread, isLoading, isError } = useQuery({
     queryKey: ['emailThread', itemId],
     queryFn: () => sendEmailApi.getThread(itemId),
+    // KHÔNG ăn staleTime 5' toàn app: nháp đổi nội dung liên tục khi soạn — cache cũ
+    // sẽ hiện body RỖNG dù Gmail đã có; thread thường cũng có thể vừa nhận reply mới.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: connections = [] } = useQuery({

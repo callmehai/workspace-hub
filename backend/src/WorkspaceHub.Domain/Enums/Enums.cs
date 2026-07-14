@@ -102,5 +102,21 @@ public enum NotificationType
     ImportantEmail,
     SyncError,
     ScheduleSent,
-    ItemSynced
+    ItemSynced,
+    FriendRequest,   // nhận lời mời kết bạn
+    FriendAccepted   // lời mời kết bạn được chấp nhận
+}
+
+/// <summary>Trạng thái quan hệ bạn bè. Decline/unfriend = xoá row (không lưu trạng thái từ chối).</summary>
+public enum FriendshipStatus
+{
+    Pending,
+    Accepted
+}
+
+/// <summary>Hạng bạn bè (per-side): thường / thân. Mở rộng sau nếu cần nhóm khác.</summary>
+public enum FriendTier
+{
+    Friend,
+    CloseFriend
 }

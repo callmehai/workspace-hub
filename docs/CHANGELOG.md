@@ -2,6 +2,17 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-10] Friend system nội bộ app (đổi hướng từ Google Contacts)
+
+> **Quyết định scope:** bỏ hướng đồng bộ Google Contacts / People API (PR #100) — bạn bè chỉ có ý nghĩa TRONG app, không liên kết bên thứ 3. Kết bạn = nhập email gửi lời mời.
+
+- **Model:** `Friendships` (1 row/cặp, Requester→Addressee, Status Pending/Accepted, tier `Friend`/`CloseFriend` lưu RIÊNG từng phía, 2 FK Users NoAction) + `FriendInvites` (email chưa có tài khoản: Token unique, hạn 14 ngày, UNIQUE(inviter,email)). Migration `AddFriendSystem`.
+- **Luồng kết bạn:** email đã có tài khoản → Pending + notification (`FriendRequest`); phía kia mời mình trước → auto-accept; chưa có tài khoản → invite + **mail mời gửi qua chính Gmail connection của người mời** (không SMTP riêng; không gửi được → FE hiện link copy). Link `{App:FrontendBaseUrl}/register?inviteToken=`.
+- **Consume khi đăng ký** (`AuthService` hook, best-effort không fail register): token khớp → bạn bè NGAY (bấm link = đồng ý); đăng ký/Google Sign-In trùng email không token → chuyển thành lời mời Pending in-app.
+- **API:** `GET /api/friends` (overview), `POST /api/friends/requests`, `POST /api/friends/{id}/accept`, `DELETE /api/friends/{id}` (decline/hủy/unfriend), `PATCH /api/friends/{id}/tier`, `DELETE /api/friends/invites/{id}`, public `GET /api/friends/invites/by-token/{token}`. `POST /api/auth/register` thêm `inviteToken?`.
+- **FE:** trang `/friends` (form kết bạn, lời mời đến/đi, invite email + copy link, badge Bạn thân ⭐, gửi mail nhanh cho bạn → `/send-email?to=`), sidebar mục Bạn bè, RegisterPage banner "X mời bạn" + prefill email. Config mới `App:FrontendBaseUrl` (prod: `App__FrontendBaseUrl` trong docker-compose).
+- **Tương lai (chưa làm):** share folder cho bạn theo role, tạo event cùng bạn, nhóm bạn tuỳ biến.
+
 ## [2026-07-10] Jira description = Markdown subset 2 chiều + UX nháp/confirm
 
 - **Description Jira đổi từ plain text → Markdown subset** (cùng chuẩn với comment): đọc `AdfConverter.ToMarkdown`, ghi `FromMarkdown` (trước là `ToPlainText`/`FromPlainText` — làm MẤT heading/bullet/bold/code khi sync). `AdfConverter` mở rộng: heading `#`→`######`, inline `` `code` ``, code block ``` fenced — 2 chiều ADF ⇄ markdown. `Snippet` list vẫn plain text. FE `miniMarkdown` render heading/code chip/code block; toolbar `RichCommentBox` thêm nút Heading + Code, dùng luôn cho sửa MÔ TẢ.

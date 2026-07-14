@@ -10,6 +10,7 @@ import { OAuthCallback } from './pages/connections/OAuthCallback';
 import { ScheduledEmails } from './pages/ScheduledEmails';
 import { SendEmail } from './pages/SendEmail';
 import { ProfilePage } from './pages/ProfilePage';
+import { Friends } from './pages/Friends';
 import { GoogleCallback } from './pages/auth/GoogleCallback';
 import { VerifyOtp } from './pages/auth/VerifyOtp';
 import { AdminRoute } from './components/auth/AdminRoute';
@@ -71,6 +72,10 @@ export const router = createBrowserRouter([
           {
             path: 'profile',
             element: <ProfilePage />,
+          },
+          {
+            path: 'friends',
+            element: <Friends />,
           },
           {
             path: '*',
