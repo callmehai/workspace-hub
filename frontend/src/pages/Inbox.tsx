@@ -9,7 +9,7 @@ import { useSeenSet } from '../lib/seenStore';
 import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
   Star, AlertCircle, Inbox as InboxIcon,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ChevronRight as BreadcrumbSeparator, Home,
   Send, FileEdit, Megaphone, Users, Bell, Mails, Loader2, ShieldAlert, Trash2, Plug,
   type LucideIcon,
 } from 'lucide-react';
@@ -163,6 +163,9 @@ export const Inbox = () => {
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Drive folder drill-down state
+  const [driveFolderStack, setDriveFolderStack] = useState<{id: string, name: string, internalId: string}[]>([]);
+
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
   // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
   const selectedFolderId = searchParams.get('folder');
@@ -178,6 +181,49 @@ export const Inbox = () => {
       next.delete('item');
       const q = next.toString();
       navigate({ pathname: location.pathname, search: q ? `?${q}` : '' }, { replace: true });
+    }
+  };
+
+  const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleItemClick = (item: ItemResponse, e: React.MouseEvent) => {
+    let isFolder = false;
+    if (item.type === 'File' && item.metadataJson) {
+      try {
+        isFolder = JSON.parse(item.metadataJson).isFolder === true;
+      } catch { /* ignore */ }
+    }
+
+    if (isFolder) {
+      if (e.detail === 1) {
+        clickTimeoutRef.current = setTimeout(() => {
+          setSelectedId(item.id);
+          clickTimeoutRef.current = null;
+        }, 200); // 200ms delay to distinguish double-click
+      } else if (e.detail === 2) {
+        if (clickTimeoutRef.current) {
+          clearTimeout(clickTimeoutRef.current);
+          clickTimeoutRef.current = null;
+        }
+        handleItemDoubleClick(item);
+      }
+    } else {
+      // Normal items don't have double-click behavior, open instantly
+      setSelectedId(item.id);
+    }
+  };
+
+  const handleItemDoubleClick = (item: ItemResponse) => {
+    if (item.type === 'File' && item.metadataJson) {
+      try {
+        const meta = JSON.parse(item.metadataJson);
+        if (meta.isFolder && item.externalId) {
+          setDriveFolderStack(prev => [...prev, { id: item.externalId!, name: item.title, internalId: item.id }]);
+          setPage(1);
+          setSelectedId(null);
+          return;
+        }
+      } catch { /* ignore */ }
     }
   };
 
@@ -240,6 +286,7 @@ export const Inbox = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
+    setDriveFolderStack([]); // Reset drive drill-down khi đổi tab
   }, [selectedFolderId, sourceType]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
@@ -322,11 +369,12 @@ export const Inbox = () => {
     projectKey: effectiveProjectKey,
     assignee: effectiveAssignee,
     gmailLabel,
+    driveParentId: driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].id : undefined,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -340,6 +388,7 @@ export const Inbox = () => {
     projectKey: params.projectKey,
     assignee: params.assignee,
     gmailLabel: params.gmailLabel,
+    driveParentId: params.driveParentId,
   });
 
   const { data, isLoading, isError, refetch, isFetching, isPlaceholderData } = useQuery({
@@ -467,6 +516,7 @@ export const Inbox = () => {
           onAssigneeChange={(v) => { setAssigneeFilter(v); setPage(1); }}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
+          currentDriveFolderId={driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].internalId : undefined}
         />
 
         {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở tab Email (sidebar) ── */}
@@ -523,6 +573,39 @@ export const Inbox = () => {
             {search && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">"{search}"</span>}
             {effectiveProjectKey && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">Project: {effectiveProjectKey}</span>}
             <button onClick={clearFilters} className="text-brand-600 dark:text-brand-400 hover:underline ml-1">{t('inbox.clearFilters')}</button>
+          </div>
+        )}
+
+        {/* ── Drive Folder Breadcrumb ── */}
+        {driveFolderStack.length > 0 && (
+          <div className="flex items-center gap-1.5 mb-3 text-[13px] font-medium overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button 
+              onClick={() => { setDriveFolderStack([]); setPage(1); }}
+              className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+            >
+              <Home className="w-4 h-4" />
+              {t('nav.allItems')}
+            </button>
+            {driveFolderStack.map((folder, index) => {
+              const isLast = index === driveFolderStack.length - 1;
+              return (
+                <div key={folder.id} className="flex items-center gap-1.5 whitespace-nowrap">
+                  <BreadcrumbSeparator className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
+                  <button
+                    onClick={() => {
+                      if (!isLast) {
+                        setDriveFolderStack(prev => prev.slice(0, index + 1));
+                        setPage(1);
+                      }
+                    }}
+                    className={`transition-colors ${isLast ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    disabled={isLast}
+                  >
+                    {folder.name}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -598,11 +681,17 @@ export const Inbox = () => {
           {showList && items.map((item: ItemResponse) => {
             const unread = isItemUnread(item, seenSet);
             const v = rowVisual(activeItemId === item.id, selectedItemIds.has(item.id), unread);
+            let isDriveFolder = false;
+            if (item.type === 'File' && item.metadataJson) {
+              try {
+                isDriveFolder = JSON.parse(item.metadataJson).isFolder === true;
+              } catch { /* ignore */ }
+            }
             return (
             <div
               key={item.id}
-              onClick={() => setSelectedId(item.id)}
-              className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
+              onClick={(e) => handleItemClick(item, e)}
+              className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row} select-none`}
             >
               {/* checkbox */}
               <input
@@ -632,8 +721,8 @@ export const Inbox = () => {
               </button>
 
               {/* avatar loại — logo brand thật trên nền trắng (Note = notepad vàng) */}
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass()}`}>
-                {typeIcon(item.type, 'w-[22px] h-[22px]')}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass(item.type, isDriveFolder)}`}>
+                {typeIcon(item.type, 'w-[22px] h-[22px]', undefined, isDriveFolder)}
               </div>
 
               <div className="flex-1 min-w-0">

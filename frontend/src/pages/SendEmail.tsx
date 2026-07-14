@@ -181,7 +181,7 @@ export const SendEmail = () => {
     }
   });
   // `mutate` referentially stable (TanStack) — dùng làm dep của useCallback thay cả object mutation.
-  const { mutate: saveDraftMutate } = saveDraftMutation;
+  const { mutate: mutateSaveDraft } = saveDraftMutation;
 
   const triggerSaveDraft = React.useCallback(async () => {
     if (isDiscardedRef.current) return;
@@ -208,8 +208,8 @@ export const SendEmail = () => {
       inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
     };
 
-    saveDraftMutate({ id: draftItemId, data: payload });
-  }, [saveDraftMutate]); // mọi giá trị form đọc qua latestDataRef — không cần dep
+    mutateSaveDraft({ id: draftItemId, data: payload }); // mọi giá trị form đọc qua latestDataRef — không cần dep
+  }, [mutateSaveDraft]);
 
   const triggerSaveDraftImmediate = React.useCallback(() => {
     if (isDiscardedRef.current) return;

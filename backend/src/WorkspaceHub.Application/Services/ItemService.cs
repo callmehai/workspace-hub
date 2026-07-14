@@ -74,6 +74,7 @@ public class ItemService : IItemService
             request.GmailLabel,
             request.Assignee,
             request.ConnectionId,
+            request.DriveParentId,
             page,
             limit,
             ct);

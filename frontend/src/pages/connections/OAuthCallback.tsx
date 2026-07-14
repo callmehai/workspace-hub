@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import type { AxiosError } from 'axios';
+import { isAxiosError } from 'axios';
 import { connectionsApi } from '../../lib/connectionsApi';
+import type { ApiErrorResponse } from '../../lib/errorUtils';
+import type { TranslationKey } from '../../i18n/translations';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../hooks/useI18n';
@@ -23,8 +25,14 @@ export const OAuthCallback = () => {
     },
     onError: (err) => {
       console.error(err);
-      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || t('oauth.failed');
-      toast.error(message);
+      const msg = isAxiosError(err)
+        ? (err.response?.data as ApiErrorResponse | undefined)?.message?.trim()
+        : undefined;
+      if (msg?.startsWith('integrations.')) {
+        toast.error(t(msg as TranslationKey, { name: t('integrations.title') }));
+        return;
+      }
+      toast.error(msg || t('oauth.failed'));
     },
   });
 
