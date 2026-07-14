@@ -53,11 +53,11 @@ function responseLabel(response: string, lang: 'vi' | 'en') {
 function recurrenceSummary(recurrence: string[] | undefined, lang: 'vi' | 'en') {
   const rule = recurrence?.[0];
   if (!rule?.startsWith('RRULE:')) return null;
-  if (rule.includes('FREQ=DAILY')) return lang === 'vi' ? 'Lap lai hang ngay' : 'Repeats daily';
-  if (rule.includes('FREQ=WEEKLY')) return lang === 'vi' ? 'Lap lai hang tuan' : 'Repeats weekly';
-  if (rule.includes('FREQ=MONTHLY')) return lang === 'vi' ? 'Lap lai hang thang' : 'Repeats monthly';
-  if (rule.includes('FREQ=YEARLY')) return lang === 'vi' ? 'Lap lai hang nam' : 'Repeats yearly';
-  return lang === 'vi' ? 'Lap lai dinh ky' : 'Repeats';
+  if (rule.includes('FREQ=DAILY')) return lang === 'vi' ? 'Lặp lại hằng ngày' : 'Repeats daily';
+  if (rule.includes('FREQ=WEEKLY')) return lang === 'vi' ? 'Lặp lại hằng tuần' : 'Repeats weekly';
+  if (rule.includes('FREQ=MONTHLY')) return lang === 'vi' ? 'Lặp lại hằng tháng' : 'Repeats monthly';
+  if (rule.includes('FREQ=YEARLY')) return lang === 'vi' ? 'Lặp lại hằng năm' : 'Repeats yearly';
+  return lang === 'vi' ? 'Lặp lại định kỳ' : 'Repeats';
 }
 
 function reminderTypeLabel(reminderType: string, lang: 'vi' | 'en') {
