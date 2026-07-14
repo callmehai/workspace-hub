@@ -51,12 +51,13 @@ if (import.meta.env.DEV) {
 }
 
 function resolveHubUrl(): string {
+  // Hub map dưới /api (khớp reverse-proxy /api/* của Caddy prod + Vite dev proxy).
   const apiUrl = import.meta.env.VITE_API_URL;
   if (!apiUrl || apiUrl.startsWith('/')) {
-    return '/hubs/notifications';
+    return '/api/hubs/notifications';
   }
   const base = apiUrl.replace(/\/api\/?$/, '');
-  return `${base}/hubs/notifications`;
+  return `${base}/api/hubs/notifications`;
 }
 
 function readCookie(name: string): string | null {

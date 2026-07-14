@@ -154,7 +154,7 @@ builder.Services.AddAuthentication(options =>
                 ctx.Token = cookieToken;
 
             if (string.IsNullOrEmpty(ctx.Token)
-                && ctx.Request.Path.StartsWithSegments("/hubs")
+                && ctx.Request.Path.StartsWithSegments("/api/hubs")
                 && ctx.Request.Query.TryGetValue("access_token", out var accessToken))
                 ctx.Token = accessToken;
 
@@ -232,7 +232,9 @@ app.UseAuthentication();
 app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<NotificationHub>("/hubs/notifications");
+// Hub nằm DƯỚI /api để dùng chung 1 luật reverse-proxy /api/* (Caddy prod) — tránh phải
+// proxy riêng /hubs và tránh 405 khi negotiate. SignalR không bắt buộc prefix, đường tự chọn.
+app.MapHub<NotificationHub>("/api/hubs/notifications");
 
 app.Run();
 

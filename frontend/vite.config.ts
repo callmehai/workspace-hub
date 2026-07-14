@@ -10,12 +10,8 @@ export default defineConfig({
     // Target HTTPS (profile "https" của Api: https://localhost:7010). secure:false để
     // chấp nhận dev cert tự ký. Chạy BE bằng: dotnet run --launch-profile https
     proxy: {
+      // Hub SignalR nằm dưới /api/hubs/* nên chỉ cần 1 block /api (ws:true cho WebSocket upgrade).
       '/api': {
-        target: 'https://localhost:7010',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/hubs': {
         target: 'https://localhost:7010',
         changeOrigin: true,
         secure: false,
