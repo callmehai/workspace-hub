@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.SignalR;
@@ -33,6 +34,23 @@ contactSuggestionType.HasKey(c => c.Email);
 edmBuilder.EntitySet<ContactSuggestionDto>("EmailContactSuggestions");
 var notifications = edmBuilder.EntitySet<NotificationDto>("Notifications");
 notifications.EntityType.HasKey(n => n.Id);
+
+// SCRUM-64: rate limit theo IP cho các endpoint OTP (register + send-otp) — chống spam đốt
+// quota email (Resend free tier). Cooldown OtpService theo userId không chặn được register hàng
+// loạt email khác nhau, nên cần chặn ở tầng IP. 429 khi vượt.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("otp", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 // Controllers + serialize enum dạng string (khớp cách lưu DB) + OData.
 builder.Services.AddControllers()
@@ -225,6 +243,8 @@ app.UseHttpsRedirection();
 
 if (allowedOrigins is { Length: > 0 })
     app.UseCors("frontend");
+
+app.UseRateLimiter(); // SCRUM-64: áp policy "otp" cho register + send-otp
 
 app.UseAuthentication();
 // CSRF double-submit check (SCRUM-62) — sau Authentication (cần biết request dùng cookie),

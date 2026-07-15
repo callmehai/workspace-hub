@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using WorkspaceHub.Api.Auth;
 using WorkspaceHub.Application.DTOs.Auth;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -24,23 +25,29 @@ public class AuthController : ApiControllerBase
     }
 
     /// <summary>
-    /// POST /api/auth/register — tạo tài khoản (PhoneVerified=false) + gửi OTP (SCRUM-64).
+    /// POST /api/auth/register — tạo tài khoản (EmailVerified=false) + gửi OTP qua email (SCRUM-64).
     /// KHÔNG set cookie/đăng nhập ngay — client phải verify OTP ở /auth/verify-otp.
+    /// Rate limit theo IP (policy "otp") — chống spam đốt quota email.
     /// </summary>
     [HttpPost("register")]
+    [EnableRateLimiting("otp")]
     [ProducesResponseType(typeof(RegisterResult), 201)]
     [ProducesResponseType(400)]
     [ProducesResponseType(409)]
+    [ProducesResponseType(429)]
     public async Task<ActionResult<RegisterResult>> Register(RegisterRequest request, CancellationToken ct)
         => StatusCode(201, await _auth.RegisterAsync(request, ct));
 
     /// <summary>
     /// POST /api/auth/send-otp — gửi lại OTP cho tài khoản chưa verify (SCRUM-64).
     /// Luôn 200 (không tiết lộ email tồn tại/đã verify — chống enumeration).
+    /// Rate limit theo IP (policy "otp") — chống spam đốt quota email.
     /// </summary>
     [HttpPost("send-otp")]
     [AllowAnonymous]
+    [EnableRateLimiting("otp")]
     [ProducesResponseType(200)]
+    [ProducesResponseType(429)]
     public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request, CancellationToken ct)
     {
         var cooldown = await _auth.SendOtpAsync(request.Email, ct);

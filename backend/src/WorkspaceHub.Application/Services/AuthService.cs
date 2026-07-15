@@ -6,6 +6,7 @@ using System.Web;
 using FluentValidation;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs.Auth;
@@ -32,6 +33,7 @@ public class AuthService : IAuthService
     private readonly IJwtTokenFactory _jwt;
     private readonly IOtpService _otp;
     private readonly IFriendService _friends;
+    private readonly ILogger<AuthService> _logger;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -50,7 +52,8 @@ public class AuthService : IAuthService
         IGoogleTokenVerifier googleTokenVerifier,
         IJwtTokenFactory jwt,
         IOtpService otp,
-        IFriendService friends)
+        IFriendService friends,
+        ILogger<AuthService> logger)
     {
         _users = users;
         _config = config;
@@ -62,6 +65,7 @@ public class AuthService : IAuthService
         _jwt = jwt;
         _otp = otp;
         _friends = friends;
+        _logger = logger;
     }
 
     public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
@@ -75,15 +79,14 @@ public class AuthService : IAuthService
 
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
 
-        // SCRUM-64: tạo user trước, verify sau. PhoneVerified=false → login bị chặn tới khi verify OTP.
+        // SCRUM-64: tạo user trước, verify sau. EmailVerified=false → login bị chặn tới khi verify OTP.
         var user = new User
         {
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = passwordHash,
             FullName = request.FullName.Trim(),
-            Phone = request.Phone.Trim(),
-            PhoneVerified = false,
+            EmailVerified = false,
             Role = UserRole.User,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
@@ -95,8 +98,21 @@ public class AuthService : IAuthService
         // Bấm link mời kết bạn (?inviteToken=) → thành bạn với inviter; invite khác trùng email → pending.
         await _friends.ConsumeInvitesOnRegistrationAsync(user.Id, email, request.InviteToken, ct);
 
-        var cooldown = await _otp.SendAsync(user.Id, user.Phone, ct);
-        return new RegisterResult(user.Email, RequiresPhoneVerification: true, cooldown);
+        // Gửi OTP tới email. Provider lỗi (review #2) KHÔNG được kẹt user: user đã ở trong DB
+        // (register lại → 409, login → 403), nên nuốt lỗi + log, vẫn trả 201 với cooldown mặc định
+        // — FE có nút resend (/auth/send-otp) để user tự thoát.
+        int cooldown;
+        try
+        {
+            cooldown = await _otp.SendAsync(user.Id, user.Email, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Gửi OTP đăng ký thất bại. UserId={UserId} — user vẫn được tạo, dùng resend.", user.Id);
+            cooldown = DefaultCooldownSeconds;
+        }
+
+        return new RegisterResult(user.Email, RequiresEmailVerification: true, cooldown);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -116,23 +132,23 @@ public class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedException("Invalid credentials");
 
-        // SCRUM-64: chặn login nếu chưa verify SĐT. FE bắt mã này → mở màn nhập OTP.
-        if (!user.PhoneVerified)
-            throw new ForbiddenException("PHONE_NOT_VERIFIED");
+        // SCRUM-64: chặn login nếu chưa verify email. FE bắt mã này → mở màn nhập OTP.
+        if (!user.EmailVerified)
+            throw new ForbiddenException("EMAIL_NOT_VERIFIED");
 
         return await SignInAsync(user, ct);
     }
 
     public async Task<int> SendOtpAsync(string email, CancellationToken ct = default)
     {
-        // Chống user enumeration (review #6): KHÔNG tiết lộ email tồn tại / đã verify / không
-        // có phone. Email không đủ điều kiện → im lặng trả cooldown giả, không gửi gì.
+        // Chống user enumeration (review #6): KHÔNG tiết lộ email tồn tại / đã verify.
+        // Email không đủ điều kiện → im lặng trả cooldown giả, không gửi gì.
         var normalized = email.Trim().ToLowerInvariant();
         var user = await _users.GetByEmailAsync(normalized, ct);
-        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
+        if (user is null || user.EmailVerified)
             return DefaultCooldownSeconds;
 
-        return await _otp.SendAsync(user.Id, user.Phone, ct);
+        return await _otp.SendAsync(user.Id, user.Email, ct);
     }
 
     public async Task<AuthResponse> VerifyOtpAsync(string email, string code, CancellationToken ct = default)
@@ -140,16 +156,16 @@ public class AuthService : IAuthService
         var normalized = email.Trim().ToLowerInvariant();
         var user = await _users.GetByEmailAsync(normalized, ct);
 
-        // Uniform 422 cho mọi case không hợp lệ (user không tồn tại / đã verify / không phone /
-        // mã sai) — không phân biệt để tránh enumeration. OtpService.VerifyAsync cũng throw 422.
-        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
+        // Uniform 422 cho mọi case không hợp lệ (user không tồn tại / đã verify / mã sai)
+        // — không phân biệt để tránh enumeration. OtpService.VerifyAsync cũng throw 422.
+        if (user is null || user.EmailVerified)
             throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
 
         var ok = await _otp.VerifyAsync(user.Id, code, ct);
         if (!ok)
             throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
 
-        user.PhoneVerified = true;
+        user.EmailVerified = true;
         await _users.SaveChangesAsync(ct);
 
         // Verify xong → đăng nhập luôn (phát JWT) cho mượt.

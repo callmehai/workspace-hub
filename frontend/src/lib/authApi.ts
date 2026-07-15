@@ -25,7 +25,7 @@ export const authApi = {
   },
 
   /** SCRUM-64: đăng ký → tạo user (chưa verify) + gửi OTP. KHÔNG đăng nhập ngay. */
-  register: async (body: { fullName: string; email: string; password: string; phone: string; inviteToken?: string }): Promise<RegisterResult> => {
+  register: async (body: { fullName: string; email: string; password: string; inviteToken?: string }): Promise<RegisterResult> => {
     const res = await api.post<RegisterResult>('/auth/register', body);
     return res.data;
   },

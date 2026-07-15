@@ -35,8 +35,8 @@ export const Login = () => {
       const data = isAxiosError<ApiError>(error)
         ? error.response?.data
         : undefined;
-      if (data?.message === "PHONE_NOT_VERIFIED") {
-        toast("Tài khoản chưa xác minh — vui lòng xác nhận số điện thoại.");
+      if (data?.message === "EMAIL_NOT_VERIFIED") {
+        toast("Tài khoản chưa xác minh — vui lòng xác nhận email.");
         navigate("/verify-otp", { state: { email } });
         return;
       }

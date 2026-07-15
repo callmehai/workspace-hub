@@ -17,13 +17,15 @@ public class OtpServiceTests
     private static IDistributedCache CreateCache()
         => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
-    /// <summary>SMS sender bắt OTP gửi đi để test verify với đúng mã.</summary>
-    private sealed class CapturingSms : ISmsSender
+    private const string TestEmail = "user@example.com";
+
+    /// <summary>Email sender bắt OTP gửi đi (text body) để test verify với đúng mã.</summary>
+    private sealed class CapturingEmail : ISystemEmailSender
     {
-        public string? LastMessage { get; private set; }
-        public Task SendAsync(string toPhoneE164, string message, CancellationToken ct = default)
+        public string? LastText { get; private set; }
+        public Task SendAsync(string toEmail, string subject, string htmlBody, string textBody, CancellationToken ct = default)
         {
-            LastMessage = message;
+            LastText = textBody;
             return Task.CompletedTask;
         }
     }
@@ -31,11 +33,11 @@ public class OtpServiceTests
     private static string ExtractCode(string message)
         => System.Text.RegularExpressions.Regex.Match(message, @"\d{6}").Value;
 
-    private static (OtpService Service, CapturingSms Sms) Create()
+    private static (OtpService Service, CapturingEmail Email) Create()
     {
-        var sms = new CapturingSms();
-        var service = new OtpService(CreateCache(), sms, NullLogger<OtpService>.Instance);
-        return (service, sms);
+        var email = new CapturingEmail();
+        var service = new OtpService(CreateCache(), email, NullLogger<OtpService>.Instance);
+        return (service, email);
     }
 
     /// <summary>
@@ -72,10 +74,10 @@ public class OtpServiceTests
     {
         var userId = Guid.NewGuid();
         var cache = new ExpiryCapturingCache();
-        var sms = new CapturingSms();
-        var service = new OtpService(cache, sms, NullLogger<OtpService>.Instance);
+        var email = new CapturingEmail();
+        var service = new OtpService(cache, email, NullLogger<OtpService>.Instance);
 
-        await service.SendAsync(userId, "+84901234567");
+        await service.SendAsync(userId, TestEmail);
         var otpKey = $"otp:{userId}";
         var expiryAfterSend = cache.LastAbsoluteExpiration[otpKey];
 
@@ -92,12 +94,12 @@ public class OtpServiceTests
     public async Task Send_then_verify_correct_code_succeeds()
     {
         var userId = Guid.NewGuid();
-        var (service, sms) = Create();
+        var (service, email) = Create();
 
-        var cooldown = await service.SendAsync(userId, "+84901234567");
+        var cooldown = await service.SendAsync(userId, TestEmail);
         cooldown.Should().Be(60);
 
-        var code = ExtractCode(sms.LastMessage!);
+        var code = ExtractCode(email.LastText!);
         var ok = await service.VerifyAsync(userId, code);
 
         ok.Should().BeTrue();
@@ -108,7 +110,7 @@ public class OtpServiceTests
     {
         var userId = Guid.NewGuid();
         var (service, _) = Create();
-        await service.SendAsync(userId, "+84901234567");
+        await service.SendAsync(userId, TestEmail);
 
         var ok = await service.VerifyAsync(userId, "000000");
 
@@ -120,9 +122,9 @@ public class OtpServiceTests
     {
         var userId = Guid.NewGuid();
         var (service, _) = Create();
-        await service.SendAsync(userId, "+84901234567");
+        await service.SendAsync(userId, TestEmail);
 
-        var act = () => service.SendAsync(userId, "+84901234567");
+        var act = () => service.SendAsync(userId, TestEmail);
 
         await act.Should().ThrowAsync<BusinessRuleException>();
     }
@@ -142,7 +144,7 @@ public class OtpServiceTests
     {
         var userId = Guid.NewGuid();
         var (service, _) = Create();
-        await service.SendAsync(userId, "+84901234567");
+        await service.SendAsync(userId, TestEmail);
 
         // 5 lần sai → lần thứ 5 ném (hết lượt) + OTP bị xoá.
         for (var i = 0; i < 4; i++)

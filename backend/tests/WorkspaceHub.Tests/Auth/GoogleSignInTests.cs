@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using WorkspaceHub.Application.Common;
@@ -88,7 +89,8 @@ public class GoogleSignInTests
             verifier.Object,
             jwtFactory,
             otp.Object,
-            friends.Object);
+            friends.Object,
+            NullLogger<AuthService>.Instance);
 
         return (service, users, tokenClient, verifier, cache);
     }

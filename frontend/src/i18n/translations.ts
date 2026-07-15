@@ -131,7 +131,6 @@ export const vi = {
   'register.subtitle': 'Bắt đầu gom tất cả công việc về một nơi.',
   'register.fullName': 'Họ và tên',
   'register.fullNamePlaceholder': 'Nguyễn Văn A',
-  'register.phone': 'Số điện thoại',
   'register.password': 'Mật khẩu',
   'register.confirm': 'Nhập lại mật khẩu',
   'register.confirmPlaceholder': 'Nhập lại mật khẩu',
@@ -142,8 +141,8 @@ export const vi = {
   'register.loginLink': 'Đăng nhập',
 
   // ── verify OTP ──
-  'verifyOtp.title': 'Xác minh số điện thoại',
-  'verifyOtp.subtitle': 'Nhập mã 6 số đã gửi tới điện thoại của bạn',
+  'verifyOtp.title': 'Xác minh email',
+  'verifyOtp.subtitle': 'Nhập mã 6 số đã gửi tới email của bạn',
   'verifyOtp.label': 'Mã OTP',
   'verifyOtp.verifying': 'Đang xác minh...',
   'verifyOtp.verify': 'Xác minh',
@@ -155,11 +154,11 @@ export const vi = {
   'verifyOtp.resent': 'Đã gửi lại mã OTP.',
   'verifyOtp.resendFail': 'Không gửi lại được mã. Vui lòng thử lại.',
   'verifyOtp.sixDigits': 'Mã OTP gồm 6 chữ số.',
-  'verifyOtp.enterRegisteredPhone': 'Nhập số điện thoại đã đăng ký',
-  'verifyOtp.invalidPhoneFormat': 'Số điện thoại không hợp lệ (vd: 0912345678).',
+  'verifyOtp.enterRegisteredEmail': 'Nhập email đã đăng ký',
+  'verifyOtp.invalidEmailFormat': 'Email không hợp lệ.',
   'verifyOtp.sending': 'Đang gửi...',
   'verifyOtp.sendOtp': 'Gửi mã xác nhận',
-  'verifyOtp.noPhoneToResend': 'Không có số điện thoại để gửi mã.',
+  'verifyOtp.noEmailToResend': 'Không có email để gửi mã.',
 
   // ── oauth callback ──
   'oauth.connected': 'Kết nối thành công',
@@ -242,13 +241,12 @@ export const vi = {
   'common.nextPage': 'Trang sau',
   'pager.show': 'Hiển thị',
   'pager.perPage': '/ trang',
-  'register.otpSent': 'Đã gửi mã OTP. Vui lòng kiểm tra điện thoại.',
+  'register.otpSent': 'Đã gửi mã OTP. Vui lòng kiểm tra email.',
 
   // ── validation ──
   'valid.emailInvalid': 'Email không hợp lệ',
   'valid.passwordMin': 'Mật khẩu phải từ 8 ký tự trở lên',
   'valid.nameRequired': 'Vui lòng nhập họ tên',
-  'valid.phoneE164': 'SĐT không hợp lệ. Vd: 0912345678 hoặc +84912345678',
   'valid.confirmMismatch': 'Mật khẩu nhập lại không khớp',
 
   // ── profile ──
@@ -906,7 +904,6 @@ export const en: Record<TranslationKey, string> = {
   'register.subtitle': 'Start bringing all your work into one place.',
   'register.fullName': 'Full name',
   'register.fullNamePlaceholder': 'John Doe',
-  'register.phone': 'Phone number',
   'register.password': 'Password',
   'register.confirm': 'Confirm password',
   'register.confirmPlaceholder': 'Re-enter your password',
@@ -917,8 +914,8 @@ export const en: Record<TranslationKey, string> = {
   'register.loginLink': 'Sign in',
 
   // ── verify OTP ──
-  'verifyOtp.title': 'Verify phone number',
-  'verifyOtp.subtitle': 'Enter the 6-digit code sent to your phone',
+  'verifyOtp.title': 'Verify email',
+  'verifyOtp.subtitle': 'Enter the 6-digit code sent to your email',
   'verifyOtp.label': 'OTP code',
   'verifyOtp.verifying': 'Verifying...',
   'verifyOtp.verify': 'Verify',
@@ -930,11 +927,11 @@ export const en: Record<TranslationKey, string> = {
   'verifyOtp.resent': 'OTP code resent.',
   'verifyOtp.resendFail': 'Could not resend the code. Please try again.',
   'verifyOtp.sixDigits': 'The OTP code has 6 digits.',
-  'verifyOtp.enterRegisteredPhone': 'Enter registered phone number',
-  'verifyOtp.invalidPhoneFormat': 'Invalid phone format (e.g. 0912345678).',
+  'verifyOtp.enterRegisteredEmail': 'Enter registered email',
+  'verifyOtp.invalidEmailFormat': 'Invalid email.',
   'verifyOtp.sending': 'Sending...',
   'verifyOtp.sendOtp': 'Send confirmation code',
-  'verifyOtp.noPhoneToResend': 'No phone number to send code.',
+  'verifyOtp.noEmailToResend': 'No email to send code.',
 
   // ── oauth callback ──
   'oauth.connected': 'Connected successfully',
@@ -1017,13 +1014,12 @@ export const en: Record<TranslationKey, string> = {
   'common.nextPage': 'Next page',
   'pager.show': 'Show',
   'pager.perPage': 'per page',
-  'register.otpSent': 'OTP code sent. Please check your phone.',
+  'register.otpSent': 'OTP code sent. Please check your email.',
 
   // ── validation ──
   'valid.emailInvalid': 'Invalid email',
   'valid.passwordMin': 'Password must be at least 8 characters',
   'valid.nameRequired': 'Please enter your full name',
-  'valid.phoneE164': 'Invalid phone. E.g. 0912345678 or +84912345678',
   'valid.confirmMismatch': 'Passwords do not match',
 
   // ── profile ──

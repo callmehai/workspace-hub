@@ -22,10 +22,10 @@ export interface GoogleAuthStartResponse {
   state: string;
 }
 
-/** SCRUM-64: kết quả register — chưa đăng nhập, cần verify OTP. */
+/** SCRUM-64: kết quả register — chưa đăng nhập, cần verify OTP qua email. */
 export interface RegisterResult {
   email: string;
-  requiresPhoneVerification: boolean;
+  requiresEmailVerification: boolean;
   resendCooldownSeconds: number;
 }
 
