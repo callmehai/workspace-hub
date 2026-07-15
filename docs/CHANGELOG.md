@@ -2,6 +2,18 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-16] SCRUM-64 đổi hướng OTP: Email (Resend) thay cho SMS/Firebase
+
+> **Quyết định scope:** OTP đăng ký chuyển sang **gửi qua email** dùng **Resend**. Bỏ CẢ hai hướng cũ: SMS Twilio (develop) và Firebase Phone Auth (nhánh `fix/login-ux`).
+
+- **Vì sao không dùng Gmail cá nhân để gửi OTP:** luồng gửi mail hiện tại (`IGmailGateway.SendMessageAsync`) cần một `Connection` OAuth của user — mà OTP xảy ra TRƯỚC khi user đăng nhập/connect, nên phải là **sender hệ thống**. Dùng token Gmail cá nhân làm single-point-of-failure (hết hạn/revoke → sập đăng ký), giới hạn ~500 mail/ngày, dễ bị Google gắn cờ. → chọn Resend (HTTP API thuần, free 3k/tháng, tách abstraction như `ISmsSender` cũ).
+- **Tên abstraction:** sender hệ thống đặt là `ISystemEmailSender`/`ITransactionalEmailSender` (KHÔNG đặt `IEmailSender` để tránh nhầm với `IGmailGateway` — luồng gửi mail nghiệp vụ qua Gmail của user: SendEmail/ScheduledEmails/mail mời kết bạn). Impl: `ResendEmailSender` + dev fallback `LogEmailSender`.
+- **Giữ nguyên:** toàn bộ logic Redis/hash/cooldown/attempts trong `OtpService` (chỉ đổi kênh gửi SMS→Email + tham số phone→email). Chống enumeration ở `send-otp`/`verify-otp` giữ nguyên.
+- **DB:** migration mới **rename `Users.PhoneVerified`→`EmailVerified` + drop cột `Phone`**. ⚠️ EF KHÔNG tự sinh `RenameColumn` (sẽ ra Drop+Add làm user chưa-verify thành `EmailVerified=true`) → phải **sửa tay** file migration thành `RenameColumn`. Cũng phải sửa `AppDbContext` (cấu hình `Phone`/`PhoneVerified`).
+- **Login gate:** giữ chặn — chưa verify → 403, đổi mã `PHONE_NOT_VERIFIED`→`EMAIL_NOT_VERIFIED`.
+- **Rủi ro cần chốt sớm (không phải lưu ý nhỏ):** (1) **verify domain `workspace-hub.space` trên Resend** — test mode chỉ gửi được tới chủ tài khoản Resend; giám khảo đăng ký bằng email của họ sẽ không nhận OTP. Cần thêm DNS SPF/DKIM (propagate lâu). (2) **Rate limit theo IP** cho `/auth/register` + `/auth/send-otp` (Program.cs chưa có `AddRateLimiter`) — email free tier bị spam sẽ đốt hết quota. (3) Bọc `try/catch` quanh gửi OTP trong `RegisterAsync` để lỗi provider không kẹt user trong DB.
+- **Bỏ Firebase:** xoá `IFirebasePhoneVerifier`/`FirebasePhoneVerifier`, `frontend/src/lib/firebase.ts`, package `firebase` + nuget `FirebaseAdmin`, config `Firebase:ProjectId`. Giữ cải tiến của nhánh: `IGoogleTokenVerifier.VerifyAsync` trả `(Sub, Email, Name)` → user Google mới lấy FullName thật thay vì `email.split('@')`.
+
 ## [2026-07-10] Friend system nội bộ app (đổi hướng từ Google Contacts)
 
 > **Quyết định scope:** bỏ hướng đồng bộ Google Contacts / People API (PR #100) — bạn bè chỉ có ý nghĩa TRONG app, không liên kết bên thứ 3. Kết bạn = nhập email gửi lời mời.
@@ -87,7 +99,9 @@
 - **Xoá tag = hard delete**, cascade dọn `TagAssignment`, **Item giữ nguyên** (đúng nguyên tắc "không soft delete"; tag chỉ là label, gỡ label không xoá nội dung).
 - **FE tách riêng SCRUM-71** (quản lý tag + chip + gắn/gỡ + filter theo tag) — chưa làm, chờ đợt sau.
 
-## [2026-06-30 — kế hoạch, ĐANG TRIỂN KHAI theo nhánh] Đại tu Auth: HttpOnly cookie + refresh token (Redis) + OTP đăng ký (Twilio)
+## [2026-06-30 — kế hoạch] Đại tu Auth: HttpOnly cookie + refresh token (Redis) + OTP đăng ký (Twilio)
+
+> ⚠️ **Phần OTP của entry này đã bị thay thế** — SCRUM-64 đổi từ SMS (Twilio) sang **Email (Resend)**, xem entry [2026-07-16] ở đầu file. 62 (cookie) + 63 (refresh/Redis) vẫn đúng như mô tả dưới.
 
 > ⚠️ **VƯỢT SCOPE SCRUM-42 và thay đổi NỀN TẢNG AUTH chung** (Lộc/Khánh/Vũ phụ thuộc). Yêu cầu phát sinh từ owner (ngoài board lúc ghi). Đã tách thành **3 ticket mới SCRUM-62/63/64** (xem SPRINTS.md) + làm theo **3 nhánh riêng** để dễ review, không dồn vào PR SCRUM-42. Ghi lại đây để cả nhóm nắm "tại sao" vì nó **đảo nhiều quyết định cũ** ở CLAUDE.md.
 

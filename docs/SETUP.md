@@ -43,7 +43,8 @@ dotnet user-secrets set "OAuth:google:ClientSecret" "<client-secret>" --project 
 dotnet user-secrets set "Cron:Secret" "<cron-secret>" --project src/WorkspaceHub.Api
 
 # 3. Apply migrations (tạo DB). Gồm: InitialCreate, UsersMultiAuth, ModelBConnections,
-#    RemoveClientCredentialsFromIntegration, ... , AddUserPhoneOtp (SCRUM-64: Users.Phone/PhoneVerified)
+#    RemoveClientCredentialsFromIntegration, ... , AddFriendSystem (mới nhất trên develop);
+#    SCRUM-64 (đang làm) thêm migration rename PhoneVerified→EmailVerified + drop Phone.
 dotnet ef database update --project src/WorkspaceHub.Infrastructure --startup-project src/WorkspaceHub.Api
 
 # 4. Run (profile https — FE proxy trỏ tới https://localhost:7010)
@@ -76,12 +77,12 @@ dotnet run --project src/WorkspaceHub.Api --launch-profile https
 | `Cron:SyncAutoRun` | `true` = BE tự chạy `ConnectionSyncProcessorService`. **Prod:** bật trong `docker-compose.prod.yml` (cùng pattern cron email). Dev: `appsettings.Development.json` |
 | `Cron:SyncIntervalSeconds` | Chu kỳ auto-sync khi `SyncAutoRun=true` (prod compose: 60s; default appsettings: 300s) |
 | `ConnectionStrings:Redis` | Redis cho refresh token + OTP + OAuth state (SCRUM-63, vd `localhost:6379`) |
-| `Firebase:ProjectId` | Firebase Project ID (SCRUM-64) để xác thực Firebase ID Token khi đăng nhập qua số điện thoại. |
+| `Email:Resend:ApiKey` / `Email:Resend:FromAddress` | Resend (SCRUM-64) — gửi OTP đăng ký qua email. Thiếu → dev fallback `LogEmailSender` (ghi OTP ra log). `FromAddress` phải thuộc domain đã verify trên Resend (test mode: `onboarding@resend.dev`). |
 | `Cors:AllowedOrigins` | (prod) origin FE cho cookie auth cross-site, vd `https://app.example.com` |
 | `R2:AccountId` / `R2:BucketName` / `R2:PublicUrl` | Cloudflare R2 (SCRUM-75) — avatar upload. `PublicUrl` = domain public bucket (`r2.dev` hoặc custom domain) |
 | `R2:AccessKeyId` / `R2:SecretAccessKey` | API token R2 (scope **Object Read & Write**, giới hạn đúng bucket) — secret, KHÔNG commit |
 
-> **Auth overhaul (SCRUM-62→64) — đã merge:** access token chuyển sang **HttpOnly cookie** (bỏ localStorage), refresh token lưu **Redis** với rotation, đăng ký thêm **OTP SMS qua Firebase**. Cần chạy `docker compose up -d wh-redis`, set `ConnectionStrings:Redis` + `Firebase:ProjectId`, và chạy migration thêm cột `Users.Phone/PhoneVerified`.
+> **Auth overhaul (SCRUM-62→64):** access token chuyển sang **HttpOnly cookie** (bỏ localStorage), refresh token lưu **Redis** với rotation (62/63 ✅), đăng ký thêm **OTP qua Email** (64 🔄 đang đổi hướng SMS→Email/Resend — xem CHANGELOG [2026-07-16]). Cần chạy `docker compose up -d wh-redis`, set `ConnectionStrings:Redis` + `Email:Resend:*`, và chạy migration đổi `Users.EmailVerified`.
 
 ## Tạo migration mới
 
@@ -108,18 +109,18 @@ Scope dùng (2 chiều, mô hình B — mỗi service xin riêng full scope):
 
 > Connection cũ connect bằng scope readonly (mô hình A) sau migration SCRUM-34 vẫn giữ token cũ → phải **reconnect** mới dùng được write-back.
 
-## Setup Firebase Phone Auth (SCRUM-64)
+## Setup Email OTP — Resend (SCRUM-64)
 
-OTP đăng ký được gửi và xác thực thông qua hệ thống **Firebase Phone Authentication**. BE không trực tiếp gửi SMS mà chỉ xác thực Firebase ID Token trả về từ FE.
+OTP đăng ký được gửi tới **chính email user đăng ký**, từ một **sender hệ thống** qua [Resend](https://resend.com) (HTTP API). KHÔNG dùng Gmail của user (`IGmailGateway` là luồng khác). Thiếu config → dev fallback `LogEmailSender` ghi OTP ra log để test.
 
-1. Tạo dự án trên [Firebase Console](https://console.firebase.google.com/).
-2. Kích hoạt Authentication > Sign-in method > Phone.
-3. Lấy **Project ID** của dự án.
-4. Set config:
+1. Tạo tài khoản Resend, lấy **API Key** (Dashboard → API Keys).
+2. **Verify domain** (bắt buộc cho prod): Dashboard → Domains → thêm `workspace-hub.space`, tạo DNS record **SPF + DKIM** ở registrar. DNS propagate mất thời gian → làm sớm. Chưa verify (test mode): `FromAddress` phải là `onboarding@resend.dev` và chỉ gửi được tới email chủ tài khoản Resend.
+3. Set config:
 ```bash
-dotnet user-secrets set "Firebase:ProjectId" "your-project-id" --project src/WorkspaceHub.Api
+dotnet user-secrets set "Email:Resend:ApiKey"      "re_xxx"                     --project src/WorkspaceHub.Api
+dotnet user-secrets set "Email:Resend:FromAddress" "no-reply@workspace-hub.space" --project src/WorkspaceHub.Api
 ```
-FE sẽ dùng Firebase config (API Key, Auth Domain...) để hiển thị captcha và xin OTP, sau đó gửi ID Token lên BE.
+Dev không set → OTP in ra log console (`LogEmailSender`), lấy mã ở đó để verify.
 
 ## Cron cho scheduled email (SCRUM-31)
 

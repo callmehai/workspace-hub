@@ -57,12 +57,14 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - **SCRUM-62 — cookie auth:** login/register/google **KHÔNG trả `accessToken` trong body** nữa; body = `AuthResultDto { expiresIn, user }`. Access token JWT set vào HttpOnly cookie `wh_access`; kèm cookie `wh_csrf` (đọc được) cho double-submit. Request mutating (POST/PUT/PATCH/DELETE) **bằng cookie** phải gửi header `X-CSRF-Token` = `wh_csrf` (thiếu → 403 `CsrfError`). Request dùng `Authorization: Bearer` (Swagger/Postman) bỏ qua CSRF.
 - `POST /api/auth/logout` — AllowAnonymous; revoke refresh token (Redis) + xoá cookie `wh_access`/`wh_csrf`/`wh_refresh` → 204.
 
-## Auth OTP đăng ký ⭐ SCRUM-64
-- `POST /api/auth/register` — body `{ email, password, fullName, phone, inviteToken? }` (phone E.164, vd `+84901234567`; `inviteToken` từ link mời kết bạn — token khớp → tự thành bạn với người mời). Tạo user `PhoneVerified=false` + gửi OTP SMS. **KHÔNG đăng nhập ngay** — trả `201 RegisterResult { email, requiresPhoneVerification, resendCooldownSeconds }`. 409 email trùng, 400 validation (kể cả phone sai format).
-- `POST /api/auth/send-otp` — body `{ email }` → gửi lại OTP. Trả `{ resendCooldownSeconds }`. 404 user không tồn tại, 422 đã verify / không có phone / đang cooldown.
-- `POST /api/auth/verify-otp` — body `{ email, code }` → verify; đúng → `PhoneVerified=true` + **set cookie auth (đăng nhập)**, trả `AuthResultDto`. 422 mã sai / hết hạn / quá số lần.
-- **Login chặn chưa verify:** đăng nhập khi `PhoneVerified=false` → **403** với `message = "PHONE_NOT_VERIFIED"` (FE bắt mã này → gửi OTP + sang màn verify). Google Sign-In KHÔNG bị chặn (không có phone, `PhoneVerified` mặc định true).
-- OTP: 6 số, lưu **hash** ở Redis (`otp:{userId}`), TTL 5', cooldown gửi lại 60s, tối đa 5 lần sai. Provider Twilio (`Sms:Twilio:*`); thiếu config → dev `LogSmsSender` ghi OTP ra log.
+## Auth OTP đăng ký ⭐ SCRUM-64 — 🔄 đổi hướng sang **OTP qua Email (Resend)**
+> **Trạng thái:** design đã chốt (email OTP qua Resend, bỏ SMS/Twilio và bỏ Firebase Phone Auth). Phần dưới mô tả **hợp đồng mục tiêu**; code đang được implement trên nhánh này. Quyết định + lý do: `docs/CHANGELOG.md` mục [2026-07-16].
+- `POST /api/auth/register` — body `{ email, password, fullName, inviteToken? }` (bỏ `phone`; `inviteToken` từ link mời kết bạn — token khớp → tự thành bạn với người mời). Tạo user `EmailVerified=false` + gửi OTP tới **chính email đăng ký**. **KHÔNG đăng nhập ngay** — trả `201 RegisterResult { email, requiresEmailVerification, resendCooldownSeconds }`. 409 email trùng, 400 validation. *Gửi OTP lỗi (provider) KHÔNG làm fail register* — vẫn trả 201, user dùng `send-otp` để gửi lại.
+- `POST /api/auth/send-otp` — body `{ email }` → gửi lại OTP tới email. Trả `{ resendCooldownSeconds }`. Luôn 200 (không tiết lộ email tồn tại/đã verify — chống enumeration); email không đủ điều kiện → im lặng trả cooldown giả.
+- `POST /api/auth/verify-otp` — body `{ email, code }` → verify; đúng → `EmailVerified=true` + **set cookie auth (đăng nhập)**, trả `AuthResultDto`. 422 mã sai / hết hạn / quá số lần.
+- **Login chặn chưa verify:** đăng nhập khi `EmailVerified=false` → **403** với `message = "EMAIL_NOT_VERIFIED"` (FE bắt mã này → gửi OTP + sang màn verify). Google Sign-In KHÔNG bị chặn (`EmailVerified` mặc định true).
+- OTP: 6 số, lưu **hash** ở Redis (`otp:{userId}`), TTL 5', cooldown gửi lại 60s, tối đa 5 lần sai (logic Redis/hash/cooldown giữ nguyên từ bản SMS). Sender hệ thống qua **Resend** (`Email:Resend:*`, HTTP `POST api.resend.com/emails`); thiếu config → dev `LogEmailSender` ghi OTP ra log. **KHÔNG** phải Gmail của user (`IGmailGateway` là luồng khác).
+- **Rate limit:** `/auth/register` + `/auth/send-otp` giới hạn theo IP (chống spam đốt quota email free tier).
 
 ## Auth refresh token ⭐ SCRUM-63
 - `POST /api/auth/refresh` — AllowAnonymous; đọc cookie `wh_refresh` (HttpOnly, Path=`/api/auth/refresh`) → verify + **rotate** (cấp access token mới + refresh token mới, revoke jti cũ) → set lại cookie `wh_access`+`wh_refresh`, body `AuthResultDto`. Token thiếu/hết hạn/đã revoke → **401**. Reuse refresh token đã xoay (token theft) → revoke cả family → 401.

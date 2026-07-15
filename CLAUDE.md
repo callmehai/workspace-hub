@@ -23,7 +23,7 @@ App gom + **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Hầ
 - **Tag BE:** CRUD + assign/unassign (70 ✅).
 
 **🔄 Đang làm / ⏳ còn lại (Sprint 4):**
-- 🔄 OTP đăng ký Twilio (64, Lộc) · FE Admin dashboard (49, Huy) · FE Admin toggle integration (61, Khánh) · Notifications in-app (68, Khánh).
+- 🔄 OTP đăng ký qua **Email (Resend)** (64, Lộc — đổi hướng từ SMS/Firebase, xem CHANGELOG [2026-07-16]) · FE Admin dashboard (49, Huy) · FE Admin toggle integration (61, Khánh) · Notifications in-app (68, Khánh).
 - ⏳ FE: Tag UI (71) · Highlight email chưa đọc (67) · People API gợi ý contact (69) · responsive/dark mode (50).
 - ⏳ **Cron sync connection định kỳ + FE auto-refresh (72, Dũng)** — **THÊM** sync định kỳ ngoài on-demand (xem lưu ý sync bên dưới).
 - ⏳ Unit test service (29, Hải) · deploy prod config (51) · finalize Swagger+E2E (52) · defense (53).

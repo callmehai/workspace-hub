@@ -46,7 +46,7 @@ Tech stack:
 - Namespace `WorkspaceHub.{Domain|Application|Infrastructure|Api}.*`. Route `/api/...` lowercase.
 - Guid PK, enum lưu string, UTC `datetime2`, JSON `nvarchar(max)`.
 - **Mô hình B:** mỗi service = 1 row `Connections`. KHÔNG cột Scopes/Permission — scope suy từ ServiceType trong code. Đừng tạo lại OAuthConnections/ServiceConnections cũ.
-- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có 9: `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 — unique `Tags(UserId,Name)`), `EnableJiraIntegration` (bật `atlassian` IsEnabled=true). Prod tự chạy migration khi deploy (`Db__AutoMigrate=true`); local phải `dotnet ef database update` tay.
+- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có **13** (thứ tự): `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 — unique `Tags(UserId,Name)`), `EnableJiraIntegration` (bật `atlassian` IsEnabled=true), `AddGoogleContacts`, `AddItemThreadId`, `AddScheduledEmailAttachments`, `AddFriendSystem`. **SCRUM-64 (đang làm) sẽ thêm migration thứ 14** rename `PhoneVerified`→`EmailVerified` + drop `Phone` (⚠️ sửa tay thành `RenameColumn`). Prod tự chạy migration khi deploy (`Db__AutoMigrate=true`); local phải `dotnet ef database update` tay.
 - DB dev: SQL Server chạy Docker container `wh-sqlserver` (xem docs/SETUP.md). KHÔNG phải SQLite/Postgres.
 
 ### Frontend
@@ -65,7 +65,7 @@ Tech stack:
 
 - ✅ **Done (BE nền tảng):** SCRUM-5→40 phần lớn (solution/schema/auth/OAuth/mô hình B/sync đọc/Folder/Items/Kanban/admin/logging/exception) + **37/38 write-back Google + conflict ETag** + **30/31 scheduled email + cron gửi** + 26/27/28 (refactor/Postman/README).
 - ✅ **Done (Jira phase 55→60):** client + sync issue→Item(Ticket), tạo/update/xoá issue, metadata helpers, ImportantContacts JiraAccount. Migration `EnableJiraIntegration` bật `atlassian`. *(Board đánh 54 vẫn "To Do" nhưng code JiraStrategy/OAuth đã có — status board lag.)*
-- ✅ **Done (auth overhaul):** 62 HttpOnly cookie + CSRF, 63 refresh token + Redis rotation. 64 OTP Twilio đang 🔄.
+- ✅ **Done (auth overhaul):** 62 HttpOnly cookie + CSRF, 63 refresh token + Redis rotation. **64 OTP đang 🔄 đổi hướng SMS/Firebase → Email/Resend** (nhánh `fix/login-ux`; xem CHANGELOG [2026-07-16]).
 - ✅ **Done (FE Sprint 4):** 41 API layer, 42 wire login/register, 43 Connections, 44 Inbox, 45 Kanban, 46 write-back UI, 47 scheduled UI, 48 loading/toast, 65 Folder CRUD FE. + 70 Tag BE.
 - 🔄 **Đang làm:** 29 unit test (Hải), 49 FE admin dashboard (Huy), 61 FE admin toggle (Khánh), 64 OTP (Lộc), 68 notifications (Khánh).
 - ⏳ **To Do:** 50 responsive/dark (Dũng), 51 deploy config (đã deploy thực tế lên Lightsail rồi), 52 finalize (Hải), 53 defense (Lộc), 67 highlight unread (Vũ), 69 People API (Khánh), 71 Tag UI (Lộc), 72 cron sync định kỳ + FE poll (Dũng).
@@ -80,7 +80,7 @@ App live: **https://app.workspace-hub.space** — AWS Lightsail (2GB, Singapore)
 - **CD:** merge/push `develop` → GitHub Actions (`deploy.yml`) SSH vào Lightsail `git reset --hard origin/develop` + `docker compose up -d --build`. Cần 4 repo secrets `DEPLOY_HOST/USER/APP_DIR/SSH_KEY`.
 - **CI:** mọi PR/push develop/main (`ci.yml`) → BE `dotnet build`+`test`, FE `npm install`+`lint`+`build` (`tsc`).
 - **Redeploy tay:** SSH → `cd ~/workspace-hub && git pull && docker compose -f docker-compose.prod.yml up -d --build`.
-- **Log / OTP:** `docker compose -f docker-compose.prod.yml logs -f api`; OTP đăng ký log console (Twilio để trống).
+- **Log / OTP:** `docker compose -f docker-compose.prod.yml logs -f api`; OTP đăng ký log console khi `Email:Resend:*` để trống (dev `LogEmailSender`).
 - **DB prod:** DBeaver qua SSH tunnel (docs/DEPLOY.md §6). **Secret prod ở `.env` trên server — KHÔNG commit.**
 - **Gotcha:** FE Dockerfile/CI dùng `npm install` KHÔNG `npm ci` (lockfile đa nền tảng Vite 8/rolldown); Caddyfile KHÔNG global `email` (rỗng làm crash); dual-stack `curl -4`.
 
