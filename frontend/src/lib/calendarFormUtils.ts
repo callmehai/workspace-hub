@@ -258,7 +258,7 @@ export function localDayStartIso(date: Date): string {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
 }
 
-export function calendarQueryRange(cursor: Date, range: 'month' | 'week') {
+export function calendarQueryRange(cursor: Date, range: 'month' | 'week' | 'day' | 'year') {
   if (range === 'month') {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
     const offset = (first.getDay() + 6) % 7;
@@ -267,6 +267,15 @@ export function calendarQueryRange(cursor: Date, range: 'month' | 'week') {
     const gridEnd = addDays(gridStart, dayCount);
     return { rangeStart: gridStart, rangeEnd: gridEnd };
   }
-  const weekStart = startOfWeek(cursor);
-  return { rangeStart: weekStart, rangeEnd: addDays(weekStart, 7) };
+  if (range === 'week') {
+    const weekStart = startOfWeek(cursor);
+    return { rangeStart: weekStart, rangeEnd: addDays(weekStart, 7) };
+  }
+  if (range === 'day') {
+    const start = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+    return { rangeStart: start, rangeEnd: addDays(start, 1) };
+  }
+  // year range
+  const start = new Date(cursor.getFullYear(), 0, 1);
+  return { rangeStart: start, rangeEnd: new Date(cursor.getFullYear() + 1, 0, 1) };
 }

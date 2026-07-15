@@ -51,7 +51,7 @@ import {
   LAYER_TOGGLE_INACTIVE,
 } from '../lib/calendarEntryVisuals';
 
-type CalendarRange = 'month' | 'week';
+type CalendarRange = 'month' | 'week' | 'day' | 'year';
 type CalendarEntryKind = 'event' | 'scheduled' | 'jira';
 
 interface CalendarEntry {
@@ -707,9 +707,29 @@ export function CalendarPage() {
     setDragOver(null);
   };
 
-  const previousRange = () => setCursor(current => range === 'month' ? addMonths(current, -1) : addDays(current, -7));
-  const nextRange = () => setCursor(current => range === 'month' ? addMonths(current, 1) : addDays(current, 7));
-  const title = range === 'month' ? formatMonthTitle(cursor, lang) : formatWeekTitle(startOfWeek(cursor), lang);
+  const previousRange = () => setCursor(current => {
+    if (range === 'month') return addMonths(current, -1);
+    if (range === 'week') return addDays(current, -7);
+    if (range === 'day') return addDays(current, -1);
+    return addMonths(current, -12); // year view
+  });
+  const nextRange = () => setCursor(current => {
+    if (range === 'month') return addMonths(current, 1);
+    if (range === 'week') return addDays(current, 7);
+    if (range === 'day') return addDays(current, 1);
+    return addMonths(current, 12); // year view
+  });
+  const title = useMemo(() => {
+    if (range === 'month') return formatMonthTitle(cursor, lang);
+    if (range === 'week') return formatWeekTitle(startOfWeek(cursor), lang);
+    if (range === 'day') {
+      const weekdayVi = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][cursor.getDay()];
+      return lang === 'vi'
+        ? `${weekdayVi}, ${cursor.getDate()} thg ${cursor.getMonth() + 1}, ${cursor.getFullYear()}`
+        : cursor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    return lang === 'vi' ? `Năm ${cursor.getFullYear()}` : `${cursor.getFullYear()}`;
+  }, [cursor, range, lang]);
   const dayNames = lang === 'vi' ? DAY_NAMES_VI : DAY_NAMES_EN;
   const loading = itemsLoading || (!folderId && !googleCalendarOnly && scheduledLoading);
 
@@ -890,6 +910,155 @@ export function CalendarPage() {
     );
   };
 
+  const renderDay = () => {
+    const slots = Array.from({ length: (WEEK_END_HOUR - WEEK_START_HOUR) * 2 }, (_, index) => index);
+    const height = slots.length * HALF_HOUR_HEIGHT;
+    const todayKey = dateKey(cursor);
+    const allDayEntries = entriesForDay(cursor).filter(entry => entry.allDay);
+    const timedEntries = entriesForDay(cursor).filter(entry => !entry.allDay);
+
+    return (
+      <div className="flex-1 min-w-[320px]">
+        {/* All day section */}
+        <div className="grid grid-cols-[58px_1fr] border-b border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="flex items-center justify-end px-2 text-[10.5px] font-semibold text-slate-400">{t('calendar.allDay')}</div>
+          <div
+            onClick={() => openCreate(cursor, '09:00', true)}
+            onDragOver={event => { if (event.dataTransfer.types.includes(DRAG_TYPE)) { event.preventDefault(); setDragOver(`all-${todayKey}`); } }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={event => { event.preventDefault(); moveEvent(event.dataTransfer.getData(DRAG_TYPE) || event.dataTransfer.getData('text/plain'), cursor, undefined, true); }}
+            className={`min-h-14 space-y-1 p-2 transition border-l border-slate-100 dark:border-slate-800 ${dragOver === `all-${todayKey}` ? 'bg-brand-50 outline outline-2 -outline-offset-2 outline-dashed outline-brand-500 dark:bg-brand-500/10' : ''}`}
+          >
+            {allDayEntries.map(entry => (
+              <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} connections={connections} compact onOpen={openEntry} onDragStart={dragStart} />
+            ))}
+          </div>
+        </div>
+
+        {/* Timed section */}
+        <div className="grid grid-cols-[58px_1fr]">
+          <div style={{ height }}>
+            {slots.map(slot => (
+              <div key={slot} style={{ height: HALF_HOUR_HEIGHT }} className="pr-2 text-right text-[10px] tabular-nums text-slate-400">
+                {slot % 2 === 0 ? `${pad(WEEK_START_HOUR + slot / 2)}:00` : ''}
+              </div>
+            ))}
+          </div>
+          <div className="relative border-l border-slate-100 dark:border-slate-800" style={{ height }}>
+            {slots.map(slot => {
+              const minutes = WEEK_START_HOUR * 60 + slot * 30;
+              const slotTime = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+              const slotKey = `slot-${todayKey}-${slotTime}`;
+              return (
+                <button
+                  type="button"
+                  key={slot}
+                  aria-label={`${todayKey} ${slotTime}`}
+                  onClick={() => openCreate(cursor, slotTime)}
+                  onDragOver={event => { if (event.dataTransfer.types.includes(DRAG_TYPE)) { event.preventDefault(); setDragOver(slotKey); } }}
+                  onDragLeave={() => setDragOver(null)}
+                  onDrop={event => { event.preventDefault(); moveEvent(event.dataTransfer.getData(DRAG_TYPE) || event.dataTransfer.getData('text/plain'), cursor, slotTime, false); }}
+                  style={{ top: slot * HALF_HOUR_HEIGHT, height: HALF_HOUR_HEIGHT }}
+                  className={`absolute inset-x-0 border-b border-slate-100 transition hover:bg-brand-50/50 dark:border-slate-800 dark:hover:bg-brand-500/5 ${slot % 2 === 0 ? 'border-b-slate-200 dark:border-b-slate-700' : ''} ${dragOver === slotKey ? 'z-10 bg-brand-50 outline outline-2 -outline-offset-2 outline-dashed outline-brand-500 dark:bg-brand-500/10' : ''}`}
+                />
+              );
+            })}
+
+            {timedEntries.map(entry => {
+              const startMinutes = entry.start.getHours() * 60 + entry.start.getMinutes();
+              const endMinutes = entry.end.getHours() * 60 + entry.end.getMinutes();
+              const top = ((startMinutes - WEEK_START_HOUR * 60) / 30) * HALF_HOUR_HEIGHT;
+              const entryHeight = Math.max(24, ((Math.max(endMinutes, startMinutes + 30) - startMinutes) / 30) * HALF_HOUR_HEIGHT - 2);
+              if (top < -entryHeight || top >= height) return null;
+              const Icon = entry.kind === 'scheduled' ? Mail : entry.kind === 'jira' ? Flag : CalendarDays;
+              return (
+                <button
+                  type="button"
+                  key={`${entry.kind}-${entry.id}`}
+                  draggable={entry.kind === 'event'}
+                  onDragStart={event => dragStart(event, entry)}
+                  onClick={event => openEntry(entry, event)}
+                  style={{ top: Math.max(0, top), height: entryHeight }}
+                  className={`absolute left-2 right-2 z-10 overflow-hidden rounded-lg border px-3 py-1.5 text-left text-[11.5px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                >
+                  <span className="flex items-center gap-1 truncate"><Icon className="h-3 w-3 shrink-0" />{entry.title}</span>
+                  <span className="mt-0.5 block text-[10.5px] font-medium tabular-nums opacity-70">{timeValue(entry.start)} – {timeValue(entry.end)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderYear = () => {
+    const year = cursor.getFullYear();
+    const months = Array.from({ length: 12 }, (_, i) => i);
+
+    return (
+      <div className="grid grid-cols-1 gap-6 p-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 bg-slate-50 dark:bg-slate-950 w-full">
+        {months.map(monthIndex => {
+          const first = new Date(year, monthIndex, 1);
+          const offset = (first.getDay() + 6) % 7;
+          const gridStart = addDays(first, -offset);
+          const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+          const dayCount = Math.ceil((offset + daysInMonth) / 7) * 7;
+          const days = Array.from({ length: dayCount }, (_, idx) => addDays(gridStart, idx));
+          
+          const monthLabel = lang === 'vi' 
+            ? `Tháng ${monthIndex + 1}` 
+            : new Intl.DateTimeFormat('en-US', { month: 'long' }).format(first);
+
+          return (
+            <div key={monthIndex} className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h3 className="mb-2 text-center text-xs font-bold text-slate-700 dark:text-slate-200">{monthLabel}</h3>
+              <div className="grid grid-cols-7 gap-y-1 text-center text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                {lang === 'vi' ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(n => <div key={n}>{n}</div>) : ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((n, idx) => <div key={idx}>{n}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-y-1 text-center">
+                {days.map((day, idx) => {
+                  const isCurrentMonth = day.getMonth() === monthIndex;
+                  const key = dateKey(day);
+                  const dayEntries = entriesForDay(day);
+                  const hasEvents = dayEntries.length > 0;
+                  const today = dateKey(new Date()) === key;
+                  
+                  let dayClass = 'text-[10px] py-1 rounded-md font-medium select-none cursor-pointer ';
+                  if (!isCurrentMonth) {
+                    dayClass += 'text-slate-300 dark:text-slate-700 pointer-events-none';
+                  } else if (today) {
+                    dayClass += 'bg-brand-600 text-white font-bold';
+                  } else if (hasEvents) {
+                    dayClass += 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300 font-semibold';
+                  } else {
+                    dayClass += 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800';
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      className={dayClass}
+                      onClick={() => {
+                        if (isCurrentMonth) {
+                          setCursor(day);
+                          setRange('day');
+                        }
+                      }}
+                      title={hasEvents ? `${dayEntries.length} sự kiện` : undefined}
+                    >
+                      {isCurrentMonth ? day.getDate() : ''}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // URL cũ/deep-link không hợp lệ: Email/Jira/Drive không có calendar view.
   if (sourceType && sourceType !== 'Event') {
     return <Navigate to={`/?type=${encodeURIComponent(sourceType)}`} replace />;
@@ -974,9 +1143,12 @@ export function CalendarPage() {
           <button type="button" onClick={() => setCursor(new Date())} className="ml-1 h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12.5px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">{t('calendar.today')}</button>
           <h2 className="ml-1 text-[16px] font-bold tabular-nums">{title}</h2>
           <div className="ml-auto flex items-center gap-1 rounded-[9px] border border-slate-200 bg-white p-[3px] dark:border-slate-700 dark:bg-slate-800">
-            {(['month', 'week'] as const).map(value => (
+            {(['day', 'week', 'month', 'year'] as const).map(value => (
               <button key={value} type="button" onClick={() => setRange(value)} className={`rounded-[6px] px-3 py-1 text-[12.5px] font-medium ${range === value ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'}`}>
-                {value === 'month' ? t('calendar.month') : t('calendar.week')}
+                {value === 'day' ? (lang === 'vi' ? 'Ngày' : 'Day') :
+                 value === 'week' ? (lang === 'vi' ? 'Tuần' : 'Week') :
+                 value === 'month' ? (lang === 'vi' ? 'Tháng' : 'Month') :
+                 (lang === 'vi' ? 'Năm' : 'Year')}
               </button>
             ))}
           </div>
@@ -987,7 +1159,10 @@ export function CalendarPage() {
             <div className="flex min-h-[620px] w-full items-center justify-center gap-2 text-sm text-slate-400"><Loader2 className="h-5 w-5 animate-spin" />{t('common.loading')}</div>
           ) : itemsError ? (
             <div className="flex min-h-[620px] w-full flex-col items-center justify-center p-8 text-center"><AlertCircle className="mb-3 h-9 w-9 text-rose-500" /><p className="font-semibold">{t('calendar.loadFailed')}</p></div>
-          ) : range === 'month' ? renderMonth() : renderWeek()}
+          ) : range === 'day' ? renderDay() :
+              range === 'week' ? renderWeek() :
+              range === 'month' ? renderMonth() :
+              renderYear()}
         </div>
       </div>
 
