@@ -240,11 +240,16 @@ export const WorkspaceToolbar = ({
   });
 
   // Danh sách người phụ trách (assignee) cho filter tab Jira — suy từ ticket đã sync.
+  // staleTime 0: query chỉ active ở tab Jira, nên invalidate lúc connect/sync (khi đang
+  // ở tab khác) KHÔNG refetch được — chỉ đánh dấu stale. Toolbar lại dùng chung cho mọi
+  // tab nên đổi ?type= KHÔNG remount → refetchOnMount cũng không cứu. Không có staleTime,
+  // dropdown sẽ kẹt ở cache rỗng của lần vào đầu tiên (lúc chưa sync ticket nào) tới khi F5.
+  // Payload nhỏ (~0.4 kB) và chỉ fetch ở tab Jira → refetch thoải mái.
   const { data: assignees = [] } = useQuery({
     queryKey: ['jira', 'assignees'],
     queryFn: itemsApi.getAssignees,
     enabled: sourceType === 'Ticket',
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   const availableProjects = useMemo(() => {
