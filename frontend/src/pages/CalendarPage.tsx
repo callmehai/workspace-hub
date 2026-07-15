@@ -78,6 +78,7 @@ interface UpdateEventVariables {
   start: Date;
   end: Date;
   allDay: boolean;
+  folderIds?: string[];
 }
 
 const DRAG_TYPE = 'application/x-workspace-calendar-event';
@@ -482,7 +483,15 @@ export function CalendarPage() {
         guestsCanSeeOtherGuests: form.guestsCanSeeOtherGuests,
         sendUpdates,
       });
-      if (folderId) await foldersApi.addItemToFolder(folderId, { itemId: created.id });
+
+      const folderIdsToAssign = form.folderIds && form.folderIds.length > 0
+        ? form.folderIds
+        : (folderId ? [folderId] : []);
+
+      for (const fId of folderIdsToAssign) {
+        await foldersApi.addItemToFolder(fId, { itemId: created.id });
+      }
+
       return created;
     },
     onSuccess: () => {
@@ -496,7 +505,21 @@ export function CalendarPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ item, patch }: UpdateEventVariables) => itemsApi.patchItem(item.id, patch),
+    mutationFn: async ({ item, patch, folderIds }: UpdateEventVariables) => {
+      const res = await itemsApi.patchItem(item.id, patch);
+      if (folderIds !== undefined) {
+        const oldFolderIds = item.folderIds ?? [];
+        const added = folderIds.filter(id => !oldFolderIds.includes(id));
+        const removed = oldFolderIds.filter(id => !folderIds.includes(id));
+        for (const fId of added) {
+          await foldersApi.addItemToFolder(fId, { itemId: item.id });
+        }
+        for (const fId of removed) {
+          await foldersApi.removeItemFromFolder(fId, item.id);
+        }
+      }
+      return res;
+    },
     onMutate: async variables => {
       await queryClient.cancelQueries({ queryKey: calendarItemsKey });
       await queryClient.cancelQueries({ queryKey: ['calendar-event-detail', variables.item.id] });
@@ -647,6 +670,7 @@ export function CalendarPage() {
       end,
       allDay: form.allDay,
       patch: { ...calendarFormToPatch(form), sendUpdates },
+      folderIds: form.folderIds,
     });
   };
 

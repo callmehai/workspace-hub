@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   CalendarDays,
   ExternalLink,
   FileText,
+  Folder,
   Loader2,
   Mail,
   MapPin,
@@ -17,7 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ConnectionDto } from '../../lib/connectionsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
-import { itemsApi } from '../../lib/itemsApi';
+import { itemsApi, foldersApi } from '../../lib/itemsApi';
 import { GoogleDrivePickerModal } from '../drive/GoogleDrivePickerModal';
 import { DriveIcon } from '../../lib/brandIcons';
 import { driveItemOpenUrl, resolveGmailSuggestConnection } from '../../lib/calendarFormUtils';
@@ -46,6 +47,7 @@ export interface CalendarEventFormValue {
   guestsCanModify: boolean;
   guestsCanInviteOthers: boolean;
   guestsCanSeeOtherGuests: boolean;
+  folderIds?: string[];
 }
 
 export interface EventReminderFormValue {
@@ -201,6 +203,29 @@ export function CalendarEventEditorModal({
   const [customRecurrence, setCustomRecurrence] = useState<CustomRecurrenceValue>(
     () => parseCustomRecurrence(initialValue.recurrence, initialValue.date),
   );
+
+  const { data: folders = [] } = useQuery({
+    queryKey: ['folders'],
+    queryFn: () => foldersApi.getFolders(false),
+  });
+
+  const [isAddingToFolder, setIsAddingToFolder] = useState(false);
+  const [folderSearch, setFolderSearch] = useState('');
+  const addFolderRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isAddingToFolder) {
+      setFolderSearch('');
+      return;
+    }
+    const onDocClick = (e: MouseEvent) => {
+      if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) {
+        setIsAddingToFolder(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick, true);
+    return () => document.removeEventListener('mousedown', onDocClick, true);
+  }, [isAddingToFolder]);
 
   const recurrenceOptions = useMemo(() => {
     if (!form.date) return [];
@@ -723,6 +748,90 @@ export function CalendarEventEditorModal({
                     {connections.length === 0 && (
                       <p className="mt-1.5 text-[12px] text-amber-600 dark:text-amber-400">{t('calendar.noConnection')}</p>
                     )}
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <Folder className={rowIconClass} />
+                  <div className="min-w-0 flex-1">
+                    <label className={labelClass}>{lang === 'vi' ? 'Thư mục' : 'Folders'}</label>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {form.folderIds?.map(fId => {
+                        const f = folders.find(fol => fol.id === fId);
+                        if (!f) return null;
+                        return (
+                          <span
+                            key={f.id}
+                            style={{ borderColor: f.color || '#94a3b8', color: f.color || '#64748b' }}
+                            className="inline-flex items-center gap-1.5 rounded-full border bg-white dark:bg-slate-800 py-0.5 pl-2.5 pr-1 text-[11px] font-semibold shadow-sm transition hover:bg-slate-50 dark:hover:bg-slate-700"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: f.color || '#94a3b8' }} />
+                            <span className="truncate max-w-[120px]">{f.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextIds = (form.folderIds ?? []).filter(id => id !== f.id);
+                                setForm(curr => ({ ...curr, folderIds: nextIds }));
+                              }}
+                              className="p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-rose-600 transition"
+                              title={lang === 'vi' ? 'Xóa khỏi thư mục' : 'Remove from folder'}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+
+                      {/* Dropdown to add folder */}
+                      <div className="relative" ref={addFolderRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingToFolder(!isAddingToFolder)}
+                          className="inline-flex items-center justify-center gap-1 h-[24px] px-2.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-white transition-colors text-[11px] font-semibold"
+                          title={lang === 'vi' ? 'Thêm vào thư mục' : 'Add to folder'}
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>{lang === 'vi' ? 'Thêm' : 'Add'}</span>
+                        </button>
+
+                        {isAddingToFolder && (
+                          <div className="absolute top-full left-0 mt-1.5 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-xl py-1.5 z-[9000] animate-in fade-in zoom-in-95 duration-100">
+                            <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
+                              <input
+                                type="text"
+                                placeholder={lang === 'vi' ? 'Tìm thư mục...' : 'Search folders...'}
+                                value={folderSearch}
+                                onChange={e => setFolderSearch(e.target.value)}
+                                className="w-full px-2 py-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 text-slate-900 dark:text-slate-100"
+                              />
+                            </div>
+                            {folders.filter(f => !form.folderIds?.includes(f.id)).length === 0 ? (
+                              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Đã thuộc tất cả thư mục' : 'Already in all folders'}</div>
+                            ) : folders.filter(f => !form.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase())).length === 0 ? (
+                              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Không tìm thấy' : 'No folders found'}</div>
+                            ) : (
+                              folders
+                                .filter(f => !form.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase()))
+                                .map(f => (
+                                  <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const nextIds = [...(form.folderIds ?? []), f.id];
+                                      setForm(curr => ({ ...curr, folderIds: nextIds }));
+                                      setIsAddingToFolder(false);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
+                                  >
+                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                                    <span className="truncate">{f.name}</span>
+                                  </button>
+                                ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 

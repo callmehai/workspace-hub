@@ -163,6 +163,7 @@ export function emptyCalendarForm(date: Date, connectionId = '', startTime = '09
     guestsCanModify: false,
     guestsCanInviteOthers: true,
     guestsCanSeeOtherGuests: true,
+    folderIds: [],
   };
 }
 
@@ -195,6 +196,7 @@ export function itemToCalendarForm(item: ItemResponse): CalendarEventFormValue {
     guestsCanModify: metadata.guestsCanModify === true,
     guestsCanInviteOthers: metadata.guestsCanInviteOthers !== false,
     guestsCanSeeOtherGuests: metadata.guestsCanSeeOtherGuests !== false,
+    folderIds: item.folderIds ?? [],
   };
 }
 
