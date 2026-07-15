@@ -5,8 +5,8 @@
 ## [2026-07-14] Calendar guest email prompt + dọn attendee metadata cũ
 
 - Khi create/edit làm thay đổi danh sách khách, FE hiển thị hộp thoại ba lựa chọn giống Google Calendar: quay lại chỉnh sửa, lưu nhưng không gửi email, hoặc gửi email. API nhận `sendUpdates`; Calendar gateway map sang Google `none|all` (mặc định vẫn là `all` để tương thích client cũ).
+- Quyết định về phạm vi email guest: dialog trong WorkspaceHub chỉ là UI chọn có để Google Calendar gửi notification hay không; request sang Google vẫn dùng `sendUpdates=all` khi chọn gửi và `sendUpdates=none` khi không gửi. Google Calendar API chỉ công khai ba mức `sendUpdates`: `all` (notifications sent to all guests), `externalOnly` (non-Google Calendar guests only), `none` (no notifications); không có tham số target riêng người vừa thêm/xóa, nên việc Google có tự lọc/suppress email theo diff là hành vi nội bộ không được API cam kết. Nguồn docs: https://developers.google.com/workspace/calendar/api/v3/reference/events/update, https://developers.google.com/workspace/calendar/api/v3/reference/events/patch, https://developers.google.com/workspace/calendar/api/v3/reference/events/insert.
 - `sendUpdates=false` chỉ tắt email do Google Calendar gửi; invitation và notification in-app vẫn được reconcile để user WorkspaceHub nhận lời mời trong app.
-- `EmailChipsInput` chốt email đang gõ ngay ở sự kiện blur, trước click Lưu của form cha; bỏ delay 150 ms từng làm email cuối chưa kịp vào payload attendees.
 - Fix lỗi xóa khách cuối cùng: Google trả `attendees=null`, backend nay xóa khóa `attendees` khỏi metadata local thay vì giữ danh sách cũ. Khi mở editor, FE ưu tiên attendee live từ endpoint calendar details để tự sửa cả snapshot cũ trước lần sync tiếp theo.
 - Thêm unit test cho việc truyền lựa chọn không gửi email và dọn metadata khi attendee cuối cùng bị xóa.
 

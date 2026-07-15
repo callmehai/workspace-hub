@@ -5,6 +5,7 @@ import {
   ExternalLink,
   FileText,
   Loader2,
+  Mail,
   MapPin,
   Paperclip,
   Plus,
@@ -21,7 +22,7 @@ import { GoogleDrivePickerModal } from '../drive/GoogleDrivePickerModal';
 import { DriveIcon } from '../../lib/brandIcons';
 import { driveItemOpenUrl, resolveGmailSuggestConnection } from '../../lib/calendarFormUtils';
 import toast from 'react-hot-toast';
-import { EmailChipsInput } from '../EmailChipsInput';
+import { sendEmailApi } from '../../lib/sendEmailApi';
 import { DatePicker } from '../DatePicker';
 import { TimePicker } from '../TimePicker';
 import type { ReminderType } from '../../types/items';
@@ -75,6 +76,28 @@ interface CustomRecurrenceValue {
 }
 
 const RRULE_WEEK_DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
+const GUEST_SUGGEST_DEBOUNCE_MS = 250;
+
+function normalizeGuestEmail(raw: string) {
+  return raw.trim().toLowerCase();
+}
+
+function splitGuestEmails(raw: string) {
+  return raw.split(/[,;\s]+/).map(part => normalizeGuestEmail(part)).filter(Boolean);
+}
+
+function parseGuestDraft(attendees: string[], draft: string) {
+  const next = [...attendees];
+  const invalid: string[] = [];
+  for (const email of splitGuestEmails(draft)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      invalid.push(email);
+      continue;
+    }
+    if (!next.some(value => value.toLowerCase() === email)) next.push(email);
+  }
+  return { attendees: next, invalid };
+}
 
 function rruleDayForDate(date: string) {
   const [year, month, day] = date.split('-').map(Number);
@@ -172,6 +195,9 @@ export function CalendarEventEditorModal({
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
   const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | 'end-date' | null>(null);
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
+  const [guestDraft, setGuestDraft] = useState('');
+  const [debouncedGuestQuery, setDebouncedGuestQuery] = useState('');
+  const [guestSuggestOpen, setGuestSuggestOpen] = useState(false);
   const [customRecurrence, setCustomRecurrence] = useState<CustomRecurrenceValue>(
     () => parseCustomRecurrence(initialValue.recurrence, initialValue.date),
   );
@@ -263,12 +289,32 @@ export function CalendarEventEditorModal({
       setOpenPicker(null);
       setCustomRecurrence(parseCustomRecurrence(initialValue.recurrence, initialValue.date));
       setCustomRecurrenceOpen(false);
+      setGuestDraft('');
+      setGuestSuggestOpen(false);
     }
   }
 
   const suggestConnectionId = useMemo(
     () => (allConnections ? resolveGmailSuggestConnection(allConnections, form.connectionId) : undefined),
     [allConnections, form.connectionId],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedGuestQuery(guestDraft.trim()), GUEST_SUGGEST_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [guestDraft]);
+
+  const guestSuggestEnabled = canInviteOthers && !!suggestConnectionId && debouncedGuestQuery.length >= 2;
+  const { data: guestSuggestions = [] } = useQuery({
+    queryKey: ['calendar-guest-suggest', suggestConnectionId, debouncedGuestQuery],
+    queryFn: () => sendEmailApi.suggestContacts(suggestConnectionId!, debouncedGuestQuery),
+    enabled: open && guestSuggestEnabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const filteredGuestSuggestions = guestSuggestions.filter(suggestion =>
+    !form.attendees.some(email => email.toLowerCase() === suggestion.email.toLowerCase()),
   );
 
   // Hiển thị chip: fetch đúng Item theo driveItemIds (không phụ thuộc top 100).
@@ -294,6 +340,29 @@ export function CalendarEventEditorModal({
 
   if (!open) return null;
 
+  const selectedConnection = connections.find(connection => connection.id === form.connectionId);
+  const organizerEmail = selectedConnection?.providerAccountId;
+
+  const addGuest = (raw: string) => {
+    const { attendees, invalid } = parseGuestDraft(form.attendees, raw);
+    if (invalid.length > 0) {
+      toast.error(t('calendar.invalidGuestEmail', { email: invalid[0] }));
+      return;
+    }
+    if (attendees.length !== form.attendees.length) {
+      setForm(current => ({ ...current, attendees }));
+    }
+    setGuestDraft('');
+    setGuestSuggestOpen(false);
+  };
+
+  const removeGuest = (email: string) => {
+    setForm(current => ({
+      ...current,
+      attendees: current.attendees.filter(value => value.toLowerCase() !== email.toLowerCase()),
+    }));
+  };
+
   const submit = () => {
     const title = form.title.trim();
     const endDate = form.endDate || form.date;
@@ -311,6 +380,7 @@ export function CalendarEventEditorModal({
     }
 
     setError('');
+    setGuestSuggestOpen(false);
     onSubmit({ ...form, title });
   };
 
@@ -760,20 +830,127 @@ export function CalendarEventEditorModal({
               </div>
               <div className="space-y-4 p-5">
                 <div>
-                  <label className={labelClass}>{lang === 'vi' ? 'Thêm khách mời' : 'Add guests'}</label>
                   {canInviteOthers ? (
-                    <EmailChipsInput
-                      value={form.attendees}
-                      onChange={attendees => setForm(current => ({ ...current, attendees }))}
-                      connectionId={suggestConnectionId}
-                      placeholder={lang === 'vi' ? 'Nhập email khách mời' : 'Enter guest email'}
-                      className="mb-0"
-                    />
+                    <div className="relative">
+                      <input
+                        value={guestDraft}
+                        onChange={event => {
+                          setGuestDraft(event.target.value);
+                          setGuestSuggestOpen(true);
+                        }}
+                        onFocus={() => setGuestSuggestOpen(true)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' || event.key === ',' || event.key === ';' || event.key === 'Tab') {
+                            if (guestDraft.trim()) {
+                              event.preventDefault();
+                              addGuest(guestDraft);
+                            }
+                          }
+                          if (event.key === 'Escape') setGuestSuggestOpen(false);
+                        }}
+                        onPaste={event => {
+                          const text = event.clipboardData.getData('text');
+                          if (/[,;\s]/.test(text)) {
+                            event.preventDefault();
+                            addGuest(text);
+                          }
+                        }}
+                        placeholder={t('calendar.addGuests')}
+                        className="h-11 w-full rounded-t-lg border-0 border-b-2 border-brand-600 bg-slate-100 px-4 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-500 focus:bg-slate-50 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:bg-slate-850"
+                        autoComplete="off"
+                      />
+                      {guestDraft.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => addGuest(guestDraft)}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-brand-600 transition hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"
+                          aria-label={t('calendar.addGuest')}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                      {guestSuggestOpen && guestSuggestEnabled && filteredGuestSuggestions.length > 0 && (
+                        <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                          {filteredGuestSuggestions.map(suggestion => (
+                            <button
+                              key={suggestion.email}
+                              type="button"
+                              onMouseDown={event => event.preventDefault()}
+                              onClick={() => addGuest(suggestion.email)}
+                              className="flex w-full items-center gap-3 px-3 py-2 text-left text-[13px] text-slate-800 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/70"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[12px] font-semibold uppercase text-white">
+                                {(suggestion.displayName || suggestion.email).slice(0, 1)}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate font-medium">{suggestion.displayName || suggestion.email}</span>
+                                {suggestion.displayName && <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{suggestion.email}</span>}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <div className="flex min-h-10 flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
-                      {form.attendees.map(email => <span key={email} className="rounded-lg bg-white px-2 py-1 text-xs text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">{email}</span>)}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                      {t('calendar.guestsCannotInvite')}
                     </div>
                   )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-[13px]">
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                        {form.attendees.length} {t('calendar.guestCount')}
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400">
+                        {form.attendees.length} {t('calendar.awaiting')}
+                      </div>
+                    </div>
+                    {form.attendees.length > 0 && (
+                      <Mail className="h-4.5 w-4.5 text-slate-500 dark:text-slate-400" />
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {organizerEmail && (
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[12px] font-semibold uppercase text-white">
+                          {organizerEmail.slice(0, 1)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="truncate text-[13.5px] font-medium text-slate-900 dark:text-slate-100">
+                            {organizerEmail}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {t('calendar.organizer')}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {form.attendees.map(email => (
+                      <div key={email} className="group flex items-center gap-3 rounded-lg py-1.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[12px] font-semibold uppercase text-slate-700 dark:bg-slate-700 dark:text-slate-100">
+                          {email.slice(0, 1)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13.5px] font-medium text-slate-900 dark:text-slate-100">{email}</div>
+                        </div>
+                        {canInviteOthers && (
+                          <button
+                            type="button"
+                            onClick={() => removeGuest(email)}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-100 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-300 sm:opacity-0 sm:group-hover:opacity-100"
+                            aria-label={lang === 'vi' ? `Xóa ${email}` : `Remove ${email}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
                 </div>
 
                 {canManageGuestPermissions && <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
