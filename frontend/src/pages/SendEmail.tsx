@@ -26,8 +26,10 @@ export const SendEmail = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialDraftItemId = searchParams.get('draftItemId');
+  // Prefill từ trang Bạn bè ("Gửi mail cho bạn"): /send-email?to=
+  const prefillTo = searchParams.get('to')?.trim() ?? '';
 
-  const [to, setTo] = useState<string[]>([]);
+  const [to, setTo] = useState<string[]>(() => (prefillTo ? [prefillTo] : []));
   const [cc, setCc] = useState<string[]>([]);
   const [bcc, setBcc] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
@@ -178,6 +180,8 @@ export const SendEmail = () => {
       console.error('Failed to auto-save draft', err);
     }
   });
+  // `mutate` referentially stable (TanStack) — dùng làm dep của useCallback thay cả object mutation.
+  const { mutate: mutateSaveDraft } = saveDraftMutation;
 
   const triggerSaveDraft = React.useCallback(async () => {
     if (isDiscardedRef.current) return;
@@ -204,8 +208,8 @@ export const SendEmail = () => {
       inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
     };
 
-    saveDraftMutation.mutate({ id: draftItemId, data: payload });
-  }, [draftItemId, lastSavedState]);
+    mutateSaveDraft({ id: draftItemId, data: payload }); // mọi giá trị form đọc qua latestDataRef — không cần dep
+  }, [mutateSaveDraft]);
 
   const triggerSaveDraftImmediate = React.useCallback(() => {
     if (isDiscardedRef.current) return;

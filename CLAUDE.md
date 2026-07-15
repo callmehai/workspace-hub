@@ -32,7 +32,9 @@ App gom + **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Hầ
 
 ### NGOÀI scope (đừng code, chưa có ticket)
 - Webhook/push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch).
-- Social / friend system, AI workflow → future.
+- AI workflow → future.
+
+> **Friend system (bạn bè nội bộ app) đã VÀO scope + code xong nền tảng** (2026-07-10, chưa có ticket Jira): kết bạn theo email (user có tài khoản → pending in-app; chưa có → FriendInvite + mail mời qua Gmail của người mời, link `/register?inviteToken=` → tự kết bạn), hạng Friend/CloseFriend per-side, trang `/friends`. KHÔNG dùng provider ngoài (đã bỏ hướng Google Contacts/People API của PR #100). Tương lai: share folder cho bạn bè có role, tạo event nhanh cùng bạn.
 
 Nếu một task có vẻ cần **webhook**, dừng lại và hỏi. Jira/write-back/auth-cookie **đã code xong** — sửa/mở rộng bình thường theo ticket, không cần hỏi "có thuộc phase không" nữa.
 

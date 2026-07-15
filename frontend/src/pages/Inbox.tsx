@@ -9,10 +9,11 @@ import { useSeenSet } from '../lib/seenStore';
 import type { ItemType, ItemStatus, ItemResponse, PagedResult } from '../types/items';
 import {
   Star, AlertCircle, Inbox as InboxIcon,
-  ChevronLeft, ChevronRight,
-  Send, FileEdit, Megaphone, Users, Bell, Mails, Loader2, ShieldAlert, Trash2,
+  ChevronLeft, ChevronRight, ChevronRight as BreadcrumbSeparator, Home,
+  Send, FileEdit, Megaphone, Users, Bell, Mails, Loader2, ShieldAlert, Trash2, Plug,
   type LucideIcon,
 } from 'lucide-react';
+import { connectionsApi } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -162,6 +163,9 @@ export const Inbox = () => {
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Drive folder drill-down state
+  const [driveFolderStack, setDriveFolderStack] = useState<{id: string, name: string, internalId: string}[]>([]);
+
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
   // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
   const selectedFolderId = searchParams.get('folder');
@@ -177,6 +181,49 @@ export const Inbox = () => {
       next.delete('item');
       const q = next.toString();
       navigate({ pathname: location.pathname, search: q ? `?${q}` : '' }, { replace: true });
+    }
+  };
+
+  const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleItemClick = (item: ItemResponse, e: React.MouseEvent) => {
+    let isFolder = false;
+    if (item.type === 'File' && item.metadataJson) {
+      try {
+        isFolder = JSON.parse(item.metadataJson).isFolder === true;
+      } catch { /* ignore */ }
+    }
+
+    if (isFolder) {
+      if (e.detail === 1) {
+        clickTimeoutRef.current = setTimeout(() => {
+          setSelectedId(item.id);
+          clickTimeoutRef.current = null;
+        }, 200); // 200ms delay to distinguish double-click
+      } else if (e.detail === 2) {
+        if (clickTimeoutRef.current) {
+          clearTimeout(clickTimeoutRef.current);
+          clickTimeoutRef.current = null;
+        }
+        handleItemDoubleClick(item);
+      }
+    } else {
+      // Normal items don't have double-click behavior, open instantly
+      setSelectedId(item.id);
+    }
+  };
+
+  const handleItemDoubleClick = (item: ItemResponse) => {
+    if (item.type === 'File' && item.metadataJson) {
+      try {
+        const meta = JSON.parse(item.metadataJson);
+        if (meta.isFolder && item.externalId) {
+          setDriveFolderStack(prev => [...prev, { id: item.externalId!, name: item.title, internalId: item.id }]);
+          setPage(1);
+          setSelectedId(null);
+          return;
+        }
+      } catch { /* ignore */ }
     }
   };
 
@@ -239,6 +286,7 @@ export const Inbox = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
+    setDriveFolderStack([]); // Reset drive drill-down khi đổi tab
   }, [selectedFolderId, sourceType]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
@@ -289,6 +337,24 @@ export const Inbox = () => {
   //  · null (tab Tất cả mục) → dùng chip loại đa chọn; KHÔNG label, KHÔNG project.
   const isEmailScope = sourceType === 'Email';
   const gmailLabel = isEmailScope && mailbox && mailbox !== 'ALL' ? mailbox : undefined;
+
+  // Empty state thông minh: chưa có connection cho nguồn đang xem → nút dẫn sang trang Kết nối dịch vụ.
+  const { data: connectionsList = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+    staleTime: 60_000,
+  });
+  const SOURCE_SERVICE: Record<string, { key: string; label: string }> = {
+    Email: { key: 'gmail', label: 'Gmail' },
+    Event: { key: 'gcal', label: 'Google Calendar' },
+    File: { key: 'drive', label: 'Google Drive' },
+    Ticket: { key: 'jira', label: 'Jira' },
+  };
+  const activeServices = new Set(
+    connectionsList.filter(c => c.status.toLowerCase() === 'active').map(c => c.serviceType.toLowerCase()),
+  );
+  const requiredService = sourceType ? SOURCE_SERVICE[sourceType] : undefined;
+  const missingConnection = requiredService ? !activeServices.has(requiredService.key) : activeServices.size === 0;
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
@@ -303,11 +369,12 @@ export const Inbox = () => {
     projectKey: effectiveProjectKey,
     assignee: effectiveAssignee,
     gmailLabel,
+    driveParentId: driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].id : undefined,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -321,6 +388,7 @@ export const Inbox = () => {
     projectKey: params.projectKey,
     assignee: params.assignee,
     gmailLabel: params.gmailLabel,
+    driveParentId: params.driveParentId,
   });
 
   const { data, isLoading, isError, refetch, isFetching, isPlaceholderData } = useQuery({
@@ -448,6 +516,7 @@ export const Inbox = () => {
           onAssigneeChange={(v) => { setAssigneeFilter(v); setPage(1); }}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
+          currentDriveFolderId={driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].internalId : undefined}
         />
 
         {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở tab Email (sidebar) ── */}
@@ -507,6 +576,39 @@ export const Inbox = () => {
           </div>
         )}
 
+        {/* ── Drive Folder Breadcrumb ── */}
+        {driveFolderStack.length > 0 && (
+          <div className="flex items-center gap-1.5 mb-3 text-[13px] font-medium overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button 
+              onClick={() => { setDriveFolderStack([]); setPage(1); }}
+              className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+            >
+              <Home className="w-4 h-4" />
+              {t('nav.allItems')}
+            </button>
+            {driveFolderStack.map((folder, index) => {
+              const isLast = index === driveFolderStack.length - 1;
+              return (
+                <div key={folder.id} className="flex items-center gap-1.5 whitespace-nowrap">
+                  <BreadcrumbSeparator className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
+                  <button
+                    onClick={() => {
+                      if (!isLast) {
+                        setDriveFolderStack(prev => prev.slice(0, index + 1));
+                        setPage(1);
+                      }
+                    }}
+                    className={`transition-colors ${isLast ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    disabled={isLast}
+                  >
+                    {folder.name}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── Content ── */}
         <div className="relative">
         <div className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-opacity ${isPlaceholderData ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -536,6 +638,21 @@ export const Inbox = () => {
                     Mở <span className="font-medium text-slate-500 dark:text-slate-300">{t('nav.allItems')}</span> rồi kéo-thả item vào thư mục ở sidebar, hoặc dùng nút gán thư mục trên từng item.
                   </p>
                 </>
+              ) : missingConnection ? (
+                <>
+                  <p className="text-[13.5px] text-slate-500 dark:text-slate-300 font-medium">
+                    {requiredService
+                      ? t('inbox.emptyNoConnectionSource', { service: requiredService.label })
+                      : t('inbox.emptyNoConnectionAny')}
+                  </p>
+                  <button
+                    onClick={() => navigate('/integrations')}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-brand-600 text-[13px] font-semibold text-white hover:bg-brand-700 transition-colors"
+                  >
+                    <Plug className="w-4 h-4" />
+                    {t('nav.integrations')}
+                  </button>
+                </>
               ) : (
                 <>
                   <p className="text-[13.5px] text-slate-500 dark:text-slate-300 font-medium">{t('inbox.empty')}</p>
@@ -564,11 +681,17 @@ export const Inbox = () => {
           {showList && items.map((item: ItemResponse) => {
             const unread = isItemUnread(item, seenSet);
             const v = rowVisual(activeItemId === item.id, selectedItemIds.has(item.id), unread);
+            let isDriveFolder = false;
+            if (item.type === 'File' && item.metadataJson) {
+              try {
+                isDriveFolder = JSON.parse(item.metadataJson).isFolder === true;
+              } catch { /* ignore */ }
+            }
             return (
             <div
               key={item.id}
-              onClick={() => setSelectedId(item.id)}
-              className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row}`}
+              onClick={(e) => handleItemClick(item, e)}
+              className={`group flex items-center gap-2.5 px-3 sm:px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer transition-colors ${v.row} select-none`}
             >
               {/* checkbox */}
               <input
@@ -598,8 +721,8 @@ export const Inbox = () => {
               </button>
 
               {/* avatar loại — logo brand thật trên nền trắng (Note = notepad vàng) */}
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass()}`}>
-                {typeIcon(item.type, 'w-[22px] h-[22px]')}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${typeSolidTileClass(item.type, isDriveFolder)}`}>
+                {typeIcon(item.type, 'w-[22px] h-[22px]', undefined, isDriveFolder)}
               </div>
 
               <div className="flex-1 min-w-0">

@@ -29,8 +29,9 @@ public class AuthService : IAuthService
     private readonly IDistributedCache _cache;
     private readonly IOAuthTokenClient _tokenClient;
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
-    private readonly IFirebasePhoneVerifier _firebasePhoneVerifier;
     private readonly IJwtTokenFactory _jwt;
+    private readonly IOtpService _otp;
+    private readonly IFriendService _friends;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -47,8 +48,9 @@ public class AuthService : IAuthService
         IDistributedCache cache,
         IOAuthTokenClient tokenClient,
         IGoogleTokenVerifier googleTokenVerifier,
-        IFirebasePhoneVerifier firebasePhoneVerifier,
-        IJwtTokenFactory jwt)
+        IJwtTokenFactory jwt,
+        IOtpService otp,
+        IFriendService friends)
     {
         _users = users;
         _config = config;
@@ -57,8 +59,9 @@ public class AuthService : IAuthService
         _cache = cache;
         _tokenClient = tokenClient;
         _googleTokenVerifier = googleTokenVerifier;
-        _firebasePhoneVerifier = firebasePhoneVerifier;
         _jwt = jwt;
+        _otp = otp;
+        _friends = friends;
     }
 
     public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
@@ -89,9 +92,11 @@ public class AuthService : IAuthService
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
 
-        // FE tự generate và gửi OTP qua Firebase, nên BE không cần xử lý gửi mã.
-        // FE sẽ dùng Firebase ID token để gọi VerifyPhoneAsync.
-        return new RegisterResult(user.Email, RequiresPhoneVerification: true, ResendCooldownSeconds: 60);
+        // Bấm link mời kết bạn (?inviteToken=) → thành bạn với inviter; invite khác trùng email → pending.
+        await _friends.ConsumeInvitesOnRegistrationAsync(user.Id, email, request.InviteToken, ct);
+
+        var cooldown = await _otp.SendAsync(user.Id, user.Phone, ct);
+        return new RegisterResult(user.Email, RequiresPhoneVerification: true, cooldown);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -118,24 +123,31 @@ public class AuthService : IAuthService
         return await SignInAsync(user, ct);
     }
 
-    public async Task<AuthResponse> VerifyPhoneAsync(string email, string firebaseToken, CancellationToken ct = default)
+    public async Task<int> SendOtpAsync(string email, CancellationToken ct = default)
+    {
+        // Chống user enumeration (review #6): KHÔNG tiết lộ email tồn tại / đã verify / không
+        // có phone. Email không đủ điều kiện → im lặng trả cooldown giả, không gửi gì.
+        var normalized = email.Trim().ToLowerInvariant();
+        var user = await _users.GetByEmailAsync(normalized, ct);
+        if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
+            return DefaultCooldownSeconds;
+
+        return await _otp.SendAsync(user.Id, user.Phone, ct);
+    }
+
+    public async Task<AuthResponse> VerifyOtpAsync(string email, string code, CancellationToken ct = default)
     {
         var normalized = email.Trim().ToLowerInvariant();
         var user = await _users.GetByEmailAsync(normalized, ct);
 
         // Uniform 422 cho mọi case không hợp lệ (user không tồn tại / đã verify / không phone /
-        // mã sai) — không phân biệt để tránh enumeration.
+        // mã sai) — không phân biệt để tránh enumeration. OtpService.VerifyAsync cũng throw 422.
         if (user is null || user.PhoneVerified || string.IsNullOrEmpty(user.Phone))
-            throw new BusinessRuleException("Dữ liệu không hợp lệ hoặc tài khoản đã được xác minh.");
+            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
 
-        var verifiedPhone = await _firebasePhoneVerifier.VerifyPhoneTokenAsync(firebaseToken, ct);
-
-        // Normalize user phone to E.164 for comparison
-        var userPhoneE164 = user.Phone.StartsWith("0") ? "+84" + user.Phone.Substring(1) : user.Phone;
-        if (verifiedPhone != userPhoneE164)
-        {
-            throw new BusinessRuleException("Số điện thoại xác thực không khớp với tài khoản.");
-        }
+        var ok = await _otp.VerifyAsync(user.Id, code, ct);
+        if (!ok)
+            throw new BusinessRuleException("Mã OTP không đúng hoặc đã hết hạn.");
 
         user.PhoneVerified = true;
         await _users.SaveChangesAsync(ct);
@@ -273,7 +285,8 @@ public class AuthService : IAuthService
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = null,
-            FullName = name,  // Google display name (claim "name" từ id_token)
+            // Ưu tiên display name từ Google (claim "name"); rỗng thì fallback phần trước @ của email.
+            FullName = string.IsNullOrWhiteSpace(name) ? email.Split('@')[0] : name.Trim(),
             AuthProvider = AuthProvider.Google,
             GoogleSub = sub,
             IsActive = true,
@@ -284,6 +297,9 @@ public class AuthService : IAuthService
 
         await _users.AddAsync(newUser, ct);
         await _users.SaveChangesAsync(ct);
+
+        // User mới qua Google: consume invite kết bạn trùng email (không có token → thành pending).
+        await _friends.ConsumeInvitesOnRegistrationAsync(newUser.Id, email, inviteToken: null, ct);
 
         var (token, expiresIn) = _jwt.CreateAccessToken(newUser);
         return new AuthResponse(token, expiresIn, MapToDto(newUser));

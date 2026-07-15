@@ -153,7 +153,8 @@ public class SendEmailService : ISendEmailService
             }
 
             return new EmailThreadMessageDto(
-                m.MessageId, m.From, to, cc, bcc, subject, bodyHtml, m.BodyPlainText,
+                m.MessageId, m.From, to ?? new List<string>(), cc ?? new List<string>(), bcc ?? new List<string>(),
+                subject, bodyHtml, m.BodyPlainText,
                 m.OccurredAt?.UtcDateTime ?? DateTime.UtcNow, m.IsUnread, m.IsStarred, m.HasAttachment,
                 m.Labels,
                 m.Attachments.Select(a => new EmailAttachmentDto(a.AttachmentId, a.Filename, a.MimeType, a.Size)).ToList(),
@@ -208,7 +209,9 @@ public class SendEmailService : ISendEmailService
         // Lấy Cc live từ Gmail API nếu email cũ chưa lưu Cc trong metadata (Cách A đã chốt)
         if (request.ReplyAll && !item.MetadataJson.Contains("\"cc\""))
         {
-             var liveMsg = await _gmail.GetMessageAsync(connection, item.ExternalId, ct);
+             var externalId = item.ExternalId
+                 ?? throw new BusinessRuleException("Item has no externalId.");
+             var liveMsg = await _gmail.GetMessageAsync(connection, externalId, ct);
              var me = connection.ProviderAccountId;
              ccList.AddRange(liveMsg.Cc.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase)));
              toList.AddRange(liveMsg.To.Where(x => !ExtractEmail(x).Equals(me, StringComparison.OrdinalIgnoreCase) && !toList.Any(t => ExtractEmail(t).Equals(ExtractEmail(x), StringComparison.OrdinalIgnoreCase))));
@@ -249,7 +252,9 @@ public class SendEmailService : ISendEmailService
         }
 
         // Lấy live message gốc (chỉ 1 message, không cần cả thread)
-        var liveMsg = await _gmail.GetMessageAsync(connection, item.ExternalId, ct);
+        var forwardExternalId = item.ExternalId
+            ?? throw new BusinessRuleException("Item has no externalId.");
+        var liveMsg = await _gmail.GetMessageAsync(connection, forwardExternalId, ct);
 
         var bodyGoc = liveMsg.BodyHtml ?? liveMsg.BodyPlain?.Replace("\n", "<br/>") ?? "";
 

@@ -18,8 +18,6 @@ namespace WorkspaceHub.Infrastructure;
 /// <summary>Đăng ký DbContext + repository của tầng Infrastructure.</summary>
 public static class DependencyInjection
 {
-    private static readonly object _firebaseLock = new object();
-
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services, IConfiguration config, bool isDevelopment = false)
     {
@@ -46,7 +44,6 @@ public static class DependencyInjection
             .PersistKeysToFileSystem(new DirectoryInfo("dp-keys"));
         services.AddScoped<ITokenProtector, DataProtectionTokenProtector>();
         services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
-        services.AddScoped<IFirebasePhoneVerifier, FirebasePhoneVerifier>();
 
         // SCRUM-63: Redis làm distributed cache (refresh token + OTP + OAuth state).
         // Có ConnectionStrings:Redis → dùng Redis; thiếu → fallback in-memory (dev),
@@ -94,25 +91,25 @@ public static class DependencyInjection
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IFriendshipRepository, FriendshipRepository>();
+        services.AddScoped<IFriendInviteRepository, FriendInviteRepository>();
 
         services.AddScoped<IJwtTokenFactory, JwtTokenFactory>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
-        // Để sử dụng FirebaseAdmin SDK chỉ cho mục đích Verify ID Token, chúng ta có thể truyền
-        // một dummy credential để bypass lỗi "Credential must be set".
-        if (FirebaseAdmin.FirebaseApp.DefaultInstance == null)
-        {
-            lock (_firebaseLock)
-            {
-                if (FirebaseAdmin.FirebaseApp.DefaultInstance == null)
-                {
-                    FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
-                    {
-                        ProjectId = config["Firebase:ProjectId"] ?? "workspacehub",
-                        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromAccessToken("dummy-access-token")
-                    });
-                }
-            }
-        }
+        services.AddScoped<IOtpService, OtpService>();
+
+        // SMS sender (SCRUM-64): dùng Twilio thật CHỈ khi đủ AccountSid + AuthToken + FromNumber.
+        // Thiếu bất kỳ cái nào (vd FromNumber trống vì Twilio trial chưa mua số) → LogSmsSender
+        // ghi OTP ra console cho dev/demo, KHÔNG gọi Twilio. Đăng ký HttpClient "Twilio" sẵn.
+        services.AddHttpClient("Twilio");
+        var twilioConfigured =
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AuthToken"]) &&
+            !string.IsNullOrWhiteSpace(config["Sms:Twilio:FromNumber"]);
+        if (twilioConfigured)
+            services.AddScoped<ISmsSender, TwilioSmsSender>();
+        else
+            services.AddScoped<ISmsSender, LogSmsSender>();
 
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();

@@ -6,5 +6,8 @@ namespace WorkspaceHub.Application.DTOs.Auth;
 /// </summary>
 public record RegisterResult(string Email, bool RequiresPhoneVerification, int ResendCooldownSeconds);
 
-/// <summary>Yêu cầu verify số điện thoại qua Firebase ID Token.</summary>
-public record VerifyPhoneRequest(string Email, string FirebaseToken);
+/// <summary>Yêu cầu gửi lại OTP (theo email — FE luôn có sẵn từ form).</summary>
+public record SendOtpRequest(string Email);
+
+/// <summary>Yêu cầu verify OTP.</summary>
+public record VerifyOtpRequest(string Email, string Code);

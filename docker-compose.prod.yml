@@ -59,6 +59,8 @@ services:
       Cron__AutoRun: "true"
       Cron__Secret: ${CRON_SECRET}
       Cron__IntervalSeconds: "60"
+      # Origin FE public — BE dựng link mời kết bạn /register?inviteToken=.
+      App__FrontendBaseUrl: "https://${SITE_ADDRESS}"
       Cron__SyncAutoRun: "true"
       Cron__SyncIntervalSeconds: "60"
       OAuth__google__ClientId: ${GOOGLE_CLIENT_ID}

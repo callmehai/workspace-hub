@@ -57,11 +57,12 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - **SCRUM-62 — cookie auth:** login/register/google **KHÔNG trả `accessToken` trong body** nữa; body = `AuthResultDto { expiresIn, user }`. Access token JWT set vào HttpOnly cookie `wh_access`; kèm cookie `wh_csrf` (đọc được) cho double-submit. Request mutating (POST/PUT/PATCH/DELETE) **bằng cookie** phải gửi header `X-CSRF-Token` = `wh_csrf` (thiếu → 403 `CsrfError`). Request dùng `Authorization: Bearer` (Swagger/Postman) bỏ qua CSRF.
 - `POST /api/auth/logout` — AllowAnonymous; revoke refresh token (Redis) + xoá cookie `wh_access`/`wh_csrf`/`wh_refresh` → 204.
 
-## Auth Phone Verification (Firebase) ⭐ SCRUM-64
-- `POST /api/auth/register` — body `{ email, password, fullName, phone }` (phone E.164, vd `+84901234567`). Tạo user `PhoneVerified=false` (không tự gửi SMS vì FE tự gọi Firebase). **KHÔNG đăng nhập ngay** — trả `201 RegisterResult { email, requiresPhoneVerification, resendCooldownSeconds }`. 409 email trùng, 400 validation (kể cả phone sai format).
-- `POST /api/auth/verify-phone` — body `{ email, firebaseToken }` → verify bằng FirebaseAdmin; hợp lệ → `PhoneVerified=true` + **set cookie auth (đăng nhập)**, trả `AuthResultDto`. 422 token không hợp lệ hoặc tài khoản không tồn tại/đã verify.
-- **Login chặn chưa verify:** đăng nhập local khi `PhoneVerified=false` → **403** với `message = "PHONE_NOT_VERIFIED"` (FE bắt mã này → hiện Firebase captcha để gửi mã + sang màn verify). Google Sign-In KHÔNG bị chặn.
-- Xác thực số điện thoại: Sử dụng **Firebase Phone Authentication**. FE dùng Firebase JS SDK để xin OTP, sau đó gửi `Firebase ID Token` lên BE. BE gọi thư viện `FirebaseAdmin` để xác nhận ID token mà không cần giao tiếp trực tiếp với nhà mạng SMS.
+## Auth OTP đăng ký ⭐ SCRUM-64
+- `POST /api/auth/register` — body `{ email, password, fullName, phone, inviteToken? }` (phone E.164, vd `+84901234567`; `inviteToken` từ link mời kết bạn — token khớp → tự thành bạn với người mời). Tạo user `PhoneVerified=false` + gửi OTP SMS. **KHÔNG đăng nhập ngay** — trả `201 RegisterResult { email, requiresPhoneVerification, resendCooldownSeconds }`. 409 email trùng, 400 validation (kể cả phone sai format).
+- `POST /api/auth/send-otp` — body `{ email }` → gửi lại OTP. Trả `{ resendCooldownSeconds }`. 404 user không tồn tại, 422 đã verify / không có phone / đang cooldown.
+- `POST /api/auth/verify-otp` — body `{ email, code }` → verify; đúng → `PhoneVerified=true` + **set cookie auth (đăng nhập)**, trả `AuthResultDto`. 422 mã sai / hết hạn / quá số lần.
+- **Login chặn chưa verify:** đăng nhập khi `PhoneVerified=false` → **403** với `message = "PHONE_NOT_VERIFIED"` (FE bắt mã này → gửi OTP + sang màn verify). Google Sign-In KHÔNG bị chặn (không có phone, `PhoneVerified` mặc định true).
+- OTP: 6 số, lưu **hash** ở Redis (`otp:{userId}`), TTL 5', cooldown gửi lại 60s, tối đa 5 lần sai. Provider Twilio (`Sms:Twilio:*`); thiếu config → dev `LogSmsSender` ghi OTP ra log.
 
 ## Auth refresh token ⭐ SCRUM-63
 - `POST /api/auth/refresh` — AllowAnonymous; đọc cookie `wh_refresh` (HttpOnly, Path=`/api/auth/refresh`) → verify + **rotate** (cấp access token mới + refresh token mới, revoke jti cũ) → set lại cookie `wh_access`+`wh_refresh`, body `AuthResultDto`. Token thiếu/hết hạn/đã revoke → **401**. Reuse refresh token đã xoay (token theft) → revoke cả family → 401.
@@ -95,13 +96,15 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 
 `POST /api/admin/users/{id}/toggle-active` — toggle lock/unlock user, Admin only.
 - Response 200: `{ id, email, fullName, role, isActive, lastLoginAt, createdAt, connectionCount, itemCount }` (updated AdminUserDto).
-- Status: 200 · 400 (cannot lock self) · 401 · 403 · 404 (user not found).
+- **422** không khoá được: tự khoá chính mình · khoá user role Admin đang active (mở khoá Admin vẫn OK).
+- Status: 200 · 401 · 403 · 404 (user not found).
 
 `GET /api/admin/users/{id}`, `DELETE /api/admin/connections/{id}` — spec target, chưa implement.
 
 ## Integrations
-- `GET /api/integrations` — catalog cho user. **OData ⊕** (target — $filter isEnabled/provider, $orderby).
-- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (422). ✅ SCRUM-48.
+- `GET /api/integrations` — catalog cho user đăng nhập (`id`, `key`, `displayName`, `isEnabled`). ✅ SCRUM-61.
+- `GET /api/admin/integrations` — Admin list catalog (`id`, `key`, `displayName`, `isEnabled`). ✅ SCRUM-61.
+- `PATCH /api/admin/integrations/{key}/enable` — Admin bật/tắt integration (`IsEnabled`); tắt → user không initiate connection được (**422** `message = "integrations.connectDisabled"` — FE dịch qua i18n). ✅ SCRUM-40.
   - Request: `{ "isEnabled": true | false }`
   - Response 200: `{ "id", "key", "displayName", "isEnabled" }`
   - 404 key không tồn tại · 403 không phải Admin
@@ -231,6 +234,16 @@ Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `I
 - `POST /api/internal/process-sync` — header `X-Cron-Secret` (cùng `Cron:Secret` với `process-scheduled`). Không JWT. Quét mọi Connection Active + Integration enabled → debounce → refresh token nếu cần → `ConnectionSyncDispatcher.SyncAsync` (Gmail/GCal/Drive/Jira). Lỗi **auth bền** (401/403, refresh token fail) → `Status=Error`; lỗi tạm thời (network/5xx) giữ `Active` để cron lần sau retry — mỗi connection lỗi không chặn batch. Trả `200 ProcessSyncResult { totalConnections, successCount, skippedCount, errorCount, details? }`. ✅ SCRUM-72.
   - **Prod (mặc định):** `Cron:SyncAutoRun=true` trong `docker-compose.prod.yml` → `ConnectionSyncProcessorService` mỗi `Cron:SyncIntervalSeconds` (compose: 60s). Cùng pattern cron email — không cần cron-job.org. **Không** bật đồng thời với cron HTTP.
   - **HTTP cron (tuỳ chọn):** `POST /api/internal/process-sync` + `X-Cron-Secret` khi `SyncAutoRun=false` (test local hoặc thay BackgroundService).
+
+## Friends — bạn bè nội bộ app ⭐ (chưa có ticket Jira)
+Kết bạn theo email, KHÔNG dùng provider ngoài. Mail mời gửi qua Gmail connection của người mời.
+- `GET /api/friends` — overview `{ friends[], incomingRequests[], outgoingRequests[], emailInvites[] }` (FriendDto: friendshipId, userId, email, fullName, avatarUrl, status, myTier, isIncoming).
+- `POST /api/friends/requests` — body `{ email, connectionId? }`. Outcome: `RequestSent` (đã có tài khoản → pending + notification) / `AutoAccepted` (phía kia mời trước) / `InviteCreated` (chưa có tài khoản → invite + cố gửi mail, `emailSent` false → FE copy `invite.inviteLink`). 409 đã là bạn / đã mời; 422 tự kết bạn với mình.
+- `POST /api/friends/{id}/accept` — chỉ addressee. 403 người gửi tự accept; 409 đã xử lý; 404 ngoài cuộc.
+- `DELETE /api/friends/{id}` — Pending = từ chối/hủy lời mời; Accepted = unfriend. 204.
+- `PATCH /api/friends/{id}/tier` — body `{ tier: "Friend" | "CloseFriend" }`, chỉ đổi phía mình, chỉ khi Accepted.
+- `DELETE /api/friends/invites/{id}` — hủy invite email chưa dùng. 204.
+- `GET /api/friends/invites/by-token/{token}` — **public** (banner trang đăng ký): `{ inviterName, email }`. 404 token sai/hết hạn/đã dùng.
 
 ## Notifications
 - `GET /api/Notifications` — **OData ⊕** convention route (`NotificationsController`): `$filter` (vd `IsRead eq false`), `$orderby` (vd `CreatedAt desc`), `$top/$skip/$count`. Query OData **PascalCase** tên property CLR; JSON response camelCase. Response `{ "@odata.count"?, value: [...] }`. Badge unread: `GET /api/Notifications?$filter=IsRead eq false&$count=true&$top=0`. **SQL push-down:** `IQueryable` EF `AsNoTracking` — `$filter/$orderby` dịch sang SQL (khác ScheduledEmails/EmailContactSuggestions in-memory).

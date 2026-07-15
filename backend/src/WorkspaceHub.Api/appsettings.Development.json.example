@@ -21,8 +21,12 @@
   "Auth": {
     "CrossSiteCookies": false
   },
-  "Firebase": {
-    "ProjectId": "YOUR_FIREBASE_PROJECT_ID"
+  "Sms": {
+    "Twilio": {
+      "AccountSid": "",
+      "AuthToken": "",
+      "FromNumber": ""
+    }
   },
   "Google": {
     "RedirectUri": "http://localhost:5173/oauth/callback",

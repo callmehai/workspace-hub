@@ -142,6 +142,9 @@ public class AdminService : IAdminService
         var user = await _db.Users.FindAsync(new object[] { id }, ct)
             ?? throw new NotFoundException("User", id);
 
+        if (user.Role == UserRole.Admin && user.IsActive)
+            throw new BusinessRuleException("Không thể khoá tài khoản Admin.");
+
         user.IsActive = !user.IsActive;
         await _db.SaveChangesAsync(ct);
 

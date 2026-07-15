@@ -2,12 +2,17 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
-## [2026-07-08] Chuyển SMS provider sang Firebase Phone Auth (SCRUM-64)
+## [2026-07-10] Friend system nội bộ app (đổi hướng từ Google Contacts)
 
-- **Lý do:** Các nhà mạng SMS (Twilio, eSMS, SpeedSMS) đều gặp rào cản về việc đăng ký Brandname, giới hạn trial, hoặc không ổn định khi gửi mã OTP ở Việt Nam. Thay vì tự quản lý việc gửi OTP qua BE, chúng ta chuyển hoàn toàn sang **Firebase Phone Authentication**.
-- **Kiến trúc mới:** FE gọi Firebase (kèm reCAPTCHA) để lấy OTP, người dùng nhập OTP, FE gửi lại cho Firebase để lấy **Firebase ID Token**. FE gửi ID Token này lên BE. BE chỉ việc dùng `FirebaseAdmin` SDK (`VerifyIdTokenAsync`) để xác thực token và cập nhật trạng thái `PhoneVerified = true`.
-- **Lược bỏ BE:** Đã xoá toàn bộ `OtpService`, `ISmsSender`, các implement SMS và lưu trữ OTP trên Redis. `AuthController` bỏ endpoint `send-otp`, đổi `verify-otp` thành `verify-phone`.
-- **Config:** Thay thế các biến môi trường SMS (`Sms:Twilio:*`) thành `Firebase:ProjectId` (`FIREBASE_PROJECT_ID`).
+> **Quyết định scope:** bỏ hướng đồng bộ Google Contacts / People API (PR #100) — bạn bè chỉ có ý nghĩa TRONG app, không liên kết bên thứ 3. Kết bạn = nhập email gửi lời mời.
+
+- **Model:** `Friendships` (1 row/cặp, Requester→Addressee, Status Pending/Accepted, tier `Friend`/`CloseFriend` lưu RIÊNG từng phía, 2 FK Users NoAction) + `FriendInvites` (email chưa có tài khoản: Token unique, hạn 14 ngày, UNIQUE(inviter,email)). Migration `AddFriendSystem`.
+- **Luồng kết bạn:** email đã có tài khoản → Pending + notification (`FriendRequest`); phía kia mời mình trước → auto-accept; chưa có tài khoản → invite + **mail mời gửi qua chính Gmail connection của người mời** (không SMTP riêng; không gửi được → FE hiện link copy). Link `{App:FrontendBaseUrl}/register?inviteToken=`.
+- **Consume khi đăng ký** (`AuthService` hook, best-effort không fail register): token khớp → bạn bè NGAY (bấm link = đồng ý); đăng ký/Google Sign-In trùng email không token → chuyển thành lời mời Pending in-app.
+- **API:** `GET /api/friends` (overview), `POST /api/friends/requests`, `POST /api/friends/{id}/accept`, `DELETE /api/friends/{id}` (decline/hủy/unfriend), `PATCH /api/friends/{id}/tier`, `DELETE /api/friends/invites/{id}`, public `GET /api/friends/invites/by-token/{token}`. `POST /api/auth/register` thêm `inviteToken?`.
+- **FE:** trang `/friends` (form kết bạn, lời mời đến/đi, invite email + copy link, badge Bạn thân ⭐, gửi mail nhanh cho bạn → `/send-email?to=`), sidebar mục Bạn bè, RegisterPage banner "X mời bạn" + prefill email. Config mới `App:FrontendBaseUrl` (prod: `App__FrontendBaseUrl` trong docker-compose).
+- **Tương lai (chưa làm):** share folder cho bạn theo role, tạo event cùng bạn, nhóm bạn tuỳ biến.
+
 ## [2026-07-10] Jira description = Markdown subset 2 chiều + UX nháp/confirm
 
 - **Description Jira đổi từ plain text → Markdown subset** (cùng chuẩn với comment): đọc `AdfConverter.ToMarkdown`, ghi `FromMarkdown` (trước là `ToPlainText`/`FromPlainText` — làm MẤT heading/bullet/bold/code khi sync). `AdfConverter` mở rộng: heading `#`→`######`, inline `` `code` ``, code block ``` fenced — 2 chiều ADF ⇄ markdown. `Snippet` list vẫn plain text. FE `miniMarkdown` render heading/code chip/code block; toolbar `RichCommentBox` thêm nút Heading + Code, dùng luôn cho sửa MÔ TẢ.

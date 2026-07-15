@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { adminApi } from '../lib/adminApi';
 import { handleApiError } from '../lib/errorUtils';
-import type { AdminUserDto } from '../types/admin';
-import { Users, UserCheck, Lock, AlertCircle, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import type { AdminIntegrationDto, AdminUserDto } from '../types/admin';
+import { Users, UserCheck, Lock, AlertCircle, Loader2, ChevronLeft, ChevronRight, Search, Plug } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -12,8 +12,20 @@ import { format } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
 import { useI18n } from '../hooks/useI18n';
 import { useTheme } from '../hooks/useTheme';
+import type { TranslationKey } from '../i18n/translations';
 
 const COLORS = ['#10b981', '#ef4444', '#94a3b8']; // Active, Error, Disconnected
+
+const INTEGRATION_ICON: Record<string, string> = {
+  google: '/icons/gmail.svg',
+  atlassian: '/icons/jira.svg',
+};
+
+function integrationDescKey(key: string): TranslationKey | null {
+  if (key === 'google') return 'admin.integrationDesc.google';
+  if (key === 'atlassian') return 'admin.integrationDesc.atlassian';
+  return null;
+}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -49,6 +61,11 @@ export const AdminDashboard = () => {
     placeholderData: (prev) => prev,
   });
 
+  const { data: integrations = [], isLoading: integrationsLoading, error: integrationsError } = useQuery({
+    queryKey: ['admin', 'integrations'],
+    queryFn: adminApi.getIntegrations,
+  });
+
   const queryClient = useQueryClient();
 
   const toggleActiveMutation = useMutation({
@@ -63,8 +80,25 @@ export const AdminDashboard = () => {
 
   // User đang chờ xác nhận khoá/mở khoá (null = đóng dialog).
   const [toggleTarget, setToggleTarget] = useState<AdminUserDto | null>(null);
+  const [integrationToggleTarget, setIntegrationToggleTarget] = useState<AdminIntegrationDto | null>(null);
 
-  const handleToggleActive = (user: AdminUserDto) => setToggleTarget(user);
+  const toggleIntegrationMutation = useMutation({
+    mutationFn: ({ key, isEnabled }: { key: string; isEnabled: boolean }) =>
+      adminApi.toggleIntegration(key, isEnabled),
+    onSuccess: () => {
+      toast.success(t('admin.integrationToggleSuccess'));
+      queryClient.invalidateQueries({ queryKey: ['admin', 'integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'catalog'] });
+    },
+    onError: (err) => handleApiError(err, t('admin.integrationToggleFail')),
+  });
+
+  const handleToggleActive = (user: AdminUserDto) => {
+    // BE cũng enforce: không khoá Admin đang active (ToggleUserActiveAsync).
+    if (user.role === 'Admin' && user.isActive) return;
+    setToggleTarget(user);
+  };
+  const handleIntegrationToggle = (integration: AdminIntegrationDto) => setIntegrationToggleTarget(integration);
 
   useEffect(() => {
     if (statsError) handleApiError(statsError, t('admin.statsError'));
@@ -73,6 +107,10 @@ export const AdminDashboard = () => {
   useEffect(() => {
     if (usersError) handleApiError(usersError, t('admin.usersLoadError'));
   }, [usersError, t]);
+
+  useEffect(() => {
+    if (integrationsError) handleApiError(integrationsError, t('admin.integrationsLoadError'));
+  }, [integrationsError, t]);
 
   const pieData = stats ? [
     { name: t('integrations.statusActive'), value: stats.connectionsByStatus.Active ?? 0 },
@@ -146,6 +184,72 @@ export const AdminDashboard = () => {
             </div>
           )}
         </div>
+
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm col-span-1 lg:col-span-2">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('admin.integrationsTitle')}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('admin.integrationsSubtitle')}</p>
+          </div>
+          {integrationsLoading ? (
+            <div className="h-48 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-300 dark:text-slate-500" />
+            </div>
+          ) : integrationsError ? (
+            <div className="h-48 flex items-center justify-center text-sm text-rose-500">
+              {t('admin.integrationsLoadError')}
+            </div>
+          ) : integrations.length === 0 ? (
+            <div className="h-48 flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+              {t('admin.chartEmpty')}
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+              {integrations.map((integration) => {
+                const descKey = integrationDescKey(integration.key);
+                const iconSrc = INTEGRATION_ICON[integration.key];
+                return (
+                  <li key={integration.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center shrink-0">
+                        {iconSrc ? (
+                          <img src={iconSrc} alt="" className="w-6 h-6 object-contain" />
+                        ) : (
+                          <Plug className="w-5 h-5 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
+                          {integration.displayName}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                          {descKey ? t(descKey) : integration.key}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleIntegrationToggle(integration)}
+                        disabled={toggleIntegrationMutation.isPending}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50
+                          ${integration.isEnabled ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                        title={integration.isEnabled ? t('admin.clickToDisableIntegration') : t('admin.clickToEnableIntegration')}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
+                            ${integration.isEnabled ? 'translate-x-4' : 'translate-x-0'}`}
+                        />
+                      </button>
+                      <span className={`text-[11px] font-medium w-16 text-right ${integration.isEnabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                        {integration.isEnabled ? t('admin.integrationEnabled') : t('admin.integrationDisabled')}
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
@@ -190,7 +294,9 @@ export const AdminDashboard = () => {
                   <td colSpan={5} className="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">{t('admin.noUsers')}</td>
                 </tr>
               ) : (
-                usersData?.items.map((u) => (
+                usersData?.items.map((u) => {
+                  const cannotDeactivate = u.role === 'Admin' && u.isActive;
+                  return (
                   <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -212,10 +318,11 @@ export const AdminDashboard = () => {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => handleToggleActive(u)}
-                          disabled={toggleActiveMutation.isPending}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50
+                          disabled={toggleActiveMutation.isPending || cannotDeactivate}
+                          className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50
+                            ${cannotDeactivate ? 'cursor-not-allowed' : 'cursor-pointer'}
                             ${u.isActive ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}
-                          title={u.isActive ? t('admin.clickToLock') : t('admin.clickToUnlock')}
+                          title={cannotDeactivate ? undefined : u.isActive ? t('admin.clickToLock') : t('admin.clickToUnlock')}
                         >
                           <span
                             className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
@@ -234,7 +341,8 @@ export const AdminDashboard = () => {
                       {format(new Date(u.createdAt), 'dd MMM yyyy, HH:mm', { locale: dfLocale })}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -282,6 +390,27 @@ export const AdminDashboard = () => {
           }
         }}
         onCancel={() => setToggleTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={integrationToggleTarget !== null}
+        tone={integrationToggleTarget?.isEnabled ? 'danger' : 'primary'}
+        message={
+          integrationToggleTarget?.isEnabled
+            ? t('admin.confirmDisableIntegration')
+            : t('admin.confirmEnableIntegration')
+        }
+        confirmLabel={t('common.confirm')}
+        loading={toggleIntegrationMutation.isPending}
+        onConfirm={() => {
+          if (integrationToggleTarget) {
+            toggleIntegrationMutation.mutate(
+              { key: integrationToggleTarget.key, isEnabled: !integrationToggleTarget.isEnabled },
+              { onSettled: () => setIntegrationToggleTarget(null) },
+            );
+          }
+        }}
+        onCancel={() => setIntegrationToggleTarget(null)}
       />
     </div>
   );

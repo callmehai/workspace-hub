@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { connectionsApi } from '../lib/connectionsApi';
+import { integrationsApi } from '../lib/integrationsApi';
+import { isAxiosError } from 'axios';
 import { handleApiError } from '../lib/errorUtils';
+import type { ApiErrorResponse } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
 import type { TranslationKey } from '../i18n/translations';
 import toast from 'react-hot-toast';
@@ -8,8 +11,7 @@ import { Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
 import { usePollingInterval } from '../hooks/usePollingInterval';
-import { useState } from 'react';
-import { CreateDriveFolderModal } from '../components/drive/CreateDriveFolderModal';
+import { useMemo } from 'react';
 
 const SERVICES: {
   integrationKey: string; provider: string; serviceType: string;
@@ -53,12 +55,26 @@ const SERVICES: {
     },
   ];
 
+/** BE trả key i18n (giống notifications.*) — dịch tại trang, không map global trong errorUtils. */
+const INTEGRATION_I18N_PREFIX = 'integrations.';
+
+function integrationApiMessage(
+  err: unknown,
+  t: (key: TranslationKey, vars?: Record<string, string | number>) => string,
+  vars?: Record<string, string | number>,
+): string | null {
+  if (!isAxiosError(err)) return null;
+  const msg = (err.response?.data as ApiErrorResponse | undefined)?.message?.trim();
+  if (msg?.startsWith(INTEGRATION_I18N_PREFIX)) {
+    return t(msg as TranslationKey, vars);
+  }
+  return null;
+}
+
 export const Integrations = () => {
   const queryClient = useQueryClient();
   const pollMs = usePollingInterval(60_000);
   const { t, lang } = useI18n();
-  const [driveFolderModalOpen, setDriveFolderModalOpen] = useState(false);
-  const [driveFolderConnId, setDriveFolderConnId] = useState<string | undefined>();
   const dfLocale = lang === 'vi' ? vi : enUS;
 
   const { data: connections = [], isLoading: loading, isError, refetch, isFetching } = useQuery({
@@ -70,22 +86,52 @@ export const Integrations = () => {
     refetchOnWindowFocus: true,
   });
 
+  const { data: integrationCatalog = [] } = useQuery({
+    queryKey: ['integrations', 'catalog'],
+    queryFn: integrationsApi.getCatalog,
+    staleTime: 60_000,
+  });
+
+  const integrationEnabledByKey = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const row of integrationCatalog) {
+      map.set(row.key.toLowerCase(), row.isEnabled);
+    }
+    return map;
+  }, [integrationCatalog]);
+
   const disconnectMutation = useMutation({
     mutationFn: connectionsApi.disconnect,
     onSuccess: () => {
       toast.success(t('integrations.disconnected'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
+      // Disconnect XOÁ THẬT mọi item của connection (ConnectionsService.DisconnectAsync
+      // → DeleteByConnectionIdAsync). Không invalidate thì list vẫn hiện ticket đã bị xoá
+      // (item ma), trong khi dropdown người phụ trách đọc mới nên trống → trông như lỗi.
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['jira'] });
     },
     onError: (err) => handleApiError(err, t('integrations.disconnectFail')),
   });
 
   const connectMutation = useMutation({
-    mutationFn: (params: { integrationKey: string; serviceType: string; redirectUri: string }) =>
-      connectionsApi.startOAuth(params),
+    mutationFn: ({ integrationKey, serviceType, redirectUri }: {
+      integrationKey: string;
+      serviceType: string;
+      redirectUri: string;
+      serviceName: string;
+    }) => connectionsApi.startOAuth({ integrationKey, serviceType, redirectUri }),
     onSuccess: (res) => {
       window.location.assign(res.authorizationUrl);
     },
-    onError: (err) => handleApiError(err, t('integrations.connectFail')),
+    onError: (err, variables) => {
+      const localized = integrationApiMessage(err, t, { name: variables.serviceName });
+      if (localized) {
+        toast.error(localized);
+        return;
+      }
+      handleApiError(err, t('integrations.connectFail'));
+    },
   });
 
   const syncMutation = useMutation({
@@ -94,13 +140,15 @@ export const Integrations = () => {
       toast.success(t('integrations.syncRequested'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      // Metadata Jira (project + assignee) suy từ ticket vừa sync → phải refetch cùng.
+      queryClient.invalidateQueries({ queryKey: ['jira'] });
     },
     onError: (err) => handleApiError(err, t('integrations.syncFail')),
   });
 
-  const handleConnect = (integrationKey: string, serviceType: string) => {
+  const handleConnect = (integrationKey: string, serviceType: string, serviceName: string) => {
     const redirectUri = `${window.location.origin}/oauth/callback`;
-    connectMutation.mutate({ integrationKey, serviceType, redirectUri });
+    connectMutation.mutate({ integrationKey, serviceType, redirectUri, serviceName });
   };
 
 
@@ -146,13 +194,20 @@ export const Integrations = () => {
             const status = connection?.status || 'Disconnected';
             const isActive = status.toLowerCase() === 'active';
             const isConnectionError = status.toLowerCase() === 'error';
+            const integrationEnabled = integrationEnabledByKey.get(service.integrationKey.toLowerCase()) ?? true;
+            const connectBlocked = !integrationEnabled && !isConnected;
 
             let statusBg = 'bg-gray-100 dark:bg-slate-700';
             let statusFg = 'text-gray-600 dark:text-slate-300';
             let statusDot = 'bg-gray-400';
             let statusLabel = t('integrations.statusDisconnected');
 
-            if (isConnected) {
+            if (connectBlocked) {
+              statusBg = 'bg-amber-100 dark:bg-amber-500/15';
+              statusFg = 'text-amber-800 dark:text-amber-300';
+              statusDot = 'bg-amber-500';
+              statusLabel = t('integrations.statusDisabledByAdmin');
+            } else if (isConnected) {
               if (isActive) {
                 statusBg = 'bg-green-100 dark:bg-green-500/15';
                 statusFg = 'text-green-700 dark:text-green-300';
@@ -202,7 +257,11 @@ export const Integrations = () => {
                 </div>
 
                 <div className="text-[13px] text-gray-600 dark:text-slate-400 leading-relaxed mb-4">
-                  {t(service.descKey)}
+                  {connectBlocked ? (
+                    <span className="text-amber-700 dark:text-amber-300">{t('integrations.disabledHint')}</span>
+                  ) : (
+                    t(service.descKey)
+                  )}
                 </div>
 
                 <div className="mt-auto pt-2 flex items-center justify-between gap-3">
@@ -215,19 +274,6 @@ export const Integrations = () => {
                       <>
                         {isActive && (
                           <>
-                            {service.serviceType === 'Drive' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDriveFolderConnId(connection.id);
-                                  setDriveFolderModalOpen(true);
-                                }}
-                                disabled={isLoadingAction}
-                                className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                              >
-                                <span>{t('integrations.createDriveFolder')}</span>
-                              </button>
-                            )}
                             <button
                               onClick={() => syncMutation.mutate(connection.id)}
                               disabled={isLoadingAction}
@@ -247,9 +293,9 @@ export const Integrations = () => {
                             {t('integrations.disconnect')}
                           </button>
                         )}
-                        {isConnectionError && (
+                        {isConnectionError && !connectBlocked && (
                           <button
-                            onClick={() => handleConnect(service.integrationKey, service.serviceType)}
+                            onClick={() => handleConnect(service.integrationKey, service.serviceType, service.name)}
                             disabled={isLoadingAction}
                             className="inline-flex items-center gap-1.5 h-8 px-3 border border-transparent rounded-lg bg-brand-600 text-white text-xs font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
                           >
@@ -257,9 +303,13 @@ export const Integrations = () => {
                           </button>
                         )}
                       </>
+                    ) : connectBlocked ? (
+                      <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                        {t('integrations.statusDisabledByAdmin')}
+                      </span>
                     ) : (
                       <button
-                        onClick={() => handleConnect(service.integrationKey, service.serviceType)}
+                        onClick={() => handleConnect(service.integrationKey, service.serviceType, service.name)}
                         disabled={isLoadingAction}
                         className="inline-flex items-center gap-1.5 h-8 px-3 border border-transparent rounded-lg bg-brand-600 text-white text-xs font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
                       >
@@ -275,11 +325,6 @@ export const Integrations = () => {
         </div>
       )}
 
-      <CreateDriveFolderModal
-        isOpen={driveFolderModalOpen}
-        onClose={() => setDriveFolderModalOpen(false)}
-        defaultConnectionId={driveFolderConnId}
-      />
     </div>
   );
 };

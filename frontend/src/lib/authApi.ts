@@ -25,14 +25,20 @@ export const authApi = {
   },
 
   /** SCRUM-64: đăng ký → tạo user (chưa verify) + gửi OTP. KHÔNG đăng nhập ngay. */
-  register: async (body: { fullName: string; email: string; password: string; phone: string }): Promise<RegisterResult> => {
+  register: async (body: { fullName: string; email: string; password: string; phone: string; inviteToken?: string }): Promise<RegisterResult> => {
     const res = await api.post<RegisterResult>('/auth/register', body);
     return res.data;
   },
 
-  /** SCRUM-64: gửi Firebase ID Token lên để BE verify. */
-  verifyPhone: async (email: string, firebaseToken: string): Promise<AuthResultDto> => {
-    const res = await api.post<AuthResultDto>('/auth/verify-phone', { email, firebaseToken });
+  /** SCRUM-64: gửi lại OTP cho email chưa verify → trả cooldown (giây). */
+  sendOtp: async (email: string): Promise<number> => {
+    const res = await api.post<{ resendCooldownSeconds: number }>('/auth/send-otp', { email });
+    return res.data.resendCooldownSeconds;
+  },
+
+  /** SCRUM-64: verify OTP → set cookie auth (đăng nhập); trả user. */
+  verifyOtp: async (email: string, code: string): Promise<AuthResultDto> => {
+    const res = await api.post<AuthResultDto>('/auth/verify-otp', { email, code });
     return res.data;
   },
 };

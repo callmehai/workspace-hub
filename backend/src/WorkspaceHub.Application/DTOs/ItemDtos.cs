@@ -19,6 +19,7 @@ public record GetItemsRequest(
     string? GmailLabel = null,
     string? Assignee = null,      // Jira accountId; "unassigned" = ticket chưa gán người
     Guid? ConnectionId = null,    // Lọc item theo connection (Drive/Gmail/…)
+    string? DriveParentId = null, // Lọc item theo thư mục cha Drive
     int Page = 1,
     int Limit = 20);
 

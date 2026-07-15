@@ -28,3 +28,9 @@ export interface GetAdminUsersRequest {
   search?: string;
 }
 
+export interface AdminIntegrationDto {
+  id: string;
+  key: string;
+  displayName: string;
+  isEnabled: boolean;
+}

@@ -51,12 +51,13 @@ if (import.meta.env.DEV) {
 }
 
 function resolveHubUrl(): string {
+  // Hub map dưới /api (khớp reverse-proxy /api/* của Caddy prod + Vite dev proxy).
   const apiUrl = import.meta.env.VITE_API_URL;
   if (!apiUrl || apiUrl.startsWith('/')) {
-    return '/hubs/notifications';
+    return '/api/hubs/notifications';
   }
   const base = apiUrl.replace(/\/api\/?$/, '');
-  return `${base}/hubs/notifications`;
+  return `${base}/api/hubs/notifications`;
 }
 
 function readCookie(name: string): string | null {
@@ -189,7 +190,9 @@ async function startHubWithRetry(userId: string): Promise<void> {
   const abortHandle = { userId, aborted: false };
   connectAbortHandle = abortHandle;
 
-  const shouldAbort = () => abortHandle.aborted || activeUserId !== userId;
+  // activeUserId === null lúc mới bắt đầu — chỉ abort khi đã gán user khác (đổi account), không phải lần connect đầu.
+  const shouldAbort = () =>
+    abortHandle.aborted || (activeUserId !== null && activeUserId !== userId);
   let failedAttempts = 0;
 
   while (!shouldAbort()) {
@@ -372,8 +375,6 @@ export function useNotificationHub(): void {
 
     return () => {
       disposed = true;
-      // abortHubConnect chỉ hợp lệ khi có đúng 1 subscriber (MainLayout) — nhiều call site sẽ cần ref-count.
-      abortHubConnect(userId);
       subscribers.delete(handler);
       document.removeEventListener('visibilitychange', onTabVisible);
     };

@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import type { AxiosError } from 'axios';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { connectionsApi } from '../../lib/connectionsApi';
+import type { ApiErrorResponse } from '../../lib/errorUtils';
+import type { TranslationKey } from '../../i18n/translations';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../hooks/useI18n';
@@ -10,6 +12,7 @@ import { useI18n } from '../../hooks/useI18n';
 export const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { t } = useI18n();
 
   const code = searchParams.get('code');
@@ -19,12 +22,26 @@ export const OAuthCallback = () => {
     mutationFn: connectionsApi.oauthCallback,
     onSuccess: () => {
       toast.success(t('oauth.connected'));
+      // Connection mới → cache cũ (connections + metadata Jira) đã stale.
+      // Không invalidate ở đây thì phải F5 mới thấy dự án/người phụ trách.
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['jira'] });
+      // Connect KHÔNG sync (ConnectionsService chỉ tạo Connection) → item của connection
+      // vừa disconnect trước đó đã bị xoá khỏi DB. Phải bỏ cache items, không thì list
+      // hiện ticket ma tới khi F5.
+      queryClient.invalidateQueries({ queryKey: ['items'] });
       navigate('/integrations');
     },
     onError: (err) => {
       console.error(err);
-      const message = (err as AxiosError<{ message?: string }>)?.response?.data?.message || t('oauth.failed');
-      toast.error(message);
+      const msg = isAxiosError(err)
+        ? (err.response?.data as ApiErrorResponse | undefined)?.message?.trim()
+        : undefined;
+      if (msg?.startsWith('integrations.')) {
+        toast.error(t(msg as TranslationKey, { name: t('integrations.title') }));
+        return;
+      }
+      toast.error(msg || t('oauth.failed'));
     },
   });
 

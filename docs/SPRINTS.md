@@ -91,7 +91,7 @@
 | SCRUM-51 | Deploy: BE + DB + FE + OAuth prod config | Khánh | ⏳ To Do (board) — **thực tế đã deploy** lên AWS Lightsail (`app.workspace-hub.space`, Docker Compose + CI/CD auto-deploy develop); còn lại: chốt OAuth redirect prod cho từng account, đóng ticket. Xem `docs/DEPLOY.md`. |
 | SCRUM-52 | Finalize: Swagger + setup guide + E2E smoke test prod | Hải | ⏳ To Do |
 | SCRUM-53 | Defense: slide + demo phần mỗi người | Lộc | ⏳ To Do |
-| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | 🔄 In Progress |
+| SCRUM-61 | FE: Admin bật/tắt integration (wire `PATCH /api/admin/integrations/{key}/enable`) | Khánh | 🔄 In Progress — `GET /api/admin/integrations` + `adminApi.getIntegrations`/`toggleIntegration`; section **Tích hợp dịch vụ** trên `AdminDashboard` (toggle + ConfirmDialog bật/tắt Google/Atlassian). |
 | SCRUM-65 | Implement CRUD Folder & Assign Items to Folder | Huy | ✅ Done |
 | SCRUM-67 | FE: Highlight email chưa đọc (đồng bộ trạng thái read/unread với Gmail; fix payload sai → 409) — **không thêm cột DB** | Vũ | ⏳ To Do |
 | SCRUM-68 | Notifications in-app (chuông + badge unread + dropdown mark-as-read; BE API list phân trang + cập nhật trạng thái đọc) | Khánh | 🔄 In Progress |
@@ -157,4 +157,16 @@
 Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — chỉ là định hướng tương lai, đừng code, đừng gán số SCRUM (số 39–46 nay đã dùng cho việc khác; Jira giờ là 54→60):
 
 - Webhook / push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) thay sync on-demand.
-- Social / friend system, AI workflow.
+- AI workflow.
+
+---
+
+## Friend system nội bộ app (2026-07-10 — VÀO scope, CHƯA có ticket Jira, cần tạo)
+
+> Owner quyết định 2026-07-10: **bỏ hướng Google Contacts/People API (PR #100)** — bạn bè chỉ có ý nghĩa trong app, không dùng bên thứ 3. Nền tảng ĐÃ CODE XONG trên nhánh `feature/friends-system` (chi tiết: CHANGELOG [2026-07-10], DATABASE.md §Friendships, API.md §Friends).
+
+| Việc | Status |
+|---|---|
+| BE: Friendships + FriendInvites (migration `AddFriendSystem`), FriendService (kết bạn theo email, invite link, consume khi đăng ký, notification FriendRequest/FriendAccepted), `/api/friends/*`, unit test | ✅ Done |
+| FE: trang `/friends` (kết bạn, accept/decline, bạn thân ⭐, copy link mời), sidebar, RegisterPage banner+prefill từ `?inviteToken=` | ✅ Done |
+| Tương lai: share folder cho bạn theo role, tạo event cùng bạn, nhóm bạn tuỳ biến | ⏳ chưa làm |
