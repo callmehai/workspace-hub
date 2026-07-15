@@ -138,6 +138,8 @@ export const Integrations = () => {
       toast.success(t('integrations.syncRequested'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      // Metadata Jira (project + assignee) suy từ ticket vừa sync → phải refetch cùng.
+      queryClient.invalidateQueries({ queryKey: ['jira'] });
     },
     onError: (err) => handleApiError(err, t('integrations.syncFail')),
   });
