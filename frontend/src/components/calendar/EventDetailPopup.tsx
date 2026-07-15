@@ -38,37 +38,84 @@ interface EventDetailPopupProps {
 }
 
 const POPUP_MARGIN = 12;
+/** Lề đáy rộng hơn một chút để popup không dính mép màn. */
+const POPUP_BOTTOM_MARGIN = 28;
 const POPUP_GAP = 10;
+/** Khi bị kẹt đáy, kéo bao nhiêu % khoảng cách tới giữa màn hình. */
+const BOTTOM_LIFT_TOWARD_CENTER = 0.7;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function responseLabel(response: string, lang: 'vi' | 'en') {
-  if (response === 'accepted') return lang === 'vi' ? 'Có' : 'Yes';
-  if (response === 'declined') return lang === 'vi' ? 'Không' : 'No';
-  if (response === 'tentative') return lang === 'vi' ? 'Có thể' : 'Maybe';
-  return lang === 'vi' ? 'Chưa trả lời' : 'No response';
+/** top / left theo viewport, ưu tiên sát anchor; nếu sát đáy thì kéo lên hướng giữa. */
+function computePopoverPosition(anchorRect: DOMRect, width: number, height: number) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const minLeft = POPUP_MARGIN;
+  const maxLeft = Math.max(minLeft, viewportWidth - width - POPUP_MARGIN);
+  const minTop = POPUP_MARGIN;
+  const maxTop = Math.max(minTop, viewportHeight - height - POPUP_BOTTOM_MARGIN);
+
+  const rightSide = anchorRect.right + POPUP_GAP;
+  const leftSide = anchorRect.left - width - POPUP_GAP;
+  const left = rightSide + width <= viewportWidth - POPUP_MARGIN
+    ? rightSide
+    : leftSide >= POPUP_MARGIN
+      ? leftSide
+      : clamp(anchorRect.left, minLeft, maxLeft);
+
+  // Ưu tiên căn mép trên với event (sát chip).
+  const preferredTop = anchorRect.top;
+  let top = clamp(preferredTop, minTop, maxTop);
+
+  // Event/nội dung làm preferred vượt đáy → kéo lên hướng giữa, vẫn giữ giao vùng event.
+  if (preferredTop > maxTop) {
+    const centerTop = (viewportHeight - height) / 2;
+    const lifted = Math.round(maxTop - Math.max(0, maxTop - centerTop) * BOTTOM_LIFT_TOWARD_CENTER);
+    top = clamp(lifted, minTop, maxTop);
+
+    const anchorMid = anchorRect.top + anchorRect.height / 2;
+    // Đảm bảo tâm event vẫn nằm trong (hoặc sát) khung popup.
+    if (anchorMid < top + 8) {
+      top = clamp(anchorMid - 8, minTop, maxTop);
+    } else if (anchorMid > top + height - 8) {
+      top = clamp(anchorMid - height + 8, minTop, maxTop);
+    }
+  }
+
+  return {
+    top,
+    left,
+    maxHeight: viewportHeight - POPUP_MARGIN - POPUP_BOTTOM_MARGIN,
+  };
 }
 
-function recurrenceSummary(recurrence: string[] | undefined, lang: 'vi' | 'en') {
+function responseLabel(response: string, t: ReturnType<typeof useI18n>['t']) {
+  if (response === 'accepted') return t('calendar.rsvpYes');
+  if (response === 'declined') return t('calendar.rsvpNo');
+  if (response === 'tentative') return t('calendar.rsvpMaybe');
+  return t('calendar.noResponse');
+}
+
+function recurrenceSummary(recurrence: string[] | undefined, t: ReturnType<typeof useI18n>['t']) {
   const rule = recurrence?.[0];
   if (!rule?.startsWith('RRULE:')) return null;
-  if (rule.includes('FREQ=DAILY')) return lang === 'vi' ? 'Lặp lại hằng ngày' : 'Repeats daily';
-  if (rule.includes('FREQ=WEEKLY')) return lang === 'vi' ? 'Lặp lại hằng tuần' : 'Repeats weekly';
-  if (rule.includes('FREQ=MONTHLY')) return lang === 'vi' ? 'Lặp lại hằng tháng' : 'Repeats monthly';
-  if (rule.includes('FREQ=YEARLY')) return lang === 'vi' ? 'Lặp lại hằng năm' : 'Repeats yearly';
-  return lang === 'vi' ? 'Lặp lại định kỳ' : 'Repeats';
+  if (rule.includes('FREQ=DAILY')) return t('calendar.repeatsDaily');
+  if (rule.includes('FREQ=WEEKLY')) return t('calendar.repeatsWeekly');
+  if (rule.includes('FREQ=MONTHLY')) return t('calendar.repeatsMonthly');
+  if (rule.includes('FREQ=YEARLY')) return t('calendar.repeatsYearly');
+  return t('calendar.repeatsGeneric');
 }
 
-function reminderTypeLabel(reminderType: string, lang: 'vi' | 'en') {
-  if (reminderType === 'InApp') return lang === 'vi' ? 'Trong ứng dụng' : 'In app';
-  if (reminderType === 'GoogleEmail') return 'Google email';
-  return 'Google popup';
+function reminderTypeLabel(reminderType: string, t: ReturnType<typeof useI18n>['t']) {
+  if (reminderType === 'InApp') return t('calendar.inAppShort');
+  if (reminderType === 'GoogleEmail') return t('calendar.googleEmailReminder');
+  return t('calendar.googlePopupReminder');
 }
 
-function reminderText(reminder: EventReminderDto, lang: 'vi' | 'en', t: ReturnType<typeof useI18n>['t']) {
-  const type = reminderTypeLabel(reminder.reminderType ?? 'GooglePopup', lang);
+function reminderText(reminder: EventReminderDto, t: ReturnType<typeof useI18n>['t']) {
+  const type = reminderTypeLabel(reminder.reminderType ?? 'GooglePopup', t);
   const unit = String(reminder.offsetUnit ?? '').toLowerCase();
   const unitLabel = unit === 'minutes'
     ? t('calendar.minutes')
@@ -77,7 +124,7 @@ function reminderText(reminder: EventReminderDto, lang: 'vi' | 'en', t: ReturnTy
       : unit === 'days'
         ? t('calendar.days')
         : t('calendar.weeks');
-  const at = reminder.timeOfDay ? (lang === 'vi' ? ` luc ${reminder.timeOfDay}` : ` at ${reminder.timeOfDay}`) : '';
+  const at = reminder.timeOfDay ? t('calendar.atTime', { time: reminder.timeOfDay }) : '';
   return `${type}: ${reminder.offsetValue} ${unitLabel}${at} ${t('calendar.before')}`;
 }
 
@@ -166,21 +213,21 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   const addToFolderMutation = useMutation({
     mutationFn: (folderId: string) => foldersApi.addItemToFolder(folderId, { itemId }),
     onSuccess: () => {
-      toast.success(lang === 'vi' ? 'Đã thêm sự kiện vào thư mục' : 'Added event to folder');
+      toast.success(t('calendar.addedToFolder'));
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
     },
-    onError: (err) => handleApiError(err, lang === 'vi' ? 'Thêm vào thư mục thất bại' : 'Add to folder failed'),
+    onError: (err) => handleApiError(err, t('calendar.addToFolderFailed')),
   });
 
   const removeFromFolderMutation = useMutation({
     mutationFn: (folderId: string) => foldersApi.removeItemFromFolder(folderId, itemId),
     onSuccess: () => {
-      toast.success(lang === 'vi' ? 'Đã xóa sự kiện khỏi thư mục' : 'Removed event from folder');
+      toast.success(t('calendar.removedFromFolder'));
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
     },
-    onError: (err) => handleApiError(err, lang === 'vi' ? 'Xóa khỏi thư mục thất bại' : 'Remove from folder failed'),
+    onError: (err) => handleApiError(err, t('calendar.removeFromFolderFailed')),
   });
 
   useLayoutEffect(() => {
@@ -189,28 +236,31 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
       const viewportHeight = window.innerHeight;
       const rect = popoverRef.current?.getBoundingClientRect();
       const width = Math.min(rect?.width ?? 560, viewportWidth - POPUP_MARGIN * 2);
-      const height = Math.min(rect?.height ?? 360, viewportHeight - POPUP_MARGIN * 2);
+      const height = Math.min(
+        rect?.height ?? 360,
+        viewportHeight - POPUP_MARGIN - POPUP_BOTTOM_MARGIN,
+      );
 
-      let left = Math.max(POPUP_MARGIN, (viewportWidth - width) / 2);
-      let top = Math.max(POPUP_MARGIN, (viewportHeight - height) / 2);
-
-      if (anchorRect) {
-        const rightSide = anchorRect.right + POPUP_GAP;
-        const leftSide = anchorRect.left - width - POPUP_GAP;
-        left = rightSide + width <= viewportWidth - POPUP_MARGIN
-          ? rightSide
-          : leftSide >= POPUP_MARGIN
-            ? leftSide
-            : clamp(anchorRect.left, POPUP_MARGIN, viewportWidth - width - POPUP_MARGIN);
-        top = clamp(anchorRect.top + anchorRect.height / 2 - height / 2, POPUP_MARGIN, viewportHeight - height - POPUP_MARGIN);
+      if (!anchorRect) {
+        setPopoverStyle({
+          top: Math.max(POPUP_MARGIN, (viewportHeight - height) / 2),
+          left: Math.max(POPUP_MARGIN, (viewportWidth - width) / 2),
+          maxHeight: viewportHeight - POPUP_MARGIN - POPUP_BOTTOM_MARGIN,
+        });
+        return;
       }
 
-      setPopoverStyle({ top, left, maxHeight: viewportHeight - POPUP_MARGIN * 2 });
+      setPopoverStyle(computePopoverPosition(anchorRect, width, height));
     };
 
     placePopover();
+    // Remeasure after paint — height ổn định khi content (detail) đã render.
+    const raf = window.requestAnimationFrame(placePopover);
     window.addEventListener('resize', placePopover);
-    return () => window.removeEventListener('resize', placePopover);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', placePopover);
+    };
   }, [anchorRect, detail, isLoading, isError, showMoreActions]);
 
   const dateString = useMemo(() => {
@@ -234,7 +284,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   const guests = detail?.attendees?.filter((a: CalendarEventAttendeeDto) => !a.organizer) ?? [];
   const guestCount = guests.length;
   const acceptedCount = guests.filter((a: CalendarEventAttendeeDto) => a.responseStatus === 'accepted').length;
-  const recurrence = recurrenceSummary(detail?.recurrence, lang);
+  const recurrence = recurrenceSummary(detail?.recurrence, t);
   const titleAccentDot = accentDotClass ?? (isOwner ? 'bg-emerald-500' : 'bg-amber-500');
 
   const handleCopyLink = () => {
@@ -350,7 +400,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
 
         {/* Folders Assignment Section */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-slate-200/50 pt-3 dark:border-slate-800/50 pl-[36px]">
-          <span className="text-[12px] font-semibold text-slate-400 dark:text-slate-500 mr-1.5">{lang === 'vi' ? 'Thư mục:' : 'Folders:'}</span>
+          <span className="text-[12px] font-semibold text-slate-400 dark:text-slate-500 mr-1.5">{t('calendar.foldersColon')}</span>
           {item?.folderIds?.map(fId => {
             const f = folders.find((fol: FolderResponse) => fol.id === fId);
             if (!f) return null;
@@ -366,7 +416,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                   type="button"
                   onClick={() => removeFromFolderMutation.mutate(f.id)}
                   className="p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-rose-600 transition"
-                  title={lang === 'vi' ? 'Xóa khỏi thư mục' : 'Remove from folder'}
+                  title={t('calendar.removeFromFolder')}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -380,10 +430,10 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
               type="button"
               onClick={() => setIsAddingToFolder(!isAddingToFolder)}
               className="inline-flex items-center justify-center gap-1 h-[24px] px-2.5 rounded-full bg-slate-200/50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-white transition-colors text-[11px] font-semibold"
-              title={lang === 'vi' ? 'Thêm vào thư mục' : 'Add to folder'}
+              title={t('calendar.addToFolder')}
             >
               <Plus className="w-3 h-3" />
-              <span>{lang === 'vi' ? 'Thêm' : 'Add'}</span>
+              <span>{t('calendar.add')}</span>
             </button>
 
             {isAddingToFolder && (
@@ -391,16 +441,16 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
                   <input
                     type="text"
-                    placeholder={lang === 'vi' ? 'Tìm thư mục...' : 'Search folders...'}
+                    placeholder={t('calendar.searchFolders')}
                     value={folderSearch}
                     onChange={e => setFolderSearch(e.target.value)}
                     className="w-full px-2 py-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 text-slate-900 dark:text-slate-100"
                   />
                 </div>
                 {folders.filter((f: FolderResponse) => !item?.folderIds?.includes(f.id)).length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Đã thuộc tất cả thư mục' : 'Already in all folders'}</div>
+                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('calendar.alreadyInAllFolders')}</div>
                 ) : folders.filter((f: FolderResponse) => !item?.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase())).length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Không tìm thấy' : 'No folders found'}</div>
+                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('calendar.noFoldersFound')}</div>
                 ) : (
                   folders
                     .filter((f: FolderResponse) => !item?.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase()))
@@ -469,7 +519,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
             <PopupRow icon={<Bell className="h-4 w-4" />}>
               <div className="space-y-1">
                 {detail.reminders.map((reminder: EventReminderDto, idx: number) => (
-                  <p key={idx}>{reminderText(reminder, lang, t)}</p>
+                  <p key={idx}>{reminderText(reminder, t)}</p>
                 ))}
               </div>
             </PopupRow>
@@ -499,7 +549,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
           {!isOwner && (
             <PopupRow icon={<Users className="h-4 w-4" />}>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="mr-1 text-slate-500 dark:text-slate-400">{responseLabel(currentResponse, lang)}</span>
+                <span className="mr-1 text-slate-500 dark:text-slate-400">{responseLabel(currentResponse, t)}</span>
                 <button type="button" disabled={rsvpMutation.isPending} onClick={() => rsvpMutation.mutate('accepted')} className={`rounded-full px-3 py-1 text-xs font-semibold ${currentResponse === 'accepted' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200'}`}>
                   {t('calendar.rsvpYes')}
                 </button>

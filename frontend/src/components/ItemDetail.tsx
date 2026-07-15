@@ -18,7 +18,7 @@ import { DriveShareDialog } from './drive/DriveShareDialog';
 import { CreateDriveFolderModal } from './drive/CreateDriveFolderModal';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
-import { handleApiError } from '../lib/errorUtils';
+import { handleApiError, isNotFoundApiError } from '../lib/errorUtils';
 import { getStatusLabel, isItemUnread, isDriveFolder } from '../lib/itemMeta';
 import { useSeenSet, markSeen, markUnseen } from '../lib/seenStore';
 import { typeLabelKey } from '../lib/itemVisuals';
@@ -158,7 +158,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   // Fetch item by ID.
   // placeholderData: mồi từ cache list/board đang có → drawer mở TỨC THÌ với data sẵn,
   // fetch chi tiết chạy nền — không còn màn spinner nháy trước khi hiện nội dung.
-  const { data: item, isLoading, isError, refetch } = useQuery({
+  const { data: item, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['item', itemId],
     queryFn: () => itemsApi.getItemById(itemId),
     enabled: !!itemId,
@@ -176,6 +176,12 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       return undefined;
     },
   });
+  const isNotFound = isNotFoundApiError(error);
+
+  useEffect(() => {
+    if (!isError || !error || isNotFound) return;
+    handleApiError(error, t('item.loadError'));
+  }, [isError, error, isNotFound, t]);
 
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
@@ -386,15 +392,35 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       <div className="fixed inset-0 z-50 flex justify-end">
         <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
         <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500 dark:text-slate-400" style={{ animation: 'wh-slide-in .25s ease' }}>
-          <AlertCircle className="w-12 h-12 text-rose-500 dark:text-rose-400 mb-3" />
-          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">{t('item.loadError')}</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-xs mb-4">{t('item.loadErrorHint')}</p>
-          <button
-            onClick={() => refetch()}
-            className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
-          >
-            {t('item.reload')}
-          </button>
+          <AlertCircle className={`w-12 h-12 mb-3 ${isNotFound ? 'text-slate-400 dark:text-slate-500' : 'text-rose-500 dark:text-rose-400'}`} />
+          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
+            {isNotFound ? t('item.notFound') : t('item.loadError')}
+          </h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-xs mb-4">
+            {isNotFound ? t('item.notFoundHint') : t('item.loadErrorHint')}
+          </p>
+          <div className="flex items-center gap-2">
+            {!isNotFound && (
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+              >
+                {t('item.reload')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isNotFound
+                  ? 'bg-brand-600 text-white hover:bg-brand-700'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              {t('common.close')}
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -63,7 +63,7 @@ public class CalendarSyncService : ICalendarSyncService
                     existing.ETag = mapped.ETag;
                     existing.OccurredAt = mapped.OccurredAt;
                     existing.DueAt = mapped.DueAt;
-                    SyncLocalReminders(existing, ev.Reminders);
+                    SyncLocalReminders(existing, ev.Reminders, ev.AllDay);
                     anyUpdated = true;
                     // Keep Status intact to avoid resetting Kanban columns.
                 }
@@ -72,7 +72,7 @@ public class CalendarSyncService : ICalendarSyncService
                 continue;
             }
 
-            SyncLocalReminders(mapped, ev.Reminders);
+            SyncLocalReminders(mapped, ev.Reminders, ev.AllDay);
             newItems.Add(mapped);
             existingItems[ev.Id] = mapped;
             reconciliations.Add((mapped, ev));
@@ -161,7 +161,7 @@ public class CalendarSyncService : ICalendarSyncService
         }
     }
 
-    private static void SyncLocalReminders(Item item, List<CalendarEventReminder> gcalReminders)
+    private static void SyncLocalReminders(Item item, List<CalendarEventReminder> gcalReminders, bool allDay)
     {
         var existingGoogleReminders = item.Reminders
             .Where(IsGoogleReminder)
@@ -183,12 +183,14 @@ public class CalendarSyncService : ICalendarSyncService
 
         foreach (var r in syncedGoogleReminders)
         {
+            var (offsetValue, offsetUnit, timeOfDay) =
+                GoogleCalendarReminderMapper.FromGoogleMinutes(r.Minutes, allDayStyle: allDay);
             item.Reminders.Add(new EventReminder
             {
                 ReminderType = r.ReminderType,
-                OffsetValue = r.Minutes,
-                OffsetUnit = ReminderUnit.Minutes,
-                TimeOfDay = null,
+                OffsetValue = offsetValue,
+                OffsetUnit = offsetUnit,
+                TimeOfDay = timeOfDay,
                 IsSent = false
             });
         }

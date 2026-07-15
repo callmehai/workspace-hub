@@ -72,7 +72,7 @@ export const SendEventEmailModal: React.FC<SendEventEmailModalProps> = ({
       toast.success(t('calendar.emailSentSuccess'));
       onClose();
     },
-    onError: (err) => handleApiError(err, 'Lỗi gửi email')
+    onError: (err) => handleApiError(err, t('calendar.emailSendFailed'))
   });
 
   const handleAddRecipient = (e: React.FormEvent) => {
@@ -224,7 +224,7 @@ export const SendEventEmailModal: React.FC<SendEventEmailModalProps> = ({
               type="checkbox"
               checked={sendCopyToMe}
               onChange={e => setSendCopyToMe(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-350 text-indigo-600 focus:ring-indigo-500/40 focus:ring-offset-0 shrink-0"
+              className="w-4 h-4 rounded border-slate-350 accent-brand-600 text-brand-600 focus:ring-brand-500/40 focus:ring-offset-0 shrink-0"
             />
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{t('calendar.sendCopyOption')}</span>
           </label>

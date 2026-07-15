@@ -191,11 +191,17 @@ export function CalendarEventEditorModal({
   onClose,
   onSubmit,
 }: CalendarEventEditorModalProps) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [form, setForm] = useState(initialValue);
   const [error, setError] = useState('');
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
-  const [openPicker, setOpenPicker] = useState<'date' | 'start' | 'end' | 'end-date' | null>(null);
+  /** Một overlay mở tại một thời điểm (date/time picker + Select trong modal). */
+  const [openOverlay, setOpenOverlay] = useState<string | null>(null);
+
+  const bindOverlay = (id: string) => ({
+    open: openOverlay === id,
+    onOpenChange: (next: boolean) => setOpenOverlay(next ? id : null),
+  });
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
   const [guestDraft, setGuestDraft] = useState('');
   const [debouncedGuestQuery, setDebouncedGuestQuery] = useState('');
@@ -237,53 +243,49 @@ export function CalendarEventEditorModal({
     const dayOfMonth = dateObj.getDate();
     const month = dateObj.getMonth();
     
-    const dayNamesVi = ['Chủ Nhật', 'thứ Hai', 'thứ Ba', 'thứ Tư', 'thứ Năm', 'thứ Sáu', 'thứ Bảy'];
-    const dayNamesEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weekdayKeys = ['calendar.weekdaySun', 'calendar.weekdayMon', 'calendar.weekdayTue', 'calendar.weekdayWed', 'calendar.weekdayThu', 'calendar.weekdayFri', 'calendar.weekdaySat'] as const;
     const rruleDays = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-    
-    const dayNameVi = dayNamesVi[dayOfWeek];
-    const dayNameEn = dayNamesEn[dayOfWeek];
+    const dayName = t(weekdayKeys[dayOfWeek]);
     const rruleDay = rruleDays[dayOfWeek];
-    const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
     return [
       {
         id: 'none',
-        label: lang === 'vi' ? 'Không lặp lại' : 'Do not repeat',
+        label: t('calendar.repeatNone'),
         rrule: [],
       },
       {
         id: 'daily',
-        label: lang === 'vi' ? 'Hàng ngày' : 'Daily',
+        label: t('calendar.repeatDaily'),
         rrule: ['RRULE:FREQ=DAILY'],
       },
       {
         id: 'weekly',
-        label: lang === 'vi' ? `Hàng tuần vào ${dayNameVi}` : `Weekly on ${dayNameEn}`,
+        label: t('calendar.repeatWeeklyOn', { day: dayName }),
         rrule: [`RRULE:FREQ=WEEKLY;BYDAY=${rruleDay}`],
       },
       {
         id: 'monthly',
-        label: lang === 'vi' ? `Hàng tháng vào ngày ${dayOfMonth}` : `Monthly on day ${dayOfMonth}`,
+        label: t('calendar.repeatMonthlyOn', { day: dayOfMonth }),
         rrule: [`RRULE:FREQ=MONTHLY;BYMONTHDAY=${dayOfMonth}`],
       },
       {
         id: 'annually',
-        label: lang === 'vi' ? `Hàng năm vào ngày ${dayOfMonth} tháng ${month + 1}` : `Annually on ${monthNamesEn[month]} ${dayOfMonth}`,
+        label: t('calendar.repeatYearlyOn', { day: dayOfMonth, month: month + 1 }),
         rrule: ['RRULE:FREQ=YEARLY'],
       },
       {
         id: 'weekday',
-        label: lang === 'vi' ? 'Mọi ngày trong tuần (từ thứ Hai tới thứ Sáu)' : 'Every weekday (Monday to Friday)',
+        label: t('calendar.repeatWeekdays'),
         rrule: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
       },
       {
         id: 'custom',
-        label: lang === 'vi' ? 'Tùy chỉnh…' : 'Custom…',
+        label: t('calendar.repeatCustom'),
         rrule: null,
       },
     ];
-  }, [form.date, lang]);
+  }, [form.date, t]);
 
   const selectedRecurrenceOption = useMemo(() => {
     const currentRrule = form.recurrence?.[0] || '';
@@ -295,6 +297,7 @@ export function CalendarEventEditorModal({
   const handleRecurrenceChange = (optionId: string) => {
     if (optionId === 'custom') {
       setCustomRecurrence(parseCustomRecurrence(form.recurrence, form.date));
+      setOpenOverlay(null);
       setCustomRecurrenceOpen(true);
       return;
     }
@@ -311,7 +314,7 @@ export function CalendarEventEditorModal({
     setPrevOpen(open);
     if (open) {
       setForm(initialValue);
-      setOpenPicker(null);
+      setOpenOverlay(null);
       setCustomRecurrence(parseCustomRecurrence(initialValue.recurrence, initialValue.date));
       setCustomRecurrenceOpen(false);
       setGuestDraft('');
@@ -393,28 +396,28 @@ export function CalendarEventEditorModal({
     const endDate = form.endDate || form.date;
     
     if (!form.connectionId) {
-      setError(lang === 'vi' ? 'Vui lòng chọn tài khoản Google Calendar.' : 'Please select a Google Calendar account.');
+      setError(t('calendar.errSelectAccount'));
       return;
     }
     if (!title) {
-      setError(lang === 'vi' ? 'Vui lòng nhập tiêu đề sự kiện.' : 'Please enter the event title.');
+      setError(t('calendar.errTitle'));
       return;
     }
     if (!form.date) {
-      setError(lang === 'vi' ? 'Vui lòng chọn ngày bắt đầu.' : 'Please select a start date.');
+      setError(t('calendar.errStartDate'));
       return;
     }
     if (!endDate) {
-      setError(lang === 'vi' ? 'Vui lòng chọn ngày kết thúc.' : 'Please select an end date.');
+      setError(t('calendar.errEndDate'));
       return;
     }
     if (!form.allDay) {
       if (!form.startTime) {
-        setError(lang === 'vi' ? 'Vui lòng chọn giờ bắt đầu.' : 'Please select a start time.');
+        setError(t('calendar.errStartTime'));
         return;
       }
       if (!form.endTime) {
-        setError(lang === 'vi' ? 'Vui lòng chọn giờ kết thúc.' : 'Please select an end time.');
+        setError(t('calendar.errEndTime'));
         return;
       }
     }
@@ -426,20 +429,36 @@ export function CalendarEventEditorModal({
 
     setError('');
     setGuestSuggestOpen(false);
-    onSubmit({ ...form, title });
+    onSubmit({
+      ...form,
+      title,
+      reminders: (form.reminders || []).map(reminder => {
+        if (!form.allDay) {
+          return { ...reminder, timeOfDay: undefined };
+        }
+        const offsetUnit = reminder.offsetUnit === 'Weeks' ? 'Weeks' : 'Days';
+        return {
+          ...reminder,
+          offsetUnit,
+          timeOfDay: reminder.timeOfDay || '09:00',
+        };
+      }),
+    });
   };
 
   const addReminder = () => {
     const reminders = form.reminders || [];
     if (reminders.length >= 5) {
-      toast.error(lang === 'vi' ? 'Tối đa 5 nhắc nhở' : 'Maximum 5 reminders');
+      toast.error(t('calendar.maxReminders'));
       return;
     }
     setForm(current => ({
       ...current,
       reminders: [
         ...(current.reminders || []),
-        { reminderType: 'GooglePopup', offsetValue: 15, offsetUnit: 'Minutes' },
+        current.allDay
+          ? { reminderType: 'GooglePopup', offsetValue: 1, offsetUnit: 'Days', timeOfDay: '09:00' }
+          : { reminderType: 'GooglePopup', offsetValue: 15, offsetUnit: 'Minutes' },
       ],
     }));
   };
@@ -462,11 +481,11 @@ export function CalendarEventEditorModal({
 
   const applyCustomRecurrence = () => {
     if (customRecurrence.frequency === 'WEEKLY' && customRecurrence.weekDays.length === 0) {
-      toast.error(lang === 'vi' ? 'Chọn ít nhất một ngày trong tuần' : 'Select at least one weekday');
+      toast.error(t('calendar.selectWeekday'));
       return;
     }
     if (customRecurrence.endType === 'until' && customRecurrence.until < form.date) {
-      toast.error(lang === 'vi' ? 'Ngày kết thúc lặp phải từ ngày bắt đầu' : 'Repeat end date must follow the start date');
+      toast.error(t('calendar.repeatEndBeforeStart'));
       return;
     }
     setForm(current => ({ ...current, recurrence: buildCustomRecurrence(customRecurrence) }));
@@ -488,7 +507,7 @@ export function CalendarEventEditorModal({
         role="dialog"
         aria-modal="true"
         aria-label={mode === 'create' ? t('calendar.createTitle') : t('calendar.editTitle')}
-        className="flex h-[900px] max-h-[94vh] w-[1240px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="flex h-[900px] max-h-[94vh] w-[72vw] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         onMouseDown={event => event.stopPropagation()}
       >
         <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
@@ -507,7 +526,7 @@ export function CalendarEventEditorModal({
               value={form.title}
               autoFocus
               onChange={event => setForm(current => ({ ...current, title: event.target.value }))}
-              placeholder={lang === 'vi' ? 'Thêm tiêu đề' : 'Add title'}
+              placeholder={t('calendar.addTitle')}
               className="min-w-0 flex-1 border-0 border-b-2 border-slate-300 bg-transparent px-0 py-2 text-[19px] font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-brand-600 dark:border-slate-700 dark:text-slate-100 dark:focus:border-brand-400 sm:text-[22px]"
             />
 
@@ -537,55 +556,45 @@ export function CalendarEventEditorModal({
           </div>
 
           <div className="ml-12 mt-4 space-y-3 sm:ml-13">
-            <div className="flex flex-wrap items-end gap-2.5">
-              <div className="min-w-[136px] flex-1 sm:max-w-[170px]">
-                <label className={labelClass}>{lang === 'vi' ? 'Bắt đầu' : 'Start'}</label>
-                <DatePicker
-                  value={form.date}
-                  onChange={date => setForm(current => ({
-                    ...current,
-                    date,
-                    endDate: current.endDate < date ? date : current.endDate,
-                  }))}
-                  open={openPicker === 'date'}
-                  onOpenChange={next => setOpenPicker(next ? 'date' : null)}
-                />
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <DatePicker
+                variant="chip"
+                value={form.date}
+                onChange={date => setForm(current => ({
+                  ...current,
+                  date,
+                  endDate: current.endDate < date ? date : current.endDate,
+                }))}
+                {...bindOverlay('date')}
+              />
               {!form.allDay && (
-                <div className="w-[106px]">
-                  <label className={labelClass}>{t('calendar.start')}</label>
-                  <TimePicker
-                    value={form.startTime}
-                    onChange={startTime => setForm(current => ({ ...current, startTime }))}
-                    open={openPicker === 'start'}
-                    onOpenChange={next => setOpenPicker(next ? 'start' : null)}
-                  />
-                </div>
-              )}
-              <span className="pb-2 text-sm font-medium text-slate-400">–</span>
-              <div className="min-w-[136px] flex-1 sm:max-w-[170px]">
-                <label className={labelClass}>{lang === 'vi' ? 'Kết thúc' : 'End'}</label>
-                <DatePicker
-                  value={form.endDate || form.date}
-                  onChange={endDate => setForm(current => ({
-                    ...current,
-                    endDate: endDate < current.date ? current.date : endDate,
-                  }))}
-                  open={openPicker === 'end-date'}
-                  onOpenChange={next => setOpenPicker(next ? 'end-date' : null)}
+                <TimePicker
+                  variant="chip"
+                  value={form.startTime}
+                  onChange={startTime => setForm(current => ({ ...current, startTime }))}
+                  {...bindOverlay('start')}
                 />
-              </div>
-              {!form.allDay && (
-                <div className="w-[106px]">
-                  <label className={labelClass}>{t('calendar.end')}</label>
-                  <TimePicker
-                    value={form.endTime}
-                    onChange={endTime => setForm(current => ({ ...current, endTime }))}
-                    open={openPicker === 'end'}
-                    onOpenChange={next => setOpenPicker(next ? 'end' : null)}
-                  />
-                </div>
               )}
+              <span className="px-0.5 text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                {t('calendar.to')}
+              </span>
+              {!form.allDay && (
+                <TimePicker
+                  variant="chip"
+                  value={form.endTime}
+                  onChange={endTime => setForm(current => ({ ...current, endTime }))}
+                  {...bindOverlay('end')}
+                />
+              )}
+              <DatePicker
+                variant="chip"
+                value={form.endDate || form.date}
+                onChange={endDate => setForm(current => ({
+                  ...current,
+                  endDate: endDate < current.date ? current.date : endDate,
+                }))}
+                {...bindOverlay('end-date')}
+              />
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -595,10 +604,28 @@ export function CalendarEventEditorModal({
                 checked={form.allDay}
                 onChange={event => {
                   const allDay = event.target.checked;
-                  setForm(current => ({ ...current, allDay }));
-                  if (allDay) setOpenPicker(null);
+                  setForm(current => ({
+                    ...current,
+                    allDay,
+                    // Google all-day: chỉ ngày/tuần + "before at [time]". Timed: offset thuần, không giờ trong ngày.
+                    reminders: (current.reminders || []).map(reminder => {
+                      if (!allDay) {
+                        return { ...reminder, timeOfDay: undefined };
+                      }
+                      const keepWeeks = reminder.offsetUnit === 'Weeks';
+                      return {
+                        ...reminder,
+                        offsetUnit: keepWeeks ? 'Weeks' : 'Days',
+                        offsetValue: (reminder.offsetUnit === 'Minutes' || reminder.offsetUnit === 'Hours')
+                          ? 1
+                          : reminder.offsetValue,
+                        timeOfDay: reminder.timeOfDay || '09:00',
+                      };
+                    }),
+                  }));
+                  setOpenOverlay(null);
                 }}
-                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  className="h-4 w-4 rounded border-slate-300 accent-brand-600 text-brand-600 focus:ring-brand-500"
               />
                 <span>{t('calendar.allDay')}</span>
               </label>
@@ -608,6 +635,7 @@ export function CalendarEventEditorModal({
                 onChange={handleRecurrenceChange}
                 options={recurrenceOptions.map(option => ({ value: option.id, label: option.label }))}
                 className="h-9 bg-slate-50 text-[13px] dark:bg-slate-800"
+                {...bindOverlay('recurrence')}
               />
               </div>
             </div>
@@ -619,7 +647,7 @@ export function CalendarEventEditorModal({
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="border-b border-slate-200 px-5 pt-4 dark:border-slate-800 sm:px-6">
                 <div className="inline-flex border-b-2 border-brand-600 pb-3 text-[13px] font-semibold text-brand-700 dark:border-brand-400 dark:text-brand-300">
-                  {lang === 'vi' ? 'Chi tiết sự kiện' : 'Event details'}
+                  {t('calendar.eventDetails')}
                 </div>
               </div>
 
@@ -631,7 +659,7 @@ export function CalendarEventEditorModal({
                     <input
                       className={inputClass}
                       value={form.location}
-                      placeholder={lang === 'vi' ? 'Thêm địa điểm' : 'Add location'}
+                      placeholder={t('calendar.addLocation')}
                       onChange={event => setForm(current => ({ ...current, location: event.target.value }))}
                     />
                   </div>
@@ -640,93 +668,103 @@ export function CalendarEventEditorModal({
                 <div className="flex gap-4">
                   <Bell className={rowIconClass} />
                   <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <label className="text-[12px] font-semibold text-slate-500 dark:text-slate-400">
-                        {lang === 'vi' ? 'Thông báo' : 'Notifications'}
-                      </label>
-                      <button
-                        type="button"
-                        onClick={addReminder}
-                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-brand-600 transition hover:text-brand-700 dark:text-brand-400"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        {lang === 'vi' ? 'Thêm thông báo' : 'Add notification'}
-                      </button>
-                    </div>
+                    <label className="mb-2 block text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+                      {t('calendar.notifications')}
+                    </label>
 
                     <div className="space-y-2">
                       {(!form.reminders || form.reminders.length === 0) && (
-                        <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-[12.5px] text-slate-400 dark:bg-slate-800/60 dark:text-slate-500">
-                          {lang === 'vi' ? 'Không có thông báo' : 'No notifications'}
+                        <p className="py-1 text-[12.5px] text-slate-400 dark:text-slate-500">
+                          {t('calendar.noNotifications')}
                         </p>
                       )}
                       {(form.reminders || []).map((reminder, index) => {
-                        const showTimeOfDay = reminder.offsetUnit === 'Days' || reminder.offsetUnit === 'Weeks';
+                        // All-day Google: type · N · days|weeks · before at · time · ×
+                        // Timed: type · N · minutes|hours|days|weeks · ×
+                        const unitOptions = form.allDay
+                          ? [
+                              { value: 'Days', label: t('calendar.days') },
+                              { value: 'Weeks', label: t('calendar.weeks') },
+                            ]
+                          : [
+                              { value: 'Minutes', label: t('calendar.minutes') },
+                              { value: 'Hours', label: t('calendar.hours') },
+                              { value: 'Days', label: t('calendar.days') },
+                              { value: 'Weeks', label: t('calendar.weeks') },
+                            ];
                         return (
-                          <div key={`${reminder.id ?? 'new'}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 dark:border-slate-700 dark:bg-slate-800/60">
-                            <div className="grid items-center gap-2 sm:grid-cols-[minmax(160px,1fr)_82px_minmax(150px,1fr)_36px]">
-                            <Select
-                              value={reminder.reminderType ?? 'GooglePopup'}
-                              onChange={value => updateReminder(index, { reminderType: value as ReminderType })}
-                              options={[
-                                { value: 'InApp', label: lang === 'vi' ? 'Thông báo trong ứng dụng' : 'In-app notification' },
-                                { value: 'GooglePopup', label: lang === 'vi' ? 'Thông báo Google' : 'Google notification' },
-                                { value: 'GoogleEmail', label: 'Email' },
-                              ]}
-                              className="h-10 bg-white text-[12.5px] dark:bg-slate-900"
-                            />
+                          <div key={`${reminder.id ?? 'new'}-${index}`} className="flex flex-wrap items-center gap-2">
+                            <div className="w-[250px] shrink-0 sm:w-[285px]">
+                              <Select
+                                value={reminder.reminderType ?? 'GooglePopup'}
+                                onChange={value => updateReminder(index, { reminderType: value as ReminderType })}
+                                options={[
+                                  { value: 'InApp', label: t('calendar.reminderInApp') },
+                                  { value: 'GooglePopup', label: t('calendar.reminderGoogle') },
+                                  { value: 'GoogleEmail', label: 'Email' },
+                                ]}
+                                className="!h-9 !rounded-md !border-0 !bg-[#e8eaed] !px-2.5 text-[12.5px] !shadow-none hover:!bg-[#dde1e6] dark:!bg-slate-700 dark:hover:!bg-slate-600"
+                                {...bindOverlay(`reminder-type-${index}`)}
+                              />
+                            </div>
                             <input
                               type="number"
                               min="1"
                               max="999"
                               value={reminder.offsetValue}
                               onChange={event => updateReminder(index, { offsetValue: Number.parseInt(event.target.value, 10) || 1 })}
-                              aria-label={lang === 'vi' ? 'Thời lượng nhắc trước' : 'Reminder lead time'}
-                              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-center text-[13px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                              aria-label={t('calendar.reminderLeadTime')}
+                              className="h-9 w-[56px] shrink-0 rounded-md border-0 bg-[#e8eaed] px-2 text-center text-[13px] font-medium text-slate-800 outline-none transition hover:bg-[#dde1e6] focus:ring-2 focus:ring-brand-500/25 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
                             />
-                            <Select
-                              value={reminder.offsetUnit}
-                              onChange={value => {
-                                const offsetUnit = value as EventReminderFormValue['offsetUnit'];
-                                updateReminder(index, {
-                                  offsetUnit,
-                                  timeOfDay: offsetUnit === 'Days' || offsetUnit === 'Weeks' ? (reminder.timeOfDay || '09:00') : undefined,
-                                });
-                              }}
-                              options={[
-                                { value: 'Minutes', label: lang === 'vi' ? 'phút trước' : 'minutes before' },
-                                { value: 'Hours', label: lang === 'vi' ? 'giờ trước' : 'hours before' },
-                                { value: 'Days', label: lang === 'vi' ? 'ngày trước' : 'days before' },
-                                { value: 'Weeks', label: lang === 'vi' ? 'tuần trước' : 'weeks before' },
-                              ]}
-                              className="h-10 bg-white text-[12.5px] dark:bg-slate-900"
-                            />
+                            <div className="w-[96px] shrink-0">
+                              <Select
+                                value={reminder.offsetUnit}
+                                onChange={value => {
+                                  const offsetUnit = value as EventReminderFormValue['offsetUnit'];
+                                  updateReminder(index, {
+                                    offsetUnit,
+                                    timeOfDay: form.allDay ? (reminder.timeOfDay || '09:00') : undefined,
+                                  });
+                                }}
+                                options={unitOptions}
+                                className="!h-9 !rounded-md !border-0 !bg-[#e8eaed] !px-2.5 text-[12.5px] !shadow-none hover:!bg-[#dde1e6] dark:!bg-slate-700 dark:hover:!bg-slate-600"
+                                {...bindOverlay(`reminder-unit-${index}`)}
+                              />
+                            </div>
+                            {form.allDay && (
+                              <>
+                                <span className="shrink-0 whitespace-nowrap text-[12.5px] text-slate-600 dark:text-slate-300">
+                                  {t('calendar.beforeAt')}
+                                </span>
+                                <TimePicker
+                                  variant="chip"
+                                  value={reminder.timeOfDay || '09:00'}
+                                  onChange={timeOfDay => updateReminder(index, { timeOfDay: timeOfDay || '09:00' })}
+                                  {...bindOverlay(`reminder-time-${index}`)}
+                                />
+                              </>
+                            )}
                             <button
                               type="button"
                               onClick={() => removeReminder(index)}
-                              aria-label={lang === 'vi' ? 'Xóa thông báo' : 'Remove notification'}
-                              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                              aria-label={t('calendar.removeNotification')}
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                             >
                               <X className="h-4 w-4" />
                             </button>
-                            </div>
-                            {showTimeOfDay && (
-                              <div className="mt-2 flex items-center gap-2 border-t border-slate-200 pt-2 dark:border-slate-700">
-                                <span className="text-[12px] text-slate-500 dark:text-slate-400">
-                                  {lang === 'vi' ? 'Vào lúc' : 'At'}
-                                </span>
-                                <input
-                                  type="time"
-                                  value={reminder.timeOfDay || '09:00'}
-                                  onChange={event => updateReminder(index, { timeOfDay: event.target.value })}
-                                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[12.5px] font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                                />
-                              </div>
-                            )}
                           </div>
                         );
                       })}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={addReminder}
+                      className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-brand-600 transition hover:text-brand-700 dark:text-brand-400"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t('calendar.addNotification')}
+                    </button>
                   </div>
                 </div>
 
@@ -744,6 +782,7 @@ export function CalendarEventEditorModal({
                       placeholder={t('calendar.selectAccount')}
                       disabled={mode === 'edit'}
                       className="h-10 bg-slate-50 text-[13px] dark:bg-slate-800"
+                      {...bindOverlay('connection')}
                     />
                     {connections.length === 0 && (
                       <p className="mt-1.5 text-[12px] text-amber-600 dark:text-amber-400">{t('calendar.noConnection')}</p>
@@ -754,7 +793,7 @@ export function CalendarEventEditorModal({
                 <div className="flex gap-4">
                   <Folder className={rowIconClass} />
                   <div className="min-w-0 flex-1">
-                    <label className={labelClass}>{lang === 'vi' ? 'Thư mục' : 'Folders'}</label>
+                    <label className={labelClass}>{t('calendar.folders')}</label>
                     <div className="flex flex-wrap items-center gap-1.5 pt-1">
                       {form.folderIds?.map(fId => {
                         const f = folders.find(fol => fol.id === fId);
@@ -774,7 +813,7 @@ export function CalendarEventEditorModal({
                                 setForm(curr => ({ ...curr, folderIds: nextIds }));
                               }}
                               className="p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-rose-600 transition"
-                              title={lang === 'vi' ? 'Xóa khỏi thư mục' : 'Remove from folder'}
+                              title={t('calendar.removeFromFolder')}
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -788,10 +827,10 @@ export function CalendarEventEditorModal({
                           type="button"
                           onClick={() => setIsAddingToFolder(!isAddingToFolder)}
                           className="inline-flex items-center justify-center gap-1 h-[24px] px-2.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-white transition-colors text-[11px] font-semibold"
-                          title={lang === 'vi' ? 'Thêm vào thư mục' : 'Add to folder'}
+                          title={t('calendar.addToFolder')}
                         >
                           <Plus className="w-3 h-3" />
-                          <span>{lang === 'vi' ? 'Thêm' : 'Add'}</span>
+                          <span>{t('calendar.add')}</span>
                         </button>
 
                         {isAddingToFolder && (
@@ -799,16 +838,16 @@ export function CalendarEventEditorModal({
                             <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
                               <input
                                 type="text"
-                                placeholder={lang === 'vi' ? 'Tìm thư mục...' : 'Search folders...'}
+                                placeholder={t('calendar.searchFolders')}
                                 value={folderSearch}
                                 onChange={e => setFolderSearch(e.target.value)}
                                 className="w-full px-2 py-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 text-slate-900 dark:text-slate-100"
                               />
                             </div>
                             {folders.filter(f => !form.folderIds?.includes(f.id)).length === 0 ? (
-                              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Đã thuộc tất cả thư mục' : 'Already in all folders'}</div>
+                              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('calendar.alreadyInAllFolders')}</div>
                             ) : folders.filter(f => !form.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase())).length === 0 ? (
-                              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Không tìm thấy' : 'No folders found'}</div>
+                              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('calendar.noFoldersFound')}</div>
                             ) : (
                               folders
                                 .filter(f => !form.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase()))
@@ -841,11 +880,14 @@ export function CalendarEventEditorModal({
                     <button
                       type="button"
                       disabled={!form.connectionId}
-                      onClick={() => setDrivePickerOpen(true)}
+                      onClick={() => {
+                        setOpenOverlay(null);
+                        setDrivePickerOpen(true);
+                      }}
                       className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold text-brand-600 transition hover:bg-brand-50 hover:text-brand-700 disabled:text-slate-400 dark:text-brand-400 dark:hover:bg-brand-500/10"
                     >
                       <DriveIcon className="h-5 w-5 shrink-0" />
-                      <span>{lang === 'vi' ? 'Thêm tệp từ Google Drive' : 'Add Google Drive attachment'}</span>
+                      <span>{t('calendar.addDriveFile')}</span>
                     </button>
 
                     {(form.driveItemIds.length > 0 || form.driveAttachments.length > 0) && (
@@ -951,7 +993,7 @@ export function CalendarEventEditorModal({
               <div className="border-b border-slate-200 px-5 pt-4 dark:border-slate-800">
                 <div className="inline-flex items-center gap-2 border-b-2 border-brand-600 pb-3 text-[13px] font-semibold text-brand-700 dark:border-brand-400 dark:text-brand-300">
                   <Users className="h-4 w-4" />
-                  {lang === 'vi' ? 'Khách mời' : 'Guests'}
+                  {t('calendar.guests')}
                   {form.attendees.length > 0 && (
                     <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] dark:bg-brand-500/10">{form.attendees.length}</span>
                   )}
@@ -965,9 +1007,13 @@ export function CalendarEventEditorModal({
                         value={guestDraft}
                         onChange={event => {
                           setGuestDraft(event.target.value);
+                          setOpenOverlay(null);
                           setGuestSuggestOpen(true);
                         }}
-                        onFocus={() => setGuestSuggestOpen(true)}
+                        onFocus={() => {
+                          setOpenOverlay(null);
+                          setGuestSuggestOpen(true);
+                        }}
                         onKeyDown={event => {
                           if (event.key === 'Enter' || event.key === ',' || event.key === ';' || event.key === 'Tab') {
                             if (guestDraft.trim()) {
@@ -1071,7 +1117,7 @@ export function CalendarEventEditorModal({
                             type="button"
                             onClick={() => removeGuest(email)}
                             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-100 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-300 sm:opacity-0 sm:group-hover:opacity-100"
-                            aria-label={lang === 'vi' ? `Xóa ${email}` : `Remove ${email}`}
+                            aria-label={t('calendar.removeGuest', { email })}
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -1084,13 +1130,13 @@ export function CalendarEventEditorModal({
 
                 {canManageGuestPermissions && <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
                   <h4 className="mb-2.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200">
-                    {lang === 'vi' ? 'Quyền của khách' : 'Guest permissions'}
+                    {t('calendar.guestPermissions')}
                   </h4>
                   <div className="space-y-1">
                     {[
-                      { key: 'guestsCanModify', vi: 'Sửa đổi sự kiện', en: 'Modify event' },
-                      { key: 'guestsCanInviteOthers', vi: 'Mời người khác', en: 'Invite others' },
-                      { key: 'guestsCanSeeOtherGuests', vi: 'Xem danh sách khách', en: 'See guest list' },
+                      { key: 'guestsCanModify' as const, labelKey: 'calendar.guestCanModify' as const },
+                      { key: 'guestsCanInviteOthers' as const, labelKey: 'calendar.guestCanInvite' as const },
+                      { key: 'guestsCanSeeOtherGuests' as const, labelKey: 'calendar.guestCanSeeOthers' as const },
                     ].map(permission => (
                       <label
                         key={permission.key}
@@ -1098,14 +1144,14 @@ export function CalendarEventEditorModal({
                       >
                         <input
                           type="checkbox"
-                          checked={form[permission.key as 'guestsCanModify' | 'guestsCanInviteOthers' | 'guestsCanSeeOtherGuests']}
+                          checked={form[permission.key]}
                           onChange={event => setForm(current => ({
                             ...current,
                             [permission.key]: event.target.checked,
                           }))}
-                          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                          className="h-4 w-4 rounded border-slate-300 accent-brand-600 text-brand-600 focus:ring-brand-500"
                         />
-                        <span>{lang === 'vi' ? permission.vi : permission.en}</span>
+                        <span>{t(permission.labelKey)}</span>
                       </label>
                     ))}
                   </div>
@@ -1142,13 +1188,13 @@ export function CalendarEventEditorModal({
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={lang === 'vi' ? 'Lặp lại tùy chỉnh' : 'Custom recurrence'}
+            aria-label={t('calendar.customRecurrence')}
             className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
             onMouseDown={event => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
               <h3 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100">
-                {lang === 'vi' ? 'Lặp lại tùy chỉnh' : 'Custom recurrence'}
+                {t('calendar.customRecurrence')}
               </h3>
               <button
                 type="button"
@@ -1161,7 +1207,7 @@ export function CalendarEventEditorModal({
 
             <div className="space-y-5 p-5">
               <div>
-                <label className={labelClass}>{lang === 'vi' ? 'Lặp lại mỗi' : 'Repeat every'}</label>
+                <label className={labelClass}>{t('calendar.repeatEvery')}</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -1182,12 +1228,13 @@ export function CalendarEventEditorModal({
                       frequency: value as CustomRecurrenceFrequency,
                     }))}
                     options={[
-                      { value: 'DAILY', label: lang === 'vi' ? 'ngày' : 'day(s)' },
-                      { value: 'WEEKLY', label: lang === 'vi' ? 'tuần' : 'week(s)' },
-                      { value: 'MONTHLY', label: lang === 'vi' ? 'tháng' : 'month(s)' },
-                      { value: 'YEARLY', label: lang === 'vi' ? 'năm' : 'year(s)' },
+                      { value: 'DAILY', label: t('calendar.unitDay') },
+                      { value: 'WEEKLY', label: t('calendar.unitWeek') },
+                      { value: 'MONTHLY', label: t('calendar.unitMonth') },
+                      { value: 'YEARLY', label: t('calendar.unitYear') },
                     ]}
                     className="h-10 bg-slate-50 text-[13px] dark:bg-slate-800"
+                    {...bindOverlay('custom-freq')}
                   />
                   </div>
                 </div>
@@ -1195,12 +1242,10 @@ export function CalendarEventEditorModal({
 
               {customRecurrence.frequency === 'WEEKLY' && (
                 <div>
-                  <label className={labelClass}>{lang === 'vi' ? 'Lặp lại vào' : 'Repeat on'}</label>
+                  <label className={labelClass}>{t('calendar.repeatOn')}</label>
                   <div className="flex flex-wrap gap-2">
                     {RRULE_WEEK_DAYS.map((day, index) => {
-                      const labels = lang === 'vi'
-                        ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
-                        : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+                      const labels = [t('calendar.dowMon'), t('calendar.dowTue'), t('calendar.dowWed'), t('calendar.dowThu'), t('calendar.dowFri'), t('calendar.dowSat'), t('calendar.dowSun')];
                       const selected = customRecurrence.weekDays.includes(day);
                       return (
                         <button
@@ -1225,7 +1270,7 @@ export function CalendarEventEditorModal({
               )}
 
               <div>
-                <label className={labelClass}>{lang === 'vi' ? 'Kết thúc' : 'Ends'}</label>
+                <label className={labelClass}>{t('calendar.ends')}</label>
                 <div className="space-y-3 text-[13px] text-slate-700 dark:text-slate-200">
                   <label className="flex cursor-pointer items-center gap-3">
                     <input
@@ -1233,9 +1278,9 @@ export function CalendarEventEditorModal({
                       name="recurrence-end"
                       checked={customRecurrence.endType === 'never'}
                       onChange={() => setCustomRecurrence(current => ({ ...current, endType: 'never' }))}
-                      className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+                      className="h-4 w-4 accent-brand-600 text-brand-600 focus:ring-brand-500"
                     />
-                    {lang === 'vi' ? 'Không bao giờ' : 'Never'}
+                    {t('calendar.never')}
                   </label>
                   <label className="flex cursor-pointer flex-wrap items-center gap-3">
                     <input
@@ -1243,9 +1288,9 @@ export function CalendarEventEditorModal({
                       name="recurrence-end"
                       checked={customRecurrence.endType === 'until'}
                       onChange={() => setCustomRecurrence(current => ({ ...current, endType: 'until' }))}
-                      className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+                      className="h-4 w-4 accent-brand-600 text-brand-600 focus:ring-brand-500"
                     />
-                    <span className="min-w-16">{lang === 'vi' ? 'Vào ngày' : 'On'}</span>
+                    <span className="min-w-16">{t('calendar.onDate')}</span>
                     <input
                       type="date"
                       min={form.date}
@@ -1261,9 +1306,9 @@ export function CalendarEventEditorModal({
                       name="recurrence-end"
                       checked={customRecurrence.endType === 'count'}
                       onChange={() => setCustomRecurrence(current => ({ ...current, endType: 'count' }))}
-                      className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+                      className="h-4 w-4 accent-brand-600 text-brand-600 focus:ring-brand-500"
                     />
-                    <span className="min-w-16">{lang === 'vi' ? 'Sau' : 'After'}</span>
+                    <span className="min-w-16">{t('calendar.after')}</span>
                     <input
                       type="number"
                       min="1"
@@ -1276,7 +1321,7 @@ export function CalendarEventEditorModal({
                       }))}
                       className="h-9 w-20 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-center text-[12.5px] outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800"
                     />
-                    <span>{lang === 'vi' ? 'lần' : 'occurrences'}</span>
+                    <span>{t('calendar.occurrences')}</span>
                   </label>
                 </div>
               </div>

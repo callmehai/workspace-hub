@@ -2,6 +2,56 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-15] Calendar reminder notification — format thời gian
+
+- **Bug:** In-app reminder (`EventReminderProcessorService`) khi không có Snippet nhét `OccurredAt.ToString("o")` vào `preview` → toast/dropdown hiện raw ISO (`2026-07-15T00:00:00.0000000Z`).
+- **Sau:** Body = `{ itemTitle, start, allDay, preview? }` — `preview` chỉ còn text snippet; FE `formatNotificationDisplay` format `start` qua `formatEventWhen` (all-day = ngày UTC + nhãn «Cả ngày»). Legacy row ISO trong `preview` vẫn được nhận diện và format lại.
+
+## [2026-07-15] Calendar invitee: hiện event khi còn NeedsAction
+
+- **Trước:** FE chỉ render invitation/synced item khi `Accepted`/`Tentative` → khách chưa RSVP không thấy event trên lịch (dù đã có noti «sự kiện mới»).
+- **Sau:** giống Google — `NeedsAction` vẫn hiện; chỉ ẩn `Declined`. Click event chưa RSVP mở dialog phản hồi (không mở EventDetailPopup chồng).
+
+## [2026-07-15] All-day reminder `timeOfDay` ↔ Google Calendar minutes
+
+- **Bug:** Hub lưu/UI đúng `1 tuần · trước lúc · 14:00`, nhưng write-back chỉ gửi `weeks×10080` (bỏ `TimeOfDay`) → Google hiện `1 week before at 12:00am`. **Không phải** lệch timezone UTC↔ICT.
+- **Docs Google:** [Reminders](https://developers.google.com/workspace/calendar/api/concepts/reminders) — API chỉ có `minutes` trước start; all-day start = 00:00 ngày event.
+- **Code:** `GoogleCalendarReminderMapper` + `MapToGoogleReminders` / `SyncLocalReminders`. `InApp` không đẩy Google; sync chỉ thay `GooglePopup`/`GoogleEmail` (InApp rows giữ nguyên). Tests: `GoogleCalendarReminderMapperTests`.
+
+### Design — §1 Mapping (lõi)
+
+Google chỉ lưu **minutes** trước **00:00** ngày all-day. Hub lưu **offset + timeOfDay**.
+
+#### Write Hub → Google (`MapToGoogleReminders`)
+
+| Unit | `timeOfDay`? | `minutes` gửi Google |
+| --- | --- | --- |
+| Minutes / Hours | bỏ qua | như hiện tại (`value` / `value×60`) |
+| Days / Weeks | không / `"00:00"` | `value × 1440` hoặc `× 10080` |
+| Days / Weeks | có (vd `"14:00"`) | `unitMinutes − (h×60+m)` — vd 1 tuần @ 14:00 → **9240** |
+
+`InApp` không đẩy Google (giữ như hiện tại).
+
+#### Sync Google → Hub (`CalendarSyncService`)
+
+| `minutes` | Kết quả Hub |
+| --- | --- |
+| `< 1440` | `OffsetUnit=Minutes`, `TimeOfDay=null` |
+| `≥ 1440` | decode Google-style all-day: `days = ceil(minutes/1440)` (chia hết → `minutes/1440`); nếu `days % 7 == 0` → `Weeks = days/7`, else `Days`; `timeOfDayMinutes = days×1440 − minutes` → `"HH:mm"` (vd **9240 → 1 week @ 14:00**) |
+
+InApp rows trên Hub **không** bị xóa khi sync Google overrides (chỉ thay `GooglePopup` / `GoogleEmail`).
+
+> **Ghi chú implement:** với event **timed** (`allDay=false`) luôn giữ Minutes thô. Với event **all-day**, decode all-day style cả khi `minutes < 1440` (vd 900 → `1 Day` @ `09:00`) để round-trip UI Google không mất giờ.
+
+#### Ví dụ đối chiếu
+
+| Hub (UI) | Google `minutes` | Google UI |
+| --- | --- | --- |
+| 1 tuần · 14:00 | **9240** (`10080 − 840`) | 1 week before at **2:00pm** |
+| 1 tuần · (không / 00:00) | **10080** | 1 week before at **12:00am** ← bug cũ vẫn gửi case này dù Hub là 14:00 |
+| 1 ngày · 09:00 | **900** (`1440 − 540`) | 1 day before at **9:00am** |
+| 30 phút (timed) | **30** | 30 minutes before |
+
 ## [2026-07-14] Calendar guest email prompt + dọn attendee metadata cũ
 
 - Khi create/edit làm thay đổi danh sách khách, FE hiển thị hộp thoại ba lựa chọn giống Google Calendar: quay lại chỉnh sửa, lưu nhưng không gửi email, hoặc gửi email. API nhận `sendUpdates`; Calendar gateway map sang Google `none|all` (mặc định vẫn là `all` để tương thích client cũ).

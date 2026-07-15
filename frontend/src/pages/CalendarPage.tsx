@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -84,8 +84,6 @@ interface UpdateEventVariables {
 const DRAG_TYPE = 'application/x-workspace-calendar-event';
 const CONFLICT_RECOVERY_DELAY_MS = 2_000;
 
-const DAY_NAMES_VI = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-const DAY_NAMES_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEK_START_HOUR = 7;
 const WEEK_END_HOUR = 21;
 const HALF_HOUR_HEIGHT = 28;
@@ -248,18 +246,29 @@ function entryOccursOn(entry: CalendarEntry, day: Date) {
     && day < new Date(endExclusive.getFullYear(), endExclusive.getMonth(), endExclusive.getDate());
 }
 
-function formatMonthTitle(date: Date, lang: 'vi' | 'en') {
+function formatMonthTitle(date: Date, lang: 'vi' | 'en', t: (k: any, v?: any) => string) {
   return lang === 'vi'
-    ? `Tháng ${date.getMonth() + 1} · ${date.getFullYear()}`
+    ? t('calendar.monthYear', { month: date.getMonth() + 1, year: date.getFullYear() })
     : new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date);
 }
 
-function formatWeekTitle(start: Date, lang: 'vi' | 'en') {
+function formatWeekTitle(start: Date, lang: 'vi' | 'en', t: (k: any, v?: any) => string) {
   const end = addDays(start, 6);
   if (lang === 'vi') {
     return start.getMonth() === end.getMonth()
-      ? `${start.getDate()} – ${end.getDate()} thg ${end.getMonth() + 1}, ${end.getFullYear()}`
-      : `${start.getDate()} thg ${start.getMonth() + 1} – ${end.getDate()} thg ${end.getMonth() + 1}, ${end.getFullYear()}`;
+      ? t('calendar.weekRangeSameMonth', {
+          startDay: start.getDate(),
+          endDay: end.getDate(),
+          month: end.getMonth() + 1,
+          year: end.getFullYear(),
+        })
+      : t('calendar.weekRangeCrossMonth', {
+          startDay: start.getDate(),
+          startMonth: start.getMonth() + 1,
+          endDay: end.getDate(),
+          endMonth: end.getMonth() + 1,
+          year: end.getFullYear(),
+        });
   }
   const short = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
   return `${short.format(start)} – ${short.format(end)}, ${end.getFullYear()}`;
@@ -286,6 +295,7 @@ function CalendarEntryChip({
   return (
     <button
       type="button"
+      data-calendar-entry={`${entry.kind}-${entry.id}`}
       draggable={entry.kind === 'event' && Boolean(entry.item) && entry.canModify !== false}
       onDragStart={event => onDragStart(event, entry)}
       onClick={event => { event.stopPropagation(); onOpen(entry, event); }}
@@ -313,6 +323,7 @@ export function CalendarPage() {
   const sourceType = parseSourceType(searchParams.get('type'));
   const googleCalendarOnly = sourceType === 'Event' && !folderId;
   const invitationId = searchParams.get('invitation');
+  const linkedEventId = searchParams.get('eventId');
   const [range, setRange] = useState<CalendarRange>('month');
   const [cursor, setCursor] = useState(() => new Date());
   const [search, setSearch] = useState('');
@@ -331,6 +342,7 @@ export function CalendarPage() {
   } | null>(null);
   const [pendingGuestSubmit, setPendingGuestSubmit] = useState<PendingGuestSubmit | null>(null);
   const [moreDay, setMoreDay] = useState<Date | null>(null);
+  const linkedEventOpenedRef = useRef<string | null>(null);
 
   const { rangeStart, rangeEnd } = useMemo(() => calendarQueryRange(cursor, range), [cursor, range]);
   const occurredFrom = localDayStartIso(rangeStart);
@@ -385,6 +397,12 @@ export function CalendarPage() {
     enabled: Boolean(invitationId),
   });
 
+  const { data: linkedEventItem } = useQuery({
+    queryKey: ['item', linkedEventId],
+    queryFn: () => itemsApi.getItemById(linkedEventId!),
+    enabled: Boolean(linkedEventId),
+  });
+
   const gcalConnections = connections.filter(connection =>
     connection.serviceType.toLowerCase() === 'gcal' && connection.status.toLowerCase() === 'active');
   const currentFolder = folderId ? folders.find(folder => folder.id === folderId) ?? null : null;
@@ -405,18 +423,23 @@ export function CalendarPage() {
 
   const entries = useMemo(() => {
     const invitationByICalUid = new Map(invitations.filter(x => x.iCalUid).map(x => [x.iCalUid!, x]));
+    // Google-style: NeedsAction vẫn hiện trên lịch (có noti + có thể RSVP). Chỉ ẩn Declined.
     const rawItemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => {
       if (entry === null) return false;
       const iCalUid = entry.item ? asString(parseMetadata(entry.item).iCalUid) : undefined;
       const invitation = iCalUid ? invitationByICalUid.get(iCalUid) : undefined;
-      return !invitation || invitation.status === 'Accepted' || invitation.status === 'Tentative';
+      return !invitation || invitation.status !== 'Declined';
     }).map(entry => {
       if (!entry.item || entry.kind !== 'event') return entry;
       const metadata = parseMetadata(entry.item);
       const connection = connections.find(candidate => candidate.id === entry.item?.connectionId);
       const organizerEmail = asString(metadata.organizerEmail);
+      const iCalUid = asString(metadata.iCalUid);
+      const invitation = iCalUid ? invitationByICalUid.get(iCalUid) : undefined;
       return {
         ...entry,
+        // Gắn invitation khi chưa RSVP → click mở dialog Yes/Maybe/No
+        invitation: invitation?.status === 'NeedsAction' ? invitation : undefined,
         canModify: !organizerEmail
           || organizerEmail.toLowerCase() === connection?.providerAccountId?.toLowerCase()
           || metadata.guestsCanModify === true,
@@ -437,7 +460,7 @@ export function CalendarPage() {
       .map(entry => entry.item ? asString(parseMetadata(entry.item).iCalUid) : undefined)
       .filter((value): value is string => Boolean(value)));
     const invitationEntries = folderId ? [] : invitations
-      .filter(invitation => invitation.status === 'Accepted' || invitation.status === 'Tentative')
+      .filter(invitation => invitation.status !== 'Declined')
       .filter(invitation => !invitation.iCalUid || !seenICalUids.has(invitation.iCalUid))
       .map(invitationToEntry);
     const scheduledEntries = folderId || googleCalendarOnly ? [] : (scheduledPage?.value ?? []).map(scheduledToEntry);
@@ -448,6 +471,49 @@ export function CalendarPage() {
       .filter(entry => !search.trim() || entry.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
       .sort((left, right) => left.start.getTime() - right.start.getTime());
   }, [itemPage, scheduledPage, invitations, connections, folderId, googleCalendarOnly, layers, search]);
+
+  const linkedEventEntry = useMemo(() => {
+    if (!linkedEventItem || linkedEventItem.type !== 'Event') return null;
+    return itemToEntry(linkedEventItem);
+  }, [linkedEventItem]);
+
+  useEffect(() => {
+    if (!linkedEventId) {
+      linkedEventOpenedRef.current = null;
+      return;
+    }
+    if (linkedEventOpenedRef.current === linkedEventId) return;
+
+    const entry = entries.find(candidate =>
+      candidate.kind === 'event' && candidate.id === linkedEventId && Boolean(candidate.item),
+    ) ?? linkedEventEntry;
+    if (!entry?.item) return;
+
+    // 1) Đúng tháng trước.
+    const onEventMonth =
+      range === 'month'
+      && cursor.getFullYear() === entry.start.getFullYear()
+      && cursor.getMonth() === entry.start.getMonth();
+    if (!onEventMonth) {
+      setRange('month');
+      setCursor(entry.start);
+      return;
+    }
+
+    // 2) Chip đã render → click như user (openEntry tự lấy anchor).
+    const clickChip = () => {
+      if (linkedEventOpenedRef.current === linkedEventId) return true;
+      const chip = document.querySelector<HTMLElement>(`[data-calendar-entry="event-${entry.id}"]`);
+      if (!chip) return false;
+      linkedEventOpenedRef.current = linkedEventId;
+      chip.click();
+      return true;
+    };
+
+    if (clickChip()) return;
+    const timer = window.setTimeout(() => { clickChip(); }, 50);
+    return () => window.clearTimeout(timer);
+  }, [linkedEventId, linkedEventEntry, entries, range, cursor]);
 
   const pendingInvitations = invitations.filter(invitation => invitation.status === 'NeedsAction');
 
@@ -632,18 +698,18 @@ export function CalendarPage() {
     mutationFn: ({ id, status }: { id: string; status: Exclude<CalendarInvitationStatus, 'NeedsAction'> }) =>
       calendarInvitationsApi.respond(id, status),
     onSuccess: invitation => {
-      toast.success(lang === 'vi' ? 'Đã lưu phản hồi lời mời' : 'Invitation response saved');
+      toast.success(t('calendar.invitationSaved'));
       queryClient.invalidateQueries({ queryKey: ['calendar-invitations'] });
       queryClient.setQueryData(['calendar-invitation', invitation.id], invitation);
       refreshCalendar();
-      setSelectedEntry(null);
-      if (invitationId) {
-        const next = new URLSearchParams(searchParams);
-        next.delete('invitation');
-        navigate({ search: next.toString() }, { replace: true });
-      }
+      // Giữ dialog: cập nhật status → ẩn nút RSVP (giống Google hiện phản hồi).
+      setSelectedEntry(current => (
+        current?.invitation?.id === invitation.id
+          ? { ...current, invitation }
+          : current
+      ));
     },
-    onError: error => handleApiError(error, lang === 'vi' ? 'Không thể phản hồi lời mời' : 'Could not respond to invitation', { navigate }),
+    onError: error => handleApiError(error, t('calendar.invitationRespondFailed'), { navigate }),
   });
 
   const openCreate = (day: Date, startTime = '09:00', allDay = false) => {
@@ -744,17 +810,38 @@ export function CalendarPage() {
     return addMonths(current, 12); // year view
   });
   const title = useMemo(() => {
-    if (range === 'month') return formatMonthTitle(cursor, lang);
-    if (range === 'week') return formatWeekTitle(startOfWeek(cursor), lang);
+    if (range === 'month') return formatMonthTitle(cursor, lang, t);
+    if (range === 'week') return formatWeekTitle(startOfWeek(cursor), lang, t);
     if (range === 'day') {
-      const weekdayVi = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][cursor.getDay()];
+      const weekdayKeys = [
+        'calendar.weekdaySunFull',
+        'calendar.weekdayMonFull',
+        'calendar.weekdayTueFull',
+        'calendar.weekdayWedFull',
+        'calendar.weekdayThuFull',
+        'calendar.weekdayFriFull',
+        'calendar.weekdaySatFull',
+      ] as const;
       return lang === 'vi'
-        ? `${weekdayVi}, ${cursor.getDate()} thg ${cursor.getMonth() + 1}, ${cursor.getFullYear()}`
+        ? t('calendar.dayTitleVi', {
+            weekday: t(weekdayKeys[cursor.getDay()]),
+            day: cursor.getDate(),
+            month: cursor.getMonth() + 1,
+            year: cursor.getFullYear(),
+          })
         : cursor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     }
-    return lang === 'vi' ? `Năm ${cursor.getFullYear()}` : `${cursor.getFullYear()}`;
-  }, [cursor, range, lang]);
-  const dayNames = lang === 'vi' ? DAY_NAMES_VI : DAY_NAMES_EN;
+    return lang === 'vi' ? t('calendar.yearN', { year: cursor.getFullYear() }) : `${cursor.getFullYear()}`;
+  }, [cursor, range, lang, t]);
+  const dayNames = [
+    t('calendar.dowMon'),
+    t('calendar.dowTue'),
+    t('calendar.dowWed'),
+    t('calendar.dowThu'),
+    t('calendar.dowFri'),
+    t('calendar.dowSat'),
+    t('calendar.dowSun'),
+  ];
   const loading = itemsLoading || (!folderId && !googleCalendarOnly && scheduledLoading);
 
   const calendarSubtitle = useMemo(() => {
@@ -765,6 +852,16 @@ export function CalendarPage() {
   }, [loading, folderId, googleCalendarOnly, entries.length, t]);
 
   const activeInvitation = selectedEntry?.invitation ?? linkedInvitation ?? null;
+  const closeLinkedEvent = () => {
+    setSelectedEntry(null);
+    setSelectedEntryAnchor(null);
+    if (linkedEventId) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('eventId');
+      navigate({ search: next.toString() }, { replace: true });
+    }
+  };
+
   const closeInvitation = () => {
     setSelectedEntry(null);
     setSelectedEntryAnchor(null);
@@ -915,6 +1012,7 @@ export function CalendarPage() {
                     <button
                       type="button"
                       key={`${entry.kind}-${entry.id}`}
+                      data-calendar-entry={`${entry.kind}-${entry.id}`}
                       draggable={entry.kind === 'event'}
                       onDragStart={event => dragStart(event, entry)}
                       onClick={event => openEntry(entry, event)}
@@ -999,6 +1097,7 @@ export function CalendarPage() {
                 <button
                   type="button"
                   key={`${entry.kind}-${entry.id}`}
+                  data-calendar-entry={`${entry.kind}-${entry.id}`}
                   draggable={entry.kind === 'event'}
                   onDragStart={event => dragStart(event, entry)}
                   onClick={event => openEntry(entry, event)}
@@ -1030,15 +1129,15 @@ export function CalendarPage() {
           const dayCount = Math.ceil((offset + daysInMonth) / 7) * 7;
           const days = Array.from({ length: dayCount }, (_, idx) => addDays(gridStart, idx));
           
-          const monthLabel = lang === 'vi' 
-            ? `Tháng ${monthIndex + 1}` 
+          const monthLabel = lang === 'vi'
+            ? t('calendar.monthN', { n: monthIndex + 1 })
             : new Intl.DateTimeFormat('en-US', { month: 'long' }).format(first);
 
           return (
             <div key={monthIndex} className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <h3 className="mb-2 text-center text-xs font-bold text-slate-700 dark:text-slate-200">{monthLabel}</h3>
               <div className="grid grid-cols-7 gap-y-1 text-center text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                {lang === 'vi' ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(n => <div key={n}>{n}</div>) : ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((n, idx) => <div key={idx}>{n}</div>)}
+                {dayNames.map((n, idx) => <div key={`${n}-${idx}`}>{n}</div>)}
               </div>
               <div className="grid grid-cols-7 gap-y-1 text-center">
                 {days.map((day, idx) => {
@@ -1119,9 +1218,7 @@ export function CalendarPage() {
             className="mb-3 inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200 dark:hover:bg-brand-500/15"
           >
             <Users className="h-4 w-4" />
-            {lang === 'vi'
-              ? `${pendingInvitations.length} lời mời lịch đang chờ phản hồi`
-              : `${pendingInvitations.length} calendar invitation(s) waiting`}
+            {t('calendar.pendingInvitations', { n: pendingInvitations.length })}
           </button>
         )}
 
@@ -1169,10 +1266,10 @@ export function CalendarPage() {
           <div className="ml-auto flex items-center gap-1 rounded-[9px] border border-slate-200 bg-white p-[3px] dark:border-slate-700 dark:bg-slate-800">
             {(['day', 'week', 'month', 'year'] as const).map(value => (
               <button key={value} type="button" onClick={() => setRange(value)} className={`rounded-[6px] px-3 py-1 text-[12.5px] font-medium ${range === value ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'}`}>
-                {value === 'day' ? (lang === 'vi' ? 'Ngày' : 'Day') :
-                 value === 'week' ? (lang === 'vi' ? 'Tuần' : 'Week') :
-                 value === 'month' ? (lang === 'vi' ? 'Tháng' : 'Month') :
-                 (lang === 'vi' ? 'Năm' : 'Year')}
+                {value === 'day' ? t('calendar.day') :
+                 value === 'week' ? t('calendar.week') :
+                 value === 'month' ? t('calendar.month') :
+                 t('calendar.year')}
               </button>
             ))}
           </div>
@@ -1224,19 +1321,15 @@ export function CalendarPage() {
         onSend={() => submitPendingGuestChanges(true)}
       />
 
-      {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && (
+      {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && selectedEntry.invitation?.status !== 'NeedsAction' && (
         <EventDetailPopup
           itemId={selectedEntry.id}
           accentDotClass={getEventAccentDot(selectedEntry)}
           anchorRect={selectedEntryAnchor}
-          onClose={() => {
-            setSelectedEntry(null);
-            setSelectedEntryAnchor(null);
-          }}
+          onClose={closeLinkedEvent}
           onEdit={(detailedItem) => {
             const entry = selectedEntry;
-            setSelectedEntry(null);
-            setSelectedEntryAnchor(null);
+            closeLinkedEvent();
             const formVal = itemToCalendarForm(entry.item!);
             formVal.reminders = detailedItem.reminders ?? [];
             formVal.recurrence = detailedItem.recurrence ?? formVal.recurrence ?? [];
@@ -1258,8 +1351,7 @@ export function CalendarPage() {
           }}
           onDelete={() => {
             const entry = selectedEntry;
-            setSelectedEntry(null);
-            setSelectedEntryAnchor(null);
+            closeLinkedEvent();
             setDeleteEntry(entry);
           }}
         />
@@ -1318,13 +1410,16 @@ export function CalendarPage() {
         const dayEntries = entriesForDay(moreDay);
         
         const getDayLabel = (date: Date) => {
-          const day = date.getDay(); // 0 = CN, 1 = T2, etc.
-          if (lang === 'vi') {
-            const viMap = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-            return viMap[day];
-          }
-          const enMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          return enMap[day];
+          const keys = [
+            'calendar.dowSun',
+            'calendar.dowMon',
+            'calendar.dowTue',
+            'calendar.dowWed',
+            'calendar.dowThu',
+            'calendar.dowFri',
+            'calendar.dowSat',
+          ] as const;
+          return t(keys[date.getDay()]);
         };
 
         const dayLabel = getDayLabel(moreDay);
@@ -1396,7 +1491,7 @@ export function CalendarPage() {
                   })
                 ) : (
                   <div className="py-8 text-center text-xs text-slate-400 italic">
-                    {lang === 'vi' ? 'Không có sự kiện' : 'No events'}
+                    {t('calendar.noEvents')}
                   </div>
                 )}
               </div>

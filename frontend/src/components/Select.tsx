@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { useI18n } from '../hooks/useI18n';
 
@@ -19,15 +19,37 @@ interface SelectProps {
   dropUp?: boolean;
   /** Icon nhỏ đứng trước nhãn (vd Briefcase cho chọn dự án). */
   icon?: ReactNode;
+  /** Controlled — dùng khi parent cần đóng các overlay khác khi mở cái này. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Dropdown/listbox tự style (thay native <select>) — khớp tông brand, bo góc, có tick chọn. */
-export function Select({ value, onChange, options, placeholder, className = '', disabled, dropUp, icon }: SelectProps) {
+export function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  className = '',
+  disabled,
+  dropUp,
+  icon,
+  open: openProp,
+  onOpenChange,
+}: SelectProps) {
   const { t } = useI18n();
   const ph = placeholder ?? t('common.select');
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
+
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+
+  const setOpen = useCallback((next: boolean) => {
+    if (isControlled) onOpenChange?.(next);
+    else setInternalOpen(next);
+  }, [isControlled, onOpenChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -43,14 +65,14 @@ export function Select({ value, onChange, options, placeholder, className = '', 
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(!open)}
         className={`w-full flex items-center justify-between gap-2 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
           open ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-300 hover:border-gray-400 dark:border-slate-700 dark:hover:border-slate-600'
         } ${className}`}

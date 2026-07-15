@@ -1,4 +1,4 @@
-/* Polish react-datepicker (chế độ inline) cho khớp brand (#2563eb). Scope: .wh-dtp. */
+/* Polish react-datepicker (chế độ inline) cho khớp brand indigo (#4f46e5). Scope: .wh-dtp. */
 .wh-dtp .react-datepicker {
   border: none;
   border-radius: 0;
@@ -57,23 +57,23 @@
 }
 
 .wh-dtp .react-datepicker__day:hover {
-  background: #eff6ff; /* brand-50 */
-  color: #1d4ed8;      /* brand-700 */
+  background: #eef2ff; /* brand-50 */
+  color: #4338ca;      /* brand-700 */
 }
 
 .wh-dtp .react-datepicker__day--today {
   font-weight: 700;
-  color: #2563eb;
+  color: #4f46e5;
 }
 
 .wh-dtp .react-datepicker__day--selected,
 .wh-dtp .react-datepicker__day--keyboard-selected {
-  background: #2563eb !important; /* brand-600 */
+  background: #4f46e5 !important; /* brand-600 */
   color: #fff !important;
 }
 
 .wh-dtp .react-datepicker__day--selected:hover {
-  background: #1d4ed8 !important; /* brand-700 */
+  background: #4338ca !important; /* brand-700 */
 }
 
 .wh-dtp .react-datepicker__day--disabled {
@@ -168,18 +168,18 @@
 }
 
 .wh-time-picker__item:hover {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: #eef2ff;
+  color: #4338ca;
 }
 
 .wh-time-picker__item--selected {
-  background: #2563eb !important;
+  background: #4f46e5 !important;
   color: #fff !important;
   font-weight: 600;
 }
 
 .wh-time-picker__item--selected:hover {
-  background: #1d4ed8 !important;
+  background: #4338ca !important;
   color: #fff !important;
 }
 
@@ -188,8 +188,8 @@
 }
 
 .dark .wh-time-picker__item:hover {
-  background: rgba(37, 99, 235, 0.15);
-  color: #93c5fd;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
 }
 
 /* ── Dark mode (class `dark` trên <html>; popover render qua portal vào body) ──
@@ -215,12 +215,12 @@
 }
 
 .dark .wh-dtp .react-datepicker__day:hover {
-  background: rgba(37, 99, 235, 0.15);
-  color: #93c5fd; /* brand-300 */
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc; /* brand-300 */
 }
 
 .dark .wh-dtp .react-datepicker__day--today {
-  color: #60a5fa; /* brand-400 */
+  color: #818cf8; /* brand-400 */
 }
 
 /* Ngày quá khứ (disabled) + ngoài tháng — mờ tối, không gây rối mắt */

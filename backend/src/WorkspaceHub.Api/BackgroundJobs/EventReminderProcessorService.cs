@@ -72,14 +72,18 @@ public class EventReminderProcessorService : BackgroundService
             {
                 try
                 {
-                    var body = JsonSerializer.Serialize(new
+                    // Body: itemTitle + start (ISO) + allDay — FE format start theo locale.
+                    // Không nhét OccurredAt ISO vào preview (hiện raw trên toast).
+                    var payload = new Dictionary<string, object?>
                     {
-                        itemTitle = reminder.EventItem.Title,
-                        preview = string.IsNullOrWhiteSpace(reminder.EventItem.Snippet)
-                            ? reminder.EventItem.OccurredAt.ToString("o")
-                            : reminder.EventItem.Snippet,
-                        start = reminder.EventItem.OccurredAt.ToString("o")
-                    });
+                        ["itemTitle"] = reminder.EventItem.Title,
+                        ["start"] = reminder.EventItem.OccurredAt.ToString("o"),
+                        ["allDay"] = TryGetMetadataBool(reminder.EventItem.MetadataJson, "allDay"),
+                    };
+                    if (!string.IsNullOrWhiteSpace(reminder.EventItem.Snippet))
+                        payload["preview"] = reminder.EventItem.Snippet.Trim();
+
+                    var body = JsonSerializer.Serialize(payload);
 
                     await notificationService.CreateAndSendAsync(
                         userId: reminder.EventItem.UserId,
@@ -139,5 +143,29 @@ public class EventReminderProcessorService : BackgroundService
         }
 
         return baseDate;
+    }
+
+    private static bool TryGetMetadataBool(string metadataJson, string property)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.TryGetProperty(property, out var prop))
+            {
+                return prop.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    JsonValueKind.String => bool.TryParse(prop.GetString(), out var b) && b,
+                    _ => false,
+                };
+            }
+        }
+        catch (JsonException)
+        {
+            // Metadata không hợp lệ — coi như không all-day.
+        }
+
+        return false;
     }
 }

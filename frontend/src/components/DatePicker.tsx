@@ -19,6 +19,8 @@ export interface DatePickerProps {
   onChange: (value: string) => void;
   className?: string;
   placeholder?: string;
+  /** `chip` = Google Calendar style: nền xám mềm, không icon/clear. */
+  variant?: 'default' | 'chip';
   /** Controlled popover — dùng cùng parent để chỉ mở 1 picker/lúc. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -29,7 +31,16 @@ const POP_H = 320;
 /** 7 cột × (2rem + 4px margin) + padding tháng 20px */
 const CALENDAR_POP_W = 7 * 36 + 20;
 
-export function DatePicker({ value, onChange, className, placeholder, open: openProp, onOpenChange }: DatePickerProps) {
+export function DatePicker({
+  value,
+  onChange,
+  className,
+  placeholder,
+  variant = 'default',
+  open: openProp,
+  onOpenChange,
+}: DatePickerProps) {
+  const isChip = variant === 'chip';
   const { t, lang } = useI18n();
   const [internalOpen, setInternalOpen] = useState(false);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
@@ -96,21 +107,23 @@ export function DatePicker({ value, onChange, className, placeholder, open: open
     setOpen(false);
   };
 
-  const baseTrigger = `flex h-9 w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-left text-[13px] outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 ${className ?? ''}`;
+  const baseTrigger = isChip
+    ? `inline-flex h-9 items-center justify-center rounded-md border-0 bg-[#e8eaed] px-3 text-[13px] font-medium text-slate-800 outline-none transition hover:bg-[#dde1e6] dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600 ${className ?? ''}`
+    : `flex h-9 w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-left text-[13px] outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 ${className ?? ''}`;
 
   return (
-    <div className="relative">
+    <div className={isChip ? 'relative inline-block' : 'relative'}>
       <button
         ref={triggerRef}
         type="button"
         onClick={toggleOpen}
-        className={`${baseTrigger} ${open ? '!border-brand-500 ring-2 ring-brand-500/20' : ''}`}
+        className={`${baseTrigger} ${open ? (isChip ? 'ring-2 ring-brand-500/25' : '!border-brand-500 ring-2 ring-brand-500/20') : ''}`}
       >
-        <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
-        <span className={`min-w-0 flex-1 whitespace-nowrap tabular-nums ${selected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+        {!isChip && <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />}
+        <span className={`min-w-0 whitespace-nowrap tabular-nums ${isChip ? '' : 'flex-1'} ${selected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
           {selected ? displayText : (placeholder ?? t('calendar.date'))}
         </span>
-        {selected && (
+        {!isChip && selected && (
           <span
             role="button"
             tabIndex={-1}

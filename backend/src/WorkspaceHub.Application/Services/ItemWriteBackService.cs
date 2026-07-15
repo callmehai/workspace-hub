@@ -772,14 +772,7 @@ public class ItemWriteBackService : IItemWriteBackService
         var list = new List<CalendarEventReminder>();
         foreach (var r in localReminders)
         {
-            int minutes = r.OffsetUnit.ToString().ToLower() switch
-            {
-                "minutes" => r.OffsetValue,
-                "hours" => r.OffsetValue * 60,
-                "days" => r.OffsetValue * 1440,
-                "weeks" => r.OffsetValue * 10080,
-                _ => r.OffsetValue
-            };
+            var minutes = GoogleCalendarReminderMapper.ToGoogleMinutes(r.OffsetUnit, r.OffsetValue, r.TimeOfDay);
 
             var reminderType = NormalizeReminderType(r.ReminderType);
             if (reminderType == ReminderType.GooglePopup)
