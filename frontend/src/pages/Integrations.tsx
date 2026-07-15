@@ -139,7 +139,11 @@ export const Integrations = () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
-    onError: (err) => handleApiError(err, t('integrations.syncFail')),
+    onError: (err) => {
+      // 502 đã ghi Status=Error trên BE — invalidate để badge «Lỗi đồng bộ» hiện ngay, không cần F5.
+      handleApiError(err, t('integrations.syncFail'));
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+    },
   });
 
   const handleConnect = (integrationKey: string, serviceType: string, serviceName: string) => {

@@ -102,5 +102,6 @@ public class ConnectionsController : ApiControllerBase
 
     [HttpPost("{id:guid}/sync")]
     public async Task<IActionResult> SyncConnection(Guid id, CancellationToken ct)
-        => Ok(await _syncDispatcher.SyncAsync(id, CurrentUserId, ct));
+        // markProviderError: sync tay → Status=Error khi Google/Jira fail (toast 502 ↔ badge lỗi đồng bộ).
+        => Ok(await _syncDispatcher.SyncAsync(id, CurrentUserId, ct, markProviderError: true));
 }

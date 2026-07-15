@@ -39,7 +39,11 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
         _jiraSync = jiraSync;
     }
 
-    public async Task<SyncResult> SyncAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    public async Task<SyncResult> SyncAsync(
+        Guid connectionId,
+        Guid userId,
+        CancellationToken ct = default,
+        bool markProviderError = false)
     {
         var connection = await _connections.GetByIdAsync(connectionId, ct);
         if (connection is null || connection.UserId != userId)
@@ -68,10 +72,31 @@ public class ConnectionSyncDispatcher : IConnectionSyncDispatcher
         }
         catch (GoogleApiException ex)
         {
-            throw new ProviderException(
+            var providerEx = new ProviderException(
                 $"Google API trả về lỗi {(int)ex.HttpStatusCode}: {ex.Error?.Message ?? ex.Message}",
                 ex.HttpStatusCode,
                 ex);
+            if (markProviderError)
+                await MarkConnectionErrorAsync(connectionId, providerEx.Message, ct);
+            throw providerEx;
         }
+        catch (ProviderException ex)
+        {
+            // Jira (và gateway khác) throw ProviderException trực tiếp → 502 + Error trên UI khi sync tay.
+            if (markProviderError)
+                await MarkConnectionErrorAsync(connectionId, ex.Message, ct);
+            throw;
+        }
+    }
+
+    private async Task MarkConnectionErrorAsync(Guid connectionId, string message, CancellationToken ct)
+    {
+        var tracked = await _connections.GetByIdTrackedAsync(connectionId, ct);
+        if (tracked is null) return;
+
+        tracked.Status = ConnectionStatus.Error;
+        tracked.LastError = message;
+        _connections.Update(tracked);
+        await _connections.SaveChangesAsync(ct);
     }
 }

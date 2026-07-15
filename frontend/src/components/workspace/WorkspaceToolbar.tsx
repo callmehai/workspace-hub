@@ -313,6 +313,7 @@ export const WorkspaceToolbar = ({
       } catch (err) {
         toast.error(t('integrations.syncErrorToast'), { id: toastId });
         handleApiError(err, t('integrations.syncErrorToast'), { navigate });
+        queryClient.invalidateQueries({ queryKey: ['connections'] });
       }
     } catch (err) {
       handleApiError(err, t('integrations.connectionsError'), { navigate });
