@@ -53,7 +53,7 @@ public class ConnectionHealthCheckerTests
         await _checker.EnsureAllSyncedAsync(userId);
 
         _connectionRepoMock.Verify(r => r.GetByIdTrackedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-        _syncDispatcherMock.Verify(s => s.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Fact]
@@ -77,13 +77,13 @@ public class ConnectionHealthCheckerTests
             .Setup(r => r.GetByIdTrackedAsync(conn.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(conn);
         _syncDispatcherMock
-            .Setup(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync(new SyncResult(10, 5, 0, "cursor"));
 
         await _checker.EnsureAllSyncedAsync(userId);
 
         _connectionsServiceMock.Verify(s => s.RefreshConnectionAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-        _syncDispatcherMock.Verify(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()), Times.Once);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Once);
     }
 
     [Fact]
@@ -119,13 +119,13 @@ public class ConnectionHealthCheckerTests
             .ReturnsAsync(refreshedConn); // Second call after refresh
 
         _syncDispatcherMock
-            .Setup(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync(new SyncResult(10, 5, 0, "cursor"));
 
         await _checker.EnsureAllSyncedAsync(userId);
 
         _connectionsServiceMock.Verify(s => s.RefreshConnectionAsync(conn.Id, userId, It.IsAny<CancellationToken>()), Times.Once);
-        _syncDispatcherMock.Verify(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()), Times.Once);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Once);
     }
 
     [Fact]
@@ -166,13 +166,13 @@ public class ConnectionHealthCheckerTests
             .ThrowsAsync(new Exception("Revoked"));
         
         _syncDispatcherMock
-            .Setup(s => s.SyncAsync(conn2.Id, conn2.UserId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.SyncAsync(conn2.Id, conn2.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync(new SyncResult(10, 5, 0, "cursor"));
 
         await _checker.EnsureAllSyncedAsync(userId);
 
         // Conn1 sync is skipped
-        _syncDispatcherMock.Verify(s => s.SyncAsync(conn1.Id, conn1.UserId, It.IsAny<CancellationToken>()), Times.Never);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn1.Id, conn1.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
         
         // Assert conn1 is marked as needing re-auth
         Assert.Equal(ConnectionStatus.Error, conn1.Status);
@@ -182,7 +182,7 @@ public class ConnectionHealthCheckerTests
         _connectionRepoMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
 
         // Conn2 sync still happens
-        _syncDispatcherMock.Verify(s => s.SyncAsync(conn2.Id, conn2.UserId, It.IsAny<CancellationToken>()), Times.Once);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(conn2.Id, conn2.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Once);
     }
 
     [Fact]
@@ -208,6 +208,6 @@ public class ConnectionHealthCheckerTests
 
         await _checker.EnsureAllSyncedAsync(userId);
 
-        _syncDispatcherMock.Verify(s => s.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _syncDispatcherMock.Verify(s => s.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
     }
 }

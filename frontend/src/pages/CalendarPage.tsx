@@ -12,6 +12,7 @@ import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import type { CalendarEventDetailResponse, ItemResponse, PagedResult, PatchItemRequest } from '../types/items';
 import { useI18n } from '../hooks/useI18n';
 import { usePollingInterval } from '../hooks/usePollingInterval';
+import type { TranslationKey } from '../i18n/translations';
 import { handleApiError } from '../lib/errorUtils';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { parseSourceType } from '../lib/itemVisuals';
@@ -246,13 +247,21 @@ function entryOccursOn(entry: CalendarEntry, day: Date) {
     && day < new Date(endExclusive.getFullYear(), endExclusive.getMonth(), endExclusive.getDate());
 }
 
-function formatMonthTitle(date: Date, lang: 'vi' | 'en', t: (k: any, v?: any) => string) {
+function formatMonthTitle(
+  date: Date,
+  lang: 'vi' | 'en',
+  t: (k: TranslationKey, v?: Record<string, string | number>) => string,
+) {
   return lang === 'vi'
     ? t('calendar.monthYear', { month: date.getMonth() + 1, year: date.getFullYear() })
     : new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date);
 }
 
-function formatWeekTitle(start: Date, lang: 'vi' | 'en', t: (k: any, v?: any) => string) {
+function formatWeekTitle(
+  start: Date,
+  lang: 'vi' | 'en',
+  t: (k: TranslationKey, v?: Record<string, string | number>) => string,
+) {
   const end = addDays(start, 6);
   if (lang === 'vi') {
     return start.getMonth() === end.getMonth()
@@ -495,9 +504,12 @@ export function CalendarPage() {
       && cursor.getFullYear() === entry.start.getFullYear()
       && cursor.getMonth() === entry.start.getMonth();
     if (!onEventMonth) {
-      setRange('month');
-      setCursor(entry.start);
-      return;
+      // Deferred: tránh setState sync trong effect (react-hooks/set-state-in-effect).
+      const navigateToEventMonth = window.setTimeout(() => {
+        setRange('month');
+        setCursor(entry.start);
+      }, 0);
+      return () => window.clearTimeout(navigateToEventMonth);
     }
 
     // 2) Chip đã render → click như user (openEntry tự lấy anchor).

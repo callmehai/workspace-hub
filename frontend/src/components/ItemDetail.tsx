@@ -86,16 +86,18 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
+  const closeFolderPicker = () => {
+    setIsAddingToFolder(false);
+    setFolderSearch('');
+  };
+
   // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
-    if (!isAddingToFolder) {
-      setFolderSearch('');
-      return;
-    }
+    if (!isAddingToFolder) return;
     const onDocClick = (e: MouseEvent) => {
-      if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) setIsAddingToFolder(false);
+      if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) closeFolderPicker();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsAddingToFolder(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeFolderPicker(); };
     document.addEventListener('mousedown', onDocClick, true);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -640,7 +642,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             {/* Add to folder button & dropdown */}
             <div className="relative" ref={addFolderRef}>
               <button
-                onClick={() => setIsAddingToFolder(!isAddingToFolder)}
+                onClick={() => {
+                  if (isAddingToFolder) closeFolderPicker();
+                  else {
+                    setFolderSearch('');
+                    setIsAddingToFolder(true);
+                  }
+                }}
                 className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-[12px] font-medium"
                 title={t('item.addToFolder')}
               >
@@ -671,7 +679,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                           key={f.id}
                           onClick={() => {
                             addToFolderMutation.mutate(f.id);
-                            setIsAddingToFolder(false);
+                            closeFolderPicker();
                           }}
                           disabled={addToFolderMutation.isPending}
                           className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"

@@ -26,8 +26,10 @@ export function useNotificationHub(): void {
   const queryClientRef = useRef(queryClient);
   const navigateRef = useRef(navigate);
 
-  queryClientRef.current = queryClient;
-  navigateRef.current = navigate;
+  useEffect(() => {
+    queryClientRef.current = queryClient;
+    navigateRef.current = navigate;
+  }, [queryClient, navigate]);
 
   useEffect(() => {
     if (!userId) {

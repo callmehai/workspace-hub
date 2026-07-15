@@ -51,13 +51,13 @@ public class ProcessConnectionsSyncServiceTests
     {
         var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
         SetupTracked(conn);
-        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync(new SyncResult(10, 2, 1, "cursor"));
 
         var result = await _sut.ProcessConnectionsSyncAsync();
 
         result.SuccessCount.Should().Be(1);
-        _dispatcher.Verify(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()), Times.Once);
+        _dispatcher.Verify(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Once);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class ProcessConnectionsSyncServiceTests
         var result = await _sut.ProcessConnectionsSyncAsync();
 
         result.SkippedCount.Should().Be(1);
-        _dispatcher.Verify(d => d.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _dispatcher.Verify(d => d.SyncAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class ProcessConnectionsSyncServiceTests
     {
         var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
         SetupTracked(conn);
-        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ThrowsAsync(new InvalidOperationException("API fail"));
 
         var result = await _sut.ProcessConnectionsSyncAsync();
@@ -91,7 +91,7 @@ public class ProcessConnectionsSyncServiceTests
     {
         var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
         SetupTracked(conn);
-        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ThrowsAsync(new ProviderException("Google API trả về lỗi 403: invalid_grant", HttpStatusCode.Forbidden));
 
         var result = await _sut.ProcessConnectionsSyncAsync();
@@ -105,7 +105,7 @@ public class ProcessConnectionsSyncServiceTests
     {
         var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
         SetupTracked(conn);
-        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ThrowsAsync(new ProviderException("Google API trả về lỗi 503: unavailable", HttpStatusCode.ServiceUnavailable));
 
         var result = await _sut.ProcessConnectionsSyncAsync();
@@ -119,7 +119,7 @@ public class ProcessConnectionsSyncServiceTests
     {
         var conn = ActiveConnection(lastSyncedMinutesAgo: 5);
         SetupTracked(conn);
-        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>()))
+        _dispatcher.Setup(d => d.SyncAsync(conn.Id, conn.UserId, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ThrowsAsync(new ForbiddenException("Token revoked"));
 
         var result = await _sut.ProcessConnectionsSyncAsync();

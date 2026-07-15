@@ -219,14 +219,16 @@ export function CalendarEventEditorModal({
   const [folderSearch, setFolderSearch] = useState('');
   const addFolderRef = useRef<HTMLDivElement>(null);
 
+  const closeFolderPicker = () => {
+    setIsAddingToFolder(false);
+    setFolderSearch('');
+  };
+
   useEffect(() => {
-    if (!isAddingToFolder) {
-      setFolderSearch('');
-      return;
-    }
+    if (!isAddingToFolder) return;
     const onDocClick = (e: MouseEvent) => {
       if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) {
-        setIsAddingToFolder(false);
+        closeFolderPicker();
       }
     };
     document.addEventListener('mousedown', onDocClick, true);
@@ -825,7 +827,13 @@ export function CalendarEventEditorModal({
                       <div className="relative" ref={addFolderRef}>
                         <button
                           type="button"
-                          onClick={() => setIsAddingToFolder(!isAddingToFolder)}
+                          onClick={() => {
+                            if (isAddingToFolder) closeFolderPicker();
+                            else {
+                              setFolderSearch('');
+                              setIsAddingToFolder(true);
+                            }
+                          }}
                           className="inline-flex items-center justify-center gap-1 h-[24px] px-2.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-white transition-colors text-[11px] font-semibold"
                           title={t('calendar.addToFolder')}
                         >
@@ -858,7 +866,7 @@ export function CalendarEventEditorModal({
                                     onClick={() => {
                                       const nextIds = [...(form.folderIds ?? []), f.id];
                                       setForm(curr => ({ ...curr, folderIds: nextIds }));
-                                      setIsAddingToFolder(false);
+                                      closeFolderPicker();
                                     }}
                                     className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
                                   >

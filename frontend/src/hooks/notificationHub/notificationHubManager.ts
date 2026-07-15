@@ -78,13 +78,9 @@ function waitBeforeRetry(delayMs: number, signal: AbortSignal): Promise<void> {
     }
 
     let settled = false;
-    let timerId: number | undefined;
 
     const cleanup = () => {
-      if (timerId !== undefined) {
-        window.clearTimeout(timerId);
-      }
-
+      window.clearTimeout(timerId);
       signal.removeEventListener('abort', finish);
       window.removeEventListener('online', finish);
       document.removeEventListener('visibilitychange', onVisibilityChange);
@@ -104,7 +100,7 @@ function waitBeforeRetry(delayMs: number, signal: AbortSignal): Promise<void> {
       }
     };
 
-    timerId = window.setTimeout(finish, delayMs);
+    const timerId = window.setTimeout(finish, delayMs);
 
     signal.addEventListener('abort', finish, { once: true });
     window.addEventListener('online', finish, { once: true });
