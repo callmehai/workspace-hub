@@ -33,6 +33,8 @@ public class AppDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<EventReminder> EventReminders => Set<EventReminder>();
     public DbSet<CalendarInvitation> CalendarInvitations => Set<CalendarInvitation>();
+    public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<FriendInvite> FriendInvites => Set<FriendInvite>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder cfg)
     {
@@ -52,6 +54,8 @@ public class AppDbContext : DbContext
         cfg.Properties<AuthProvider>().HaveConversion<string>().HaveMaxLength(10);
         cfg.Properties<ReminderUnit>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<CalendarInvitationStatus>().HaveConversion<string>().HaveMaxLength(20);
+        cfg.Properties<FriendshipStatus>().HaveConversion<string>().HaveMaxLength(20);
+        cfg.Properties<FriendTier>().HaveConversion<string>().HaveMaxLength(20);
 
         // DateTime → luôn UTC.
         cfg.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
@@ -172,6 +176,41 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.CreatedByUserId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // ---------- Bạn bè nội bộ app ----------
+        b.Entity<Friendship>(e =>
+        {
+            e.HasKey(x => x.Id);
+            // 1 row / cặp; chiều ngược kiểm tra ở service (query cả 2 chiều trước khi tạo).
+            e.HasIndex(x => new { x.RequesterId, x.AddresseeId }).IsUnique();
+            e.HasIndex(x => x.AddresseeId);
+
+            // Hai FK trỏ về Users → NoAction để tránh multiple cascade path (như FolderShare).
+            e.HasOne(x => x.Requester)
+                .WithMany()
+                .HasForeignKey(x => x.RequesterId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            e.HasOne(x => x.Addressee)
+                .WithMany()
+                .HasForeignKey(x => x.AddresseeId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        b.Entity<FriendInvite>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Token).HasMaxLength(64).IsRequired();
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => x.Email);                                          // consume theo email khi user mới đăng ký
+            e.HasIndex(x => new { x.InviterUserId, x.Email }).IsUnique();      // 1 invite sống / (inviter, email)
+
+            e.HasOne(x => x.Inviter)
+                .WithMany()
+                .HasForeignKey(x => x.InviterUserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<ItemFolder>(e =>

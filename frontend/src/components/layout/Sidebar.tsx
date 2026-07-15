@@ -5,6 +5,7 @@ import {
   Plug,
   Clock,
   Send,
+  Users,
   LayoutDashboard,
   LogOut,
   Plus,
@@ -233,6 +234,11 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
           <NavLink to="/scheduled-emails" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
             <Clock className="w-[18px] h-[18px] shrink-0" />
             <span className="flex-1 text-left">{t('nav.scheduledEmails')}</span>
+          </NavLink>
+
+          <NavLink to="/friends" onClick={() => onMobileClose?.()} className={({ isActive }) => navItemClass(isActive)}>
+            <Users className="w-[18px] h-[18px] shrink-0" />
+            <span className="flex-1 text-left">{t('nav.friends')}</span>
           </NavLink>
 
           {user?.role === 'Admin' && (

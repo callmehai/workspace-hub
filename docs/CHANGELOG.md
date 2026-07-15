@@ -20,7 +20,7 @@
 ## [2026-07-12] Jira deadline trên Calendar — sync `fields.duedate`
 
 - **Gap:** FE overlay Jira đã có (violet, read-only) nhưng `JiraItemMapper` không map `fields.duedate` → `DueAt`/`metadata.dueDate` luôn null → ticket không lên lịch; overlap query còn match ticket theo `OccurredAt=updated` (sai).
-- **BE:** `JiraGateway` request thêm field `duedate`; `JiraIssue.DueDate`; mapper: có due → `OccurredAt`=start ngày UTC, `DueAt`=end exclusive (+1 ngày, all-day), `metadata.dueDate`=`yyyy-MM-dd`; không due → `OccurredAt=updated`, `DueAt=null`. `JiraSyncService` + `PatchTicketAsync` cập nhật `DueAt` khi re-sync/remap.
+- **BE:** `JiraGateway` request thêm field `duedate`; `JiraIssue.DueDate`; mapper: có due → `OccurredAt`=start ngày UTC, `DueAt`=end exclusive (+1 ngày, all-day), `metadata.dueDate`=`yyyy-MM-dd`; không due → `OccurredAt=updated`, `DueAt`=null`. `JiraSyncService` + `PatchTicketAsync` cập nhật `DueAt` khi re-sync/remap.
 - **Query:** `ItemRepository` calendar overlap loại Ticket không có `DueAt` (chỉ deadline mới lên lịch).
 - **Re-sync:** ticket đã sync trước đó cần sync lại connection Jira để populate deadline.
 - **Tests:** `JiraItemMapperTests` (+2 case due date).
@@ -63,6 +63,17 @@
 - **Ba lớp thời gian:** Google Calendar Event (amber, CRUD/write-back), ScheduledEmail Pending (blue, read-only, mở màn Email hẹn giờ), Jira deadline (violet, read-only, mở ItemDetail). Khi vào folder, chỉ Item Event/Ticket đã gắn folder được hiển thị; ScheduledEmail hiện chỉ có ở lịch chung vì schema chưa có FolderId.
 - **Drag/drop:** chỉ Event có `draggable`; month drop giữ giờ hiện tại, week timed-slot drop đổi ngày+giờ, week all-day row đổi thành cả ngày. Jira/ScheduledEmail tuyệt đối read-only trên lịch.
 - **Contract BE cần khớp:** FE gửi `allDay` kèm `start/end` để tương thích API hiện tại; BE Calendar cần map `allDay=true` sang `EventDateTime.Date` để Google lưu đúng event cả ngày. Jira overlay đọc `ItemResponse.dueAt` hoặc `metadata.dueDate`; Jira sync phải populate một trong hai field thì deadline mới xuất hiện.
+
+## [2026-07-10] Friend system nội bộ app (đổi hướng từ Google Contacts)
+
+> **Quyết định scope:** bỏ hướng đồng bộ Google Contacts / People API (PR #100) — bạn bè chỉ có ý nghĩa TRONG app, không liên kết bên thứ 3. Kết bạn = nhập email gửi lời mời.
+
+- **Model:** `Friendships` (1 row/cặp, Requester→Addressee, Status Pending/Accepted, tier `Friend`/`CloseFriend` lưu RIÊNG từng phía, 2 FK Users NoAction) + `FriendInvites` (email chưa có tài khoản: Token unique, hạn 14 ngày, UNIQUE(inviter,email)). Migration `AddFriendSystem`.
+- **Luồng kết bạn:** email đã có tài khoản → Pending + notification (`FriendRequest`); phía kia mời mình trước → auto-accept; chưa có tài khoản → invite + **mail mời gửi qua chính Gmail connection của người mời** (không SMTP riêng; không gửi được → FE hiện link copy). Link `{App:FrontendBaseUrl}/register?inviteToken=`.
+- **Consume khi đăng ký** (`AuthService` hook, best-effort không fail register): token khớp → bạn bè NGAY (bấm link = đồng ý); đăng ký/Google Sign-In trùng email không token → chuyển thành lời mời Pending in-app.
+- **API:** `GET /api/friends` (overview), `POST /api/friends/requests`, `POST /api/friends/{id}/accept`, `DELETE /api/friends/{id}` (decline/hủy/unfriend), `PATCH /api/friends/{id}/tier`, `DELETE /api/friends/invites/{id}`, public `GET /api/friends/invites/by-token/{token}`. `POST /api/auth/register` thêm `inviteToken?`.
+- **FE:** trang `/friends` (form kết bạn, lời mời đến/đi, invite email + copy link, badge Bạn thân ⭐, gửi mail nhanh cho bạn → `/send-email?to=`), sidebar mục Bạn bè, RegisterPage banner "X mời bạn" + prefill email. Config mới `App:FrontendBaseUrl` (prod: `App__FrontendBaseUrl` trong docker-compose).
+- **Tương lai (chưa làm):** share folder cho bạn theo role, tạo event cùng bạn, nhóm bạn tuỳ biến.
 
 ## [2026-07-10] Jira description = Markdown subset 2 chiều + UX nháp/confirm
 

@@ -104,7 +104,9 @@ public enum NotificationType
     ScheduleSent,
     ItemSynced,
     CalendarReminder,
-    CalendarInvite
+    CalendarInvite,
+    FriendRequest,   // nhận lời mời kết bạn
+    FriendAccepted   // lời mời kết bạn được chấp nhận
 }
 
 /// <summary>Trạng thái phản hồi lời mời Calendar, tương ứng responseStatus của Google.</summary>
@@ -131,4 +133,18 @@ public enum ReminderUnit
     Hours,
     Days,
     Weeks
+}
+
+/// <summary>Trạng thái quan hệ bạn bè. Decline/unfriend = xoá row (không lưu trạng thái từ chối).</summary>
+public enum FriendshipStatus
+{
+    Pending,
+    Accepted
+}
+
+/// <summary>Hạng bạn bè (per-side): thường / thân. Mở rộng sau nếu cần nhóm khác.</summary>
+public enum FriendTier
+{
+    Friend,
+    CloseFriend
 }

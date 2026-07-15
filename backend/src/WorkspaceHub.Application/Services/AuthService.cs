@@ -31,6 +31,7 @@ public class AuthService : IAuthService
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
     private readonly IJwtTokenFactory _jwt;
     private readonly IOtpService _otp;
+    private readonly IFriendService _friends;
 
     private const string GoogleAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string GoogleTokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -48,7 +49,8 @@ public class AuthService : IAuthService
         IOAuthTokenClient tokenClient,
         IGoogleTokenVerifier googleTokenVerifier,
         IJwtTokenFactory jwt,
-        IOtpService otp)
+        IOtpService otp,
+        IFriendService friends)
     {
         _users = users;
         _config = config;
@@ -59,6 +61,7 @@ public class AuthService : IAuthService
         _googleTokenVerifier = googleTokenVerifier;
         _jwt = jwt;
         _otp = otp;
+        _friends = friends;
     }
 
     public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
@@ -88,6 +91,9 @@ public class AuthService : IAuthService
 
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
+
+        // Bấm link mời kết bạn (?inviteToken=) → thành bạn với inviter; invite khác trùng email → pending.
+        await _friends.ConsumeInvitesOnRegistrationAsync(user.Id, email, request.InviteToken, ct);
 
         var cooldown = await _otp.SendAsync(user.Id, user.Phone, ct);
         return new RegisterResult(user.Email, RequiresPhoneVerification: true, cooldown);
@@ -290,6 +296,9 @@ public class AuthService : IAuthService
 
         await _users.AddAsync(newUser, ct);
         await _users.SaveChangesAsync(ct);
+
+        // User mới qua Google: consume invite kết bạn trùng email (không có token → thành pending).
+        await _friends.ConsumeInvitesOnRegistrationAsync(newUser.Id, email, inviteToken: null, ct);
 
         var (token, expiresIn) = _jwt.CreateAccessToken(newUser);
         return new AuthResponse(token, expiresIn, MapToDto(newUser));

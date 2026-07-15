@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../hooks/useI18n';
 import { sendEmailApi, type ContactSuggestion } from '../lib/sendEmailApi';
+import { friendsApi } from '../lib/friendsApi';
+
+/** Gợi ý = bạn bè trong app (ưu tiên, Bạn thân trước) + cache contact Google. */
+type Suggestion = ContactSuggestion & { tier?: 'Friend' | 'CloseFriend' };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEBOUNCE_MS = 300;
@@ -50,9 +54,26 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId, cl
     retry: false,
   });
 
-  const filtered = suggestions.filter(
-    (s) => !value.some((v) => v.toLowerCase() === s.email.toLowerCase())
-  );
+  // Bạn bè trong app — không cần connectionId, khớp theo tên HOẶC email, Bạn thân lên đầu.
+  const { data: friendsOverview } = useQuery({
+    queryKey: ['friends'],
+    queryFn: friendsApi.getOverview,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const q = debouncedQ.toLowerCase();
+  const friendMatches: Suggestion[] = q.length >= 2
+    ? (friendsOverview?.friends ?? [])
+        .filter((f) => f.email.toLowerCase().includes(q) || f.fullName.toLowerCase().includes(q))
+        .sort((a, b) => Number(b.myTier === 'CloseFriend') - Number(a.myTier === 'CloseFriend'))
+        .map((f) => ({ email: f.email, displayName: f.fullName, tier: f.myTier }))
+    : [];
+  const friendEmails = new Set(friendMatches.map((f) => f.email.toLowerCase()));
+
+  const filtered: Suggestion[] = [
+    ...friendMatches,
+    ...suggestions.filter((s) => !friendEmails.has(s.email.toLowerCase())),
+  ].filter((s) => !value.some((v) => v.toLowerCase() === s.email.toLowerCase()));
 
   /** Index đang highlight trong dropdown — luôn nằm trong [0, filtered.length). */
   const selectedIndex = filtered.length === 0 ? 0 : Math.min(activeIdx, filtered.length - 1);
@@ -146,7 +167,7 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId, cl
     if (/[,;\s]/.test(text)) { e.preventDefault(); addFrom(text); }
   };
 
-  const showDropdown = open && suggestEnabled && filtered.length > 0;
+  const showDropdown = open && filtered.length > 0;
 
   return (
     <div ref={wrapRef} className={`relative min-w-0 ${className ?? 'mb-3'}`}>
@@ -200,28 +221,68 @@ export function EmailChipsInput({ value, onChange, placeholder, connectionId, cl
 
       {showDropdown && (
         <ul
-          className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg py-1"
+          className="absolute z-50 left-0 right-0 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-900/5 dark:shadow-black/30 py-1.5"
           role="listbox"
         >
-          {filtered.map((s, i) => (
-            <li key={s.email} role="option" aria-selected={i === selectedIndex}>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pickSuggestion(s)}
-                className={`w-full text-left px-3 py-2 text-sm flex flex-col gap-0.5 ${
-                  i === selectedIndex
-                    ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-800 dark:text-brand-300'
-                    : 'text-slate-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/60'
-                }`}
-              >
-                <span className="font-medium truncate">{s.displayName ?? s.email}</span>
-                {s.displayName && (
-                  <span className="text-xs text-gray-500 dark:text-slate-400 truncate">{s.email}</span>
-                )}
-              </button>
-            </li>
-          ))}
+          {filtered.map((s, i) => {
+            const isFriend = !!s.tier;
+            const isClose = s.tier === 'CloseFriend';
+            // Google đôi khi trả displayName = chính email → coi như KHÔNG có tên (tránh in trùng 2 dòng).
+            const name = s.displayName && s.displayName.trim().toLowerCase() !== s.email.trim().toLowerCase()
+              ? s.displayName : null;
+            const initial = (name ?? s.email).charAt(0).toUpperCase();
+            return (
+              <li key={s.email} role="option" aria-selected={i === selectedIndex}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickSuggestion(s)}
+                  className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${
+                    i === selectedIndex
+                      ? 'bg-brand-50 dark:bg-brand-500/10'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-700/60'
+                  }`}
+                >
+                  {/* Avatar chữ cái đầu — vàng = Bạn thân, brand = Bạn bè, xám = danh bạ Google */}
+                  <span
+                    className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-[13px] font-semibold ${
+                      isClose
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                        : isFriend
+                          ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300'
+                          : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {initial}
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className={`truncate text-[13.5px] font-medium ${
+                        i === selectedIndex ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'
+                      }`}>
+                        {name ?? s.email}
+                      </span>
+                      {isClose && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
+                    </span>
+                    {name && (
+                      <span className="block truncate text-xs text-slate-400 dark:text-slate-500">{s.email}</span>
+                    )}
+                  </span>
+
+                  {isFriend && (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      isClose
+                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                        : 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+                    }`}>
+                      {isClose ? t('friends.closeFriend') : t('friends.list')}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

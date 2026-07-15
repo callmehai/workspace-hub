@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, UserPlus } from 'lucide-react';
 import { authApi } from '../lib/authApi';
+import { friendsApi } from '../lib/friendsApi';
 import { EMAIL_RE } from '../lib/validation';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 import { ThemeLangControls } from '../components/ThemeLangControls';
@@ -17,8 +18,24 @@ const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 export const RegisterPage = () => {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const [searchParams] = useSearchParams();
+  // Link mời kết bạn: /register?inviteToken= → đăng ký xong tự thành bạn với người mời.
+  const inviteToken = searchParams.get('inviteToken');
+
+  const { data: invite } = useQuery({
+    queryKey: ['friend-invite', inviteToken],
+    queryFn: () => friendsApi.getInviteByToken(inviteToken!),
+    enabled: !!inviteToken,
+    retry: false,
+  });
+
   const [fullName, setFullName] = useState('');
+  // Prefill email được mời — BE consume invite theo email đăng ký, đổi email khác sẽ không tự kết bạn.
   const [email, setEmail] = useState('');
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill 1 lần khi invite load xong
+    if (invite?.email) setEmail((cur) => cur || invite.email);
+  }, [invite]);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -30,7 +47,7 @@ export const RegisterPage = () => {
   const [banner, setBanner] = useState('');
 
   const register = useMutation({
-    mutationFn: () => authApi.register({ fullName, email, password, phone }),
+    mutationFn: () => authApi.register({ fullName, email, password, phone, inviteToken: inviteToken ?? undefined }),
     onSuccess: (result) => {
       toast.success(t('register.otpSent'));
       // SCRUM-64: chưa đăng nhập — sang màn nhập OTP, mang email + cooldown.
@@ -94,6 +111,13 @@ export const RegisterPage = () => {
         <div className="rounded-[14px] border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-7 shadow-sm">
           <h1 className="mb-1 text-[22px] font-semibold text-slate-900 dark:text-slate-100">{t('register.title')}</h1>
           <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">{t('register.subtitle')}</p>
+
+          {invite && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 dark:border-brand-500/30 dark:bg-brand-500/10 px-3 py-2.5 text-[13px] text-brand-700 dark:text-brand-300">
+              <UserPlus className="h-4 w-4 flex-none" />
+              <span>{t('register.friendInviteBanner', { name: invite.inviterName })}</span>
+            </div>
+          )}
 
           {banner && (
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/40 px-3 py-2.5 text-[13px] text-red-700 dark:text-red-300">

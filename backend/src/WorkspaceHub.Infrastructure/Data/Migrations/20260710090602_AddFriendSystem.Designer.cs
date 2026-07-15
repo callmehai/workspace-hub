@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WorkspaceHub.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using WorkspaceHub.Infrastructure.Data;
 namespace WorkspaceHub.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260710090602_AddFriendSystem")]
+    partial class AddFriendSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,72 +24,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.CalendarInvitation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("GoogleEventId")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("nvarchar(512)");
-
-                    b.Property<bool>("GoogleSyncPending")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("ICalUid")
-                        .HasMaxLength(512)
-                        .HasColumnType("nvarchar(512)");
-
-                    b.Property<string>("InviteeEmail")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("nvarchar(320)");
-
-                    b.Property<Guid?>("InviteeItemId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("InviteeUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("OrganizerItemId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("OrganizerUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("RespondedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InviteeItemId");
-
-                    b.HasIndex("OrganizerUserId");
-
-                    b.HasIndex("ICalUid", "InviteeEmail")
-                        .HasFilter("[ICalUid] IS NOT NULL");
-
-                    b.HasIndex("OrganizerItemId", "InviteeEmail")
-                        .IsUnique();
-
-                    b.HasIndex("InviteeUserId", "Status", "UpdatedAt");
-
-                    b.ToTable("CalendarInvitations");
-                });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Connection", b =>
                 {
@@ -155,45 +92,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Connections");
-                });
-
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.EventReminder", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("EventItemId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("IsSent")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("OffsetUnit")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<int>("OffsetValue")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ReminderType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("TimeOfDay")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EventItemId");
-
-                    b.ToTable("EventReminders");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Folder", b =>
@@ -823,40 +721,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.CalendarInvitation", b =>
-                {
-                    b.HasOne("WorkspaceHub.Domain.Entities.Item", "InviteeItem")
-                        .WithMany()
-                        .HasForeignKey("InviteeItemId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("WorkspaceHub.Domain.Entities.User", "InviteeUser")
-                        .WithMany("ReceivedCalendarInvitations")
-                        .HasForeignKey("InviteeUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("WorkspaceHub.Domain.Entities.Item", "OrganizerItem")
-                        .WithMany()
-                        .HasForeignKey("OrganizerItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("WorkspaceHub.Domain.Entities.User", "OrganizerUser")
-                        .WithMany()
-                        .HasForeignKey("OrganizerUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("InviteeItem");
-
-                    b.Navigation("InviteeUser");
-
-                    b.Navigation("OrganizerItem");
-
-                    b.Navigation("OrganizerUser");
-                });
-
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Connection", b =>
                 {
                     b.HasOne("WorkspaceHub.Domain.Entities.Integration", "Integration")
@@ -874,17 +738,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Navigation("Integration");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("WorkspaceHub.Domain.Entities.EventReminder", b =>
-                {
-                    b.HasOne("WorkspaceHub.Domain.Entities.Item", "EventItem")
-                        .WithMany("Reminders")
-                        .HasForeignKey("EventItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("EventItem");
                 });
 
             modelBuilder.Entity("WorkspaceHub.Domain.Entities.Folder", b =>
@@ -1099,8 +952,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                 {
                     b.Navigation("ItemFolders");
 
-                    b.Navigation("Reminders");
-
                     b.Navigation("TagAssignments");
                 });
 
@@ -1120,8 +971,6 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                     b.Navigation("Items");
 
                     b.Navigation("Notifications");
-
-                    b.Navigation("ReceivedCalendarInvitations");
 
                     b.Navigation("ScheduledEmails");
 

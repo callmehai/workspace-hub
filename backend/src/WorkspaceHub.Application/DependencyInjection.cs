@@ -56,6 +56,9 @@ public static class DependencyInjection
 
         // Tags (SCRUM-70)
         services.AddScoped<ITagService, TagService>();
+
+        // Bạn bè nội bộ app
+        services.AddScoped<IFriendService, FriendService>();
         services.AddScoped<IConnectionSyncDispatcher, ConnectionSyncDispatcher>();
         services.AddScoped<ISyncItemNotificationService, SyncItemNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();
