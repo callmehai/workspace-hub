@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { connectionsApi } from '../../lib/connectionsApi';
 import type { ApiErrorResponse } from '../../lib/errorUtils';
@@ -12,6 +12,7 @@ import { useI18n } from '../../hooks/useI18n';
 export const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { t } = useI18n();
 
   const code = searchParams.get('code');
@@ -21,6 +22,10 @@ export const OAuthCallback = () => {
     mutationFn: connectionsApi.oauthCallback,
     onSuccess: () => {
       toast.success(t('oauth.connected'));
+      // Connection mới → cache cũ (connections + metadata Jira) đã stale.
+      // Không invalidate ở đây thì phải F5 mới thấy dự án/người phụ trách.
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['jira'] });
       navigate('/integrations');
     },
     onError: (err) => {

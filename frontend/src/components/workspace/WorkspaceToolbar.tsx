@@ -283,6 +283,8 @@ export const WorkspaceToolbar = ({
         toast.success(t('toolbar.syncDone'), { id: toastId });
         queryClient.invalidateQueries({ queryKey: ['items'] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
+        // Metadata Jira (project + assignee) suy từ ticket vừa sync → phải refetch cùng.
+        queryClient.invalidateQueries({ queryKey: ['jira'] });
       } catch (err) {
         toast.error(t('integrations.syncErrorToast'), { id: toastId });
         handleApiError(err, t('integrations.syncErrorToast'), { navigate });
