@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock, X } from 'lucide-react';
 import './DateTimePicker.css';
@@ -44,24 +44,48 @@ interface ScrollColumnProps {
 function ScrollColumn({ label, items, selected, onSelect, scrollKey }: ScrollColumnProps) {
   const listRef = useRef<HTMLUListElement>(null);
 
+  // We repeat the items 5 times to create a looping list
+  const repeatedItems = useMemo(() => {
+    const result: { value: number; key: string }[] = [];
+    for (let c = 0; c < 5; c++) {
+      items.forEach((item, idx) => {
+        result.push({ value: item, key: `${c}-${idx}-${item}` });
+      });
+    }
+    return result;
+  }, [items]);
+
   useEffect(() => {
-    const el = listRef.current?.querySelector('[data-selected="true"]');
-    el?.scrollIntoView({ block: 'center' });
+    const el = listRef.current;
+    if (!el) return;
+    const selectedButtons = el.querySelectorAll('[data-selected="true"]');
+    const middleBtn = selectedButtons[2] || selectedButtons[0];
+    middleBtn?.scrollIntoView({ block: 'center' });
   }, [scrollKey, selected]);
+
+  const handleScroll = (e: React.UIEvent<HTMLUListElement>) => {
+    const el = e.currentTarget;
+    const singleSetHeight = el.scrollHeight / 5;
+    if (el.scrollTop < singleSetHeight) {
+      el.scrollTop += singleSetHeight * 2;
+    } else if (el.scrollTop > el.scrollHeight - singleSetHeight * 2) {
+      el.scrollTop -= singleSetHeight * 2;
+    }
+  };
 
   return (
     <div className="wh-time-picker__column">
       <p className="wh-time-picker__caption">{label}</p>
-      <ul ref={listRef} className="wh-time-picker__list hide-scrollbar">
-        {items.map(item => (
-          <li key={item}>
+      <ul ref={listRef} onScroll={handleScroll} className="wh-time-picker__list hide-scrollbar">
+        {repeatedItems.map(({ value, key }) => (
+          <li key={key}>
             <button
               type="button"
-              data-selected={item === selected ? 'true' : undefined}
-              className={`wh-time-picker__item${item === selected ? ' wh-time-picker__item--selected' : ''}`}
-              onClick={() => onSelect(item)}
+              data-selected={value === selected ? 'true' : undefined}
+              className={`wh-time-picker__item${value === selected ? ' wh-time-picker__item--selected' : ''}`}
+              onClick={() => onSelect(value)}
             >
-              {String(item).padStart(2, '0')}
+              {String(value).padStart(2, '0')}
             </button>
           </li>
         ))}

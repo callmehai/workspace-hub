@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   CalendarDays,
@@ -366,15 +366,35 @@ export function CalendarEventEditorModal({
   const submit = () => {
     const title = form.title.trim();
     const endDate = form.endDate || form.date;
-    if (!form.connectionId || !title || !form.date || !endDate) {
-      setError(t('calendar.requiredFields'));
+    
+    if (!form.connectionId) {
+      setError(lang === 'vi' ? 'Vui lòng chọn tài khoản Google Calendar.' : 'Please select a Google Calendar account.');
       return;
     }
-    if (endDate < form.date || (!form.allDay && (
-      !form.startTime
-      || !form.endTime
-      || (endDate === form.date && form.endTime <= form.startTime)
-    ))) {
+    if (!title) {
+      setError(lang === 'vi' ? 'Vui lòng nhập tiêu đề sự kiện.' : 'Please enter the event title.');
+      return;
+    }
+    if (!form.date) {
+      setError(lang === 'vi' ? 'Vui lòng chọn ngày bắt đầu.' : 'Please select a start date.');
+      return;
+    }
+    if (!endDate) {
+      setError(lang === 'vi' ? 'Vui lòng chọn ngày kết thúc.' : 'Please select an end date.');
+      return;
+    }
+    if (!form.allDay) {
+      if (!form.startTime) {
+        setError(lang === 'vi' ? 'Vui lòng chọn giờ bắt đầu.' : 'Please select a start time.');
+        return;
+      }
+      if (!form.endTime) {
+        setError(lang === 'vi' ? 'Vui lòng chọn giờ kết thúc.' : 'Please select an end time.');
+        return;
+      }
+    }
+    
+    if (endDate < form.date || (!form.allDay && endDate === form.date && form.endTime <= form.startTime)) {
       setError(t('calendar.timeOrder'));
       return;
     }

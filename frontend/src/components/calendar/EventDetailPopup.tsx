@@ -23,7 +23,7 @@ import { itemsApi } from '../../lib/itemsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
 import type { CalendarEventAttendeeDto, EventReminderDto, CalendarEventDetailResponse, CalendarDriveAttachmentDto } from '../../types/items';
-import { calendarEntryAccentDot } from '../../lib/calendarEntryVisuals';
+
 import { SendEventEmailModal } from './SendEventEmailModal';
 
 interface EventDetailPopupProps {
@@ -185,7 +185,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   const guestCount = guests.length;
   const acceptedCount = guests.filter((a: CalendarEventAttendeeDto) => a.responseStatus === 'accepted').length;
   const recurrence = recurrenceSummary(detail?.recurrence, lang);
-  const titleAccentDot = accentDotClass ?? calendarEntryAccentDot('event', detail?.allDay === true);
+  const titleAccentDot = accentDotClass ?? (isOwner ? 'bg-emerald-500' : 'bg-amber-500');
 
   const handleCopyLink = () => {
     const link = detail?.htmlLink || `${window.location.origin}/calendar?eventId=${itemId}`;

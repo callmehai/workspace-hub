@@ -8,7 +8,7 @@ import {
 import toast from 'react-hot-toast';
 import { foldersApi, itemsApi } from '../lib/itemsApi';
 import { scheduledEmailsApi, type ScheduledEmailDto } from '../lib/scheduledEmailsApi';
-import { connectionsApi } from '../lib/connectionsApi';
+import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import type { CalendarEventDetailResponse, ItemResponse, PagedResult, PatchItemRequest } from '../types/items';
 import { useI18n } from '../hooks/useI18n';
 import { usePollingInterval } from '../hooks/usePollingInterval';
@@ -46,7 +46,6 @@ import {
   timeValue,
 } from '../lib/calendarFormUtils';
 import {
-  calendarEntryAccentDot,
   LAYER_LEGEND_DOTS,
   LAYER_TOGGLE_ACTIVE,
   LAYER_TOGGLE_INACTIVE,
@@ -103,10 +102,15 @@ const ALL_DAY_ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
   jira: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/15 dark:text-fuchsia-200',
 };
 
-function entryChipClasses(entry: CalendarEntry): string {
-  const baseClass = entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
+function entryChipClasses(entry: CalendarEntry, connections: ConnectionDto[]): string {
   if (entry.kind === 'event' && entry.item) {
     const metadata = parseMetadata(entry.item);
+    const connection = connections.find(c => c.id === entry.item?.connectionId);
+    const currentUserEmail = connection?.providerAccountId;
+    const organizerEmail = metadata.organizerEmail as string | undefined;
+    const isOwner = !organizerEmail || (currentUserEmail && organizerEmail.toLowerCase() === currentUserEmail.toLowerCase());
+
+    const baseClass = isOwner ? ALL_DAY_ENTRY_CLASSES.event : TIMED_ENTRY_CLASSES.event;
     const selfResponse = metadata.selfResponseStatus;
     
     // Nếu từ chối tham gia -> Gạch ngang và mờ đi (declined)
@@ -121,8 +125,9 @@ function entryChipClasses(entry: CalendarEntry): string {
     if (selfResponse === 'tentative') {
       return `${baseClass} opacity-80`;
     }
+    return baseClass;
   }
-  return baseClass;
+  return entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
 }
 
 function isMidnight(date: Date) {
@@ -261,12 +266,14 @@ function formatWeekTitle(start: Date, lang: 'vi' | 'en') {
 
 function CalendarEntryChip({
   entry,
+  connections,
   compact = false,
   showAllDayLabel = false,
   onOpen,
   onDragStart,
 }: {
   entry: CalendarEntry;
+  connections: ConnectionDto[];
   compact?: boolean;
   /** View tháng: hiện "Cả ngày" trước tên (tương tự giờ bắt đầu với event có giờ). */
   showAllDayLabel?: boolean;
@@ -282,7 +289,7 @@ function CalendarEntryChip({
       onDragStart={event => onDragStart(event, entry)}
       onClick={event => { event.stopPropagation(); onOpen(entry, event); }}
       title={entry.title}
-      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry)} ${entry.kind === 'event' && entry.item && entry.canModify !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
+      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry, connections)} ${entry.kind === 'event' && entry.item && entry.canModify !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
     >
       <Icon className="h-3 w-3 shrink-0 opacity-75" />
       {entry.allDay && showAllDayLabel ? (
@@ -380,6 +387,20 @@ export function CalendarPage() {
   const gcalConnections = connections.filter(connection =>
     connection.serviceType.toLowerCase() === 'gcal' && connection.status.toLowerCase() === 'active');
   const currentFolder = folderId ? folders.find(folder => folder.id === folderId) ?? null : null;
+
+  const getEventAccentDot = (entry: CalendarEntry) => {
+    if (entry.kind === 'event' && entry.item) {
+      const metadata = parseMetadata(entry.item);
+      const connection = connections.find(c => c.id === entry.item?.connectionId);
+      const currentUserEmail = connection?.providerAccountId;
+      const organizerEmail = metadata.organizerEmail as string | undefined;
+      const isOwner = !organizerEmail || (currentUserEmail && organizerEmail.toLowerCase() === currentUserEmail.toLowerCase());
+      return isOwner ? 'bg-emerald-500' : 'bg-amber-500';
+    }
+    if (entry.kind === 'scheduled') return 'bg-blue-500';
+    if (entry.kind === 'jira') return 'bg-fuchsia-500';
+    return entry.allDay ? 'bg-emerald-500' : 'bg-amber-500';
+  };
 
   const entries = useMemo(() => {
     const invitationByICalUid = new Map(invitations.filter(x => x.iCalUid).map(x => [x.iCalUid!, x]));
@@ -750,7 +771,7 @@ export function CalendarPage() {
                 </div>
                 <div className="space-y-1">
                   {dayEntries.slice(0, 3).map(entry => (
-                    <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} compact showAllDayLabel onOpen={openEntry} onDragStart={dragStart} />
+                    <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} connections={connections} compact showAllDayLabel onOpen={openEntry} onDragStart={dragStart} />
                   ))}
                   {dayEntries.length > 3 && (
                     <button type="button" onClick={event => { event.stopPropagation(); setMoreDay(day); }} className="w-full rounded px-1.5 py-0.5 text-left text-[11px] font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10">
@@ -801,7 +822,7 @@ export function CalendarPage() {
                 onDrop={event => { event.preventDefault(); moveEvent(event.dataTransfer.getData(DRAG_TYPE) || event.dataTransfer.getData('text/plain'), day, undefined, true); }}
                 className={`min-h-14 space-y-1 border-l border-slate-100 p-1.5 transition dark:border-slate-800 ${dragOver === `all-${key}` ? 'bg-brand-50 outline outline-2 -outline-offset-2 outline-dashed outline-brand-500 dark:bg-brand-500/10' : ''}`}
               >
-                {allDayEntries.map(entry => <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} compact onOpen={openEntry} onDragStart={dragStart} />)}
+                {allDayEntries.map(entry => <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} connections={connections} compact onOpen={openEntry} onDragStart={dragStart} />)}
               </div>
             );
           })}
@@ -854,7 +875,7 @@ export function CalendarPage() {
                       onDragStart={event => dragStart(event, entry)}
                       onClick={event => openEntry(entry, event)}
                       style={{ top: Math.max(0, top), height: entryHeight }}
-                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                     >
                       <span className="flex items-center gap-1 truncate"><Icon className="h-3 w-3 shrink-0" />{entry.title}</span>
                       <span className="mt-0.5 block text-[10px] font-medium tabular-nums opacity-70">{timeValue(entry.start)}{entry.kind === 'event' ? ` – ${timeValue(entry.end)}` : ''}</span>
@@ -1007,7 +1028,7 @@ export function CalendarPage() {
       {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && (
         <EventDetailPopup
           itemId={selectedEntry.id}
-          accentDotClass={calendarEntryAccentDot('event', selectedEntry.allDay)}
+          accentDotClass={getEventAccentDot(selectedEntry)}
           anchorRect={selectedEntryAnchor}
           onClose={() => {
             setSelectedEntry(null);
@@ -1059,9 +1080,9 @@ export function CalendarPage() {
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={event => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="grid grid-cols-[14px_minmax(0,1fr)] gap-3">
-                <span className={`mt-1.5 h-3 w-3 shrink-0 rounded ${calendarEntryAccentDot(selectedEntry.kind, selectedEntry.allDay)}`} />
+                <span className={`mt-1.5 h-3 w-3 shrink-0 rounded ${getEventAccentDot(selectedEntry)}`} />
                 <div>
-                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${entryChipClasses(selectedEntry)}`}>
+                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${entryChipClasses(selectedEntry, connections)}`}>
                   {selectedEntry.kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
                 </span>
                 <h3 className="mt-2 text-[16px] font-bold leading-snug text-slate-900 dark:text-slate-100">{selectedEntry.title}</h3>
@@ -1144,13 +1165,15 @@ export function CalendarPage() {
                     if (entry.kind === 'event' && selfResponse === 'declined') {
                       dotClass += 'bg-rose-500';
                     } else if (entry.kind === 'event' && selfResponse === 'tentative') {
-                      const outline = entry.allDay ? 'border-emerald-500' : 'border-amber-500';
-                      dotClass += `bg-transparent border ${outline}`;
+                      const color = getEventAccentDot(entry);
+                      const borderClass = color === 'bg-emerald-500' ? 'border-emerald-500' : 'border-amber-500';
+                      dotClass += `bg-transparent border ${borderClass}`;
                     } else if (entry.kind === 'event' && selfResponse === 'needsAction') {
-                      const outline = entry.allDay ? 'border-emerald-500' : 'border-amber-500';
-                      dotClass += `bg-transparent border border-dashed ${outline}`;
+                      const color = getEventAccentDot(entry);
+                      const borderClass = color === 'bg-emerald-500' ? 'border-emerald-500' : 'border-amber-500';
+                      dotClass += `bg-transparent border border-dashed ${borderClass}`;
                     } else {
-                      dotClass += calendarEntryAccentDot(entry.kind, entry.allDay);
+                      dotClass += getEventAccentDot(entry);
                     }
 
                     return (
