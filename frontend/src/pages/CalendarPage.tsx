@@ -8,8 +8,8 @@ import {
 import toast from 'react-hot-toast';
 import { foldersApi, itemsApi } from '../lib/itemsApi';
 import { scheduledEmailsApi, type ScheduledEmailDto } from '../lib/scheduledEmailsApi';
-import { connectionsApi } from '../lib/connectionsApi';
-import type { ItemResponse, PagedResult, PatchItemRequest } from '../types/items';
+import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
+import type { CalendarEventDetailResponse, ItemResponse, PagedResult, PatchItemRequest } from '../types/items';
 import { useI18n } from '../hooks/useI18n';
 import { usePollingInterval } from '../hooks/usePollingInterval';
 import { handleApiError } from '../lib/errorUtils';
@@ -46,13 +46,12 @@ import {
   timeValue,
 } from '../lib/calendarFormUtils';
 import {
-  calendarEntryAccentDot,
   LAYER_LEGEND_DOTS,
   LAYER_TOGGLE_ACTIVE,
   LAYER_TOGGLE_INACTIVE,
 } from '../lib/calendarEntryVisuals';
 
-type CalendarRange = 'month' | 'week';
+type CalendarRange = 'month' | 'week' | 'day' | 'year';
 type CalendarEntryKind = 'event' | 'scheduled' | 'jira';
 
 interface CalendarEntry {
@@ -79,6 +78,7 @@ interface UpdateEventVariables {
   start: Date;
   end: Date;
   allDay: boolean;
+  folderIds?: string[];
 }
 
 const DRAG_TYPE = 'application/x-workspace-calendar-event';
@@ -103,10 +103,15 @@ const ALL_DAY_ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
   jira: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/15 dark:text-fuchsia-200',
 };
 
-function entryChipClasses(entry: CalendarEntry): string {
-  const baseClass = entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
+function entryChipClasses(entry: CalendarEntry, connections: ConnectionDto[]): string {
   if (entry.kind === 'event' && entry.item) {
     const metadata = parseMetadata(entry.item);
+    const connection = connections.find(c => c.id === entry.item?.connectionId);
+    const currentUserEmail = connection?.providerAccountId;
+    const organizerEmail = metadata.organizerEmail as string | undefined;
+    const isOwner = !organizerEmail || (currentUserEmail && organizerEmail.toLowerCase() === currentUserEmail.toLowerCase());
+
+    const baseClass = isOwner ? ALL_DAY_ENTRY_CLASSES.event : TIMED_ENTRY_CLASSES.event;
     const selfResponse = metadata.selfResponseStatus;
     
     // Nếu từ chối tham gia -> Gạch ngang và mờ đi (declined)
@@ -121,8 +126,9 @@ function entryChipClasses(entry: CalendarEntry): string {
     if (selfResponse === 'tentative') {
       return `${baseClass} opacity-80`;
     }
+    return baseClass;
   }
-  return baseClass;
+  return entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
 }
 
 function isMidnight(date: Date) {
@@ -261,12 +267,14 @@ function formatWeekTitle(start: Date, lang: 'vi' | 'en') {
 
 function CalendarEntryChip({
   entry,
+  connections,
   compact = false,
   showAllDayLabel = false,
   onOpen,
   onDragStart,
 }: {
   entry: CalendarEntry;
+  connections: ConnectionDto[];
   compact?: boolean;
   /** View tháng: hiện "Cả ngày" trước tên (tương tự giờ bắt đầu với event có giờ). */
   showAllDayLabel?: boolean;
@@ -282,7 +290,7 @@ function CalendarEntryChip({
       onDragStart={event => onDragStart(event, entry)}
       onClick={event => { event.stopPropagation(); onOpen(entry, event); }}
       title={entry.title}
-      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry)} ${entry.kind === 'event' && entry.item && entry.canModify !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
+      className={`group flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-[0.98] ${entryChipClasses(entry, connections)} ${entry.kind === 'event' && entry.item && entry.canModify !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${compact ? 'leading-tight' : ''}`}
     >
       <Icon className="h-3 w-3 shrink-0 opacity-75" />
       {entry.allDay && showAllDayLabel ? (
@@ -381,6 +389,20 @@ export function CalendarPage() {
     connection.serviceType.toLowerCase() === 'gcal' && connection.status.toLowerCase() === 'active');
   const currentFolder = folderId ? folders.find(folder => folder.id === folderId) ?? null : null;
 
+  const getEventAccentDot = (entry: CalendarEntry) => {
+    if (entry.kind === 'event' && entry.item) {
+      const metadata = parseMetadata(entry.item);
+      const connection = connections.find(c => c.id === entry.item?.connectionId);
+      const currentUserEmail = connection?.providerAccountId;
+      const organizerEmail = metadata.organizerEmail as string | undefined;
+      const isOwner = !organizerEmail || (currentUserEmail && organizerEmail.toLowerCase() === currentUserEmail.toLowerCase());
+      return isOwner ? 'bg-emerald-500' : 'bg-amber-500';
+    }
+    if (entry.kind === 'scheduled') return 'bg-blue-500';
+    if (entry.kind === 'jira') return 'bg-fuchsia-500';
+    return entry.allDay ? 'bg-emerald-500' : 'bg-amber-500';
+  };
+
   const entries = useMemo(() => {
     const invitationByICalUid = new Map(invitations.filter(x => x.iCalUid).map(x => [x.iCalUid!, x]));
     const rawItemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => {
@@ -431,10 +453,13 @@ export function CalendarPage() {
 
   const firstConnectionId = gcalConnections[0]?.id ?? '';
 
-  const refreshCalendar = () => {
+  const refreshCalendar = (itemId?: string) => {
     queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
     queryClient.invalidateQueries({ queryKey: ['calendar-scheduled-emails'] });
     queryClient.invalidateQueries({ queryKey: ['items'] });
+    if (itemId) {
+      queryClient.invalidateQueries({ queryKey: ['calendar-event-detail', itemId] });
+    }
   };
 
   const createMutation = useMutation({
@@ -458,7 +483,15 @@ export function CalendarPage() {
         guestsCanSeeOtherGuests: form.guestsCanSeeOtherGuests,
         sendUpdates,
       });
-      if (folderId) await foldersApi.addItemToFolder(folderId, { itemId: created.id });
+
+      const folderIdsToAssign = form.folderIds && form.folderIds.length > 0
+        ? form.folderIds
+        : (folderId ? [folderId] : []);
+
+      for (const fId of folderIdsToAssign) {
+        await foldersApi.addItemToFolder(fId, { itemId: created.id });
+      }
+
       return created;
     },
     onSuccess: () => {
@@ -472,10 +505,26 @@ export function CalendarPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ item, patch }: UpdateEventVariables) => itemsApi.patchItem(item.id, patch),
+    mutationFn: async ({ item, patch, folderIds }: UpdateEventVariables) => {
+      const res = await itemsApi.patchItem(item.id, patch);
+      if (folderIds !== undefined) {
+        const oldFolderIds = item.folderIds ?? [];
+        const added = folderIds.filter(id => !oldFolderIds.includes(id));
+        const removed = oldFolderIds.filter(id => !folderIds.includes(id));
+        for (const fId of added) {
+          await foldersApi.addItemToFolder(fId, { itemId: item.id });
+        }
+        for (const fId of removed) {
+          await foldersApi.removeItemFromFolder(fId, item.id);
+        }
+      }
+      return res;
+    },
     onMutate: async variables => {
       await queryClient.cancelQueries({ queryKey: calendarItemsKey });
+      await queryClient.cancelQueries({ queryKey: ['calendar-event-detail', variables.item.id] });
       const previous = queryClient.getQueryData<PagedResult<ItemResponse>>(calendarItemsKey);
+      const previousDetail = queryClient.getQueryData<CalendarEventDetailResponse>(['calendar-event-detail', variables.item.id]);
       queryClient.setQueryData<PagedResult<ItemResponse>>(calendarItemsKey, current => {
         if (!current) return current;
         return {
@@ -501,7 +550,38 @@ export function CalendarPage() {
           }),
         };
       });
-      return { previous };
+      queryClient.setQueryData<CalendarEventDetailResponse>(['calendar-event-detail', variables.item.id], current => {
+        if (!current) return current;
+        const nextDetail: CalendarEventDetailResponse = { ...current };
+        if (variables.patch.title !== undefined) nextDetail.title = variables.patch.title;
+        if (variables.patch.description !== undefined) nextDetail.description = variables.patch.description;
+        if (variables.patch.location !== undefined) nextDetail.location = variables.patch.location;
+        if (variables.patch.start !== undefined) nextDetail.start = variables.patch.start;
+        if (variables.patch.end !== undefined) nextDetail.end = variables.patch.end;
+        if (variables.patch.allDay !== undefined) nextDetail.allDay = variables.patch.allDay;
+        if (variables.patch.reminders !== undefined) nextDetail.reminders = variables.patch.reminders;
+        if (variables.patch.recurrence !== undefined) nextDetail.recurrence = variables.patch.recurrence;
+        if (variables.patch.guestsCanModify !== undefined) nextDetail.guestsCanModify = variables.patch.guestsCanModify;
+        if (variables.patch.guestsCanInviteOthers !== undefined) nextDetail.guestsCanInviteOthers = variables.patch.guestsCanInviteOthers;
+        if (variables.patch.guestsCanSeeOtherGuests !== undefined) nextDetail.guestsCanSeeOtherGuests = variables.patch.guestsCanSeeOtherGuests;
+        if (variables.patch.attendees !== undefined) {
+          const previousByEmail = new Map(
+            current.attendees.map(attendee => [attendee.email.trim().toLocaleLowerCase(), attendee]),
+          );
+          nextDetail.attendees = variables.patch.attendees.map(email => {
+            const existing = previousByEmail.get(email.trim().toLocaleLowerCase());
+            return existing ?? {
+              email,
+              displayName: null,
+              responseStatus: 'needsAction',
+              comment: null,
+              organizer: false,
+            };
+          });
+        }
+        return nextDetail;
+      });
+      return { previous, previousDetail };
     },
     onSuccess: () => {
       toast.success(t('calendar.updated'));
@@ -513,6 +593,9 @@ export function CalendarPage() {
     },
     onError: (error, variables, context) => {
       if (context?.previous) queryClient.setQueryData(calendarItemsKey, context.previous);
+      if (context?.previousDetail) {
+        queryClient.setQueryData(['calendar-event-detail', variables.item.id], context.previousDetail);
+      }
       handleApiError(error, t('calendar.updateFailed'), {
         navigate,
         conflictMessage: t('calendar.conflictReload'),
@@ -527,6 +610,9 @@ export function CalendarPage() {
           }, CONFLICT_RECOVERY_DELAY_MS);
         },
       });
+    },
+    onSettled: (_data, _error, variables) => {
+      refreshCalendar(variables.item.id);
     },
   });
 
@@ -584,6 +670,7 @@ export function CalendarPage() {
       end,
       allDay: form.allDay,
       patch: { ...calendarFormToPatch(form), sendUpdates },
+      folderIds: form.folderIds,
     });
   };
 
@@ -644,9 +731,29 @@ export function CalendarPage() {
     setDragOver(null);
   };
 
-  const previousRange = () => setCursor(current => range === 'month' ? addMonths(current, -1) : addDays(current, -7));
-  const nextRange = () => setCursor(current => range === 'month' ? addMonths(current, 1) : addDays(current, 7));
-  const title = range === 'month' ? formatMonthTitle(cursor, lang) : formatWeekTitle(startOfWeek(cursor), lang);
+  const previousRange = () => setCursor(current => {
+    if (range === 'month') return addMonths(current, -1);
+    if (range === 'week') return addDays(current, -7);
+    if (range === 'day') return addDays(current, -1);
+    return addMonths(current, -12); // year view
+  });
+  const nextRange = () => setCursor(current => {
+    if (range === 'month') return addMonths(current, 1);
+    if (range === 'week') return addDays(current, 7);
+    if (range === 'day') return addDays(current, 1);
+    return addMonths(current, 12); // year view
+  });
+  const title = useMemo(() => {
+    if (range === 'month') return formatMonthTitle(cursor, lang);
+    if (range === 'week') return formatWeekTitle(startOfWeek(cursor), lang);
+    if (range === 'day') {
+      const weekdayVi = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][cursor.getDay()];
+      return lang === 'vi'
+        ? `${weekdayVi}, ${cursor.getDate()} thg ${cursor.getMonth() + 1}, ${cursor.getFullYear()}`
+        : cursor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    return lang === 'vi' ? `Năm ${cursor.getFullYear()}` : `${cursor.getFullYear()}`;
+  }, [cursor, range, lang]);
   const dayNames = lang === 'vi' ? DAY_NAMES_VI : DAY_NAMES_EN;
   const loading = itemsLoading || (!folderId && !googleCalendarOnly && scheduledLoading);
 
@@ -708,7 +815,7 @@ export function CalendarPage() {
                 </div>
                 <div className="space-y-1">
                   {dayEntries.slice(0, 3).map(entry => (
-                    <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} compact showAllDayLabel onOpen={openEntry} onDragStart={dragStart} />
+                    <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} connections={connections} compact showAllDayLabel onOpen={openEntry} onDragStart={dragStart} />
                   ))}
                   {dayEntries.length > 3 && (
                     <button type="button" onClick={event => { event.stopPropagation(); setMoreDay(day); }} className="w-full rounded px-1.5 py-0.5 text-left text-[11px] font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10">
@@ -759,7 +866,7 @@ export function CalendarPage() {
                 onDrop={event => { event.preventDefault(); moveEvent(event.dataTransfer.getData(DRAG_TYPE) || event.dataTransfer.getData('text/plain'), day, undefined, true); }}
                 className={`min-h-14 space-y-1 border-l border-slate-100 p-1.5 transition dark:border-slate-800 ${dragOver === `all-${key}` ? 'bg-brand-50 outline outline-2 -outline-offset-2 outline-dashed outline-brand-500 dark:bg-brand-500/10' : ''}`}
               >
-                {allDayEntries.map(entry => <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} compact onOpen={openEntry} onDragStart={dragStart} />)}
+                {allDayEntries.map(entry => <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} connections={connections} compact onOpen={openEntry} onDragStart={dragStart} />)}
               </div>
             );
           })}
@@ -812,7 +919,7 @@ export function CalendarPage() {
                       onDragStart={event => dragStart(event, entry)}
                       onClick={event => openEntry(entry, event)}
                       style={{ top: Math.max(0, top), height: entryHeight }}
-                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                     >
                       <span className="flex items-center gap-1 truncate"><Icon className="h-3 w-3 shrink-0" />{entry.title}</span>
                       <span className="mt-0.5 block text-[10px] font-medium tabular-nums opacity-70">{timeValue(entry.start)}{entry.kind === 'event' ? ` – ${timeValue(entry.end)}` : ''}</span>
@@ -823,6 +930,155 @@ export function CalendarPage() {
             );
           })}
         </div>
+      </div>
+    );
+  };
+
+  const renderDay = () => {
+    const slots = Array.from({ length: (WEEK_END_HOUR - WEEK_START_HOUR) * 2 }, (_, index) => index);
+    const height = slots.length * HALF_HOUR_HEIGHT;
+    const todayKey = dateKey(cursor);
+    const allDayEntries = entriesForDay(cursor).filter(entry => entry.allDay);
+    const timedEntries = entriesForDay(cursor).filter(entry => !entry.allDay);
+
+    return (
+      <div className="flex-1 min-w-[320px]">
+        {/* All day section */}
+        <div className="grid grid-cols-[58px_1fr] border-b border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="flex items-center justify-end px-2 text-[10.5px] font-semibold text-slate-400">{t('calendar.allDay')}</div>
+          <div
+            onClick={() => openCreate(cursor, '09:00', true)}
+            onDragOver={event => { if (event.dataTransfer.types.includes(DRAG_TYPE)) { event.preventDefault(); setDragOver(`all-${todayKey}`); } }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={event => { event.preventDefault(); moveEvent(event.dataTransfer.getData(DRAG_TYPE) || event.dataTransfer.getData('text/plain'), cursor, undefined, true); }}
+            className={`min-h-14 space-y-1 p-2 transition border-l border-slate-100 dark:border-slate-800 ${dragOver === `all-${todayKey}` ? 'bg-brand-50 outline outline-2 -outline-offset-2 outline-dashed outline-brand-500 dark:bg-brand-500/10' : ''}`}
+          >
+            {allDayEntries.map(entry => (
+              <CalendarEntryChip key={`${entry.kind}-${entry.id}`} entry={entry} connections={connections} compact onOpen={openEntry} onDragStart={dragStart} />
+            ))}
+          </div>
+        </div>
+
+        {/* Timed section */}
+        <div className="grid grid-cols-[58px_1fr]">
+          <div style={{ height }}>
+            {slots.map(slot => (
+              <div key={slot} style={{ height: HALF_HOUR_HEIGHT }} className="pr-2 text-right text-[10px] tabular-nums text-slate-400">
+                {slot % 2 === 0 ? `${pad(WEEK_START_HOUR + slot / 2)}:00` : ''}
+              </div>
+            ))}
+          </div>
+          <div className="relative border-l border-slate-100 dark:border-slate-800" style={{ height }}>
+            {slots.map(slot => {
+              const minutes = WEEK_START_HOUR * 60 + slot * 30;
+              const slotTime = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+              const slotKey = `slot-${todayKey}-${slotTime}`;
+              return (
+                <button
+                  type="button"
+                  key={slot}
+                  aria-label={`${todayKey} ${slotTime}`}
+                  onClick={() => openCreate(cursor, slotTime)}
+                  onDragOver={event => { if (event.dataTransfer.types.includes(DRAG_TYPE)) { event.preventDefault(); setDragOver(slotKey); } }}
+                  onDragLeave={() => setDragOver(null)}
+                  onDrop={event => { event.preventDefault(); moveEvent(event.dataTransfer.getData(DRAG_TYPE) || event.dataTransfer.getData('text/plain'), cursor, slotTime, false); }}
+                  style={{ top: slot * HALF_HOUR_HEIGHT, height: HALF_HOUR_HEIGHT }}
+                  className={`absolute inset-x-0 border-b border-slate-100 transition hover:bg-brand-50/50 dark:border-slate-800 dark:hover:bg-brand-500/5 ${slot % 2 === 0 ? 'border-b-slate-200 dark:border-b-slate-700' : ''} ${dragOver === slotKey ? 'z-10 bg-brand-50 outline outline-2 -outline-offset-2 outline-dashed outline-brand-500 dark:bg-brand-500/10' : ''}`}
+                />
+              );
+            })}
+
+            {timedEntries.map(entry => {
+              const startMinutes = entry.start.getHours() * 60 + entry.start.getMinutes();
+              const endMinutes = entry.end.getHours() * 60 + entry.end.getMinutes();
+              const top = ((startMinutes - WEEK_START_HOUR * 60) / 30) * HALF_HOUR_HEIGHT;
+              const entryHeight = Math.max(24, ((Math.max(endMinutes, startMinutes + 30) - startMinutes) / 30) * HALF_HOUR_HEIGHT - 2);
+              if (top < -entryHeight || top >= height) return null;
+              const Icon = entry.kind === 'scheduled' ? Mail : entry.kind === 'jira' ? Flag : CalendarDays;
+              return (
+                <button
+                  type="button"
+                  key={`${entry.kind}-${entry.id}`}
+                  draggable={entry.kind === 'event'}
+                  onDragStart={event => dragStart(event, entry)}
+                  onClick={event => openEntry(entry, event)}
+                  style={{ top: Math.max(0, top), height: entryHeight }}
+                  className={`absolute left-2 right-2 z-10 overflow-hidden rounded-lg border px-3 py-1.5 text-left text-[11.5px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                >
+                  <span className="flex items-center gap-1 truncate"><Icon className="h-3 w-3 shrink-0" />{entry.title}</span>
+                  <span className="mt-0.5 block text-[10.5px] font-medium tabular-nums opacity-70">{timeValue(entry.start)} – {timeValue(entry.end)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderYear = () => {
+    const year = cursor.getFullYear();
+    const months = Array.from({ length: 12 }, (_, i) => i);
+
+    return (
+      <div className="grid grid-cols-1 gap-6 p-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 bg-slate-50 dark:bg-slate-950 w-full">
+        {months.map(monthIndex => {
+          const first = new Date(year, monthIndex, 1);
+          const offset = (first.getDay() + 6) % 7;
+          const gridStart = addDays(first, -offset);
+          const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+          const dayCount = Math.ceil((offset + daysInMonth) / 7) * 7;
+          const days = Array.from({ length: dayCount }, (_, idx) => addDays(gridStart, idx));
+          
+          const monthLabel = lang === 'vi' 
+            ? `Tháng ${monthIndex + 1}` 
+            : new Intl.DateTimeFormat('en-US', { month: 'long' }).format(first);
+
+          return (
+            <div key={monthIndex} className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h3 className="mb-2 text-center text-xs font-bold text-slate-700 dark:text-slate-200">{monthLabel}</h3>
+              <div className="grid grid-cols-7 gap-y-1 text-center text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                {lang === 'vi' ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(n => <div key={n}>{n}</div>) : ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((n, idx) => <div key={idx}>{n}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-y-1 text-center">
+                {days.map((day, idx) => {
+                  const isCurrentMonth = day.getMonth() === monthIndex;
+                  const key = dateKey(day);
+                  const dayEntries = entriesForDay(day);
+                  const hasEvents = dayEntries.length > 0;
+                  const today = dateKey(new Date()) === key;
+                  
+                  let dayClass = 'text-[10px] py-1 rounded-md font-medium select-none cursor-pointer ';
+                  if (!isCurrentMonth) {
+                    dayClass += 'text-slate-300 dark:text-slate-700 pointer-events-none';
+                  } else if (today) {
+                    dayClass += 'bg-brand-600 text-white font-bold';
+                  } else if (hasEvents) {
+                    dayClass += 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300 font-semibold';
+                  } else {
+                    dayClass += 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800';
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      className={dayClass}
+                      onClick={() => {
+                        if (isCurrentMonth) {
+                          setCursor(day);
+                          setRange('day');
+                        }
+                      }}
+                      title={hasEvents ? `${dayEntries.length} sự kiện` : undefined}
+                    >
+                      {isCurrentMonth ? day.getDate() : ''}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -911,9 +1167,12 @@ export function CalendarPage() {
           <button type="button" onClick={() => setCursor(new Date())} className="ml-1 h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12.5px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">{t('calendar.today')}</button>
           <h2 className="ml-1 text-[16px] font-bold tabular-nums">{title}</h2>
           <div className="ml-auto flex items-center gap-1 rounded-[9px] border border-slate-200 bg-white p-[3px] dark:border-slate-700 dark:bg-slate-800">
-            {(['month', 'week'] as const).map(value => (
+            {(['day', 'week', 'month', 'year'] as const).map(value => (
               <button key={value} type="button" onClick={() => setRange(value)} className={`rounded-[6px] px-3 py-1 text-[12.5px] font-medium ${range === value ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'}`}>
-                {value === 'month' ? t('calendar.month') : t('calendar.week')}
+                {value === 'day' ? (lang === 'vi' ? 'Ngày' : 'Day') :
+                 value === 'week' ? (lang === 'vi' ? 'Tuần' : 'Week') :
+                 value === 'month' ? (lang === 'vi' ? 'Tháng' : 'Month') :
+                 (lang === 'vi' ? 'Năm' : 'Year')}
               </button>
             ))}
           </div>
@@ -924,7 +1183,10 @@ export function CalendarPage() {
             <div className="flex min-h-[620px] w-full items-center justify-center gap-2 text-sm text-slate-400"><Loader2 className="h-5 w-5 animate-spin" />{t('common.loading')}</div>
           ) : itemsError ? (
             <div className="flex min-h-[620px] w-full flex-col items-center justify-center p-8 text-center"><AlertCircle className="mb-3 h-9 w-9 text-rose-500" /><p className="font-semibold">{t('calendar.loadFailed')}</p></div>
-          ) : range === 'month' ? renderMonth() : renderWeek()}
+          ) : range === 'day' ? renderDay() :
+              range === 'week' ? renderWeek() :
+              range === 'month' ? renderMonth() :
+              renderYear()}
         </div>
       </div>
 
@@ -965,7 +1227,7 @@ export function CalendarPage() {
       {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && (
         <EventDetailPopup
           itemId={selectedEntry.id}
-          accentDotClass={calendarEntryAccentDot('event', selectedEntry.allDay)}
+          accentDotClass={getEventAccentDot(selectedEntry)}
           anchorRect={selectedEntryAnchor}
           onClose={() => {
             setSelectedEntry(null);
@@ -1017,9 +1279,9 @@ export function CalendarPage() {
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={event => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="grid grid-cols-[14px_minmax(0,1fr)] gap-3">
-                <span className={`mt-1.5 h-3 w-3 shrink-0 rounded ${calendarEntryAccentDot(selectedEntry.kind, selectedEntry.allDay)}`} />
+                <span className={`mt-1.5 h-3 w-3 shrink-0 rounded ${getEventAccentDot(selectedEntry)}`} />
                 <div>
-                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${entryChipClasses(selectedEntry)}`}>
+                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${entryChipClasses(selectedEntry, connections)}`}>
                   {selectedEntry.kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
                 </span>
                 <h3 className="mt-2 text-[16px] font-bold leading-snug text-slate-900 dark:text-slate-100">{selectedEntry.title}</h3>
@@ -1102,13 +1364,15 @@ export function CalendarPage() {
                     if (entry.kind === 'event' && selfResponse === 'declined') {
                       dotClass += 'bg-rose-500';
                     } else if (entry.kind === 'event' && selfResponse === 'tentative') {
-                      const outline = entry.allDay ? 'border-emerald-500' : 'border-amber-500';
-                      dotClass += `bg-transparent border ${outline}`;
+                      const color = getEventAccentDot(entry);
+                      const borderClass = color === 'bg-emerald-500' ? 'border-emerald-500' : 'border-amber-500';
+                      dotClass += `bg-transparent border ${borderClass}`;
                     } else if (entry.kind === 'event' && selfResponse === 'needsAction') {
-                      const outline = entry.allDay ? 'border-emerald-500' : 'border-amber-500';
-                      dotClass += `bg-transparent border border-dashed ${outline}`;
+                      const color = getEventAccentDot(entry);
+                      const borderClass = color === 'bg-emerald-500' ? 'border-emerald-500' : 'border-amber-500';
+                      dotClass += `bg-transparent border border-dashed ${borderClass}`;
                     } else {
-                      dotClass += calendarEntryAccentDot(entry.kind, entry.allDay);
+                      dotClass += getEventAccentDot(entry);
                     }
 
                     return (

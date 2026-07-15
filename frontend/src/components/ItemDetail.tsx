@@ -79,6 +79,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const seenSet = useSeenSet();
 
   const [isAddingToFolder, setIsAddingToFolder] = useState(false);
+  const [folderSearch, setFolderSearch] = useState('');
   const addFolderRef = useRef<HTMLDivElement>(null);
   const [isAddingTag, setIsAddingTag] = useState(false);
   const addTagRef = useRef<HTMLDivElement>(null);
@@ -87,15 +88,18 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
-    if (!isAddingToFolder) return;
+    if (!isAddingToFolder) {
+      setFolderSearch('');
+      return;
+    }
     const onDocClick = (e: MouseEvent) => {
       if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) setIsAddingToFolder(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsAddingToFolder(false); };
-    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('mousedown', onDocClick, true);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('mousedown', onDocClick, true);
       document.removeEventListener('keydown', onKey);
     };
   }, [isAddingToFolder]);
@@ -620,23 +624,36 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
               {isAddingToFolder && (
                 <div className="absolute top-full left-0 mt-1.5 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
+                    <input
+                      type="text"
+                      placeholder={lang === 'vi' ? 'Tìm thư mục...' : 'Search folders...'}
+                      value={folderSearch}
+                      onChange={e => setFolderSearch(e.target.value)}
+                      className="w-full px-2 py-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
                   {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
                     <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('item.noMoreFolders')}</div>
+                  ) : folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase())).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Không tìm thấy' : 'No folders found'}</div>
                   ) : (
-                    folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
-                      <button
-                        key={f.id}
-                        onClick={() => {
-                          addToFolderMutation.mutate(f.id);
-                          setIsAddingToFolder(false);
-                        }}
-                        disabled={addToFolderMutation.isPending}
-                        className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
-                      >
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
-                        <span className="truncate">{f.name}</span>
-                      </button>
-                    ))
+                    folders
+                      .filter((f: FolderResponse) => !item.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase()))
+                      .map((f: FolderResponse) => (
+                        <button
+                          key={f.id}
+                          onClick={() => {
+                            addToFolderMutation.mutate(f.id);
+                            setIsAddingToFolder(false);
+                          }}
+                          disabled={addToFolderMutation.isPending}
+                          className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                          <span className="truncate">{f.name}</span>
+                        </button>
+                      ))
                   )}
                 </div>
               )}
