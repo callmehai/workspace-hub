@@ -26,6 +26,10 @@ export const OAuthCallback = () => {
       // Không invalidate ở đây thì phải F5 mới thấy dự án/người phụ trách.
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['jira'] });
+      // Connect KHÔNG sync (ConnectionsService chỉ tạo Connection) → item của connection
+      // vừa disconnect trước đó đã bị xoá khỏi DB. Phải bỏ cache items, không thì list
+      // hiện ticket ma tới khi F5.
+      queryClient.invalidateQueries({ queryKey: ['items'] });
       navigate('/integrations');
     },
     onError: (err) => {

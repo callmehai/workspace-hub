@@ -647,6 +647,7 @@ export const vi = {
   'toolbar.groupRefine': 'Lọc thêm',
   'toolbar.allProjects': 'Tất cả dự án',
   'toolbar.allAssignees': 'Tất cả mọi người',
+  'toolbar.unassigned': 'Chưa gán',
   'toolbar.search': 'Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)',
 
   // ── kanban ──
@@ -1418,6 +1419,7 @@ export const en: Record<TranslationKey, string> = {
   'toolbar.groupRefine': 'Refine',
   'toolbar.allProjects': 'All projects',
   'toolbar.allAssignees': 'All assignees',
+  'toolbar.unassigned': 'Unassigned',
   'toolbar.search': 'Search title, content… (no diacritics needed)',
 
   // ── kanban ──

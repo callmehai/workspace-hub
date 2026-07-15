@@ -11,8 +11,7 @@ import { Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
 import { usePollingInterval } from '../hooks/usePollingInterval';
-import { useState, useMemo } from 'react';
-import { CreateDriveFolderModal } from '../components/drive/CreateDriveFolderModal';
+import { useMemo } from 'react';
 
 const SERVICES: {
   integrationKey: string; provider: string; serviceType: string;
@@ -76,8 +75,6 @@ export const Integrations = () => {
   const queryClient = useQueryClient();
   const pollMs = usePollingInterval(60_000);
   const { t, lang } = useI18n();
-  const [driveFolderModalOpen, setDriveFolderModalOpen] = useState(false);
-  const [driveFolderConnId, setDriveFolderConnId] = useState<string | undefined>();
   const dfLocale = lang === 'vi' ? vi : enUS;
 
   const { data: connections = [], isLoading: loading, isError, refetch, isFetching } = useQuery({
@@ -108,6 +105,11 @@ export const Integrations = () => {
     onSuccess: () => {
       toast.success(t('integrations.disconnected'));
       queryClient.invalidateQueries({ queryKey: ['connections'] });
+      // Disconnect XOÁ THẬT mọi item của connection (ConnectionsService.DisconnectAsync
+      // → DeleteByConnectionIdAsync). Không invalidate thì list vẫn hiện ticket đã bị xoá
+      // (item ma), trong khi dropdown người phụ trách đọc mới nên trống → trông như lỗi.
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['jira'] });
     },
     onError: (err) => handleApiError(err, t('integrations.disconnectFail')),
   });
@@ -272,19 +274,6 @@ export const Integrations = () => {
                       <>
                         {isActive && (
                           <>
-                            {service.serviceType === 'Drive' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDriveFolderConnId(connection.id);
-                                  setDriveFolderModalOpen(true);
-                                }}
-                                disabled={isLoadingAction}
-                                className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                              >
-                                <span>{t('integrations.createDriveFolder')}</span>
-                              </button>
-                            )}
                             <button
                               onClick={() => syncMutation.mutate(connection.id)}
                               disabled={isLoadingAction}
@@ -336,11 +325,6 @@ export const Integrations = () => {
         </div>
       )}
 
-      <CreateDriveFolderModal
-        isOpen={driveFolderModalOpen}
-        onClose={() => setDriveFolderModalOpen(false)}
-        defaultConnectionId={driveFolderConnId}
-      />
     </div>
   );
 };
