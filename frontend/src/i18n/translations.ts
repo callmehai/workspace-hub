@@ -30,7 +30,7 @@ export const vi = {
   // ── nav / sidebar ──
   'nav.allItems': 'Tất cả mục',
   'nav.sources': 'Nguồn',
-  'integration.email': 'Email',
+  'integration.email': 'Gmail',
   'integration.calendar': 'Calendar',
   'integration.drive': 'Drive',
   'integration.jira': 'Jira',
@@ -799,7 +799,7 @@ export const en: Record<TranslationKey, string> = {
   // ── nav / sidebar ──
   'nav.allItems': 'All items',
   'nav.sources': 'Sources',
-  'integration.email': 'Email',
+  'integration.email': 'Gmail',
   'integration.calendar': 'Calendar',
   'integration.drive': 'Drive',
   'integration.jira': 'Jira',
