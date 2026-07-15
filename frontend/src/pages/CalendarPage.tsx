@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import { foldersApi, itemsApi } from '../lib/itemsApi';
 import { scheduledEmailsApi, type ScheduledEmailDto } from '../lib/scheduledEmailsApi';
 import { connectionsApi } from '../lib/connectionsApi';
-import type { ItemResponse, PagedResult, PatchItemRequest } from '../types/items';
+import type { CalendarEventDetailResponse, ItemResponse, PagedResult, PatchItemRequest } from '../types/items';
 import { useI18n } from '../hooks/useI18n';
 import { usePollingInterval } from '../hooks/usePollingInterval';
 import { handleApiError } from '../lib/errorUtils';
@@ -431,10 +431,13 @@ export function CalendarPage() {
 
   const firstConnectionId = gcalConnections[0]?.id ?? '';
 
-  const refreshCalendar = () => {
+  const refreshCalendar = (itemId?: string) => {
     queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
     queryClient.invalidateQueries({ queryKey: ['calendar-scheduled-emails'] });
     queryClient.invalidateQueries({ queryKey: ['items'] });
+    if (itemId) {
+      queryClient.invalidateQueries({ queryKey: ['calendar-event-detail', itemId] });
+    }
   };
 
   const createMutation = useMutation({
@@ -475,7 +478,9 @@ export function CalendarPage() {
     mutationFn: ({ item, patch }: UpdateEventVariables) => itemsApi.patchItem(item.id, patch),
     onMutate: async variables => {
       await queryClient.cancelQueries({ queryKey: calendarItemsKey });
+      await queryClient.cancelQueries({ queryKey: ['calendar-event-detail', variables.item.id] });
       const previous = queryClient.getQueryData<PagedResult<ItemResponse>>(calendarItemsKey);
+      const previousDetail = queryClient.getQueryData<CalendarEventDetailResponse>(['calendar-event-detail', variables.item.id]);
       queryClient.setQueryData<PagedResult<ItemResponse>>(calendarItemsKey, current => {
         if (!current) return current;
         return {
@@ -501,7 +506,38 @@ export function CalendarPage() {
           }),
         };
       });
-      return { previous };
+      queryClient.setQueryData<CalendarEventDetailResponse>(['calendar-event-detail', variables.item.id], current => {
+        if (!current) return current;
+        const nextDetail: CalendarEventDetailResponse = { ...current };
+        if (variables.patch.title !== undefined) nextDetail.title = variables.patch.title;
+        if (variables.patch.description !== undefined) nextDetail.description = variables.patch.description;
+        if (variables.patch.location !== undefined) nextDetail.location = variables.patch.location;
+        if (variables.patch.start !== undefined) nextDetail.start = variables.patch.start;
+        if (variables.patch.end !== undefined) nextDetail.end = variables.patch.end;
+        if (variables.patch.allDay !== undefined) nextDetail.allDay = variables.patch.allDay;
+        if (variables.patch.reminders !== undefined) nextDetail.reminders = variables.patch.reminders;
+        if (variables.patch.recurrence !== undefined) nextDetail.recurrence = variables.patch.recurrence;
+        if (variables.patch.guestsCanModify !== undefined) nextDetail.guestsCanModify = variables.patch.guestsCanModify;
+        if (variables.patch.guestsCanInviteOthers !== undefined) nextDetail.guestsCanInviteOthers = variables.patch.guestsCanInviteOthers;
+        if (variables.patch.guestsCanSeeOtherGuests !== undefined) nextDetail.guestsCanSeeOtherGuests = variables.patch.guestsCanSeeOtherGuests;
+        if (variables.patch.attendees !== undefined) {
+          const previousByEmail = new Map(
+            current.attendees.map(attendee => [attendee.email.trim().toLocaleLowerCase(), attendee]),
+          );
+          nextDetail.attendees = variables.patch.attendees.map(email => {
+            const existing = previousByEmail.get(email.trim().toLocaleLowerCase());
+            return existing ?? {
+              email,
+              displayName: null,
+              responseStatus: 'needsAction',
+              comment: null,
+              organizer: false,
+            };
+          });
+        }
+        return nextDetail;
+      });
+      return { previous, previousDetail };
     },
     onSuccess: () => {
       toast.success(t('calendar.updated'));
@@ -513,6 +549,9 @@ export function CalendarPage() {
     },
     onError: (error, variables, context) => {
       if (context?.previous) queryClient.setQueryData(calendarItemsKey, context.previous);
+      if (context?.previousDetail) {
+        queryClient.setQueryData(['calendar-event-detail', variables.item.id], context.previousDetail);
+      }
       handleApiError(error, t('calendar.updateFailed'), {
         navigate,
         conflictMessage: t('calendar.conflictReload'),
@@ -527,6 +566,9 @@ export function CalendarPage() {
           }, CONFLICT_RECOVERY_DELAY_MS);
         },
       });
+    },
+    onSettled: (_data, _error, variables) => {
+      refreshCalendar(variables.item.id);
     },
   });
 

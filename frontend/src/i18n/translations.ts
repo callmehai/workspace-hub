@@ -846,6 +846,18 @@ export const vi = {
   'calendar.emailBodyPlaceholder': 'Nhập nội dung thư mời...',
   'calendar.sendCopyOption': 'Gửi bản sao cho tôi (Cc)',
   'calendar.sendEmailBtn': 'Gửi ngay',
+  'calendar.addGuests': 'Thêm khách',
+  'calendar.addGuest': 'Thêm khách',
+  'calendar.invalidGuestEmail': 'Email không hợp lệ: {email}',
+  'calendar.guestsCannotInvite': 'Người tổ chức không cho phép mời thêm khách.',
+  'calendar.awaiting': 'đang chờ',
+  'calendar.sendGuestUpdateTitle': 'Gửi email cập nhật tới người tham gia?',
+  'calendar.sendGuestUpdateAddedRemoved': 'Bạn đã thêm {addedCount} và xóa {removedCount} người tham gia. Chọn Gửi để Google Calendar gửi lời mời cho khách mới và email hủy/cập nhật cho khách bị xóa.',
+  'calendar.sendGuestUpdateRemoved': 'Bạn đã xóa {removedCount} người tham gia. Chọn Gửi để Google Calendar gửi email hủy/cập nhật cho họ.',
+  'calendar.sendGuestUpdateAdded': 'Bạn đã thêm {addedCount} người tham gia. Chọn Gửi để Google Calendar gửi email mời cho họ.',
+  'calendar.backToEditing': 'Quay lại chỉnh sửa',
+  'calendar.dontSend': 'Không gửi',
+  'calendar.send': 'Gửi',
 } as const;
 
 export type TranslationKey = keyof typeof vi;
@@ -1690,6 +1702,18 @@ export const en: Record<TranslationKey, string> = {
   'calendar.emailBodyPlaceholder': 'Enter email body content...',
   'calendar.sendCopyOption': 'Send a copy to me (Cc)',
   'calendar.sendEmailBtn': 'Send Now',
+  'calendar.addGuests': 'Add guests',
+  'calendar.addGuest': 'Add guest',
+  'calendar.invalidGuestEmail': 'Invalid email: {email}',
+  'calendar.guestsCannotInvite': 'The organizer does not allow adding guests.',
+  'calendar.awaiting': 'awaiting',
+  'calendar.sendGuestUpdateTitle': 'Email guests about this update?',
+  'calendar.sendGuestUpdateAddedRemoved': 'You added {addedCount} and removed {removedCount} guest(s). Choose Send to have Google Calendar email invitations to new guests and cancellation/update emails to removed guests.',
+  'calendar.sendGuestUpdateRemoved': 'You removed {removedCount} guest(s). Choose Send to have Google Calendar email cancellation/update notices to them.',
+  'calendar.sendGuestUpdateAdded': 'You added {addedCount} guest(s). Choose Send to have Google Calendar email their invitations.',
+  'calendar.backToEditing': 'Back to editing',
+  'calendar.dontSend': "Don't send",
+  'calendar.send': 'Send',
 };
 
 export const dictionaries = { vi, en };

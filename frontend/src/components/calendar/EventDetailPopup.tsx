@@ -181,8 +181,9 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
     (a: CalendarEventAttendeeDto) => a.email.toLowerCase() === currentUserEmail?.toLowerCase(),
   );
   const currentResponse = userRsvp?.responseStatus || 'needsAction';
-  const guestCount = detail?.attendees?.length ?? 0;
-  const acceptedCount = detail?.attendees?.filter((a: CalendarEventAttendeeDto) => a.responseStatus === 'accepted').length ?? 0;
+  const guests = detail?.attendees?.filter((a: CalendarEventAttendeeDto) => !a.organizer) ?? [];
+  const guestCount = guests.length;
+  const acceptedCount = guests.filter((a: CalendarEventAttendeeDto) => a.responseStatus === 'accepted').length;
   const recurrence = recurrenceSummary(detail?.recurrence, lang);
   const titleAccentDot = accentDotClass ?? calendarEntryAccentDot('event', detail?.allDay === true);
 
@@ -214,7 +215,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
           eventLocation={detail.location || ''}
           eventTime={dateString}
           eventMeetUrl={detail.meetUrl || ''}
-          guests={detail.attendees || []}
+          guests={guests}
           onClose={() => setIsEmailPopupOpen(false)}
         />
       )}
