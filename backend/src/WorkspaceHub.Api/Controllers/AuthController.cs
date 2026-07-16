@@ -27,10 +27,10 @@ public class AuthController : ApiControllerBase
     /// <summary>
     /// POST /api/auth/register — tạo tài khoản (EmailVerified=false) + gửi OTP qua email (SCRUM-64).
     /// KHÔNG set cookie/đăng nhập ngay — client phải verify OTP ở /auth/verify-otp.
-    /// Rate limit theo IP (policy "otp") — chống spam đốt quota email.
+    /// Rate limit theo IP (policy "otp-register") — chống spam đốt quota email.
     /// </summary>
     [HttpPost("register")]
-    [EnableRateLimiting("otp")]
+    [EnableRateLimiting("otp-register")]
     [ProducesResponseType(typeof(RegisterResult), 201)]
     [ProducesResponseType(400)]
     [ProducesResponseType(409)]
@@ -41,11 +41,11 @@ public class AuthController : ApiControllerBase
     /// <summary>
     /// POST /api/auth/send-otp — gửi lại OTP cho tài khoản chưa verify (SCRUM-64).
     /// Luôn 200 (không tiết lộ email tồn tại/đã verify — chống enumeration).
-    /// Rate limit theo IP (policy "otp") — chống spam đốt quota email.
+    /// Rate limit theo IP (policy "otp-send") — chống spam đốt quota email.
     /// </summary>
     [HttpPost("send-otp")]
     [AllowAnonymous]
-    [EnableRateLimiting("otp")]
+    [EnableRateLimiting("otp-send")]
     [ProducesResponseType(200)]
     [ProducesResponseType(429)]
     public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request, CancellationToken ct)

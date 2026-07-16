@@ -4,6 +4,7 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -35,21 +36,38 @@ edmBuilder.EntitySet<ContactSuggestionDto>("EmailContactSuggestions");
 var notifications = edmBuilder.EntitySet<NotificationDto>("Notifications");
 notifications.EntityType.HasKey(n => n.Id);
 
-// SCRUM-64: rate limit theo IP cho các endpoint OTP (register + send-otp) — chống spam đốt
-// quota email (Resend free tier). Cooldown OtpService theo userId không chặn được register hàng
-// loạt email khác nhau, nên cần chặn ở tầng IP. 429 khi vượt.
+// SCRUM-64: đọc IP thật của client từ X-Forwarded-For do reverse-proxy (Caddy) gắn — cần cho
+// rate limit partition theo IP. Service `api` KHÔNG expose port ra ngoài (chỉ Caddy 80/443 tới
+// được) nên clear KnownNetworks/KnownProxies là an toàn (Caddy trong docker network có IP động).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// SCRUM-64: rate limit theo IP cho các endpoint OTP — chống spam đốt quota email (Resend free
+// tier). Cooldown OtpService theo userId không chặn được register hàng loạt email khác nhau, nên
+// cần chặn ở tầng IP. 429 khi vượt. Partition theo IP THẬT của client (X-Forwarded-For qua
+// UseForwardedHeaders) — sau reverse-proxy Caddy, RemoteIpAddress = IP container Caddy nên nếu
+// không đọc header thì mọi user chung 1 partition = giới hạn toàn cục.
+// register + send-otp tách 2 policy để KHÔNG chia chung hạn mức (đăng ký ≠ gửi lại mã).
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("otp", httpContext =>
+
+    static RateLimitPartition<string> PerIpFixedWindow(HttpContext ctx, int permitLimit) =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            partitionKey: ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 5,
+                PermitLimit = permitLimit,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
-            }));
+            });
+
+    options.AddPolicy("otp-register", ctx => PerIpFixedWindow(ctx, 5));
+    options.AddPolicy("otp-send", ctx => PerIpFixedWindow(ctx, 5));
 });
 
 // Controllers + serialize enum dạng string (khớp cách lưu DB) + OData.
@@ -224,6 +242,10 @@ if (app.Configuration.GetValue<bool>("Db:AutoMigrate"))
         .GetRequiredService<WorkspaceHub.Infrastructure.Data.AppDbContext>()
         .Database.Migrate();
 }
+
+// SCRUM-64: áp X-Forwarded-For SỚM NHẤT để RemoteIpAddress = IP thật client (dùng cho rate
+// limit partition + log). Sau reverse-proxy Caddy, thiếu bước này thì mọi IP = IP container Caddy.
+app.UseForwardedHeaders();
 
 // Request logging (SCRUM-25) — đặt NGOÀI CÙNG để đo trọn thời gian xử lý và đọc đúng
 // status code cuối (kể cả 5xx do ExceptionMiddleware set sau khi nuốt exception).

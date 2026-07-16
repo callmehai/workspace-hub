@@ -72,8 +72,10 @@ services:
       # Redirect URI trỏ tới route FE (Caddy serve) — phải khớp Google Cloud Console.
       Google__RedirectUri: "https://${SITE_ADDRESS}/oauth/callback"
       Google__SignInRedirectUri: "https://${SITE_ADDRESS}/auth/google/callback"
-      # Firebase ProjectId (SCRUM-64 — xác thực sđt qua Firebase Phone Auth)
-      Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-workspacehub}
+      # OTP đăng ký (SCRUM-64) — sender hệ thống qua Resend.
+      # Thiếu ⇒ LogEmailSender: OTP chỉ ra log, KHÔNG gửi mail thật.
+      Email__Resend__ApiKey: ${RESEND_API_KEY:-}
+      Email__Resend__FromAddress: ${RESEND_FROM_ADDRESS:-no-reply@workspace-hub.space}
       # Cloudflare R2 (SCRUM-75) — avatar upload.
       R2__AccountId: ${R2_ACCOUNT_ID}
       R2__BucketName: ${R2_BUCKET_NAME}
