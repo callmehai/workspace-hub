@@ -10,8 +10,8 @@ import type { ApiError } from '../../types/auth';
 import { useI18n } from '../../hooks/useI18n';
 
 /**
- * SCRUM-64 — màn nhập OTP xác minh SĐT. Vào từ Register (state.email) hoặc Login bị
- * chặn (PHONE_NOT_VERIFIED). Verify thành công → đăng nhập luôn (cookie auth set).
+ * SCRUM-64 — màn nhập OTP xác minh email. Vào từ Register (state.email) hoặc Login bị
+ * chặn (EMAIL_NOT_VERIFIED). Verify thành công → đăng nhập luôn (cookie auth set).
  */
 export const VerifyOtp = () => {
   const navigate = useNavigate();
