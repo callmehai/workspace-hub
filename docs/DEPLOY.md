@@ -47,14 +47,14 @@ Code → PR vào develop → CI (build/test) → merge → CD tự deploy lên L
 ## 3. Cấu hình & secret
 
 Secret prod nằm ở **`.env` trên server** (gitignored, KHÔNG commit) — xem `deploy/.env.prod.example` để biết các key:
-`SITE_ADDRESS`, `MSSQL_SA_PASSWORD`, `JWT_SECRET`, `CRON_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, (Twilio tuỳ chọn), `R2_*` (SCRUM-75 — avatar, xem dưới).
+`SITE_ADDRESS`, `MSSQL_SA_PASSWORD`, `JWT_SECRET`, `CRON_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `RESEND_API_KEY` + `RESEND_FROM_ADDRESS` (SCRUM-64 — OTP email, thiếu → dev log OTP), `R2_*` (SCRUM-75 — avatar, xem dưới).
 
 Env quan trọng (set trong compose, đọc từ `.env`):
 - `Db__AutoMigrate=true` — api tự áp migration lúc khởi động (single-instance).
 - `Cron__AutoRun=true` — BackgroundService tự quét & gửi scheduled email mỗi `Cron__IntervalSeconds` (60s).
 - `Cron__SyncAutoRun=true` + `Cron__SyncIntervalSeconds=60` — BackgroundService sync connections (Gmail/GCal/Drive/Jira) mỗi 60s. **Không** cần cron-job.org cho sync; **không** bật đồng thời với job HTTP `POST /api/internal/process-sync`.
 - `Auth__CrossSiteCookies=false` — same-origin ⇒ cookie SameSite=Lax.
-- Twilio để trống ⇒ OTP đăng ký **log ra console** thay vì gửi SMS: `docker compose -f docker-compose.prod.yml logs api | grep -i otp`.
+- OTP đăng ký (SCRUM-64) gửi qua email bằng **Resend**: set `RESEND_API_KEY` + `RESEND_FROM_ADDRESS` trong `.env` (compose map vào container qua `Email__Resend__ApiKey`/`FromAddress`). Thiếu → dev fallback ghi OTP ra log (không gửi mail thật). **Verify domain `workspace-hub.space`** (SPF/DKIM) để gửi được tới email bất kỳ; test mode chỉ gửi tới chủ tài khoản Resend.
 
 ### Cập nhật `.env` cho R2 (SCRUM-75) trên server đang chạy
 

@@ -19,11 +19,11 @@ App gom + **đồng bộ 2 chiều** (đọc + ghi ngược lên provider). Hầ
 - **Write-back Google (2 chiều, synchronous):** `PATCH/POST/DELETE /api/items` — Email (label/read/star/trash + gửi mới, **KHÔNG sửa nội dung** Gmail immutable), Event (CRUD), File (rename/trash). Conflict qua `Items.ETag` → 409 (`IWriteBackGuard`). ✅ SCRUM-37/38.
 - **Scheduled email + cron gửi:** `/api/internal/process-scheduled` (X-Cron-Secret). ✅ SCRUM-30/31.
 - **Phase Jira/Atlassian (CRUD đầy đủ) — ĐÃ CODE XONG:** Atlassian = 1 Integration, mỗi Jira account = 1 Connection (ServiceType=Jira). OAuth 3LO+cloudId (54), sync issue→Item(Ticket) (55), tạo (56), write-back update qua cùng `IWriteBackGuard` — `fields.updated` làm version-token thay ETag (57), xoá (58), metadata helpers (59), ImportantContacts JiraAccount (60). Description = ADF 2 chiều. Migration `EnableJiraIntegration` đã bật `atlassian` IsEnabled=true trên develop.
-- **Auth overhaul:** access token → **HttpOnly cookie + CSRF** (62 ✅), refresh token + Redis rotation (63 ✅ trên nhánh). OAuth key Jira = `atlassian` (đọc `OAuth:atlassian:ClientId/Secret`).
+- **Auth overhaul:** access token → **HttpOnly cookie + CSRF** (62 ✅), refresh token + Redis rotation (63 ✅ trên nhánh), **OTP đăng ký qua Email/Resend** (64 ✅ trên nhánh `fix/login-ux` — đổi hướng từ SMS/Firebase; `EmailVerified`, login chặn chưa verify → 403 `EMAIL_NOT_VERIFIED`, rate limit IP; xem CHANGELOG [2026-07-16]). OAuth key Jira = `atlassian` (đọc `OAuth:atlassian:ClientId/Secret`).
 - **Tag BE:** CRUD + assign/unassign (70 ✅).
 
 **🔄 Đang làm / ⏳ còn lại (Sprint 4):**
-- 🔄 OTP đăng ký Twilio (64, Lộc) · FE Admin dashboard (49, Huy) · FE Admin toggle integration (61, Khánh) · Notifications in-app (68, Khánh).
+- 🔄 FE Admin dashboard (49, Huy) · FE Admin toggle integration (61, Khánh) · Notifications in-app (68, Khánh).
 - ⏳ FE: Tag UI (71) · Highlight email chưa đọc (67) · People API gợi ý contact (69) · responsive/dark mode (50).
 - ⏳ **Cron sync connection định kỳ + FE auto-refresh (72, Dũng)** — **THÊM** sync định kỳ ngoài on-demand (xem lưu ý sync bên dưới).
 - ⏳ Unit test service (29, Hải) · deploy prod config (51) · finalize Swagger+E2E (52) · defense (53).

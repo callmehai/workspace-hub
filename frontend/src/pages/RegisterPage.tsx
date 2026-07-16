@@ -12,9 +12,6 @@ import { ThemeLangControls } from '../components/ThemeLangControls';
 import { useI18n } from '../hooks/useI18n';
 import type { ApiError } from '../types/auth';
 
-// SĐT định dạng E.164 (vd +84901234567) — khớp validator backend SCRUM-64.
-const PHONE_RE = /^\+[1-9]\d{7,14}$/;
-
 export const RegisterPage = () => {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -36,21 +33,19 @@ export const RegisterPage = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill 1 lần khi invite load xong
     if (invite?.email) setEmail((cur) => cur || invite.email);
   }, [invite]);
-  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [errFullName, setErrFullName] = useState('');
   const [errEmail, setErrEmail] = useState('');
-  const [errPhone, setErrPhone] = useState('');
   const [errPwd, setErrPwd] = useState('');
   const [errConfirm, setErrConfirm] = useState('');
   const [banner, setBanner] = useState('');
 
   const register = useMutation({
-    mutationFn: () => authApi.register({ fullName, email, password, phone, inviteToken: inviteToken ?? undefined }),
+    mutationFn: () => authApi.register({ fullName, email, password, inviteToken: inviteToken ?? undefined }),
     onSuccess: (result) => {
       toast.success(t('register.otpSent'));
-      // SCRUM-64: chưa đăng nhập — sang màn nhập OTP, mang email + cooldown.
+      // SCRUM-64: chưa đăng nhập — sang màn nhập OTP, mang email + cooldown gửi lại.
       navigate('/verify-otp', {
         replace: true,
         state: { email: result.email, cooldown: result.resendCooldownSeconds },
@@ -79,15 +74,13 @@ export const RegisterPage = () => {
 
     const eFullName = fullName.trim().length === 0 ? t('valid.nameRequired') : '';
     const eEmail = !EMAIL_RE.test(email) ? t('valid.emailInvalid') : '';
-    const ePhone = !PHONE_RE.test(phone) ? t('valid.phoneE164') : '';
     const ePwd = password.length < 8 ? t('valid.passwordMin') : '';
     const eConfirm = confirm !== password ? t('valid.confirmMismatch') : '';
     setErrFullName(eFullName);
     setErrEmail(eEmail);
-    setErrPhone(ePhone);
     setErrPwd(ePwd);
     setErrConfirm(eConfirm);
-    if (eFullName || eEmail || ePhone || ePwd || eConfirm) return;
+    if (eFullName || eEmail || ePwd || eConfirm) return;
 
     register.mutate();
   };
@@ -151,19 +144,6 @@ export const RegisterPage = () => {
               }`}
             />
             {errEmail && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{errEmail}</div>}
-
-            <label htmlFor="phone" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-slate-900 dark:text-slate-200">{t('register.phone')}</label>
-            <input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+84901234567"
-              className={`h-[38px] w-full rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 ${
-                errPhone ? 'border-red-400' : 'border-slate-300 dark:border-slate-700'
-              }`}
-            />
-            {errPhone && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{errPhone}</div>}
 
             <label htmlFor="password" className="mb-1.5 mt-3.5 block text-[13px] font-medium text-slate-900 dark:text-slate-200">{t('register.password')}</label>
             <input

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "wh-scrum27-collection",
     "name": "Workspace Hub API (SCRUM-27)",
-    "description": "API testing collection cho Workspace Hub backend (ASP.NET Core 8).\n\n## Cách chạy\n1. Import file này + `Workspace-Hub.postman_environment.json`, chọn environment **Workspace Hub — Local (https)**.\n2. Chạy backend ở **HTTPS**: `dotnet run --project src/WorkspaceHub.Api --launch-profile https` (mặc định https://localhost:7010). Cần Docker `wh-sqlserver` + Redis (xem README).\n3. Trong Postman: **Settings → General → SSL certificate verification = OFF** (cert dev self-signed). Newman: thêm cờ `-k`.\n4. **Cần 1 tài khoản đã verify SĐT** để login lấy token (OTP không chạy blackbox — xem README mục *Tài khoản test*). Điền `userEmail` + `userPassword` của tài khoản đó vào environment.\n5. Mở **Collection Runner** → chọn collection → Run.\n\n## Auth mới (SCRUM-62/63/64) — ĐỌC KỸ\n- Login/verify-otp KHÔNG trả token trong body nữa. Token nằm trong **HttpOnly cookie `wh_access`**. Test script **đọc cookie** này → set biến `accessToken` để các request sau gửi qua header `Authorization: Bearer` (Postman/Newman dùng Bearer nên KHÔNG dính CSRF).\n- Register giờ cần `phone` (E.164) + gửi OTP; login bị chặn `403 PHONE_NOT_VERIFIED` tới khi verify OTP.\n- OTP gửi qua SMS (Twilio). Trial chưa mua số → dùng `LogSmsSender` (ghi mã ra console), **không** đọc được qua API → không thể verify blackbox. Vì vậy các case verify-otp/gửi-OTP chỉ test đường lỗi; happy-path OTP bị **skip**.\n\n## Biến môi trường\n- `baseUrl` — URL backend (mặc định https://localhost:7010).\n- `userEmail` / `userPassword` — tài khoản **đã verify SĐT** (dev tạo sẵn 1 lần). Login đọc cookie → set `accessToken`.\n- `userPhone` — SĐT E.164 dùng cho các case register throwaway (không cần thật).\n- `accessToken` — tự set sau khi Login (đọc từ cookie `wh_access`).\n- `adminToken` — JWT của tài khoản **Admin** (tự điền tay nếu muốn chạy nhóm Admin success). Để trống vẫn chạy được phần còn lại.\n- `gmailConnectionId` / `gcalConnectionId` — chỉ cần khi test happy-path provider (cần OAuth thật). Để trống thì các request đó vẫn minh hoạ case lỗi 404/422.\n\n## Phủ status code\n200 · 201 · 204 · 400 (validation) · 401 (no/invalid JWT) · 403 (sai role / chưa verify SĐT) · 404 (không tồn tại) · 409 (trùng) · 422 (business rule). Mỗi nhóm endpoint có cả case thành công và case lỗi.\n\nWire format: **camelCase**, enum dạng string. Auth: `Authorization: Bearer {{accessToken}}`.",
+    "description": "API testing collection cho Workspace Hub backend (ASP.NET Core 8).\n\n## Cách chạy\n1. Import file này + `Workspace-Hub.postman_environment.json`, chọn environment **Workspace Hub — Local (https)**.\n2. Chạy backend ở **HTTPS**: `dotnet run --project src/WorkspaceHub.Api --launch-profile https` (mặc định https://localhost:7010). Cần Docker `wh-sqlserver` + Redis (xem README).\n3. Trong Postman: **Settings → General → SSL certificate verification = OFF** (cert dev self-signed). Newman: thêm cờ `-k`.\n4. **Cần 1 tài khoản đã verify email** để login lấy token (OTP không chạy blackbox — xem README mục *Tài khoản test*). Điền `userEmail` + `userPassword` của tài khoản đó vào environment.\n5. Mở **Collection Runner** → chọn collection → Run.\n\n## Auth mới (SCRUM-62/63/64) — ĐỌC KỸ\n- Login/verify-otp KHÔNG trả token trong body nữa. Token nằm trong **HttpOnly cookie `wh_access`**. Test script **đọc cookie** này → set biến `accessToken` để các request sau gửi qua header `Authorization: Bearer` (Postman/Newman dùng Bearer nên KHÔNG dính CSRF).\n- Register KHÔNG còn `phone`; gửi OTP qua **email** tới chính email đăng ký. Login bị chặn `403 EMAIL_NOT_VERIFIED` tới khi verify OTP.\n- OTP gửi qua email (Resend). Chưa cấu hình `Email:Resend:*` → dùng `LogEmailSender` (ghi mã ra console), **không** đọc được qua API → không thể verify blackbox. Vì vậy các case verify-otp/gửi-OTP chỉ test đường lỗi; happy-path OTP bị **skip**.\n- `/auth/register` + `/auth/send-otp` có **rate limit theo IP** (5 req/phút) — chạy Runner nhiều lần nhanh có thể gặp `429`.\n\n## Biến môi trường\n- `baseUrl` — URL backend (mặc định https://localhost:7010).\n- `userEmail` / `userPassword` — tài khoản **đã verify email** (dev tạo sẵn 1 lần). Login đọc cookie → set `accessToken`.\n- `accessToken` — tự set sau khi Login (đọc từ cookie `wh_access`).\n- `adminToken` — JWT của tài khoản **Admin** (tự điền tay nếu muốn chạy nhóm Admin success). Để trống vẫn chạy được phần còn lại.\n- `gmailConnectionId` / `gcalConnectionId` — chỉ cần khi test happy-path provider (cần OAuth thật). Để trống thì các request đó vẫn minh hoạ case lỗi 404/422.\n\n## Phủ status code\n200 · 201 · 204 · 400 (validation) · 401 (no/invalid JWT) · 403 (sai role / chưa verify email) · 404 (không tồn tại) · 409 (trùng) · 422 (business rule) · 429 (rate limit OTP). Mỗi nhóm endpoint có cả case thành công và case lỗi.\n\nWire format: **camelCase**, enum dạng string. Auth: `Authorization: Bearer {{accessToken}}`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -15,12 +15,9 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Default password + phone cho tài khoản test nếu chưa set.",
+          "// Default password cho tài khoản test nếu chưa set.",
           "if (!pm.environment.get('userPassword')) {",
           "  pm.environment.set('userPassword', 'Password123!');",
-          "}",
-          "if (!pm.environment.get('userPhone')) {",
-          "  pm.environment.set('userPhone', '+14155550100');",
           "}"
         ]
       }
@@ -82,7 +79,7 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"SCRUM-27 Test User\",\n  \"phone\": \"{{userPhone}}\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"SCRUM-27 Test User\"\n}" },
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
           },
           "event": [
@@ -101,7 +98,7 @@
               "var b = pm.response.json();",
               "pm.test('returns RegisterResult (không có token — phải verify OTP)', function () {",
               "  pm.expect(b).to.have.property('email');",
-              "  pm.expect(b).to.have.property('requiresPhoneVerification', true);",
+              "  pm.expect(b).to.have.property('requiresEmailVerification', true);",
               "  pm.expect(b).to.have.property('resendCooldownSeconds').that.is.a('number');",
               "  pm.expect(b).to.not.have.property('accessToken');",
               "});"
@@ -109,7 +106,7 @@
           ]
         },
         {
-          "name": "Login unverified → PHONE_NOT_VERIFIED (403)",
+          "name": "Login unverified → EMAIL_NOT_VERIFIED (403)",
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
@@ -119,9 +116,9 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('403 Forbidden — chưa verify SĐT', function () { pm.response.to.have.status(403); });",
-              "pm.test('message = PHONE_NOT_VERIFIED', function () {",
-              "  pm.expect(pm.response.json().message).to.eql('PHONE_NOT_VERIFIED');",
+              "pm.test('403 Forbidden — chưa verify email', function () { pm.response.to.have.status(403); });",
+              "pm.test('message = EMAIL_NOT_VERIFIED', function () {",
+              "  pm.expect(pm.response.json().message).to.eql('EMAIL_NOT_VERIFIED');",
               "});"
             ] } }
           ]
@@ -141,7 +138,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Email chưa từng đăng ký → nhánh anti-enumeration LUÔN trả 200 (không gửi SMS, không cooldown).",
+                  "// Email chưa từng đăng ký → nhánh anti-enumeration LUÔN trả 200 (không gửi email, không cooldown).",
                   "// KHÔNG dùng throwawayEmail vì Register vừa gửi OTP cho nó → còn cooldown 60s → 422.",
                   "pm.environment.set('sendOtpEmail', 'wh_nobody_' + Date.now() + '@nowhere.local');"
                 ]
@@ -166,7 +163,7 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "// Happy-path verify cần đọc mã OTP từ SMS/console → không blackbox được. Chỉ test đường lỗi.",
+              "// Happy-path verify cần đọc mã OTP từ email/console → không blackbox được. Chỉ test đường lỗi.",
               "pm.test('422 — mã OTP sai/hết hạn', function () { pm.response.to.have.status(422); });"
             ] } }
           ]
@@ -177,7 +174,7 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"Duplicate\",\n  \"phone\": \"{{userPhone}}\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{throwawayEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"fullName\": \"Duplicate\"\n}" },
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
           },
           "event": [
@@ -188,12 +185,12 @@
           ]
         },
         {
-          "name": "Register invalid — short password + no phone (400)",
+          "name": "Register invalid — short password + bad email (400)",
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"123\",\n  \"fullName\": \"\",\n  \"phone\": \"\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"123\",\n  \"fullName\": \"\"\n}" },
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
           },
           "event": [
@@ -217,7 +214,7 @@
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": [
               "if (!pm.environment.get('userEmail')) {",
-              "  pm.test.skip('skipped — set userEmail/userPassword của tài khoản đã verify SĐT (xem README) để chạy phần core');",
+              "  pm.test.skip('skipped — set userEmail/userPassword của tài khoản đã verify email (xem README) để chạy phần core');",
               "  return;",
               "}",
               "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
