@@ -142,10 +142,20 @@ public class CalendarInvitationService : ICalendarInvitationService
         {
             // User responded locally before connecting GCal: first sync must push that decision up,
             // not overwrite it with Google's still-stale needsAction value.
-            await _calendar.RsvpEventAsync(
-                connection, "primary", localItem.ExternalId,
-                ToGoogleStatus(invitation.Status), comment: null, ct: ct);
-            invitation.GoogleSyncPending = false;
+            try
+            {
+                await _calendar.RsvpEventAsync(
+                    connection, "primary", localItem.ExternalId,
+                    ToGoogleStatus(invitation.Status), comment: null, ct: ct);
+                invitation.GoogleSyncPending = false;
+            }
+            catch (Exception ex) when (ex is ProviderException or ForbiddenException)
+            {
+                // Giữ GoogleSyncPending + Status local; không ghi đè từ Google needsAction.
+                invitation.UpdatedAt = DateTime.UtcNow;
+                await _invitations.SaveChangesAsync(ct);
+                return;
+            }
         }
         else
         {

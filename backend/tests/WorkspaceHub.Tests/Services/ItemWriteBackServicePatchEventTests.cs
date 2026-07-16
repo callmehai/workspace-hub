@@ -246,6 +246,26 @@ public class ItemWriteBackServicePatchEventTests
     }
 
     [Fact]
+    public async Task PatchEvent_WithoutReminders_PassesNullRemindersToGateway()
+    {
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");
+        SetupItemAndConn(item);
+        SetupCalendarGetAndUpdate(new CalendarEvent(
+            "google-ev-1", "\"etag-2\"", "New title", "notes", AllDayStart, AllDayEnd, AllDay: true));
+
+        CalendarEvent? captured = null;
+        _calendar.Setup(m => m.UpdateEventAsync(
+                It.IsAny<Connection>(), "primary", "google-ev-1", It.IsAny<CalendarEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<Connection, string, string, CalendarEvent, CancellationToken>((_, _, _, dto, _) => captured = dto)
+            .ReturnsAsync(new CalendarEvent("google-ev-1", "\"etag-2\"", "New title", "notes", AllDayStart, AllDayEnd, AllDay: true));
+
+        await _service.PatchItemAsync(item.Id, _userId, new PatchItemRequest(Title: "New title"));
+
+        captured.Should().NotBeNull();
+        captured!.Reminders.Should().BeNull();
+    }
+
+    [Fact]
     public async Task PatchEvent_AllDayFalse_SendsTimedToGateway()
     {
         var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07"}""");

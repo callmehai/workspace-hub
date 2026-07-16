@@ -154,7 +154,7 @@ Bản ghi lời mời nội bộ, không thay thế Google Event. Dùng để no
 | Id | uuid PK | |
 | OrganizerItemId | uuid FK→Items | CASCADE; event snapshot của organizer |
 | OrganizerUserId / InviteeUserId | uuid FK→Users | NoAction |
-| InviteeItemId | uuid FK→Items null | Item cùng event trên GCal connection của invitee sau sync |
+| InviteeItemId | uuid FK→Items null | Item cùng event trên GCal connection của invitee sau sync; **ON DELETE SET NULL** (xóa Item invitee không chặn / không cascade invitation) |
 | InviteeEmail | nvarchar(320) | lower-case |
 | GoogleEventId / ICalUid | nvarchar(512) | `iCalUID` là khóa reconcile chéo calendar |
 | Status | enum string | NeedsAction / Accepted / Tentative / Declined |

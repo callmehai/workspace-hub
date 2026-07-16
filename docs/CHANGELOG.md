@@ -2,6 +2,12 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-16] Calendar PR review — partial-update reminders + invitation harden
+
+- **Critical — reminders wipe:** `CalendarGateway.UpdateEventAsync` khi `Reminders == null` từng ghi `UseDefault=true` → PATCH event (đổi title/…) xóa reminder Google. **Sau:** `null` = giữ nguyên từ `Events.Get`; non-null (kể cả list rỗng) = ghi overrides. Contract test: `PatchEvent_WithoutReminders_PassesNullRemindersToGateway`.
+- **Important — InviteeItem FK:** `CalendarInvitations.InviteeItemId` đổi `NoAction` → **ON DELETE SET NULL** (migration `CalendarInvitationInviteeItemSetNull`) — xóa Item invitee không còn 500.
+- **Important — RSVP pending:** `ReconcileSyncedEventAsync` khi push RSVP local lên Google lỗi (`ProviderException` / `ForbiddenException`) giữ `GoogleSyncPending=true` + Status local; không ghi đè bằng Google `needsAction`.
+
 ## [2026-07-15] Calendar reminder notification — format thời gian
 
 - **Bug:** In-app reminder (`EventReminderProcessorService`) khi không có Snippet nhét `OccurredAt.ToString("o")` vào `preview` → toast/dropdown hiện raw ISO (`2026-07-15T00:00:00.0000000Z`).

@@ -356,7 +356,7 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.InviteeItem)
                 .WithMany()
                 .HasForeignKey(x => x.InviteeItemId)
-                .OnDelete(DeleteBehavior.NoAction);
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ---------- Seed: Integration Google + Atlassian ----------

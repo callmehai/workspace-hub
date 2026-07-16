@@ -159,7 +159,7 @@ public class CalendarGateway : ICalendarGateway
                 }).ToList();
             }
 
-            // Reminders
+            // Reminders: null = giữ nguyên từ Events.Get; non-null (kể cả rỗng) = ghi overrides
             if (eventDto.Reminders != null)
             {
                 existing.Reminders = new Event.RemindersData
@@ -171,10 +171,6 @@ public class CalendarGateway : ICalendarGateway
                         Minutes = r.Minutes
                     }).ToList()
                 };
-            }
-            else
-            {
-                existing.Reminders = new Event.RemindersData { UseDefault = true };
             }
 
             // Recurrence
