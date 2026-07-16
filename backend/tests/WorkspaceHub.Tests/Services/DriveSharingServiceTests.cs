@@ -308,6 +308,8 @@ public class DriveSharingServiceTests
             });
 
         SetupAnyoneLinkOnFileAndParent(parentId);
+        // Sau Detect: Ensure/list lại thấy đã tắt (giả lập Google đã apply).
+        SetupLinkClearedAfterFirstList(parentId);
 
         _gateway.Setup(m => m.SetLinkSharingAsync(
                 It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
@@ -330,6 +332,48 @@ public class DriveSharingServiceTests
             Times.Once);
     }
 
+    [Fact]
+    public async Task SetLinkSharing_Disable_Case1WithConfirm_FileForbidden_StillSucceeds()
+    {
+        // Sau khi tắt mẹ, xoá anyone trên file bị 403 (kế thừa) → vẫn OK.
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Item
+            {
+                Id = Guid.NewGuid(),
+                Title = "Dungtestfolder",
+                ExternalId = parentId,
+                ConnectionId = _connId,
+                UserId = _userId,
+                Type = ItemType.File,
+                MetadataJson = """{"isFolder":true}"""
+            });
+
+        SetupAnyoneLinkOnFileAndParent(parentId);
+        SetupLinkClearedAfterFirstList(parentId);
+
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DrivePermissionDto?)null);
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("Không đủ quyền gỡ chia sẻ."));
+
+        var result = await _service.SetLinkSharingAsync(
+            _userId, _itemId, enabled: false, confirmRestrictParent: true);
+
+        result.Should().BeNull();
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     /// <summary>Mock cả file + folder mẹ đang anyone (điều kiện Case 1).</summary>
     private void SetupAnyoneLinkOnFileAndParent(string parentExternalId)
     {
@@ -343,6 +387,30 @@ public class DriveSharingServiceTests
             {
                 new() { Id = "link-parent", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
             });
+    }
+
+    /// <summary>
+    /// Lần list đầu (Detect) còn anyone; các lần sau (Ensure) đã tắt — giả lập Google apply xong.
+    /// Gọi SAU SetupAnyoneLinkOnFileAndParent để ghi đè mock list.
+    /// </summary>
+    private void SetupLinkClearedAfterFirstList(string parentExternalId)
+    {
+        var fileCalls = 0;
+        var parentCalls = 0;
+        var anyoneFile = new List<DrivePermissionDto>
+        {
+            new() { Id = "link-file", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+        };
+        var anyoneParent = new List<DrivePermissionDto>
+        {
+            new() { Id = "link-parent", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+        };
+        var empty = new List<DrivePermissionDto>();
+
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => ++fileCalls <= 1 ? anyoneFile : empty);
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), parentExternalId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => ++parentCalls <= 1 ? anyoneParent : empty);
     }
 
     [Fact]

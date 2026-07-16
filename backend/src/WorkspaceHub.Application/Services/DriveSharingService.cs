@@ -152,16 +152,63 @@ public class DriveSharingService : IDriveSharingService
                 "Tắt link file sẽ tắt luôn link thư mục mẹ. Cần xác nhận (confirmRestrictParent) hoặc dùng GET restrict-conflict.");
         }
 
-        // User đã confirm popup "Xoá khỏi thư mục mẹ" → tắt link folder mẹ trước.
+        // User đã confirm popup "Xoá khỏi thư mục mẹ".
+        // Giống Drive: tắt link thư mục mẹ trước (quyền kế thừa xuống con).
+        // Sau đó thử tắt link trực tiếp trên file — nếu 403 (permission kế thừa,
+        // không xoá được trên con) thì coi như xong vì mẹ đã hạn chế.
         if (conflict != null && confirmRestrictParent)
         {
+            // Tắt link folder mẹ — bắt buộc (giống nút Drive).
             await _gateway.SetLinkSharingAsync(
                 conn, conflict.ParentExternalId, enable: false, role, ct);
+
+            // Google đôi khi còn trả anyone trên list ngay sau delete — đợi rồi xoá lại nếu cần.
+            await EnsureLinkDisabledAsync(conn, conflict.ParentExternalId, role, ct);
+
+            try
+            {
+                await _gateway.SetLinkSharingAsync(
+                    conn, item.ExternalId!, enable: false, role, ct);
+                await EnsureLinkDisabledAsync(conn, item.ExternalId!, role, ct);
+            }
+            catch (ForbiddenException)
+            {
+                // File chỉ còn anyone kế thừa từ mẹ — đã tắt mẹ là đủ (khớp Drive).
+            }
+
+            return null;
         }
 
-        // Tắt link trên chính file/folder đang thao tác.
+        // Không Case 1 — tắt link thẳng trên item.
         return await _gateway.SetLinkSharingAsync(
             conn, item.ExternalId!, enable: false, role, ct);
+    }
+
+    /// <summary>
+    /// Sau khi tắt link: poll list permissions; nếu vẫn còn anyone thì gọi tắt lại 1 lần.
+    /// Tránh FE refetch ngay thấy anyone cũ (Google lag).
+    /// </summary>
+    private async Task EnsureLinkDisabledAsync(
+        Connection conn,
+        string externalId,
+        DrivePermissionRole role,
+        CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (attempt > 0)
+                await Task.Delay(400, ct);
+
+            var perms = await _gateway.ListPermissionsAsync(conn, externalId, ct);
+            var stillHasLink = perms.Any(p => p.IsLink || DrivePermissionTypes.IsLinkType(p.Type));
+            if (!stillHasLink)
+                return;
+
+            if (attempt < 2)
+            {
+                await _gateway.SetLinkSharingAsync(conn, externalId, enable: false, role, ct);
+            }
+        }
     }
 
     /// <inheritdoc />

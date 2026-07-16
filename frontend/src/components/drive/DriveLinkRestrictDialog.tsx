@@ -76,37 +76,49 @@ export function DriveLinkRestrictDialog({
             </a>
           </p>
 
-          {/* Cây quyền: folder mẹ → file (giống screenshot Drive) */}
-          <div className="mt-5 space-y-0">
+          {/*
+            Cây quyền giống Google Drive — đường nối chữ L (└) từ folder xuống file.
+          */}
+          <div className="mt-5">
+            {/* Folder mẹ */}
             <div className="flex gap-3 items-start">
-              <span className="mt-0.5 w-9 h-9 rounded-full bg-[#e8f0fe] dark:bg-blue-500/15 flex items-center justify-center shrink-0">
-                <Folder className="w-5 h-5 text-[#1a73e8]" fill="currentColor" fillOpacity={0.15} />
+              <span className="relative z-[1] w-10 h-10 rounded-full bg-[#e8f0fe] dark:bg-blue-500/15 flex items-center justify-center shrink-0">
+                <Folder className="w-[22px] h-[22px] text-[#1a73e8]" fill="currentColor" fillOpacity={0.2} />
               </span>
-              <div className="min-w-0 pt-0.5">
+              <div className="min-w-0 pt-2">
                 <div className="text-[14px] font-medium text-[#202124] dark:text-slate-100 truncate">
                   {conflict.parentTitle}
                 </div>
                 <div className="text-[12px] text-[#5f6368] dark:text-slate-400 mt-0.5">
                   {accessLabel(conflict.parentFromAccess)}
-                  <span className="mx-1">→</span>
+                  <span className="mx-1.5">→</span>
                   {accessLabel(conflict.parentToAccess)}
                 </div>
               </div>
             </div>
 
-            {/* Đường nối cây */}
-            <div className="flex gap-3 ml-[17px] border-l-2 border-[#dadce0] dark:border-slate-600 pl-5 py-1">
-              <div className="flex gap-3 items-start -ml-[2px] w-full">
-                <span className="mt-0.5 w-9 h-9 rounded-full bg-[#e8f0fe] dark:bg-blue-500/15 flex items-center justify-center shrink-0">
-                  <FileText className="w-5 h-5 text-[#1a73e8]" />
+            {/*
+              Guide └ : nửa trái = cạnh dọc (căn giữa icon mẹ w-10 → ml-5),
+              nửa phải = cạnh ngang rồi tới icon file.
+            */}
+            <div className="flex items-start">
+              {/* Cột căn giữa icon mẹ (40px): vẽ L bằng border */}
+              <div className="w-10 shrink-0 flex justify-center" aria-hidden>
+                <div className="w-[20px] h-8 border-l border-b border-[#dadce0] dark:border-slate-500 rounded-bl-[3px] ml-[20px]" />
+              </div>
+
+              {/* File con — nằm ngay sau cạnh ngang của L */}
+              <div className="flex gap-3 items-start min-w-0 flex-1 -ml-0.5 pt-1">
+                <span className="relative z-[1] w-10 h-10 rounded-full bg-[#e8f0fe] dark:bg-blue-500/15 flex items-center justify-center shrink-0">
+                  <FileText className="w-[22px] h-[22px] text-[#1a73e8]" />
                 </span>
-                <div className="min-w-0 pt-0.5">
+                <div className="min-w-0 pt-2">
                   <div className="text-[14px] font-medium text-[#202124] dark:text-slate-100 truncate">
                     {conflict.itemTitle}
                   </div>
                   <div className="text-[12px] text-[#5f6368] dark:text-slate-400 mt-0.5">
                     {accessLabel(conflict.itemFromAccess)}
-                    <span className="mx-1">→</span>
+                    <span className="mx-1.5">→</span>
                     {accessLabel(conflict.itemToAccess)}
                   </div>
                 </div>

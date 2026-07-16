@@ -38,6 +38,8 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
   const [removeTargetId, setRemoveTargetId] = useState<string | null>(null);
   // Case 1 — conflict tắt link khi folder mẹ đang public (popup giống Drive).
   const [linkRestrictConflict, setLinkRestrictConflict] = useState<DriveLinkRestrictConflict | null>(null);
+  // Đang GET restrict-conflict trước khi tắt — chặn spam click.
+  const [isPreviewingRestrict, setIsPreviewingRestrict] = useState(false);
 
   const permissionsQuery = useQuery({
     queryKey: ['drive-permissions', itemId],
@@ -82,16 +84,65 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
       enabled: boolean;
       role: DrivePermissionRole;
       confirmRestrictParent?: boolean;
+      /** Folder mẹ — cập nhật cache khi Case 1 confirm. */
+      parentItemId?: string | null;
     }) =>
       driveApi.setLinkSharing(itemId, {
         enabled: payload.enabled,
         role: payload.role,
         confirmRestrictParent: payload.confirmRestrictParent,
       }),
-    onSuccess: (_data, vars) => {
+    onSuccess: async (data, vars) => {
+      const parentItemId = vars.parentItemId ?? null;
       setLinkRestrictConflict(null);
-      invalidate();
-      // Confirm Case 1: tắt cả folder mẹ — toast rõ hơn.
+
+      /** Bỏ dòng anyone khỏi cache permissions. */
+      const stripLink = (old: { items: DrivePermission[] } | undefined) => ({
+        items: (old?.items ?? []).filter((p) => !p.isLink),
+      });
+
+      // Huỷ refetch đang bay — tránh Google còn trả anyone ghi đè UI vừa tắt.
+      await queryClient.cancelQueries({ queryKey: ['drive-permissions', itemId] });
+      if (parentItemId) {
+        await queryClient.cancelQueries({ queryKey: ['drive-permissions', parentItemId] });
+      }
+
+      if (vars.enabled) {
+        queryClient.setQueryData(
+          ['drive-permissions', itemId],
+          (old: { items: DrivePermission[] } | undefined) => {
+            const withoutLink = (old?.items ?? []).filter((p) => !p.isLink);
+            const linkRow: DrivePermission = data ?? {
+              id: 'link-optimistic',
+              type: 'anyone',
+              role: vars.role,
+              isOwner: false,
+              isLink: true,
+            };
+            return { items: [...withoutLink, linkRow] };
+          },
+        );
+        void queryClient.invalidateQueries({ queryKey: ['drive-permissions', itemId] });
+      } else {
+        // Tắt link: ghi cache tắt ngay cho file (+ folder mẹ nếu Case 1).
+        queryClient.setQueryData(['drive-permissions', itemId], stripLink);
+        if (parentItemId) {
+          queryClient.setQueryData(['drive-permissions', parentItemId], stripLink);
+        }
+
+        if (vars.confirmRestrictParent) {
+          // Google list còn anyone vài giây sau delete — trì hoãn refetch.
+          window.setTimeout(() => {
+            void queryClient.invalidateQueries({ queryKey: ['drive-permissions', itemId] });
+            if (parentItemId) {
+              void queryClient.invalidateQueries({ queryKey: ['drive-permissions', parentItemId] });
+            }
+          }, 2500);
+        } else {
+          void queryClient.invalidateQueries({ queryKey: ['drive-permissions', itemId] });
+        }
+      }
+
       toast.success(
         vars.confirmRestrictParent
           ? t('drive.share.linkOffWithParent')
@@ -109,7 +160,8 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
           return;
         }
       }
-      handleApiError(err, t('drive.share.loadError'), { navigate });
+      // Không navigate /integrations — 403 gỡ share thường là kế thừa quyền, không phải thiếu scope.
+      handleApiError(err, t('drive.share.loadError'));
     },
   });
 
@@ -118,25 +170,51 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
     label: t(roleLabelKey(r)),
   }));
 
-  // Toggle link: derive từ API (linkPerm), optimistic khi mutation đang chạy — không dùng useEffect.
+  // Toggle: ưu tiên mutation đang chạy; sau success giữ giá trị trong lúc refetch.
   const serverLinkEnabled = !!linkPerm;
   const serverLinkRole: DrivePermissionRole =
     linkPerm && ROLE_OPTIONS.includes(linkPerm.role as DrivePermissionRole)
       ? (linkPerm.role as DrivePermissionRole)
       : 'reader';
-  const linkEnabled =
-    linkMutation.isPending && linkMutation.variables != null
-      ? linkMutation.variables.enabled
-      : serverLinkEnabled;
-  const linkRole =
-    linkMutation.isPending && linkMutation.variables != null
-      ? linkMutation.variables.role
-      : serverLinkRole;
+
+  const mutationLink =
+    linkMutation.variables != null &&
+    (linkMutation.isPending ||
+      (linkMutation.isSuccess && permissionsQuery.isFetching))
+      ? linkMutation.variables
+      : null;
+
+  const linkEnabled = mutationLink?.enabled ?? serverLinkEnabled;
+  const linkRole = mutationLink?.role ?? serverLinkRole;
 
   const handleToggleLink = (enabled: boolean) => {
-    linkMutation.mutate({ enabled, role: linkRole });
+    // Tránh double-click làm toggle nháy khi đang gọi API / refetch / preview.
+    if (linkMutation.isPending || permissionsQuery.isFetching || isPreviewingRestrict) return;
+
+    // Tắt link: preview Case 1 trước — có conflict thì mở popup, KHÔNG nháy toggle tắt.
+    if (!enabled) {
+      void (async () => {
+        setIsPreviewingRestrict(true);
+        try {
+          const conflict = await driveApi.getLinkRestrictConflict(itemId);
+          if (conflict) {
+            setLinkRestrictConflict(conflict);
+            return;
+          }
+        } catch {
+          // Preview lỗi → vẫn thử PUT (BE vẫn 409 nếu Case 1).
+        } finally {
+          setIsPreviewingRestrict(false);
+        }
+        linkMutation.mutate({ enabled: false, role: linkRole });
+      })();
+      return;
+    }
+
+    linkMutation.mutate({ enabled: true, role: linkRole });
   };
   const handleLinkRoleChange = (role: string) => {
+    if (linkMutation.isPending) return;
     linkMutation.mutate({ enabled: true, role: role as DrivePermissionRole });
   };
 
@@ -246,7 +324,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
               <button
                 type="button"
                 onClick={() => handleToggleLink(!linkEnabled)}
-                disabled={linkMutation.isPending}
+                disabled={linkMutation.isPending || isPreviewingRestrict}
                 className={`relative w-10 h-5 rounded-full transition-colors ${linkEnabled ? 'bg-brand-600' : 'bg-slate-300'}`}
               >
                 <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${linkEnabled ? 'translate-x-5' : ''}`} />
@@ -300,10 +378,12 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
         loading={linkMutation.isPending && !!linkMutation.variables?.confirmRestrictParent}
         onCancel={() => setLinkRestrictConflict(null)}
         onConfirm={() => {
+          const parentItemId = linkRestrictConflict?.parentItemId ?? null;
           linkMutation.mutate({
             enabled: false,
             role: linkRole,
             confirmRestrictParent: true,
+            parentItemId,
           });
         }}
       />
