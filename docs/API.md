@@ -200,7 +200,8 @@ Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `I
 - `POST /api/drive/items/{itemId}/permissions` — [Authorize]. Body `{ email, role, notify? }` (`role`: reader|commenter|writer; `notify` default true). Mời user qua email. Trả **201** `DrivePermissionDto`. (400 validation, 404, 409 email đã có quyền, 422 business rule, 502)
 - `PATCH /api/drive/items/{itemId}/permissions/{permissionId}` — [Authorize]. Body `{ role }`. Đổi role (không áp dụng owner). Trả **200** `DrivePermissionDto`. (404 permission/item, 422 không sửa owner, 502)
 - `DELETE /api/drive/items/{itemId}/permissions/{permissionId}` — [Authorize]. Gỡ quyền. Trả **204**. (404, 422 owner, 502)
-- `PUT /api/drive/items/{itemId}/link-sharing` — [Authorize]. Body `{ enabled, role? }`. `enabled=true` → bật anyone-with-link (`role` bắt buộc: reader|commenter|writer); `enabled=false` → tắt link. Trả **200** `DrivePermissionDto` hoặc `null` khi tắt. (400 validation, 404, 502)
+- `PUT /api/drive/items/{itemId}/link-sharing` — [Authorize]. Body `{ enabled, role?, confirmRestrictParent? }`. `enabled=true` → bật anyone-with-link (`role` bắt buộc: reader|commenter|writer); `enabled=false` → tắt link. **Case 1 (giống Google Drive):** tắt link file khi folder mẹ đang anyone → **409** + body `DriveLinkRestrictConflict` (trừ khi `confirmRestrictParent: true`). Confirm → tắt link **cả file lẫn folder mẹ**. Case 2 (folder private, file public) không hỏi — bật thẳng. Trả **200** `DrivePermissionDto` hoặc `null` khi tắt. (400 validation, 404, 409 conflict Case 1, 502)
+- `GET /api/drive/items/{itemId}/link-sharing/restrict-conflict` — [Authorize]. Preview Case 1. **200** `DriveLinkRestrictConflict` hoặc **204** nếu không xung đột.
 
 **FE (SCRUM-79):** `DriveShareDialog`, `CreateDriveFolderModal`, `driveApi`; entry: ItemDetail (Chia sẻ + folder con), Integrations (Tạo folder), WorkspaceToolbar (Folder Drive). i18n `drive.*`.
 

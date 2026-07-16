@@ -207,13 +207,31 @@ namespace WorkspaceHub.Api.Controllers
         }
 
         /// <summary>PUT /api/drive/items/{itemId}/link-sharing — bật/tắt link công khai.</summary>
+        /// <remarks>
+        /// Tắt link (enabled=false): nếu Case 1 (folder mẹ đang anyone) mà chưa
+        /// <c>confirmRestrictParent</c> → 409 + body <see cref="DriveLinkRestrictConflict"/> (FE hiện popup).
+        /// Sau khi user bấm "Xoá khỏi thư mục mẹ" → gọi lại với <c>confirmRestrictParent: true</c>
+        /// → tắt link cả file lẫn folder mẹ.
+        /// </remarks>
         [HttpPut("items/{itemId:guid}/link-sharing")]
+        [ProducesResponseType(typeof(DrivePermissionDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(DriveLinkRestrictConflict), StatusCodes.Status409Conflict)]
         public async Task<ActionResult<DrivePermissionDto>> SetLinkSharing(
             Guid itemId,
             [FromBody] LinkSharingRequest request,
             CancellationToken ct = default)
         {
             await _linkSharingValidator.ValidateAndThrowAsync(request, ct);
+
+            // Preview Case 1 trước khi ghi — trả 409 + DTO để FE hiện dialog (không silent).
+            if (!request.Enabled && !request.ConfirmRestrictParent)
+            {
+                var conflict = await _driveSharing.DetectLinkRestrictConflictAsync(
+                    CurrentUserId, itemId, ct);
+                if (conflict != null)
+                    return Conflict(conflict);
+            }
+
             var role = request.Enabled
                 ? ParseRole(request.Role!)
                 : DrivePermissionRole.Reader;
@@ -222,8 +240,28 @@ namespace WorkspaceHub.Api.Controllers
                 itemId,
                 request.Enabled,
                 role,
+                request.ConfirmRestrictParent,
                 ct);
             return Ok(result);
+        }
+
+        /// <summary>
+        /// GET /api/drive/items/{itemId}/link-sharing/restrict-conflict —
+        /// Preview Case 1 (tắt link file có kéo theo folder mẹ không).
+        /// 200 + conflict DTO, hoặc 204 nếu không xung đột (tắt link thẳng được).
+        /// </summary>
+        [HttpGet("items/{itemId:guid}/link-sharing/restrict-conflict")]
+        [ProducesResponseType(typeof(DriveLinkRestrictConflict), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<ActionResult<DriveLinkRestrictConflict>> GetLinkRestrictConflict(
+            Guid itemId,
+            CancellationToken ct = default)
+        {
+            var conflict = await _driveSharing.DetectLinkRestrictConflictAsync(
+                CurrentUserId, itemId, ct);
+            if (conflict is null)
+                return NoContent();
+            return Ok(conflict);
         }
 
         /// <summary>Chuyển role string (JSON) → enum — validator đã check trước đó.</summary>

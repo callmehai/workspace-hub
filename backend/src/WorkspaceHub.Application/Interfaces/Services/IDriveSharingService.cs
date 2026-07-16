@@ -49,12 +49,18 @@ public interface IDriveSharingService
         string permissionId,
         CancellationToken ct = default);
 
-    /// <summary>Bật/tắt link "ai có đường link".</summary>
+    /// <summary>
+    /// Bật/tắt link "ai có đường link".
+    /// Khi tắt (<paramref name="enabled"/>=false): nếu Case 1 và chưa
+    /// <paramref name="confirmRestrictParent"/> → ném <see cref="Common.ConflictException"/> (FE dùng GET conflict + dialog).
+    /// Khi <paramref name="confirmRestrictParent"/>=true → tắt link file + folder mẹ (giống nút Drive).
+    /// </summary>
     Task<DrivePermissionDto?> SetLinkSharingAsync(
         Guid userId,
         Guid itemId,
         bool enabled,
         DrivePermissionRole role = DrivePermissionRole.Reader,
+        bool confirmRestrictParent = false,
         CancellationToken ct = default);
 
     /// <summary>

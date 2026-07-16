@@ -135,10 +135,33 @@ public class DriveSharingService : IDriveSharingService
         Guid itemId,
         bool enabled,
         DrivePermissionRole role = DrivePermissionRole.Reader,
+        bool confirmRestrictParent = false,
         CancellationToken ct = default)
     {
         var (item, conn) = await ResolveDriveItemAsync(itemId, userId, ct);
-        return await _gateway.SetLinkSharingAsync(conn, item.ExternalId!, enabled, role, ct);
+
+        // Bật link (Case 2): Drive không hỏi — ghi thẳng lên Google.
+        if (enabled)
+            return await _gateway.SetLinkSharingAsync(conn, item.ExternalId!, true, role, ct);
+
+        // Tắt link — Case 1: folder mẹ đang anyone → cần confirm giống Drive.
+        var conflict = await DetectLinkRestrictConflictAsync(userId, itemId, ct);
+        if (conflict != null && !confirmRestrictParent)
+        {
+            throw new ConflictException(
+                "Tắt link file sẽ tắt luôn link thư mục mẹ. Cần xác nhận (confirmRestrictParent) hoặc dùng GET restrict-conflict.");
+        }
+
+        // User đã confirm popup "Xoá khỏi thư mục mẹ" → tắt link folder mẹ trước.
+        if (conflict != null && confirmRestrictParent)
+        {
+            await _gateway.SetLinkSharingAsync(
+                conn, conflict.ParentExternalId, enable: false, role, ct);
+        }
+
+        // Tắt link trên chính file/folder đang thao tác.
+        return await _gateway.SetLinkSharingAsync(
+            conn, item.ExternalId!, enable: false, role, ct);
     }
 
     /// <inheritdoc />
