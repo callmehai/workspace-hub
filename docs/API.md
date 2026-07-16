@@ -203,7 +203,7 @@ Route prefix `/api/drive/*`. Controller mỏng → `IDriveSharingService` → `I
 - `PUT /api/drive/items/{itemId}/link-sharing` — [Authorize]. Body `{ enabled, role?, confirmRestrictParent? }`. `enabled=true` → bật anyone-with-link (`role` bắt buộc: reader|commenter|writer); `enabled=false` → tắt link. **Case 1 (giống Google Drive):** tắt link file khi folder mẹ đang anyone → **409** + body `DriveLinkRestrictConflict` (trừ khi `confirmRestrictParent: true`). Confirm → tắt link **cả file lẫn folder mẹ**. Case 2 (folder private, file public) không hỏi — bật thẳng. Trả **200** `DrivePermissionDto` hoặc `null` khi tắt. (400 validation, 404, 409 conflict Case 1, 502)
 - `GET /api/drive/items/{itemId}/link-sharing/restrict-conflict` — [Authorize]. Preview Case 1. **200** `DriveLinkRestrictConflict` hoặc **204** nếu không xung đột.
 
-**FE (SCRUM-79):** `DriveShareDialog`, `CreateDriveFolderModal`, `driveApi`; entry: ItemDetail (Chia sẻ + folder con), Integrations (Tạo folder), WorkspaceToolbar (Folder Drive). i18n `drive.*`.
+**FE (SCRUM-79):** `DriveShareDialog`, `DriveLinkRestrictDialog` (Case 1), `CreateDriveFolderModal`, `driveApi`; entry: ItemDetail (Chia sẻ + folder con), Integrations (Tạo folder), WorkspaceToolbar (Folder Drive). i18n `drive.*`.
 
 ## Item-Folder — không đổi
 `POST/DELETE /api/folders/{id}/items`, `PATCH .../reorder`.

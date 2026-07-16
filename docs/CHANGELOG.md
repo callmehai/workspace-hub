@@ -2,6 +2,16 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
+
+> Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.
+
+- **Case 1:** file + folder mẹ đều `anyone` → `PUT link-sharing` tắt không confirm → **409** + `DriveLinkRestrictConflict`; confirm `confirmRestrictParent: true` → tắt link **cả file lẫn folder mẹ** (file vẫn trong folder).
+- **Case 2:** folder mẹ hạn chế, bật link file → **không popup** (khớp Drive web).
+- **BE:** `DetectLinkRestrictConflictAsync`, `GET .../restrict-conflict`, `LinkSharingRequest.ConfirmRestrictParent`; test Case 1 trên `DriveSharingServiceTests`.
+- **FE:** `DriveLinkRestrictDialog` (layout gần Drive: tiêu đề, cây quyền, Huỷ / Xoá khỏi thư mục mẹ); wire trong `DriveShareDialog` bắt 409.
+- **Docs:** `docs/API.md`, `docs/DRIVE_FOLDER_SHARING.md` §6.4 / §7.6–7.7 / QA.
+
 ## [2026-07-10] Friend system nội bộ app (đổi hướng từ Google Contacts)
 
 > **Quyết định scope:** bỏ hướng đồng bộ Google Contacts / People API (PR #100) — bạn bè chỉ có ý nghĩa TRONG app, không liên kết bên thứ 3. Kết bạn = nhập email gửi lời mời.
