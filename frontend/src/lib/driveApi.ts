@@ -7,6 +7,7 @@ import type {
     CreateDriveFolderPayload,
     DriveFolderUploadEntry,
     DriveFolderUploadResponse,
+    DriveLinkRestrictConflict,
     DrivePermission,
     DrivePermissionsListResponse,
     LinkSharingPayload,
@@ -14,6 +15,7 @@ import type {
     UploadDriveFilePayload,
     UploadDriveFolderPayload,
 } from '../types/drive';
+import { LINK_RESTRICT_AFFECTS_PARENT } from '../types/drive';
 import {
     MAX_DRIVE_FILE_BYTES,
     MAX_DRIVE_FOLDER_FILES,
@@ -159,7 +161,7 @@ export const driveApi = {
         await api.delete(`/drive/items/${itemId}/permissions/${permissionId}`);
     },
 
-    /** Bật/tắt link "ai có đường link". */
+    /** Bật/tắt link "ai có đường link". Case 1 chưa confirm → BE 409 + conflict body. */
     setLinkSharing: async (
         itemId: string,
         payload: LinkSharingPayload,
@@ -170,7 +172,28 @@ export const driveApi = {
         );
         return response.data;
     },
+
+    /**
+     * Preview Case 1 — 200 conflict hoặc null (204).
+     * FE có thể gọi trước khi tắt link; hoặc bắt 409 từ setLinkSharing.
+     */
+    getLinkRestrictConflict: async (itemId: string): Promise<DriveLinkRestrictConflict | null> => {
+        const response = await api.get<DriveLinkRestrictConflict>(
+            `/drive/items/${itemId}/link-sharing/restrict-conflict`,
+            { validateStatus: (s) => s === 200 || s === 204 },
+        );
+        if (response.status === 204) return null;
+        return response.data;
+    },
 };
+
+/** Lấy DriveLinkRestrictConflict từ lỗi axios 409 (PUT tắt link Case 1). */
+export function getLinkRestrictConflictFromError(err: unknown): DriveLinkRestrictConflict | null {
+    if (!axios.isAxiosError(err) || err.response?.status !== 409) return null;
+    const data = err.response.data as DriveLinkRestrictConflict | undefined;
+    if (!data || data.code !== LINK_RESTRICT_AFFECTS_PARENT) return null;
+    return data;
+}
 
 // Re-export hằng số để UI import từ driveApi nếu tiện
 export {

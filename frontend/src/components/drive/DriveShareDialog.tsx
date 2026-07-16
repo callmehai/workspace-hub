@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, X, UserPlus, Link2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { driveApi } from '../../lib/driveApi';
+import { driveApi, getLinkRestrictConflictFromError } from '../../lib/driveApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
 import { ConfirmDialog } from '../ConfirmDialog';
-import type { DrivePermission, DrivePermissionRole } from '../../types/drive';
+import { DriveLinkRestrictDialog } from './DriveLinkRestrictDialog';
+import type { DriveLinkRestrictConflict, DrivePermission, DrivePermissionRole } from '../../types/drive';
 
 interface Props {
   itemId: string;
@@ -24,6 +25,7 @@ function roleLabelKey(role: DrivePermissionRole) {
   if (role === 'writer') return 'drive.share.roleWriter' as const;
   return 'drive.share.roleReader' as const;
 }
+
 /** SCRUM-79 B2 — dialog chia sẻ file/folder Drive (gọi /api/drive/items/{id}/permissions). */
 export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -34,7 +36,9 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
   const [notify, setNotify] = useState(true);
   // Permission đang chờ xác nhận gỡ (null = đóng dialog).
   const [removeTargetId, setRemoveTargetId] = useState<string | null>(null);
-  // Mở dialog mới fetch — cache key ['drive-permissions', itemId]
+  // Case 1 — conflict tắt link khi folder mẹ đang public (popup giống Drive).
+  const [linkRestrictConflict, setLinkRestrictConflict] = useState<DriveLinkRestrictConflict | null>(null);
+
   const permissionsQuery = useQuery({
     queryKey: ['drive-permissions', itemId],
     queryFn: () => driveApi.listPermissions(itemId),
@@ -45,6 +49,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['drive-permissions', itemId] });
   };
+
   const inviteMutation = useMutation({
     mutationFn: () =>
       driveApi.addPermission(itemId, { email: email.trim(), role: inviteRole, notify }),
@@ -73,14 +78,41 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
     onError: (err) => handleApiError(err, t('drive.share.loadError'), { navigate }),
   });
   const linkMutation = useMutation({
-    mutationFn: (payload: { enabled: boolean; role: DrivePermissionRole }) =>
-      driveApi.setLinkSharing(itemId, { enabled: payload.enabled, role: payload.role }),
+    mutationFn: (payload: {
+      enabled: boolean;
+      role: DrivePermissionRole;
+      confirmRestrictParent?: boolean;
+    }) =>
+      driveApi.setLinkSharing(itemId, {
+        enabled: payload.enabled,
+        role: payload.role,
+        confirmRestrictParent: payload.confirmRestrictParent,
+      }),
     onSuccess: (_data, vars) => {
+      setLinkRestrictConflict(null);
       invalidate();
-      toast.success(vars.enabled ? t('drive.share.linkOn') : t('drive.share.linkOff'));
+      // Confirm Case 1: tắt cả folder mẹ — toast rõ hơn.
+      toast.success(
+        vars.confirmRestrictParent
+          ? t('drive.share.linkOffWithParent')
+          : vars.enabled
+            ? t('drive.share.linkOn')
+            : t('drive.share.linkOff'),
+      );
     },
-    onError: (err) => handleApiError(err, t('drive.share.loadError'), { navigate }),
+    onError: (err, vars) => {
+      // Case 1: BE 409 + conflict → hiện popup Drive, không toast lỗi.
+      if (!vars.enabled && !vars.confirmRestrictParent) {
+        const conflict = getLinkRestrictConflictFromError(err);
+        if (conflict) {
+          setLinkRestrictConflict(conflict);
+          return;
+        }
+      }
+      handleApiError(err, t('drive.share.loadError'), { navigate });
+    },
   });
+
   const roleSelectOptions = ROLE_OPTIONS.map((r) => ({
     value: r,
     label: t(roleLabelKey(r)),
@@ -107,6 +139,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
   const handleLinkRoleChange = (role: string) => {
     linkMutation.mutate({ enabled: true, role: role as DrivePermissionRole });
   };
+
   const renderPermissionRow = (perm: DrivePermission) => {
     const label = perm.displayName || perm.emailAddress || perm.type;
     const isBusy =
@@ -157,6 +190,7 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
       </div>
     );
   };
+
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
@@ -257,6 +291,21 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
           }
         }}
         onCancel={() => setRemoveTargetId(null)}
+      />
+
+      {/* Case 1 — popup giống Google Drive khi tắt link file trong folder public */}
+      <DriveLinkRestrictDialog
+        open={linkRestrictConflict !== null}
+        conflict={linkRestrictConflict}
+        loading={linkMutation.isPending && !!linkMutation.variables?.confirmRestrictParent}
+        onCancel={() => setLinkRestrictConflict(null)}
+        onConfirm={() => {
+          linkMutation.mutate({
+            enabled: false,
+            role: linkRole,
+            confirmRestrictParent: true,
+          });
+        }}
       />
     </div>
   );
