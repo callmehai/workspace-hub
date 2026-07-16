@@ -273,4 +273,70 @@ public class DriveUploadServiceTests
             It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
         _items.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
+
+    /// <summary>
+    /// Regression: SaveChanges từng item — file thứ N lỗi thì item đã upload trước vẫn đã persist (không rollback cả batch).
+    /// </summary>
+    [Fact]
+    public async Task UploadFolder_SecondFileFails_StillSavedFirstFile()
+    {
+        SetupDriveConnection();
+
+        var firstDto = new DriveFileDto
+        {
+            Id = "file-a",
+            Name = "a.txt",
+            MimeType = "text/plain",
+            Size = 1
+        };
+        var firstItem = new Item
+        {
+            Id = Guid.NewGuid(),
+            Title = "a.txt",
+            Type = ItemType.File,
+            ExternalId = "file-a",
+            ConnectionId = _connId,
+            UserId = _userId
+        };
+
+        _gateway.Setup(m => m.UploadFileAsync(
+                It.IsAny<Connection>(),
+                "a.txt",
+                "text/plain",
+                null,
+                It.IsAny<Stream>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(firstDto);
+
+        _gateway.Setup(m => m.UploadFileAsync(
+                It.IsAny<Connection>(),
+                "b.txt",
+                "text/plain",
+                null,
+                It.IsAny<Stream>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ProviderException("Google Drive upload lỗi giữa chừng."));
+
+        _mapper.Setup(m => m.ToItem(firstDto, _userId, _connId)).Returns(firstItem);
+
+        var entries = new List<DriveFolderUploadEntry>
+        {
+            new("a.txt", "a.txt", "text/plain", new MemoryStream([1]), 1),
+            new("b.txt", "b.txt", "text/plain", new MemoryStream([2]), 1)
+        };
+
+        var act = () => _service.UploadFolderAsync(_userId, _connId, entries);
+
+        await act.Should().ThrowAsync<ProviderException>();
+
+        // File đầu đã Add + Save trước khi file 2 lỗi — không gộp Save cuối vòng lặp.
+        _items.Verify(m => m.AddAsync(firstItem, It.IsAny<CancellationToken>()), Times.Once);
+        _items.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _gateway.Verify(m => m.UploadFileAsync(
+            It.IsAny<Connection>(), "a.txt", "text/plain", null,
+            It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
+        _gateway.Verify(m => m.UploadFileAsync(
+            It.IsAny<Connection>(), "b.txt", "text/plain", null,
+            It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

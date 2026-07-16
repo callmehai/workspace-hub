@@ -257,6 +257,44 @@ public class DriveSharingServiceTests
         result.Should().BeNull();
     }
 
+    /// <summary>
+    /// Regression: controller đã Detect (không conflict) → skipConflictDetect tránh gọi lại ListPermissions/GetFile.
+    /// </summary>
+    [Fact]
+    public async Task SetLinkSharing_Disable_SkipConflictDetect_DoesNotCallDetectApis()
+    {
+        // Có parents → nếu Detect chạy sẽ ListPermissions file + mẹ; skip phải không gọi.
+        const string parentId = "parent-folder-skip";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DrivePermissionDto?)null);
+
+        var result = await _service.SetLinkSharingAsync(
+            _userId,
+            _itemId,
+            enabled: false,
+            confirmRestrictParent: false,
+            skipConflictDetect: true);
+
+        result.Should().BeNull();
+        _gateway.Verify(
+            m => m.ListPermissionsAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _gateway.Verify(
+            m => m.GetFileAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false,
+                It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     [Fact]
     public async Task SetLinkSharing_Disable_Case1WithoutConfirm_ThrowsConflict()
     {
