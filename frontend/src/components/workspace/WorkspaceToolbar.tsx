@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
-  FolderPlus, Briefcase, UserRound, Loader2, ChevronDown, Check,
+  Briefcase, UserRound, Loader2, ChevronDown, Check,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
@@ -18,7 +18,7 @@ import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
 import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
-import { CreateDriveFolderModal } from '../drive/CreateDriveFolderModal';
+import { DriveNewMenu } from '../drive/DriveNewMenu';
 
 /*
  * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
@@ -215,7 +215,6 @@ export const WorkspaceToolbar = ({
   const [isEventOpen, setIsEventOpen] = useState(false);
   const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
-  const [isDriveFolderOpen, setIsDriveFolderOpen] = useState(false);
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
   const { data: connections = [] } = useQuery({
@@ -449,14 +448,7 @@ export const WorkspaceToolbar = ({
                 </button>
               )}
               {showDriveFolder && (
-                <button
-                  type="button"
-                  onClick={() => setIsDriveFolderOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <FolderPlus className="w-4 h-4" />
-                  <span>{t('toolbar.driveFolder')}</span>
-                </button>
+                <DriveNewMenu defaultParentItemId={currentDriveFolderId} />
               )}
             </div>
           )}
@@ -521,7 +513,6 @@ export const WorkspaceToolbar = ({
       <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
       <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
-      <CreateDriveFolderModal isOpen={isDriveFolderOpen} onClose={() => setIsDriveFolderOpen(false)} defaultParentItemId={currentDriveFolderId} />
     </>
   );
 };
