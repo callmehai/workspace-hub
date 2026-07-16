@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.Drive;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.Services;
@@ -293,5 +294,94 @@ public class DriveSharingServiceTests
         var act = () => _service.CreateFolderAsync(_userId, _connId, "Folder");
 
         await act.Should().ThrowAsync<NotFoundException>();
+    }
+
+    // ── DetectLinkRestrictConflictAsync (Case 1 — giống Google Drive) ──
+
+    [Fact]
+    public async Task DetectLinkRestrict_NoParents_ReturnsNull()
+    {
+        // File ở gốc My Drive — không có thư mục mẹ → không conflict.
+        SetupDriveItem();
+
+        var result = await _service.DetectLinkRestrictConflictAsync(_userId, _itemId);
+
+        result.Should().BeNull();
+        _gateway.Verify(
+            m => m.ListPermissionsAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task DetectLinkRestrict_ParentPrivate_FilePublic_ReturnsNull_Case2()
+    {
+        // Case 2: folder mẹ hạn chế, file đang anyone — Drive không hỏi → null.
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-file", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "owner", Type = DrivePermissionTypes.User, Role = "owner", IsOwner = true }
+            });
+
+        var result = await _service.DetectLinkRestrictConflictAsync(_userId, _itemId);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DetectLinkRestrict_BothAnyone_ReturnsConflict_Case1()
+    {
+        // Case 1: file + folder mẹ đều anyone → conflict (popup Drive).
+        const string parentId = "parent-folder-1";
+        var parentItemId = Guid.NewGuid();
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"],"isFolder":false}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Item
+            {
+                Id = parentItemId,
+                UserId = _userId,
+                Type = ItemType.File,
+                ConnectionId = _connId,
+                ExternalId = parentId,
+                Title = "Dungtestfolder",
+                MetadataJson = """{"isFolder":true}"""
+            });
+
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-file", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-parent", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+
+        var result = await _service.DetectLinkRestrictConflictAsync(_userId, _itemId);
+
+        result.Should().NotBeNull();
+        result!.Code.Should().Be(DriveLinkRestrictConflict.RestrictAffectsParentCode);
+        result.ParentExternalId.Should().Be(parentId);
+        result.ParentItemId.Should().Be(parentItemId);
+        result.ParentTitle.Should().Be("Dungtestfolder");
+        result.ItemFromAccess.Should().Be("anyone");
+        result.ItemToAccess.Should().Be("restricted");
+        result.ParentFromAccess.Should().Be("anyone");
+        result.ParentToAccess.Should().Be("restricted");
     }
 }

@@ -2,6 +2,7 @@
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
+using WorkspaceHub.Application.DTOs.Drive;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.Mapping;
@@ -140,6 +141,59 @@ public class DriveSharingService : IDriveSharingService
         return await _gateway.SetLinkSharingAsync(conn, item.ExternalId!, enabled, role, ct);
     }
 
+    /// <inheritdoc />
+    public async Task<DriveLinkRestrictConflict?> DetectLinkRestrictConflictAsync(
+        Guid userId,
+        Guid itemId,
+        CancellationToken ct = default)
+    {
+        var (item, conn) = await ResolveDriveItemAsync(itemId, userId, ct);
+
+        // Folder gốc / không có parents → tắt link không đụng thư mục mẹ.
+        var parentExternalId = TryGetFirstParentExternalId(item);
+        if (string.IsNullOrEmpty(parentExternalId))
+            return null;
+
+        // Quyền hiện tại của file + folder mẹ (hỏi Google live, không cache DB).
+        var itemPerms = await _gateway.ListPermissionsAsync(conn, item.ExternalId!, ct);
+        var parentPerms = await _gateway.ListPermissionsAsync(conn, parentExternalId, ct);
+
+        var itemHasLink = itemPerms.Any(p => p.IsLink || DrivePermissionTypes.IsLinkType(p.Type));
+        var parentHasLink = parentPerms.Any(p => p.IsLink || DrivePermissionTypes.IsLinkType(p.Type));
+
+        // Case 1 chỉ khi CẢ HAI đang "ai có link" — tắt file sẽ kéo theo folder mẹ (giống Drive).
+        // Case 2 (folder private, file public): parentHasLink=false → null, không popup.
+        if (!itemHasLink || !parentHasLink)
+            return null;
+
+        // Tên folder mẹ: ưu tiên Item local đã sync; fallback gọi Google GetFile.
+        var parentLocal = await _items.GetByConnectionAndExternalIdAsync(
+            userId, conn.Id, parentExternalId, ct);
+        var parentTitle = parentLocal?.Title;
+        if (string.IsNullOrWhiteSpace(parentTitle))
+        {
+            var parentFile = await _gateway.GetFileAsync(conn, parentExternalId, ct);
+            parentTitle = string.IsNullOrWhiteSpace(parentFile.Name)
+                ? parentExternalId
+                : parentFile.Name!;
+        }
+
+        var itemTitle = string.IsNullOrWhiteSpace(item.Title) ? item.ExternalId! : item.Title;
+
+        return new DriveLinkRestrictConflict(
+            Code: DriveLinkRestrictConflict.RestrictAffectsParentCode,
+            ItemId: item.Id,
+            ItemTitle: itemTitle,
+            ItemExternalId: item.ExternalId!,
+            ParentItemId: parentLocal?.Id,
+            ParentExternalId: parentExternalId,
+            ParentTitle: parentTitle,
+            ItemFromAccess: DriveLinkRestrictConflict.AccessAnyone,
+            ItemToAccess: DriveLinkRestrictConflict.AccessRestricted,
+            ParentFromAccess: DriveLinkRestrictConflict.AccessAnyone,
+            ParentToAccess: DriveLinkRestrictConflict.AccessRestricted);
+    }
+
     // ───────────────────────── Private helpers ─────────────────────────
 
     /// <summary>
@@ -217,6 +271,34 @@ public class DriveSharingService : IDriveSharingService
 
         if (name.Trim().Length > 255)
             throw new BusinessRuleException("Tên folder tối đa 255 ký tự.");
+    }
+
+    /// <summary>
+    /// Lấy Google folder id cha đầu tiên từ metadata.parents (sync A6 / upload đã ghi).
+    /// Null = file ở gốc My Drive hoặc metadata chưa có parents.
+    /// </summary>
+    private static string? TryGetFirstParentExternalId(Item item)
+    {
+        if (string.IsNullOrEmpty(item.MetadataJson))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(item.MetadataJson);
+            if (!doc.RootElement.TryGetProperty("parents", out var parents)
+                || parents.ValueKind != JsonValueKind.Array
+                || parents.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            var first = parents[0].GetString();
+            return string.IsNullOrWhiteSpace(first) ? null : first;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

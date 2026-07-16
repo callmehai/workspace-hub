@@ -1,5 +1,6 @@
 ﻿using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.DTOs;
+using WorkspaceHub.Application.DTOs.Drive;
 
 namespace WorkspaceHub.Application.Interfaces.Services;
 
@@ -54,6 +55,16 @@ public interface IDriveSharingService
         Guid itemId,
         bool enabled,
         DrivePermissionRole role = DrivePermissionRole.Reader,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Case 1 (giống Google Drive): kiểm tra tắt link file có kéo theo folder mẹ đang public không.
+    /// Trả conflict để FE hiện popup; <c>null</c> = không xung đột (tắt link thẳng được).
+    /// Case 2 (folder private, file public) — Drive không hỏi → method này cũng trả null.
+    /// </summary>
+    Task<DriveLinkRestrictConflict?> DetectLinkRestrictConflictAsync(
+        Guid userId,
+        Guid itemId,
         CancellationToken ct = default);
 }
 
