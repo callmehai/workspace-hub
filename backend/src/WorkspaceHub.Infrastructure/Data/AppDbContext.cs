@@ -69,8 +69,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Email).HasMaxLength(256).IsRequired();
             e.HasIndex(x => x.Email).IsUnique();
             e.Property(x => x.FullName).HasMaxLength(200).IsRequired();
-            e.Property(x => x.Phone).HasMaxLength(20);          // E.164, tối đa 15 chữ số + dấu +
-            e.Property(x => x.PhoneVerified).HasDefaultValue(true); // user cũ + Google không bị chặn
+            e.Property(x => x.EmailVerified).HasDefaultValue(true); // SCRUM-64: user cũ + Google không bị chặn
             e.Property(x => x.GoogleSub).HasMaxLength(256);
             e.HasIndex(x => x.GoogleSub)
                 .IsUnique()

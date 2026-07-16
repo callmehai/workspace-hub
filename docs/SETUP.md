@@ -43,7 +43,8 @@ dotnet user-secrets set "OAuth:google:ClientSecret" "<client-secret>" --project 
 dotnet user-secrets set "Cron:Secret" "<cron-secret>" --project src/WorkspaceHub.Api
 
 # 3. Apply migrations (tạo DB). Gồm: InitialCreate, UsersMultiAuth, ModelBConnections,
-#    RemoveClientCredentialsFromIntegration, ... , AddUserPhoneOtp (SCRUM-64: Users.Phone/PhoneVerified)
+#    RemoveClientCredentialsFromIntegration, ... , AddFriendSystem (mới nhất trên develop);
+#    SCRUM-64 (đang làm) thêm migration rename PhoneVerified→EmailVerified + drop Phone.
 dotnet ef database update --project src/WorkspaceHub.Infrastructure --startup-project src/WorkspaceHub.Api
 
 # 4. Run (profile https — FE proxy trỏ tới https://localhost:7010)
@@ -76,12 +77,12 @@ dotnet run --project src/WorkspaceHub.Api --launch-profile https
 | `Cron:SyncAutoRun` | `true` = BE tự chạy `ConnectionSyncProcessorService`. **Prod:** bật trong `docker-compose.prod.yml` (cùng pattern cron email). Dev: `appsettings.Development.json` |
 | `Cron:SyncIntervalSeconds` | Chu kỳ auto-sync khi `SyncAutoRun=true` (prod compose: 60s; default appsettings: 300s) |
 | `ConnectionStrings:Redis` | Redis cho refresh token + OTP + OAuth state (SCRUM-63, vd `localhost:6379`) |
-| `Sms:Twilio:AccountSid` / `Sms:Twilio:AuthToken` / `Sms:Twilio:FromNumber` | Twilio SMS gửi OTP (SCRUM-64). Cần **đủ cả 3** mới gọi Twilio thật; thiếu bất kỳ cái nào (vd `FromNumber` trống) → fallback `LogSmsSender` ghi OTP ra console |
+| `Email:Resend:ApiKey` / `Email:Resend:FromAddress` | Resend (SCRUM-64) — gửi OTP đăng ký qua email. Thiếu → dev fallback `LogEmailSender` (ghi OTP ra log). `FromAddress` phải thuộc domain đã verify trên Resend (test mode: `onboarding@resend.dev`). |
 | `Cors:AllowedOrigins` | (prod) origin FE cho cookie auth cross-site, vd `https://app.example.com` |
 | `R2:AccountId` / `R2:BucketName` / `R2:PublicUrl` | Cloudflare R2 (SCRUM-75) — avatar upload. `PublicUrl` = domain public bucket (`r2.dev` hoặc custom domain) |
 | `R2:AccessKeyId` / `R2:SecretAccessKey` | API token R2 (scope **Object Read & Write**, giới hạn đúng bucket) — secret, KHÔNG commit |
 
-> **Auth overhaul (SCRUM-62→64) — chưa merge, đang làm theo nhánh:** access token sẽ chuyển sang **HttpOnly cookie** (bỏ localStorage), refresh token lưu **Redis** với rotation, đăng ký thêm **OTP SMS qua Twilio**. Chi tiết quyết định: CHANGELOG.md mục [2026-06-30]. Khi các nhánh merge: cần chạy `docker compose up -d wh-redis`, set `ConnectionStrings:Redis` + `Sms:Twilio:*`, và chạy migration thêm cột `Users.Phone/PhoneVerified`.
+> **Auth overhaul (SCRUM-62→64):** access token chuyển sang **HttpOnly cookie** (bỏ localStorage), refresh token lưu **Redis** với rotation (62/63 ✅), đăng ký thêm **OTP qua Email** (64 🔄 đang đổi hướng SMS→Email/Resend — xem CHANGELOG [2026-07-16]). Cần chạy `docker compose up -d wh-redis`, set `ConnectionStrings:Redis` + `Email:Resend:*`, và chạy migration đổi `Users.EmailVerified`.
 
 ## Tạo migration mới
 
@@ -108,22 +109,18 @@ Scope dùng (2 chiều, mô hình B — mỗi service xin riêng full scope):
 
 > Connection cũ connect bằng scope readonly (mô hình A) sau migration SCRUM-34 vẫn giữ token cũ → phải **reconnect** mới dùng được write-back.
 
-## Setup Twilio SMS OTP (SCRUM-64)
+## Setup Email OTP — Resend (SCRUM-64)
 
-OTP đăng ký gửi qua Twilio. Dev có thể bỏ qua → `LogSmsSender` ghi OTP ra **console** để demo.
+OTP đăng ký được gửi tới **chính email user đăng ký**, từ một **sender hệ thống** qua [Resend](https://resend.com) (HTTP API). KHÔNG dùng Gmail của user (`IGmailGateway` là luồng khác). Thiếu config → dev fallback `LogEmailSender` ghi OTP ra log để test.
 
-> **Điều kiện bật Twilio thật:** chỉ khi cấu hình **đủ cả 3** `Sms:Twilio:AccountSid` + `AuthToken` + `FromNumber`. Thiếu bất kỳ cái nào (vd Twilio trial chưa mua số nên `FromNumber` trống) → tự fallback `LogSmsSender` (log console, KHÔNG gọi Twilio). Tiện cho team test khi chưa có số gửi.
-
-Dùng SMS thật (Twilio trial — đủ cho đồ án):
-1. Đăng ký https://www.twilio.com/try-twilio → lấy **Account SID** + **Auth Token** (Console Dashboard).
-2. Trial cấp 1 số gửi (**From**) + phải **verify số nhận** trong "Verified Caller IDs" (giới hạn của trial).
-3. Set config (user-secrets / env):
+1. Tạo tài khoản Resend, lấy **API Key** (Dashboard → API Keys).
+2. **Verify domain** (bắt buộc cho prod): Dashboard → Domains → thêm `workspace-hub.space`, tạo DNS record **SPF + DKIM** ở registrar. DNS propagate mất thời gian → làm sớm. Chưa verify (test mode): `FromAddress` phải là `onboarding@resend.dev` và chỉ gửi được tới email chủ tài khoản Resend.
+3. Set config:
 ```bash
-dotnet user-secrets set "Sms:Twilio:AccountSid" "ACxxxx" --project src/WorkspaceHub.Api
-dotnet user-secrets set "Sms:Twilio:AuthToken" "xxxx" --project src/WorkspaceHub.Api
-dotnet user-secrets set "Sms:Twilio:FromNumber" "+1xxxxxxxxxx" --project src/WorkspaceHub.Api
+dotnet user-secrets set "Email:Resend:ApiKey"      "re_xxx"                     --project src/WorkspaceHub.Api
+dotnet user-secrets set "Email:Resend:FromAddress" "no-reply@workspace-hub.space" --project src/WorkspaceHub.Api
 ```
-SĐT nhập khi đăng ký phải dạng E.164 (vd `+84901234567`).
+Dev không set → OTP in ra log console (`LogEmailSender`), lấy mã ở đó để verify.
 
 ## Cron cho scheduled email (SCRUM-31)
 

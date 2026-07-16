@@ -20,12 +20,12 @@ namespace WorkspaceHub.Infrastructure.Services;
 ///
 /// Chống TOCTOU (review #2): cooldown được "đặt chỗ" ATOMIC bằng SET NX (Lua) khi có Redis
 /// thật — 2 request đồng thời cùng userId thì chỉ 1 cái set được key, cái còn lại bị từ chối
-/// → đúng 1 SMS. Dev fallback (in-memory) dùng get+set không atomic (chấp nhận single-instance).
+/// → đúng 1 email. Dev fallback (in-memory) dùng get+set không atomic (chấp nhận single-instance).
 /// </summary>
 public class OtpService : IOtpService
 {
     private readonly IDistributedCache _cache;
-    private readonly ISmsSender _sms;
+    private readonly ISystemEmailSender _email;
     private readonly ILogger<OtpService> _logger;
     private readonly IConnectionMultiplexer? _redis;
 
@@ -39,17 +39,17 @@ public class OtpService : IOtpService
 
     public OtpService(
         IDistributedCache cache,
-        ISmsSender sms,
+        ISystemEmailSender email,
         ILogger<OtpService> logger,
         IConnectionMultiplexer? redis = null)
     {
         _cache = cache;
-        _sms = sms;
+        _email = email;
         _logger = logger;
         _redis = redis;
     }
 
-    public async Task<int> SendAsync(Guid userId, string phoneE164, CancellationToken ct = default)
+    public async Task<int> SendAsync(Guid userId, string email, CancellationToken ct = default)
     {
         // Cooldown: chặn spam gửi lại. Đặt chỗ ATOMIC → false nghĩa là đang trong cooldown.
         if (!await TryAcquireCooldownAsync(userId, ct))
@@ -62,10 +62,26 @@ public class OtpService : IOtpService
         await _cache.SetStringAsync(OtpKey(userId), $"{hash}:0:{expiry.UtcTicks}",
             new DistributedCacheEntryOptions { AbsoluteExpiration = expiry }, ct);
 
-        await _sms.SendAsync(phoneE164, $"Mã xác minh Workspace Hub của bạn là: {code} (hết hạn sau 5 phút).", ct);
+        var (subject, html, text) = BuildOtpEmail(code);
+        await _email.SendAsync(email, subject, html, text, ct);
         _logger.LogInformation("Đã gửi OTP. UserId={UserId}", userId);
 
         return CooldownSeconds;
+    }
+
+    /// <summary>Nội dung email OTP: text plain (dev log đọc mã dễ) + html tối giản.</summary>
+    private static (string Subject, string Html, string Text) BuildOtpEmail(string code)
+    {
+        const string subject = "Mã xác minh Workspace Hub";
+        var text = $"Mã xác minh Workspace Hub của bạn là: {code}\nMã hết hạn sau 5 phút. Nếu bạn không yêu cầu, hãy bỏ qua email này.";
+        var html =
+            "<div style=\"font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:auto\">" +
+            "<h2 style=\"margin:0 0 12px\">Xác minh Workspace Hub</h2>" +
+            "<p style=\"margin:0 0 16px;color:#334155\">Nhập mã dưới đây để hoàn tất đăng ký:</p>" +
+            $"<p style=\"font-size:32px;font-weight:700;letter-spacing:8px;margin:0 0 16px\">{code}</p>" +
+            "<p style=\"margin:0;color:#64748b;font-size:13px\">Mã hết hạn sau 5 phút. Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>" +
+            "</div>";
+        return (subject, html, text);
     }
 
     /// <summary>

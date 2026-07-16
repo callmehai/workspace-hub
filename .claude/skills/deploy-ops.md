@@ -24,7 +24,7 @@ description: "Invoke khi làm bất kỳ việc gì về deploy / hạ tầng / 
 ## Việc hay làm
 - **Redeploy tay:** SSH → `cd ~/workspace-hub && git pull && docker compose -f docker-compose.prod.yml up -d --build`.
 - **Xem log / debug:** `docker compose -f docker-compose.prod.yml ps` + `... logs -f <web|api|mssql|redis>`.
-- **Lấy OTP đăng ký** (Twilio để trống): `... logs api | grep -i otp`.
+- **Lấy OTP đăng ký** (khi `Email:Resend:*` để trống → dev `LogEmailSender`): `... logs api | grep -i otp`.
 - **Truy cập DB (DBeaver):** SSH tunnel (Host 18.140.38.148, user ec2-user, Lightsail key) → mssql `127.0.0.1:1433` (cần mở loopback trong compose), sa / DB WorkspaceHub, `trustServerCertificate=true`. Query nhanh: `... exec mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d WorkspaceHub -Q "..."`.
 - **Billing (giữ trong $100):** Billing → Budgets (đặt cảnh báo $80) · Credits (xem còn lại) · Cost Explorer. Lightsail ~$10-14/tháng.
 

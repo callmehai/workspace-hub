@@ -131,7 +131,6 @@ export const vi = {
   'register.subtitle': 'Bắt đầu gom tất cả công việc về một nơi.',
   'register.fullName': 'Họ và tên',
   'register.fullNamePlaceholder': 'Nguyễn Văn A',
-  'register.phone': 'Số điện thoại',
   'register.password': 'Mật khẩu',
   'register.confirm': 'Nhập lại mật khẩu',
   'register.confirmPlaceholder': 'Nhập lại mật khẩu',
@@ -142,8 +141,8 @@ export const vi = {
   'register.loginLink': 'Đăng nhập',
 
   // ── verify OTP ──
-  'verifyOtp.title': 'Xác minh số điện thoại',
-  'verifyOtp.subtitle': 'Nhập mã 6 số đã gửi tới điện thoại của bạn',
+  'verifyOtp.title': 'Xác minh email',
+  'verifyOtp.subtitle': 'Nhập mã 6 số đã gửi tới email của bạn',
   'verifyOtp.label': 'Mã OTP',
   'verifyOtp.verifying': 'Đang xác minh...',
   'verifyOtp.verify': 'Xác minh',
@@ -237,13 +236,12 @@ export const vi = {
   'common.nextPage': 'Trang sau',
   'pager.show': 'Hiển thị',
   'pager.perPage': '/ trang',
-  'register.otpSent': 'Đã gửi mã OTP. Vui lòng kiểm tra điện thoại.',
+  'register.otpSent': 'Đã gửi mã OTP. Vui lòng kiểm tra email.',
 
   // ── validation ──
   'valid.emailInvalid': 'Email không hợp lệ',
   'valid.passwordMin': 'Mật khẩu phải từ 8 ký tự trở lên',
   'valid.nameRequired': 'Vui lòng nhập họ tên',
-  'valid.phoneE164': 'SĐT phải dạng E.164, vd +84901234567',
   'valid.confirmMismatch': 'Mật khẩu nhập lại không khớp',
 
   // ── profile ──
@@ -901,7 +899,6 @@ export const en: Record<TranslationKey, string> = {
   'register.subtitle': 'Start bringing all your work into one place.',
   'register.fullName': 'Full name',
   'register.fullNamePlaceholder': 'John Doe',
-  'register.phone': 'Phone number',
   'register.password': 'Password',
   'register.confirm': 'Confirm password',
   'register.confirmPlaceholder': 'Re-enter your password',
@@ -912,8 +909,8 @@ export const en: Record<TranslationKey, string> = {
   'register.loginLink': 'Sign in',
 
   // ── verify OTP ──
-  'verifyOtp.title': 'Verify phone number',
-  'verifyOtp.subtitle': 'Enter the 6-digit code sent to your phone',
+  'verifyOtp.title': 'Verify email',
+  'verifyOtp.subtitle': 'Enter the 6-digit code sent to your email',
   'verifyOtp.label': 'OTP code',
   'verifyOtp.verifying': 'Verifying...',
   'verifyOtp.verify': 'Verify',
@@ -1007,13 +1004,12 @@ export const en: Record<TranslationKey, string> = {
   'common.nextPage': 'Next page',
   'pager.show': 'Show',
   'pager.perPage': 'per page',
-  'register.otpSent': 'OTP code sent. Please check your phone.',
+  'register.otpSent': 'OTP code sent. Please check your email.',
 
   // ── validation ──
   'valid.emailInvalid': 'Invalid email',
   'valid.passwordMin': 'Password must be at least 8 characters',
   'valid.nameRequired': 'Please enter your full name',
-  'valid.phoneE164': 'Phone must be E.164, e.g. +84901234567',
   'valid.confirmMismatch': 'Passwords do not match',
 
   // ── profile ──
