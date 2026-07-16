@@ -21,11 +21,10 @@
   "Auth": {
     "CrossSiteCookies": false
   },
-  "Sms": {
-    "Twilio": {
-      "AccountSid": "",
-      "AuthToken": "",
-      "FromNumber": ""
+  "Email": {
+    "Resend": {
+      "ApiKey": "",
+      "FromAddress": ""
     }
   },
   "Google": {

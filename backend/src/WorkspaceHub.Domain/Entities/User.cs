@@ -14,14 +14,11 @@ public class User
     public string? LockedReason { get; set; }
     public DateTime? LastLoginAt { get; set; }
 
-    /// <summary>Số điện thoại (E.164) để xác minh OTP khi đăng ký local (SCRUM-64). Null nếu chưa nhập.</summary>
-    public string? Phone { get; set; }
-
     /// <summary>
-    /// Đã xác minh SĐT qua OTP chưa (SCRUM-64). Default true: user cũ + Google Sign-In
+    /// Đã xác minh email qua OTP chưa (SCRUM-64). Default true: user cũ + Google Sign-In
     /// không bị chặn; chỉ user đăng ký local mới (set false) phải verify trước khi login.
     /// </summary>
-    public bool PhoneVerified { get; set; } = true;
+    public bool EmailVerified { get; set; } = true;
 
     /// <summary>1 user = 1 role (Admin/User). Mặc định User khi register.</summary>
     public UserRole Role { get; set; } = UserRole.User;

@@ -39,10 +39,13 @@ Users 1──n FriendInvites
 | IsActive | bool | false = khoá |
 | LockedReason | string null | |
 | LastLoginAt | datetime null | |
+| EmailVerified | bool | SCRUM-64 — đã verify email qua OTP chưa. Default **true** (user cũ + Google Sign-In không bị chặn); user đăng ký local mới = false tới khi verify. Login local chặn khi false (403 `EMAIL_NOT_VERIFIED`). |
 | Role | string | |
 | CreatedAt | datetime | |
 
 > UNIQUE filtered index cho GoogleSub (chỉ khi not null).
+>
+> **SCRUM-64 (🔄 đang đổi hướng SMS→Email/Resend):** migration `AddUserPhoneOtp` (cũ) thêm `Phone` + `PhoneVerified`. Đợt này **rename `PhoneVerified`→`EmailVerified` + drop `Phone`** (OTP giờ theo email, không cần phone) — migration mới phải sửa tay thành `RenameColumn` (EF tự sinh `Drop+Add` sẽ mất trạng thái verify). Xem CHANGELOG [2026-07-16].
 
 ## Role
 KHÔNG có bảng Roles/UserRoles (code thật dùng cột `Users.Role` string `Admin`/`User`, đẩy vào JWT claim `role`). 1 user = 1 role.

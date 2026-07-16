@@ -99,18 +99,17 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IOtpService, OtpService>();
 
-        // SMS sender (SCRUM-64): dùng Twilio thật CHỈ khi đủ AccountSid + AuthToken + FromNumber.
-        // Thiếu bất kỳ cái nào (vd FromNumber trống vì Twilio trial chưa mua số) → LogSmsSender
-        // ghi OTP ra console cho dev/demo, KHÔNG gọi Twilio. Đăng ký HttpClient "Twilio" sẵn.
-        services.AddHttpClient("Twilio");
-        var twilioConfigured =
-            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AccountSid"]) &&
-            !string.IsNullOrWhiteSpace(config["Sms:Twilio:AuthToken"]) &&
-            !string.IsNullOrWhiteSpace(config["Sms:Twilio:FromNumber"]);
-        if (twilioConfigured)
-            services.AddScoped<ISmsSender, TwilioSmsSender>();
+        // System email sender (SCRUM-64): dùng Resend thật CHỈ khi đủ ApiKey + FromAddress.
+        // Thiếu → LogEmailSender ghi OTP ra console cho dev/demo, KHÔNG gọi Resend.
+        // ⚠️ Đây là sender HỆ THỐNG cho OTP, KHÔNG phải Gmail của user (IGmailGateway).
+        services.AddHttpClient("Resend");
+        var resendConfigured =
+            !string.IsNullOrWhiteSpace(config["Email:Resend:ApiKey"]) &&
+            !string.IsNullOrWhiteSpace(config["Email:Resend:FromAddress"]);
+        if (resendConfigured)
+            services.AddScoped<ISystemEmailSender, ResendEmailSender>();
         else
-            services.AddScoped<ISmsSender, LogSmsSender>();
+            services.AddScoped<ISystemEmailSender, LogEmailSender>();
 
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAtlassianTokenService, AtlassianTokenService>();

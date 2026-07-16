@@ -33,11 +33,11 @@ export const Login = () => {
     },
     onError: async (error) => {
       const data = isAxiosError<ApiError>(error) ? error.response?.data : undefined;
-      // SCRUM-64: 403 PHONE_NOT_VERIFIED → gửi lại OTP + sang màn xác minh.
-      if (data?.message === 'PHONE_NOT_VERIFIED') {
+      // SCRUM-64: 403 EMAIL_NOT_VERIFIED → gửi lại OTP + sang màn xác minh.
+      if (data?.message === 'EMAIL_NOT_VERIFIED') {
         try {
           const cooldown = await authApi.sendOtp(email);
-          toast('Tài khoản chưa xác minh — đã gửi mã OTP.', { icon: '📱' });
+          toast('Tài khoản chưa xác minh — đã gửi mã OTP qua email.', { icon: '✉️' });
           navigate('/verify-otp', { state: { email, cooldown } });
         } catch {
           navigate('/verify-otp', { state: { email } });
