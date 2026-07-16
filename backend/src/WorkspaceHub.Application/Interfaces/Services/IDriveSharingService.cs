@@ -54,6 +54,8 @@ public interface IDriveSharingService
     /// Khi tắt (<paramref name="enabled"/>=false): nếu Case 1 và chưa
     /// <paramref name="confirmRestrictParent"/> → ném <see cref="Common.ConflictException"/> (FE dùng GET conflict + dialog).
     /// Khi <paramref name="confirmRestrictParent"/>=true → tắt link file + folder mẹ (giống nút Drive).
+    /// <paramref name="skipConflictDetect"/>=true khi controller đã Detect và biết chắc không conflict
+    /// (tránh gọi Google API Detect lần 2 trên path tắt-link đơn giản).
     /// </summary>
     Task<DrivePermissionDto?> SetLinkSharingAsync(
         Guid userId,
@@ -61,6 +63,7 @@ public interface IDriveSharingService
         bool enabled,
         DrivePermissionRole role = DrivePermissionRole.Reader,
         bool confirmRestrictParent = false,
+        bool skipConflictDetect = false,
         CancellationToken ct = default);
 
     /// <summary>

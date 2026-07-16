@@ -106,6 +106,7 @@ public class DriveUploadService : IDriveUploadService
         var folderExternalIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var createdItems = new List<ItemResponse>();
         var foldersCreated = 0;
+        var filesUploaded = 0;
 
         foreach (var entry in entries)
         {
@@ -136,14 +137,15 @@ public class DriveUploadService : IDriveUploadService
 
             var item = _mapper.ToItem(driveFile, userId, connectionId);
             await _items.AddAsync(item, ct);
+            // Save từng file/folder ngay — nếu file sau lỗi, phần đã lên Drive vẫn có Item local.
+            await _items.SaveChangesAsync(ct);
             createdItems.Add(MapToItemResponse(item));
+            filesUploaded++;
         }
-
-        await _items.SaveChangesAsync(ct);
 
         return new DriveFolderUploadResponse(
             createdItems,
-            FilesUploaded: entries.Count,
+            FilesUploaded: filesUploaded,
             FoldersCreated: foldersCreated);
     }
 
@@ -243,6 +245,8 @@ public class DriveUploadService : IDriveUploadService
 
             var folderItem = _mapper.ToItem(created, userId, connectionId);
             await _items.AddAsync(folderItem, ct);
+            // Persist folder ngay — tránh "mồ côi" trên Drive nếu upload file sau lỗi.
+            await _items.SaveChangesAsync(ct);
             createdItems.Add(MapToItemResponse(folderItem));
         }
 

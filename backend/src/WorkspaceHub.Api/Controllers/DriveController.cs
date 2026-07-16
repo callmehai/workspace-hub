@@ -113,23 +113,37 @@ namespace WorkspaceHub.Api.Controllers
             if (paths is null || paths.Count != files.Count)
                 return BadRequest("Số lượng paths phải khớp số file.");
 
-            var entries = new List<DriveFolderUploadEntry>(files.Count);
-            for (var i = 0; i < files.Count; i++)
+            // Validate giới hạn TRƯỚC khi OpenReadStream — tránh mở hàng trăm stream rồi mới 422.
+            if (files.Count > DriveUploadLimits.MaxFolderFileCount)
+                return BadRequest($"Tối đa {DriveUploadLimits.MaxFolderFileCount} file mỗi lần upload folder.");
+
+            long totalBytes = 0;
+            foreach (var formFile in files)
             {
-                var formFile = files[i];
                 if (formFile.Length == 0)
                     return BadRequest($"File rỗng: {formFile.FileName}");
-
-                entries.Add(new DriveFolderUploadEntry(
-                    paths[i],
-                    formFile.FileName,
-                    formFile.ContentType ?? "application/octet-stream",
-                    formFile.OpenReadStream(),
-                    formFile.Length));
+                if (formFile.Length > DriveUploadLimits.MaxFileBytes)
+                    return BadRequest($"File vượt quá 100 MB: {formFile.FileName}");
+                totalBytes += formFile.Length;
             }
 
+            if (totalBytes > DriveUploadLimits.MaxFolderTotalBytes)
+                return BadRequest("Tổng dung lượng upload folder vượt quá 500 MB.");
+
+            var entries = new List<DriveFolderUploadEntry>(files.Count);
             try
             {
+                for (var i = 0; i < files.Count; i++)
+                {
+                    var formFile = files[i];
+                    entries.Add(new DriveFolderUploadEntry(
+                        paths[i],
+                        formFile.FileName,
+                        formFile.ContentType ?? "application/octet-stream",
+                        formFile.OpenReadStream(),
+                        formFile.Length));
+                }
+
                 var result = await _driveUpload.UploadFolderAsync(
                     CurrentUserId,
                     connectionId,
@@ -140,7 +154,7 @@ namespace WorkspaceHub.Api.Controllers
             }
             finally
             {
-                // Stream mở từ IFormFile — dispose sau khi service upload xong.
+                // Dispose mọi stream đã mở (kể cả khi build entries lỗi giữa chừng).
                 foreach (var entry in entries)
                     await entry.Content.DisposeAsync();
             }
@@ -235,12 +249,15 @@ namespace WorkspaceHub.Api.Controllers
             var role = request.Enabled
                 ? ParseRole(request.Role!)
                 : DrivePermissionRole.Reader;
+            // Controller đã Detect khi tắt-link không confirm → skip Detect lần 2 trong service.
+            var skipConflictDetect = !request.Enabled && !request.ConfirmRestrictParent;
             var result = await _driveSharing.SetLinkSharingAsync(
                 CurrentUserId,
                 itemId,
                 request.Enabled,
                 role,
                 request.ConfirmRestrictParent,
+                skipConflictDetect,
                 ct);
             return Ok(result);
         }

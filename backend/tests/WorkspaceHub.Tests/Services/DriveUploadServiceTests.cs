@@ -271,6 +271,6 @@ public class DriveUploadServiceTests
         _gateway.Verify(m => m.UploadFileAsync(
             It.IsAny<Connection>(), "readme.txt", "text/plain", "folder-docs",
             It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
-        _items.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _items.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 }

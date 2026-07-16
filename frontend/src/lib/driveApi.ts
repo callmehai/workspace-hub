@@ -22,34 +22,11 @@ import {
     MAX_DRIVE_FOLDER_TOTAL_BYTES,
 } from '../types/drive';
 
-const CSRF_COOKIE = 'wh_csrf';
-const CSRF_HEADER = 'X-CSRF-Token';
-
-/** Timeout upload — file lớn cần lâu hơn api mặc định (30s). */
-const UPLOAD_TIMEOUT_MS = 15 * 60 * 1000;
-
-const readCookie = (name: string): string | null => {
-    const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-    return match ? decodeURIComponent(match[1]) : null;
-};
-
 /**
- * Axios riêng cho upload multipart — timeout dài, vẫn gửi cookie auth + CSRF.
- * Tách khỏi api.ts vì upload Drive có thể mất nhiều phút.
+ * Timeout upload — file lớn cần lâu hơn api mặc định (30s).
+ * Dùng chung instance `api` (CSRF + refresh 401) — chỉ override timeout theo request.
  */
-const driveUploadClient = axios.create({
-    baseURL: import.meta.env.VITE_API_URL ?? '/api',
-    timeout: UPLOAD_TIMEOUT_MS,
-    withCredentials: true,
-});
-
-driveUploadClient.interceptors.request.use((config) => {
-    const csrf = readCookie(CSRF_COOKIE);
-    if (csrf) {
-        config.headers[CSRF_HEADER] = csrf;
-    }
-    return config;
-});
+const UPLOAD_TIMEOUT_MS = 15 * 60 * 1000;
 
 /**
  * Validate danh sách file trước khi gọi API.
@@ -89,7 +66,7 @@ export const driveApi = {
 
     /**
      * Upload một file từ máy lên Google Drive (multipart → BE → Google).
-     * Gọi validateDriveUploadFiles([file]) trước nếu cần chặn sớm trên FE.
+     * Dùng `api` chung → hết access token giữa upload vẫn refresh + retry như mọi API khác.
      */
     uploadFile: async (payload: UploadDriveFilePayload): Promise<ItemResponse> => {
         const form = new FormData();
@@ -99,7 +76,9 @@ export const driveApi = {
         }
         form.append('file', payload.file);
 
-        const response = await driveUploadClient.post<ItemResponse>('/drive/files', form);
+        const response = await api.post<ItemResponse>('/drive/files', form, {
+            timeout: UPLOAD_TIMEOUT_MS,
+        });
         return response.data;
     },
 
@@ -118,9 +97,10 @@ export const driveApi = {
             form.append('paths', entry.relativePath);
         }
 
-        const response = await driveUploadClient.post<DriveFolderUploadResponse>(
+        const response = await api.post<DriveFolderUploadResponse>(
             '/drive/folders/upload',
             form,
+            { timeout: UPLOAD_TIMEOUT_MS },
         );
         return response.data;
     },
