@@ -154,11 +154,6 @@ export const vi = {
   'verifyOtp.resent': 'Đã gửi lại mã OTP.',
   'verifyOtp.resendFail': 'Không gửi lại được mã. Vui lòng thử lại.',
   'verifyOtp.sixDigits': 'Mã OTP gồm 6 chữ số.',
-  'verifyOtp.enterRegisteredEmail': 'Nhập email đã đăng ký',
-  'verifyOtp.invalidEmailFormat': 'Email không hợp lệ.',
-  'verifyOtp.sending': 'Đang gửi...',
-  'verifyOtp.sendOtp': 'Gửi mã xác nhận',
-  'verifyOtp.noEmailToResend': 'Không có email để gửi mã.',
 
   // ── oauth callback ──
   'oauth.connected': 'Kết nối thành công',
@@ -927,11 +922,6 @@ export const en: Record<TranslationKey, string> = {
   'verifyOtp.resent': 'OTP code resent.',
   'verifyOtp.resendFail': 'Could not resend the code. Please try again.',
   'verifyOtp.sixDigits': 'The OTP code has 6 digits.',
-  'verifyOtp.enterRegisteredEmail': 'Enter registered email',
-  'verifyOtp.invalidEmailFormat': 'Invalid email.',
-  'verifyOtp.sending': 'Sending...',
-  'verifyOtp.sendOtp': 'Send confirmation code',
-  'verifyOtp.noEmailToResend': 'No email to send code.',
 
   // ── oauth callback ──
   'oauth.connected': 'Connected successfully',

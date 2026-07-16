@@ -57,8 +57,8 @@ Như cũ, lưu ý: **403** thiếu scope ghi (connection cũ readonly) · **409*
 - **SCRUM-62 — cookie auth:** login/register/google **KHÔNG trả `accessToken` trong body** nữa; body = `AuthResultDto { expiresIn, user }`. Access token JWT set vào HttpOnly cookie `wh_access`; kèm cookie `wh_csrf` (đọc được) cho double-submit. Request mutating (POST/PUT/PATCH/DELETE) **bằng cookie** phải gửi header `X-CSRF-Token` = `wh_csrf` (thiếu → 403 `CsrfError`). Request dùng `Authorization: Bearer` (Swagger/Postman) bỏ qua CSRF.
 - `POST /api/auth/logout` — AllowAnonymous; revoke refresh token (Redis) + xoá cookie `wh_access`/`wh_csrf`/`wh_refresh` → 204.
 
-## Auth OTP đăng ký ⭐ SCRUM-64 — 🔄 đổi hướng sang **OTP qua Email (Resend)**
-> **Trạng thái:** design đã chốt (email OTP qua Resend, bỏ SMS/Twilio và bỏ Firebase Phone Auth). Phần dưới mô tả **hợp đồng mục tiêu**; code đang được implement trên nhánh này. Quyết định + lý do: `docs/CHANGELOG.md` mục [2026-07-16].
+## Auth OTP đăng ký qua Email (Resend) ⭐ SCRUM-64 ✅
+> Đã bỏ SMS/Twilio và Firebase Phone Auth — OTP gửi qua email bằng Resend. Quyết định + lý do: `docs/CHANGELOG.md` mục [2026-07-16].
 - `POST /api/auth/register` — body `{ email, password, fullName, inviteToken? }` (bỏ `phone`; `inviteToken` từ link mời kết bạn — token khớp → tự thành bạn với người mời). Tạo user `EmailVerified=false` + gửi OTP tới **chính email đăng ký**. **KHÔNG đăng nhập ngay** — trả `201 RegisterResult { email, requiresEmailVerification, resendCooldownSeconds }`. 409 email trùng, 400 validation. *Gửi OTP lỗi (provider) KHÔNG làm fail register* — vẫn trả 201, user dùng `send-otp` để gửi lại.
 - `POST /api/auth/send-otp` — body `{ email }` → gửi lại OTP tới email. Trả `{ resendCooldownSeconds }`. Luôn 200 (không tiết lộ email tồn tại/đã verify — chống enumeration); email không đủ điều kiện → im lặng trả cooldown giả.
 - `POST /api/auth/verify-otp` — body `{ email, code }` → verify; đúng → `EmailVerified=true` + **set cookie auth (đăng nhập)**, trả `AuthResultDto`. 422 mã sai / hết hạn / quá số lần.

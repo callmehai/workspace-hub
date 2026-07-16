@@ -9,7 +9,7 @@ File này load tự động vào mọi Claude session khi mở repo. Bổ trợ 
 **Đồ án PRN232 Fullstack ASP.NET, nhóm 6 người, 60/40 BE-FE.**
 App aggregator: gom **Gmail / Google Calendar / Drive** về 1 nơi (Jira ở phase sau).
 Concept: `Item` (Email/Event/File/Note) → kéo vào `Folder` (context) → Kanban 3 cột (Inbox/Doing/Done).
-Sprint hiện hành **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Nền tảng 2 chiều **đã xong**: mô hình B (SCRUM-34/35/36) + Google Sign-In + **write-back Google 37/38 ✅** + scheduled email 30/31 ✅. **Phase Jira 54→60 đã code xong** (Atlassian OAuth 3LO + sync/CRUD issue → Item Type=Ticket). **Auth overhaul** cookie/refresh/OTP (62/63 ✅, 64 🔄). Đang làm: FE polish + admin dashboard + tag UI + notifications + cron sync định kỳ (72).
+Sprint hiện hành **Sprint 4** (FE đầy đủ + hoàn thiện + nghiệm thu). Nền tảng 2 chiều **đã xong**: mô hình B (SCRUM-34/35/36) + Google Sign-In + **write-back Google 37/38 ✅** + scheduled email 30/31 ✅. **Phase Jira 54→60 đã code xong** (Atlassian OAuth 3LO + sync/CRUD issue → Item Type=Ticket). **Auth overhaul** cookie/refresh/OTP (62/63/64 ✅ — 64 = OTP đăng ký qua **Email/Resend**, bỏ SMS/Firebase). Đang làm: FE polish + admin dashboard + tag UI + notifications + cron sync định kỳ (72).
 
 Scope/phase chi tiết: đọc `CLAUDE.md` root. Status ticket: `docs/SPRINTS.md` (⚠️ dòng "Phase Jira chưa code" trong SPRINTS.md đã stale — Jira đã code). Deploy/ops: `docs/DEPLOY.md`.
 
@@ -46,7 +46,7 @@ Tech stack:
 - Namespace `WorkspaceHub.{Domain|Application|Infrastructure|Api}.*`. Route `/api/...` lowercase.
 - Guid PK, enum lưu string, UTC `datetime2`, JSON `nvarchar(max)`.
 - **Mô hình B:** mỗi service = 1 row `Connections`. KHÔNG cột Scopes/Permission — scope suy từ ServiceType trong code. Đừng tạo lại OAuthConnections/ServiceConnections cũ.
-- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có **13** (thứ tự): `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 — unique `Tags(UserId,Name)`), `EnableJiraIntegration` (bật `atlassian` IsEnabled=true), `AddGoogleContacts`, `AddItemThreadId`, `AddScheduledEmailAttachments`, `AddFriendSystem`. **SCRUM-64 (đang làm) sẽ thêm migration thứ 14** rename `PhoneVerified`→`EmailVerified` + drop `Phone` (⚠️ sửa tay thành `RenameColumn`). Prod tự chạy migration khi deploy (`Db__AutoMigrate=true`); local phải `dotnet ef database update` tay.
+- Migration mới mỗi thay đổi schema, KHÔNG sửa migration đã commit. Hiện có **14** (thứ tự): `InitialCreate`, `UsersMultiAuth`, `ModelBConnections`, `RemoveClientCredentialsFromIntegration`, `AddAtlassianIntegrationSeed`, `AddCreatedAtToScheduledEmails`, `AddUserPhoneOtp`, `AddTagUserNameUniqueIndex` (SCRUM-70 — unique `Tags(UserId,Name)`), `EnableJiraIntegration` (bật `atlassian` IsEnabled=true), `AddGoogleContacts`, `AddItemThreadId`, `AddScheduledEmailAttachments`, `AddFriendSystem`, `RenamePhoneVerifiedToEmailVerified` (SCRUM-64 — `RenameColumn` giữ trạng thái verify + drop `Phone`). Prod tự chạy migration khi deploy (`Db__AutoMigrate=true`); local phải `dotnet ef database update` tay.
 - DB dev: SQL Server chạy Docker container `wh-sqlserver` (xem docs/SETUP.md). KHÔNG phải SQLite/Postgres.
 
 ### Frontend
@@ -65,9 +65,9 @@ Tech stack:
 
 - ✅ **Done (BE nền tảng):** SCRUM-5→40 phần lớn (solution/schema/auth/OAuth/mô hình B/sync đọc/Folder/Items/Kanban/admin/logging/exception) + **37/38 write-back Google + conflict ETag** + **30/31 scheduled email + cron gửi** + 26/27/28 (refactor/Postman/README).
 - ✅ **Done (Jira phase 55→60):** client + sync issue→Item(Ticket), tạo/update/xoá issue, metadata helpers, ImportantContacts JiraAccount. Migration `EnableJiraIntegration` bật `atlassian`. *(Board đánh 54 vẫn "To Do" nhưng code JiraStrategy/OAuth đã có — status board lag.)*
-- ✅ **Done (auth overhaul):** 62 HttpOnly cookie + CSRF, 63 refresh token + Redis rotation. **64 OTP đang 🔄 đổi hướng SMS/Firebase → Email/Resend** (nhánh `fix/login-ux`; xem CHANGELOG [2026-07-16]).
+- ✅ **Done (auth overhaul):** 62 HttpOnly cookie + CSRF, 63 refresh token + Redis rotation, **64 OTP đăng ký qua Email/Resend** (đổi hướng từ SMS/Firebase — nhánh `fix/login-ux`, xem CHANGELOG [2026-07-16]). *(Board Jira còn "In Progress" — status lag.)*
 - ✅ **Done (FE Sprint 4):** 41 API layer, 42 wire login/register, 43 Connections, 44 Inbox, 45 Kanban, 46 write-back UI, 47 scheduled UI, 48 loading/toast, 65 Folder CRUD FE. + 70 Tag BE.
-- 🔄 **Đang làm:** 29 unit test (Hải), 49 FE admin dashboard (Huy), 61 FE admin toggle (Khánh), 64 OTP (Lộc), 68 notifications (Khánh).
+- 🔄 **Đang làm:** 29 unit test (Hải), 49 FE admin dashboard (Huy), 61 FE admin toggle (Khánh), 68 notifications (Khánh).
 - ⏳ **To Do:** 50 responsive/dark (Dũng), 51 deploy config (đã deploy thực tế lên Lightsail rồi), 52 finalize (Hải), 53 defense (Lộc), 67 highlight unread (Vũ), 69 People API (Khánh), 71 Tag UI (Lộc), 72 cron sync định kỳ + FE poll (Dũng).
 - ✅ **Friend system nội bộ app (2026-07-10, chưa có ticket Jira):** kết bạn theo email + invite link `/register?inviteToken=` + tier Friend/CloseFriend + trang `/friends`. ĐỔI HƯỚNG từ Google Contacts (PR #100 bị bỏ) — KHÔNG dùng provider ngoài. Xem CHANGELOG [2026-07-10].
 
