@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { isAxiosError } from 'axios';
 import { connectionsApi, type OAuthCallbackResponse } from '../../lib/connectionsApi';
@@ -23,6 +24,7 @@ const notifyListeners = () => listeners.forEach(l => l());
 export const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { t } = useI18n();
 
   const code = searchParams.get('code');
@@ -66,6 +68,13 @@ export const OAuthCallback = () => {
           activeStatus = 'success';
           notifyListeners();
           toast.success(t('oauth.connected'));
+          // Connection mới → cache cũ (connections + metadata Jira) đã stale.
+          // Không invalidate ở đây thì phải F5 mới thấy dự án/người phụ trách.
+          queryClient.invalidateQueries({ queryKey: ['connections'] });
+          queryClient.invalidateQueries({ queryKey: ['jira'] });
+          // Connect KHÔNG sync → item của connection vừa disconnect đã bị xoá khỏi DB.
+          // Phải bỏ cache items, không thì list hiện ticket ma tới khi F5.
+          queryClient.invalidateQueries({ queryKey: ['items'] });
           navigate('/integrations');
           return response;
         })
@@ -90,7 +99,7 @@ export const OAuthCallback = () => {
     } else if (activeStatus === 'success') {
       navigate('/integrations');
     }
-  }, [code, state, navigate, t]);
+  }, [code, state, navigate, t, queryClient]);
 
   const isError = activeStatus === 'error';
 

@@ -30,7 +30,7 @@ export const vi = {
   // ── nav / sidebar ──
   'nav.allItems': 'Tất cả mục',
   'nav.sources': 'Nguồn',
-  'integration.email': 'Email',
+  'integration.email': 'Gmail',
   'integration.calendar': 'Calendar',
   'integration.drive': 'Drive',
   'integration.jira': 'Jira',
@@ -651,6 +651,7 @@ export const vi = {
   'toolbar.groupRefine': 'Lọc thêm',
   'toolbar.allProjects': 'Tất cả dự án',
   'toolbar.allAssignees': 'Tất cả mọi người',
+  'toolbar.unassigned': 'Chưa gán',
   'toolbar.search': 'Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)',
 
   'calendar.pageTitle': 'Calendar',
@@ -1029,7 +1030,7 @@ export const en: Record<TranslationKey, string> = {
   // ── nav / sidebar ──
   'nav.allItems': 'All items',
   'nav.sources': 'Sources',
-  'integration.email': 'Email',
+  'integration.email': 'Gmail',
   'integration.calendar': 'Calendar',
   'integration.drive': 'Drive',
   'integration.jira': 'Jira',
@@ -1652,6 +1653,7 @@ export const en: Record<TranslationKey, string> = {
   'toolbar.groupRefine': 'Refine',
   'toolbar.allProjects': 'All projects',
   'toolbar.allAssignees': 'All assignees',
+  'toolbar.unassigned': 'Unassigned',
   'toolbar.search': 'Search title, content… (no diacritics needed)',
 
   // ── calendar view ──

@@ -271,25 +271,32 @@ export const WorkspaceToolbar = ({
     }))
   });
 
-  // Danh sách người phụ trách (assignee) cho filter tab Jira — suy từ ticket đã sync.
-  const { data: assignees = [] } = useQuery({
-    queryKey: ['jira', 'assignees'],
-    queryFn: itemsApi.getAssignees,
-    enabled: sourceType === 'Ticket',
-    staleTime: 60_000,
-  });
-
+  // Giữ luôn connectionId của từng project: assignee lấy từ Jira nên phải biết hỏi connection nào.
+  const jiraConnIds = jiraConns.map((c: ConnectionDto) => c.id).join(',');
   const availableProjects = useMemo(() => {
-    const map = new Map<string, string>();
-    projectQueries.forEach(q => {
-      if (q.data) {
-        q.data.forEach((p: JiraProject) => map.set(p.key, p.name));
+    const connIds = jiraConnIds ? jiraConnIds.split(',') : [];
+    const map = new Map<string, { name: string; connectionId: string }>();
+    projectQueries.forEach((q, i) => {
+      const connId = connIds[i];
+      if (q.data && connId) {
+        q.data.forEach((p: JiraProject) => map.set(p.key, { name: p.name, connectionId: connId }));
       }
     });
     return Array.from(map.entries())
-      .map(([key, name]) => ({ key, name }))
+      .map(([key, v]) => ({ key, name: v.name, connectionId: v.connectionId }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [projectQueries]);
+  }, [projectQueries, jiraConnIds]);
+
+  // Assignee trong Jira thuộc phạm vi TỪNG PROJECT → chỉ lọc được khi đã chọn 1 project cụ thể.
+  // Hỏi thẳng Jira (assignable-users) thay vì suy từ ticket đã sync: có người ngay sau khi
+  // connect, không phải chờ sync. Cùng dạng queryKey với CreateTicketModal → dùng chung cache.
+  const selectedProject = availableProjects.find(p => p.key === projectKeyFilter);
+  const { data: assignees = [] } = useQuery({
+    queryKey: ['jira', 'assignableUsers', selectedProject?.connectionId, projectKeyFilter, ''],
+    queryFn: () => jiraApi.getAssignableUsers(selectedProject!.connectionId, projectKeyFilter!),
+    enabled: sourceType === 'Ticket' && !!selectedProject && !!projectKeyFilter,
+    staleTime: 5 * 60_000,
+  });
 
   const handleSyncAll = async () => {
     try {
@@ -306,6 +313,8 @@ export const WorkspaceToolbar = ({
         toast.success(t('toolbar.syncDone'), { id: toastId });
         queryClient.invalidateQueries({ queryKey: ['items'] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
+        // Metadata Jira (project + assignee) — refetch cùng sau sync (#111).
+        queryClient.invalidateQueries({ queryKey: ['jira'] });
         if (view === 'calendar') {
           queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
           queryClient.invalidateQueries({ queryKey: ['calendar-scheduled-emails'] });
@@ -481,7 +490,12 @@ export const WorkspaceToolbar = ({
           <div className="w-56 shrink-0">
             <Select
               value={projectKeyFilter ?? ''}
-              onChange={onProjectKeyChange}
+              onChange={(v) => {
+                onProjectKeyChange(v);
+                // Assignee thuộc project cũ → đổi project phải bỏ chọn, không thì filter
+                // vẫn áp dụng trong khi dropdown biến mất (lọc vô hình, list trống khó hiểu).
+                if (assigneeFilter) onAssigneeChange?.('');
+              }}
               className="h-9 text-[13px]"
               icon={<Briefcase className="w-4 h-4" />}
               placeholder={`${t('createTicket.selectProject')}...`}
@@ -492,8 +506,9 @@ export const WorkspaceToolbar = ({
             />
           </div>
         )}
-        {/* Lọc theo người phụ trách (assignee) — CHỈ hiện khi đang ở tab Jira. */}
-        {onAssigneeChange && sourceType === 'Ticket' && jiraConns.length > 0 && (
+        {/* Lọc người phụ trách — CHỈ hiện khi đã chọn 1 project cụ thể, vì assignee của Jira
+            gắn theo project (chọn "Tất cả dự án" thì danh sách người không có nghĩa gì). */}
+        {onAssigneeChange && sourceType === 'Ticket' && selectedProject && (
           <div className="w-52 shrink-0">
             <Select
               value={assigneeFilter ?? ''}
@@ -503,6 +518,8 @@ export const WorkspaceToolbar = ({
               placeholder={t('toolbar.allAssignees')}
               options={[
                 { value: '', label: t('toolbar.allAssignees') },
+                // BE hiểu "unassigned" = ticket chưa gán ai (ItemRepository lọc theo giá trị này).
+                { value: 'unassigned', label: t('toolbar.unassigned') },
                 ...assignees.map(a => ({ value: a.accountId, label: a.displayName })),
               ]}
             />
