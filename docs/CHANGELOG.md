@@ -8,7 +8,7 @@
 
 - **Case 1:** file + folder mẹ đều `anyone` → `PUT link-sharing` tắt không confirm → **409** + `DriveLinkRestrictConflict`; confirm `confirmRestrictParent: true` → tắt link **cả file lẫn folder mẹ** (file vẫn trong folder).
 - **Case 2:** folder mẹ hạn chế, bật link file → **không popup** (khớp Drive web).
-- **BE:** `DetectLinkRestrictConflictAsync`, `GET .../restrict-conflict`, `LinkSharingRequest.ConfirmRestrictParent`; test Case 1 trên `DriveSharingServiceTests`.
+- **BE:** `DetectLinkRestrictConflictAsync`, `GET .../restrict-conflict`, `LinkSharingRequest.ConfirmRestrictParent`; test Case 1 trên `DriveSharingServiceTests`. `ConflictException.Payload` + middleware ghi payload làm body 409 (một path service→API, tránh 409 chỉ có message).
 - **FE:** `DriveLinkRestrictDialog` (layout gần Drive: tiêu đề, cây quyền, Huỷ / Xoá khỏi thư mục mẹ); wire trong `DriveShareDialog` bắt 409.
 - **Docs:** `docs/API.md`, `docs/DRIVE_FOLDER_SHARING.md` §6.4 / §7.6–7.7 / QA.
 ## [2026-07-16] SCRUM-64 đổi hướng OTP: Email (Resend) thay cho SMS/Firebase

@@ -52,9 +52,11 @@ public interface IDriveSharingService
     /// <summary>
     /// Bật/tắt link "ai có đường link".
     /// Khi tắt (<paramref name="enabled"/>=false): nếu Case 1 và chưa
-    /// <paramref name="confirmRestrictParent"/> → ném <see cref="Common.ConflictException"/> (FE dùng GET conflict + dialog).
+    /// <paramref name="confirmRestrictParent"/> → ném <see cref="Common.ConflictException"/>
+    /// kèm <see cref="Common.ConflictException.Payload"/> = <c>DriveLinkRestrictConflict</c>
+    /// (contract 409 cho FE popup; middleware ghi payload làm body).
     /// Khi <paramref name="confirmRestrictParent"/>=true → tắt link file + folder mẹ (giống nút Drive).
-    /// <paramref name="skipConflictDetect"/>=true khi controller đã Detect và biết chắc không conflict
+    /// <paramref name="skipConflictDetect"/>=true khi caller đã Detect và biết chắc không conflict
     /// (tránh gọi Google API Detect lần 2 trên path tắt-link đơn giản).
     /// </summary>
     Task<DrivePermissionDto?> SetLinkSharingAsync(

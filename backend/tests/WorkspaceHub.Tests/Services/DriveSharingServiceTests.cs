@@ -317,7 +317,9 @@ public class DriveSharingServiceTests
         var act = () => _service.SetLinkSharingAsync(
             _userId, _itemId, enabled: false, confirmRestrictParent: false);
 
-        await act.Should().ThrowAsync<ConflictException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>();
+        var conflict = ex.Which.Payload.Should().BeOfType<DriveLinkRestrictConflict>().Subject;
+        conflict.Code.Should().Be(DriveLinkRestrictConflict.RestrictAffectsParentCode);
         _gateway.Verify(
             m => m.SetLinkSharingAsync(
                 It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<bool>(),
