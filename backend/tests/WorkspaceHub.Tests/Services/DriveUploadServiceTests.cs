@@ -275,7 +275,8 @@ public class DriveUploadServiceTests
     }
 
     /// <summary>
-    /// Regression: SaveChanges từng item — file thứ N lỗi thì item đã upload trước vẫn đã persist (không rollback cả batch).
+    /// Upload folder KHÔNG atomic: file thứ 2 lỗi → KHÔNG throw cả batch, file 1 vẫn persist,
+    /// response trả FilesUploaded=1 + Failed chứa file lỗi (FE báo "đã lên X/Y file").
     /// </summary>
     [Fact]
     public async Task UploadFolder_SecondFileFails_StillSavedFirstFile()
@@ -325,9 +326,14 @@ public class DriveUploadServiceTests
             new("b.txt", "b.txt", "text/plain", new MemoryStream([2]), 1)
         };
 
-        var act = () => _service.UploadFolderAsync(_userId, _connId, entries);
+        var result = await _service.UploadFolderAsync(_userId, _connId, entries);
 
-        await act.Should().ThrowAsync<ProviderException>();
+        // Không throw: file 1 thành công, file 2 vào Failed.
+        result.FilesUploaded.Should().Be(1);
+        result.Failed.Should().HaveCount(1);
+        result.Failed[0].FileName.Should().Be("b.txt");
+        result.Failed[0].RelativePath.Should().Be("b.txt");
+        result.Items.Should().ContainSingle(i => i.ExternalId == "file-a");
 
         // File đầu đã Add + Save trước khi file 2 lỗi — không gộp Save cuối vòng lặp.
         _items.Verify(m => m.AddAsync(firstItem, It.IsAny<CancellationToken>()), Times.Once);
@@ -335,6 +341,7 @@ public class DriveUploadServiceTests
         _gateway.Verify(m => m.UploadFileAsync(
             It.IsAny<Connection>(), "a.txt", "text/plain", null,
             It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
+        // Vòng lặp KHÔNG dừng ở file lỗi — file 2 vẫn được thử upload.
         _gateway.Verify(m => m.UploadFileAsync(
             It.IsAny<Connection>(), "b.txt", "text/plain", null,
             It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);

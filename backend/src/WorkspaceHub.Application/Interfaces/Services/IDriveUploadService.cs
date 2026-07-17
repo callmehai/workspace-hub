@@ -64,11 +64,25 @@ public record DriveFolderUploadEntry(
     Stream Content,
     long ContentLength);
 
-/// <summary>Kết quả upload folder — danh sách Item đã tạo + thống kê.</summary>
+/// <summary>Kết quả upload folder — danh sách Item đã tạo + thống kê + file lỗi.</summary>
 /// <param name="Items">Mọi Item mới (folder trung gian + file) để FE refresh list.</param>
-/// <param name="FilesUploaded">Số file binary đã upload.</param>
+/// <param name="FilesUploaded">Số file binary upload THÀNH CÔNG.</param>
 /// <param name="FoldersCreated">Số folder mới tạo trên Drive (không tính folder cha sẵn có).</param>
+/// <param name="Failed">
+/// File upload lỗi giữa chừng (rỗng nếu trọn vẹn). Upload folder KHÔNG atomic — 1 file lỗi
+/// không làm hỏng cả batch; FE hiển thị "đã lên X/Y file" dựa vào danh sách này.
+/// </param>
 public record DriveFolderUploadResponse(
     IReadOnlyList<ItemResponse> Items,
     int FilesUploaded,
-    int FoldersCreated);
+    int FoldersCreated,
+    IReadOnlyList<DriveFolderUploadFailure> Failed);
+
+/// <summary>Một file upload thất bại trong batch folder.</summary>
+/// <param name="RelativePath">Đường dẫn tương đối của file (vd. docs/2024/file.pdf).</param>
+/// <param name="FileName">Tên file.</param>
+/// <param name="Error">Thông báo lỗi ngắn để FE hiển thị.</param>
+public record DriveFolderUploadFailure(
+    string RelativePath,
+    string FileName,
+    string Error);

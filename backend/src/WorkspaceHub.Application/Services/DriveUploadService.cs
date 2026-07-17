@@ -92,12 +92,6 @@ public class DriveUploadService : IDriveUploadService
         if (totalBytes > DriveUploadLimits.MaxFolderTotalBytes)
             throw new BusinessRuleException("Tổng dung lượng upload folder vượt quá 500 MB.");
 
-        foreach (var entry in entries)
-        {
-            ValidateFileName(entry.FileName);
-            ValidateFileSize(entry.ContentLength);
-        }
-
         var conn = await GetValidDriveConnectionAsync(connectionId, userId, ct);
         var rootParentExternalId = await ResolveParentExternalIdAsync(
             connectionId, userId, parentItemId, ct);
@@ -105,48 +99,65 @@ public class DriveUploadService : IDriveUploadService
         // Cache path folder tương đối → Google file id (tránh tạo trùng khi nhiều file cùng thư mục).
         var folderExternalIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var createdItems = new List<ItemResponse>();
+        var failures = new List<DriveFolderUploadFailure>();
         var foldersCreated = 0;
         var filesUploaded = 0;
 
+        // Upload folder KHÔNG atomic: mỗi file bọc riêng — 1 file lỗi (Google từ chối, tên xấu…)
+        // chỉ ghi vào failures rồi đi tiếp, KHÔNG kéo sập cả batch. FE báo "đã lên X/Y file".
+        // Client huỷ (ct cancelled) thì ném ra ngay, không nuốt vào failures để tiếp tục upload vô ích.
         foreach (var entry in entries)
         {
-            var (fileName, dirPath) = SplitRelativePath(entry.RelativePath, entry.FileName);
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                ValidateFileName(entry.FileName);
+                ValidateFileSize(entry.ContentLength);
 
-            var pathResult = await EnsureFolderPathAsync(
-                conn,
-                connectionId,
-                userId,
-                rootParentExternalId,
-                dirPath,
-                folderExternalIds,
-                createdItems,
-                ct);
-            foldersCreated += pathResult.FoldersCreated;
+                var (fileName, dirPath) = SplitRelativePath(entry.RelativePath, entry.FileName);
 
-            var mimeType = string.IsNullOrWhiteSpace(entry.ContentType)
-                ? "application/octet-stream"
-                : entry.ContentType.Trim();
+                var pathResult = await EnsureFolderPathAsync(
+                    conn,
+                    connectionId,
+                    userId,
+                    rootParentExternalId,
+                    dirPath,
+                    folderExternalIds,
+                    createdItems,
+                    ct);
+                foldersCreated += pathResult.FoldersCreated;
 
-            var driveFile = await _gateway.UploadFileAsync(
-                conn,
-                fileName,
-                mimeType,
-                pathResult.ParentExternalId,
-                entry.Content,
-                ct);
+                var mimeType = string.IsNullOrWhiteSpace(entry.ContentType)
+                    ? "application/octet-stream"
+                    : entry.ContentType.Trim();
 
-            var item = _mapper.ToItem(driveFile, userId, connectionId);
-            await _items.AddAsync(item, ct);
-            // Save từng file/folder ngay — nếu file sau lỗi, phần đã lên Drive vẫn có Item local.
-            await _items.SaveChangesAsync(ct);
-            createdItems.Add(MapToItemResponse(item));
-            filesUploaded++;
+                var driveFile = await _gateway.UploadFileAsync(
+                    conn,
+                    fileName,
+                    mimeType,
+                    pathResult.ParentExternalId,
+                    entry.Content,
+                    ct);
+
+                var item = _mapper.ToItem(driveFile, userId, connectionId);
+                await _items.AddAsync(item, ct);
+                // Save từng file/folder ngay — nếu file sau lỗi, phần đã lên Drive vẫn có Item local.
+                await _items.SaveChangesAsync(ct);
+                createdItems.Add(MapToItemResponse(item));
+                filesUploaded++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                failures.Add(new DriveFolderUploadFailure(
+                    entry.RelativePath, entry.FileName, ex.Message));
+            }
         }
 
         return new DriveFolderUploadResponse(
             createdItems,
             FilesUploaded: filesUploaded,
-            FoldersCreated: foldersCreated);
+            FoldersCreated: foldersCreated,
+            Failed: failures);
     }
 
     // ───────────────────────── Private helpers ─────────────────────────

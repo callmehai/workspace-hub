@@ -80,27 +80,44 @@ export function DriveNewMenu({ defaultParentItemId, defaultConnectionId }: Props
 
     setIsUploading(true);
     const toastId = toast.loading(t('drive.upload.uploading'));
-    try {
-      for (let i = 0; i < list.length; i++) {
-        toast.loading(t('drive.upload.progress', { current: i + 1, total: list.length }), { id: toastId });
+    // Mỗi file 1 request — 1 file lỗi không chặn các file sau. Gom lỗi rồi báo "đã lên X/Y".
+    let ok = 0;
+    let lastError: unknown = null;
+    for (let i = 0; i < list.length; i++) {
+      toast.loading(t('drive.upload.progress', { current: i + 1, total: list.length }), { id: toastId });
+      try {
         await driveApi.uploadFile({
           connectionId,
           file: list[i],
           parentItemId: defaultParentItemId || null,
         });
+        ok += 1;
+      } catch (err) {
+        lastError = err;
       }
+    }
+    const failedCount = list.length - ok;
+
+    if (ok > 0) queryClient.invalidateQueries({ queryKey: ['items'] });
+
+    if (failedCount === 0) {
       toast.success(
         list.length === 1 ? t('drive.upload.fileDone') : t('drive.upload.filesDone', { n: list.length }),
         { id: toastId },
       );
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-    } catch (err) {
+    } else if (ok > 0) {
+      toast(t('drive.upload.filesPartial', { ok, total: list.length, failed: failedCount }), {
+        id: toastId,
+        icon: '⚠️',
+      });
+    } else {
+      // Hỏng sạch — giữ handleApiError để vẫn redirect nếu 401/thiếu scope.
       toast.dismiss(toastId);
-      handleApiError(err, t('drive.upload.fail'), { navigate });
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      handleApiError(lastError, t('drive.upload.fail'), { navigate });
     }
+
+    setIsUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   /** Upload cả folder — một request batch lên BE */
@@ -126,10 +143,24 @@ export function DriveNewMenu({ defaultParentItemId, defaultConnectionId }: Props
         entries: buildDriveFolderEntries(list),
         parentItemId: defaultParentItemId || null,
       });
-      toast.success(
-        t('drive.upload.folderDone', { files: result.filesUploaded, folders: result.foldersCreated }),
-        { id: toastId },
-      );
+      const failedCount = result.failed?.length ?? 0;
+      if (failedCount > 0) {
+        // Upload folder không atomic — báo "đã lên X/Y" thay vì toast trắng/đỏ gây hiểu nhầm fail cả mẻ.
+        toast(
+          t('drive.upload.folderPartial', {
+            ok: result.filesUploaded,
+            total: result.filesUploaded + failedCount,
+            folders: result.foldersCreated,
+            failed: failedCount,
+          }),
+          { id: toastId, icon: '⚠️' },
+        );
+      } else {
+        toast.success(
+          t('drive.upload.folderDone', { files: result.filesUploaded, folders: result.foldersCreated }),
+          { id: toastId },
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ['items'] });
     } catch (err) {
       toast.dismiss(toastId);

@@ -96,10 +96,19 @@ export interface UploadDriveFolderPayload {
   parentItemId?: string | null;
 }
 
+/** Một file upload lỗi trong batch folder — khớp BE DriveFolderUploadFailure */
+export interface DriveFolderUploadFailure {
+  relativePath: string;
+  fileName: string;
+  error: string;
+}
+
 /** Response POST /api/drive/folders/upload — khớp BE DriveFolderUploadResponse */
 export interface DriveFolderUploadResponse {
   items: ItemResponse[];
   filesUploaded: number;
   foldersCreated: number;
+  /** File lỗi giữa chừng (rỗng nếu trọn vẹn) — upload folder không atomic. */
+  failed: DriveFolderUploadFailure[];
 }
 
