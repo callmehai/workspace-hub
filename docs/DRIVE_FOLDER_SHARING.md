@@ -1,7 +1,7 @@
 # Google Drive — Tạo folder & Chia sẻ (SCRUM-79)
 
 > **Ticket:** SCRUM-79  
-> **Trạng thái:** ✅ **Đã implement** (BE + FE, nhánh `Google_Drive_Folder_create_Sharing`)  
+> **Trạng thái:** ✅ **Đã implement** (BE + FE) — bổ sung Case 1 link-restrict (2026-07-16)  
 > **Đọc file này khi:** tra cứu spec / QA checklist Drive folder + sharing
 
 ---
@@ -196,7 +196,30 @@ User mở dialog Share → nhập email + role
 User bật toggle "Ai có link"
     → FE gọi PUT /api/drive/items/{itemId}/link-sharing { enabled: true, role: "reader" }
     → BE tạo/cập nhật permission type=anyone trên Google
+    → Case 2 (folder mẹ hạn chế, file public): KHÔNG popup — giống Google Drive
 ```
+
+### 6.4 Case 1 — Tắt link file khi folder mẹ đang public (giống Google Drive)
+
+Khi **cả file lẫn folder mẹ** đang `anyone` (ai có link), user tắt link trên **file**:
+
+```
+User tắt toggle link trên file
+    → FE PUT { enabled: false } (chưa confirm)
+    → BE DetectLinkRestrictConflictAsync → Case 1
+    → 409 + body DriveLinkRestrictConflict
+    → FE hiện DriveLinkRestrictDialog (layout giống Drive):
+         tiêu đề "Xoá quyền truy cập khỏi thư mục mẹ?"
+         cây: folder + file (anyone → Hạn chế)
+         Huỷ | Xoá khỏi thư mục mẹ
+    → User confirm
+    → FE PUT { enabled: false, confirmRestrictParent: true }
+    → BE tắt link folder mẹ + tắt link file trên Google
+```
+
+- **Huỷ** → không đổi quyền.
+- **Confirm** → tắt link **cả file lẫn folder mẹ** (file vẫn nằm trong folder — không move).
+- Preview không bắt buộc: `GET .../link-sharing/restrict-conflict` → 200 conflict / 204 không xung đột.
 
 > **Lưu ý:** Share **không** đi qua `PATCH /api/items/{id}` và **không** dùng ETag conflict — quyền không nằm trong bảng Items.
 
@@ -275,7 +298,26 @@ Trả `204`. Không cho gỡ owner.
 { "enabled": true, "role": "reader" }
 ```
 
+Tắt link:
+
+```json
+{ "enabled": false }
+```
+
 - `enabled: false` → tắt link, xoá permission `anyone` trên Google.
+- **Case 1:** file + folder mẹ đều đang anyone, chưa `confirmRestrictParent` → **409** + `DriveLinkRestrictConflict` (FE hiện popup).
+- Confirm giống nút Drive:
+
+```json
+{ "enabled": false, "confirmRestrictParent": true }
+```
+
+→ tắt link **cả file lẫn folder mẹ**.
+
+### 7.7 `GET /api/drive/items/{itemId}/link-sharing/restrict-conflict` — Preview Case 1
+
+- **200** `DriveLinkRestrictConflict` khi tắt link sẽ kéo theo folder mẹ.
+- **204** khi không xung đột (tắt link thẳng được; gồm Case 2).
 
 ### Bảng mã lỗi
 
@@ -285,7 +327,7 @@ Trả `204`. Không cho gỡ owner.
 | 400 | Dữ liệu gửi lên sai format                                           |
 | 403 | Không đủ quyền trên file Drive / token lỗi                           |
 | 404 | Item hoặc connection không tồn tại / không thuộc user                |
-| 409 | Email đã được share rồi                                              |
+| 409 | Email đã được share rồi; **hoặc** Case 1 tắt link (body = conflict DTO) |
 | 422 | Connection không phải Drive, file đã trash, parent không phải folder |
 | 502 | Google API lỗi                                                       |
 
@@ -519,9 +561,10 @@ Dùng axios instance sẵn có (cookie + CSRF). Types đặt cạnh file hoặc 
 3. List từng permission — owner: chỉ hiển thị, không nút sửa
 4. Mỗi dòng user: dropdown đổi role + nút Gỡ (confirm)
 5. Section link: Switch bật/tắt + select role → `setLinkSharing`
-6. `useMutation` + `toast` + `invalidateQueries` sau mỗi thao tác
+6. Case 1: tắt link → bắt 409 / `getLinkRestrictConflict` → `DriveLinkRestrictDialog` → confirm với `confirmRestrictParent: true`
+7. `useMutation` + `toast` + `invalidateQueries` sau mỗi thao tác
 
-**Kiểm tra:** Mở file Drive → Share → thêm email → thấy trên Google Drive web.
+**Kiểm tra:** Mở file Drive → Share → thêm email → thấy trên Google Drive web. Folder+file đều anyone → tắt link file → popup giống Drive.
 
 ---
 
@@ -604,8 +647,12 @@ npm run build && npm run lint
 ### Link sharing
 
 - [ ] Bật "Ai có link" → link hoạt động incognito
-- [ ] Tắt link → không truy cập được nữa
+- [ ] Tắt link (file không nằm trong folder public) → tắt thẳng, không popup
 - [ ] Đổi role link (reader/commenter/writer)
+- [ ] **Case 1:** folder + file đều anyone → tắt link file → popup "Xoá quyền truy cập khỏi thư mục mẹ?"
+- [ ] Case 1 **Huỷ** → quyền không đổi
+- [ ] Case 1 **Xoá khỏi thư mục mẹ** → link file + folder mẹ đều Hạn chế (kiểm tra trên Drive web)
+- [ ] **Case 2:** folder hạn chế, bật link file → không popup, bật thẳng
 
 ### Lỗi & biên
 
@@ -668,8 +715,10 @@ npm run build && npm run lint
 | --------------------------------- | -------------------------------------- |
 | `components/ItemDetail.tsx`       | Panel chi tiết — gắn Share + folder UI |
 | `pages/Integrations.tsx`          | Card Drive — nút tạo folder            |
-| `components/WorkspaceToolbar.tsx` | Toolbar — nút tạo folder               |
-| `lib/itemsApi.ts`                 | Mẫu axios API layer                    |
+| `components/drive/DriveShareDialog.tsx` | Panel chia sẻ + bắt 409 Case 1 |
+| `components/drive/DriveLinkRestrictDialog.tsx` | Popup Case 1 (giống Google Drive) |
+| `components/WorkspaceToolbar.tsx` | Toolbar — nút tạo folder / Drive New |
+| `lib/driveApi.ts` / `types/drive.ts` | API layer + conflict types |
 
 
 ### Docs liên quan

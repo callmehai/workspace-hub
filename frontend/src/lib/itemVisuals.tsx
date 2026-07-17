@@ -1,8 +1,7 @@
 import type { FC } from 'react';
-import { Folder } from 'lucide-react';
 import type { ItemType, ItemStatus } from '../types/items';
 import type { TranslationKey } from '../i18n/translations';
-import { GmailIcon, CalendarIcon, DriveIcon, JiraIcon, NoteIcon, type IconProps } from './brandIcons';
+import { GmailIcon, CalendarIcon, DriveIcon, JiraIcon, NoteIcon, FolderIcon, type IconProps } from './brandIcons';
 
 /* Icon loại item = logo brand màu (Gmail/Calendar/Drive/Jira), Note = icon note. Xem brandIcons.tsx. */
 
@@ -61,20 +60,15 @@ const TYPE_KEY: Record<ItemType, TranslationKey> = {
 };
 export const typeLabelKey = (type: ItemType): TranslationKey => TYPE_KEY[type] ?? 'type.note';
 
-/** Icon loại item = logo brand màu (Note = icon note currentColor). `strokeWidth` chỉ áp cho Note. */
-export function typeIcon(t: ItemType, cls = 'w-4 h-4', strokeWidth?: number, isFolder = false) {
+/** Icon loại item = logo brand màu (Note = icon note; File+folder = folder xanh). `strokeWidth` giữ cho tương thích, không dùng. */
+export function typeIcon(t: ItemType, cls = 'w-4 h-4', _strokeWidth?: number, isFolder = false) {
   if (t === 'File' && isFolder) {
-    return <Folder className={cls} strokeWidth={strokeWidth ?? 2} />;
+    return <FolderIcon className={cls} />;
   }
   const Icon = TYPE_ICON[t] ?? NoteIcon;
   return <Icon className={cls} />;
 }
 
-/** Tile "avatar" cho list/board — mọi logo brand (kể cả Note) đặt trên nền TRẮNG viền nhạt để giữ màu thật. */
+/** Tile "avatar" cho list/board — mọi logo brand (kể cả Note & folder) đặt trên nền TRẮNG viền nhạt để giữ màu thật. */
 const TILE_CLASS = 'bg-white border border-slate-200 dark:border-slate-300';
-export const typeSolidTileClass = (t?: ItemType, isFolder = false): string => {
-  if (t === 'File' && isFolder) {
-    return 'bg-gradient-to-br from-slate-600 to-slate-700 text-white dark:from-slate-700 dark:to-slate-800 border-none';
-  }
-  return TILE_CLASS;
-};
+export const typeSolidTileClass = (_t?: ItemType, _isFolder = false): string => TILE_CLASS;

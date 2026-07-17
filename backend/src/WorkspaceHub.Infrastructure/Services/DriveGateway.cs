@@ -1,6 +1,7 @@
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
+using Google.Apis.Upload;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Domain.Entities;
 
@@ -12,6 +13,9 @@ public class DriveGateway : IDriveGateway
     //Sau tạo chỉ trả về các field cần thiết, tránh trả về quá nhiều field không cần thiết.
     private const string CreateFolderFields =
     "id, name, mimeType, webViewLink, iconLink, modifiedTime, version, headRevisionId, parents, trashed";
+    // Field Google trả về sau upload file — thêm size để lưu vào metadata Item local.
+    private const string UploadFileFields =
+        "id, name, mimeType, size, webViewLink, iconLink, modifiedTime, version, headRevisionId, parents, trashed";
     private const string PermissionFields =
     "id, type, role, emailAddress, displayName";
     private const string ListPermissionsFields =
@@ -100,6 +104,65 @@ public class DriveGateway : IDriveGateway
         catch (Google.GoogleApiException ex)
         {
             throw GoogleApiExceptionHandler.Handle(ex, "Drive", "File", fileId);
+        }
+    }
+
+    /// <summary>
+    /// Upload file binary lên Google Drive qua API <c>files.create</c>.
+    /// Luồng: lấy token → tạo metadata (tên + folder cha) → stream nội dung lên Google.
+    /// Google .NET client tự chọn simple upload (&lt;5 MB) hoặc resumable upload (file lớn hơn).
+    /// Không insert Item local — việc đó do DriveUploadService xử lý ở bước sau.
+    /// </summary>
+    /// <param name="connection">Connection Drive của user (OAuth token).</param>
+    /// <param name="name">Tên file trên Drive.</param>
+    /// <param name="mimeType">MIME type gửi lên Google.</param>
+    /// <param name="parentExternalId">Google id folder cha; null = My Drive root.</param>
+    /// <param name="content">Stream đọc nội dung file — không buffer toàn bộ trong memory.</param>
+    /// <param name="ct">Token hủy.</param>
+    /// <returns><see cref="DriveFileDto"/> map từ response Google.</returns>
+    public async Task<DriveFileDto> UploadFileAsync(
+        Connection connection,
+        string name,
+        string mimeType,
+        string? parentExternalId,
+        Stream content,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var drive = await BuildDriveServiceAsync(connection, ct);
+
+            // Bước 1: metadata — mô tả file (tên, vị trí folder cha) gửi kèm request tạo file.
+            var metadata = new Google.Apis.Drive.v3.Data.File
+            {
+                Name = name,
+                Parents = string.IsNullOrEmpty(parentExternalId)
+                    ? null
+                    : new List<string> { parentExternalId }
+            };
+
+            // Bước 2: files.create + stream — Google client upload nội dung binary.
+            var request = drive.Files.Create(metadata, content, mimeType);
+            request.Fields = UploadFileFields;
+
+            // Bước 3: chờ upload xong — resumable nếu file >5MB, simple nếu nhỏ hơn.
+            var progress = await request.UploadAsync(ct);
+            if (progress.Status != UploadStatus.Completed)
+            {
+                throw progress.Exception
+                    ?? new InvalidOperationException("Upload file lên Google Drive thất bại.");
+            }
+
+            // Bước 4: lấy metadata file vừa tạo để map sang DriveFileDto.
+            var created = request.ResponseBody
+                ?? throw new InvalidOperationException("Google Drive không trả metadata file sau upload.");
+
+            return MapToFileDto(created);
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            throw GoogleApiExceptionHandler.Handle(ex, "Drive", "File", parentExternalId ?? "root",
+                forbiddenMessage: "Không đủ quyền upload file lên Drive.");
         }
     }
 
@@ -319,6 +382,7 @@ public class DriveGateway : IDriveGateway
             WebViewLink = file.WebViewLink,
             IconLink = file.IconLink,
             ModifiedTime = file.ModifiedTimeDateTimeOffset,
+            Size = file.Size,
             Trashed = file.Trashed ?? false,
             Version = file.Version,
             HeadRevisionId = file.HeadRevisionId,

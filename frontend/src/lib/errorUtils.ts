@@ -47,7 +47,8 @@ export const handleApiError = (
         return; // Interceptor đã xử lý CsrfError
       }
       if (!options?.silent) {
-        toast.error(translate('errors.forbiddenScope'));
+        // Ưu tiên message BE (vd. không đủ quyền gỡ share) — tránh luôn bảo "thiếu scope".
+        toast.error(data?.message || translate('errors.forbiddenScope'));
         if (options?.navigate) {
           options.navigate('/integrations');
         }

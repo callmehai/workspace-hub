@@ -185,7 +185,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   // Mutate item (writeback PATCH)
   const patchMutation = useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     mutationFn: ({ _isAutoRead, ...payload }: PatchItemRequest & { _isAutoRead?: boolean }) => itemsApi.patchItem(itemId, payload),
     // Optimistic cho read/unread: cập nhật cache NGAY để UI (row + drawer) đổi tức thì,
     // không chờ round-trip Gmail (nguồn gây "mark as read khá lag"). Rollback nếu lỗi.

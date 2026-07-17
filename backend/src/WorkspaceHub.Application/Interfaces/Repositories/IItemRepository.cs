@@ -49,6 +49,16 @@ public interface IItemRepository : IGenericRepository<Item>
     Task<Item?> GetByIdAndUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
+    /// Tìm Item Drive theo ExternalId (Google file/folder id) trong một connection của user.
+    /// Dùng khi resolve folder mẹ từ metadata.parents (Case 1 link-restrict conflict).
+    /// </summary>
+    Task<Item?> GetByConnectionAndExternalIdAsync(
+        Guid userId,
+        Guid connectionId,
+        string externalId,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Tìm danh sách Item theo IDs và User, dùng để check ownership trong bulk operations.
     /// </summary>
     Task<List<Item>> GetByIdsAndUserAsync(IEnumerable<Guid> itemIds, Guid userId, CancellationToken ct = default);
