@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, X, UserPlus, Link2 } from 'lucide-react';
+import { Loader2, X, UserPlus, Link2, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { driveApi, getLinkRestrictConflictFromError } from '../../lib/driveApi';
 import { handleApiError } from '../../lib/errorUtils';
@@ -14,8 +14,29 @@ import type { DriveLinkRestrictConflict, DrivePermission, DrivePermissionRole } 
 interface Props {
   itemId: string;
   itemTitle?: string;
+  /** URL mở trên Google Drive (metadata.webViewLink). */
+  webViewLink?: string | null;
+  /** ExternalId Drive — fallback khi thiếu webViewLink. */
+  externalId?: string | null;
+  /** true = folder Drive (URL folders/), false = file. */
+  isFolder?: boolean;
   isOpen: boolean;
   onClose: () => void;
+}
+
+/** Ưu tiên webViewLink; không có thì dựng URL Drive chuẩn. */
+function resolveShareUrl(
+  webViewLink?: string | null,
+  externalId?: string | null,
+  isFolder?: boolean,
+): string | null {
+  const fromMeta = webViewLink?.trim();
+  if (fromMeta) return fromMeta;
+  const id = externalId?.trim();
+  if (!id) return null;
+  return isFolder
+    ? `https://drive.google.com/drive/folders/${id}`
+    : `https://drive.google.com/file/d/${id}/view`;
 }
 
 const ROLE_OPTIONS: DrivePermissionRole[] = ['reader', 'commenter', 'writer'];
@@ -27,7 +48,15 @@ function roleLabelKey(role: DrivePermissionRole) {
 }
 
 /** SCRUM-79 B2 — dialog chia sẻ file/folder Drive (gọi /api/drive/items/{id}/permissions). */
-export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) {
+export function DriveShareDialog({
+  itemId,
+  itemTitle,
+  webViewLink,
+  externalId,
+  isFolder = false,
+  isOpen,
+  onClose,
+}: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -40,6 +69,15 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
   const [linkRestrictConflict, setLinkRestrictConflict] = useState<DriveLinkRestrictConflict | null>(null);
   // Đang GET restrict-conflict trước khi tắt — chặn spam click.
   const [isPreviewingRestrict, setIsPreviewingRestrict] = useState(false);
+  // Feedback tạm sau khi copy URL.
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = resolveShareUrl(webViewLink, externalId, isFolder);
+
+  // Đóng dialog → reset icon copy.
+  useEffect(() => {
+    if (!isOpen) setCopied(false);
+  }, [isOpen]);
 
   const permissionsQuery = useQuery({
     queryKey: ['drive-permissions', itemId],
@@ -332,8 +370,39 @@ export function DriveShareDialog({ itemId, itemTitle, isOpen, onClose }: Props) 
             </div>
             <p className="text-[11px] text-slate-500">{t('drive.share.linkSharingHint')}</p>
             {linkEnabled && (
-              <div className="w-[152px]">
-                <Select value={linkRole} onChange={handleLinkRoleChange} options={roleSelectOptions} className="h-8" disabled={linkMutation.isPending} />
+              <div className="space-y-2">
+                <div className="w-[152px]">
+                  <Select value={linkRole} onChange={handleLinkRoleChange} options={roleSelectOptions} className="h-8" disabled={linkMutation.isPending} />
+                </div>
+                {shareUrl && (
+                  <div className="flex gap-2 items-stretch">
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareUrl}
+                      onFocus={(e) => e.target.select()}
+                      aria-label={t('drive.share.copyLink')}
+                      className="flex-1 min-w-0 h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[12px] text-slate-700 dark:text-slate-200 truncate"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(shareUrl).then(
+                          () => {
+                            setCopied(true);
+                            toast.success(t('drive.share.linkCopied'));
+                            window.setTimeout(() => setCopied(false), 2000);
+                          },
+                          () => toast.error(t('drive.share.copyLinkFail')),
+                        );
+                      }}
+                      className="h-9 px-3 shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      {t('drive.share.copyLink')}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

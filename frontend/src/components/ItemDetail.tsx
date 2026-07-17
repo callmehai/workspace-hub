@@ -1034,6 +1034,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       <DriveShareDialog
         itemId={itemId}
         itemTitle={item.title}
+        webViewLink={typeof metadata.webViewLink === 'string' ? metadata.webViewLink : null}
+        externalId={item.externalId}
+        isFolder={fileIsDriveFolder}
         isOpen={driveShareOpen}
         onClose={() => setDriveShareOpen(false)}
       />
