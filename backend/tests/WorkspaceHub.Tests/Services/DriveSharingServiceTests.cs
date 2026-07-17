@@ -412,6 +412,48 @@ public class DriveSharingServiceTests
             Times.Once);
     }
 
+    [Fact]
+    public async Task SetLinkSharing_Disable_Case1WithConfirm_ParentForbidden_ThrowsBusinessRule()
+    {
+        // User chỉ là editor không đủ quyền đổi sharing folder mẹ → tắt link mẹ bị 403.
+        // Phải trả BusinessRuleException (thông báo rõ) thay vì lỗi thô.
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Item
+            {
+                Id = Guid.NewGuid(),
+                Title = "Dungtestfolder",
+                ExternalId = parentId,
+                ConnectionId = _connId,
+                UserId = _userId,
+                Type = ItemType.File,
+                MetadataJson = """{"isFolder":true}"""
+            });
+
+        SetupAnyoneLinkOnFileAndParent(parentId);
+
+        // Tắt link folder mẹ bị Google từ chối quyền.
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("Không đủ quyền gỡ chia sẻ."));
+
+        var act = () => _service.SetLinkSharingAsync(
+            _userId, _itemId, enabled: false, confirmRestrictParent: true);
+
+        await act.Should().ThrowAsync<BusinessRuleException>();
+
+        // KHÔNG được động tới link file khi chưa tắt được mẹ.
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     /// <summary>Mock cả file + folder mẹ đang anyone (điều kiện Case 1).</summary>
     private void SetupAnyoneLinkOnFileAndParent(string parentExternalId)
     {

@@ -165,8 +165,18 @@ public class DriveSharingService : IDriveSharingService
         if (conflict != null && confirmRestrictParent)
         {
             // Tắt link folder mẹ — bắt buộc (giống nút Drive).
-            await _gateway.SetLinkSharingAsync(
-                conn, conflict.ParentExternalId, enable: false, role, ct);
+            // User có thể chỉ là editor không đủ quyền đổi sharing folder mẹ → Google trả 403.
+            // Bọc lại thành thông báo rõ ràng thay vì lỗi thô (Drive gốc ẩn nút này khi thiếu quyền).
+            try
+            {
+                await _gateway.SetLinkSharingAsync(
+                    conn, conflict.ParentExternalId, enable: false, role, ct);
+            }
+            catch (ForbiddenException)
+            {
+                throw new BusinessRuleException(
+                    "Bạn không có quyền tắt link của thư mục mẹ. Hãy nhờ chủ sở hữu thư mục thực hiện.");
+            }
 
             // Google đôi khi còn trả anyone trên list ngay sau delete — đợi rồi xoá lại nếu cần.
             await EnsureLinkDisabledAsync(conn, conflict.ParentExternalId, role, ct);

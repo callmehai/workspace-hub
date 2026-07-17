@@ -66,6 +66,8 @@ namespace WorkspaceHub.Api.Controllers
         /// </summary>
         [HttpPost("files")]
         [RequestSizeLimit(DriveUploadLimits.RequestSizeSingleFileBytes)]
+        // Nâng luôn MultipartBodyLengthLimit cho khớp (file 100MB < 128MB nên hiếm đụng, nhưng để nhất quán).
+        [RequestFormLimits(MultipartBodyLengthLimit = DriveUploadLimits.RequestSizeSingleFileBytes)]
         public async Task<ActionResult<ItemResponse>> UploadFile(
             [FromForm] Guid connectionId,
             [FromForm] Guid? parentItemId,
@@ -100,6 +102,9 @@ namespace WorkspaceHub.Api.Controllers
         /// </summary>
         [HttpPost("folders/upload")]
         [RequestSizeLimit(DriveUploadLimits.RequestSizeFolderUploadBytes)]
+        // MultipartBodyLengthLimit mặc định 128MB — không nâng thì folder tổng >128MB bị multipart
+        // reader ném InvalidDataException TRƯỚC khi vào action (400 khó hiểu). Nâng khớp giới hạn 500MB.
+        [RequestFormLimits(MultipartBodyLengthLimit = DriveUploadLimits.RequestSizeFolderUploadBytes)]
         public async Task<ActionResult<DriveFolderUploadResponse>> UploadFolder(
             [FromForm] Guid connectionId,
             [FromForm] Guid? parentItemId,
