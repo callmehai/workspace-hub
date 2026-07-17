@@ -2,6 +2,24 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-17] Drive UX — detail preview/download + phân biệt folder/file ở Kanban
+
+> Nâng chất lượng luồng Drive: drawer chi tiết file "nghèo nàn" → có preview + tải xuống; Kanban trước đây folder và file nhìn y hệt nhau.
+
+- **BE — proxy media (2 endpoint mới):** `GET /api/drive/items/{id}/content` (tải/xem nội dung, `?dl=true` = attachment; Google-native docs export sang PDF/PNG) + `GET /api/drive/items/{id}/thumbnail` (proxy `thumbnailLink`, 204 nếu không có). **Stream thẳng — KHÔNG buffer file 100MB vào RAM** (`HttpCompletionOption.ResponseHeadersRead` + `CopyToAsync(Response.Body)`). Named `HttpClient` "DriveMedia" timeout Infinite, hủy theo CancellationToken. Layer: `IDriveGateway.DownloadFileAsync/GetThumbnailAsync` + `DriveMediaResult` (IAsyncDisposable ôm `HttpResponseMessage`) → service `IDriveContentService` (resolve item→connection, đọc mimeType từ metadata) → controller stream.
+- **Vì sao proxy on-demand thay vì lưu thumbnailLink:** `thumbnailLink`/nội dung Google là URL ngắn hạn cần bearer token → không nhúng trực tiếp `<img>` được, và lưu vào metadata thì phải re-sync. Proxy live bằng token connection: không đổi schema, không re-sync.
+- **Vì sao download = `<a download>` + probe `/auth/me`, KHÔNG blob:** auth là cookie HttpOnly → thẻ `<a>` tự gửi cookie, trình duyệt stream ra đĩa (không nạp 100MB vào RAM trình duyệt). Probe `/auth/me` trước để interceptor refresh token nếu hết hạn. Preview ảnh thì lấy blob qua axios (ảnh nhỏ, cần hưởng refresh 401 cho `<img>`).
+- **FE — detail overhaul:** khối `DriveFilePreview` (ảnh nhỏ = nội dung gốc, ảnh lớn/PDF/video/google-docs = thumbnail, còn lại = icon + nhãn loại + link mở Drive); nút **Tải xuống** (file) / **Mở thư mục** (folder, điều hướng `?openDrive=` để Inbox seed drill-down); header dùng brand icon Drive/folder; bỏ khung "Nội dung" rỗng cho File; mimeType thô → nhãn thân thiện (`friendlyMimeLabel`).
+- **FE — Kanban:** truyền `isDriveFolder` vào `typeIcon` + nhãn **"Thư mục"** (trước đây folder/file đều icon Drive + "Tệp"); sao quan trọng trên thẻ **bấm được** (optimistic trên cache từng cột board) — đồng bộ view Danh sách.
+- **i18n:** thêm `type.folder`, `item.download`/`openFolder`, `drive.preview.*`, `drive.mime.*` (vi/en).
+
+### Sau QA local (cùng ngày) — UX + điều hướng
+- **Footer drawer bớt ngợp:** trước rải 6–7 nút ngang → giờ **hành động chính bên trái** (Tải xuống/Mở thư mục + Chia sẻ), **phụ gộp vào menu "..."** (quan trọng, đã/chưa xem, đổi tên, tạo folder con, mở ngoài) + nút xoá. Áp cho mọi loại item.
+- **Điều hướng folder Drive qua history:** stack folder chuyển từ local state → **`location.state.driveStack` + `?df=<internalId>`** ⟹ **nút Back của trình duyệt lùi về folder cha** đúng (trước đây Back nhảy sang tab khác). Breadcrumb + double-click + "Mở thư mục" đều `navigate` push. Breadcrumb gốc hiện tên nguồn (Drive/…) thay vì luôn "Tất cả mục".
+- **Nút "Mới" context-aware:** đang trong 1 folder Drive → **chỉ hiện option Drive** (Thư mục mới / Tải tệp / Tải thư mục), ẩn Ghi chú/Sự kiện/Ticket (tạo Ticket vào folder Drive là vô nghĩa).
+- **Fix preview vỡ khi mở lại:** object URL phải **tạo + revoke trong CÙNG một effect** — dùng `useMemo` (như bản đầu) khiến StrictMode dev revoke URL mà memo không tính lại → ảnh vỡ. Đổi lại `useState`+`useEffect`.
+- **Thumbnail nét hơn:** proxy nâng size param `=s220`→`=s1024` khi lấy `thumbnailLink`.
+
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 
 > Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.

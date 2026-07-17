@@ -5,23 +5,26 @@ import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
   Trash2, Edit3, ExternalLink, Loader2, Tag,
   AlertCircle, Eye, EyeOff, Star, Check, Plus,
-  Share2, FolderPlus, Folder,
+  Share2, FolderPlus, Download, FolderOpen, MoreHorizontal,
 } from 'lucide-react';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
+import { driveApi } from '../lib/driveApi';
+import { friendlyMimeLabel } from '../lib/driveFile';
 import { TagChip, FolderChip } from './tags/TagChip';
 import { TagManagerModal } from './tags/TagManagerModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { EmailThreadView } from './emails/EmailThreadView';
 import { JiraTicketPanel } from './jira/JiraTicketPanel';
 import { DriveShareDialog } from './drive/DriveShareDialog';
+import { DriveFilePreview } from './drive/DriveFilePreview';
 import { CreateDriveFolderModal } from './drive/CreateDriveFolderModal';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
 import { handleApiError } from '../lib/errorUtils';
 import { getStatusLabel, isItemUnread, isDriveFolder } from '../lib/itemMeta';
 import { useSeenSet, markSeen, markUnseen } from '../lib/seenStore';
-import { typeLabelKey } from '../lib/itemVisuals';
+import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
@@ -83,6 +86,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const addTagRef = useRef<HTMLDivElement>(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
@@ -98,6 +103,21 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       document.removeEventListener('keydown', onKey);
     };
   }, [isAddingToFolder]);
+
+  // Đóng menu "..." (hành động phụ) khi click ra ngoài / nhấn Esc.
+  useEffect(() => {
+    if (!isMoreOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setIsMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMoreOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isMoreOpen]);
 
   // Đóng dropdown "Thêm tag" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
@@ -155,6 +175,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isRenamingFile, setIsRenamingFile] = useState(false);
   const [driveShareOpen, setDriveShareOpen] = useState(false);
   const [createSubfolderOpen, setCreateSubfolderOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Fetch item by ID.
   // placeholderData: mồi từ cache list/board đang có → drawer mở TỨC THÌ với data sẵn,
@@ -442,9 +463,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     }
   } else if (item.type === 'File') {
     rows.push({ label: t('item.created'), value: new Date(item.occurredAt).toLocaleString(dl) });
-    if (metadata.mimeType) rows.push({ label: t('item.fileType'), value: metadata.mimeType });
-    if (metadata.size) {
-      const kb = Math.round(metadata.size / 1024);
+    if (metadata.mimeType) rows.push({ label: t('item.fileType'), value: friendlyMimeLabel(metadata.mimeType, t) });
+    // Drive trả size dạng string → ép Number trước khi tính; folder không có size.
+    const sizeBytes = metadata.size != null ? Number(metadata.size) : NaN;
+    if (Number.isFinite(sizeBytes) && sizeBytes > 0) {
+      const kb = Math.round(sizeBytes / 1024);
       rows.push({ label: t('item.size'), value: kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB` });
     }
   } else if (item.type === 'Note') {
@@ -546,9 +569,41 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     });
   };
 
+  // Tải file Drive về máy (probe refresh rồi mở link download — stream ra đĩa).
+  const handleDownload = async () => {
+    if (!item) return;
+    setIsDownloading(true);
+    try {
+      await driveApi.downloadFile(item.id, item.title);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Mở link ngoài (Gmail/Calendar/Drive/Jira) từ menu "...".
+  const openExternal = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
+
+  // Mở folder Drive: điều hướng sang view Danh sách + seed drill-down 1 cấp qua history state
+  // (Inbox đọc location.state.driveStack). ?df để URL có nhận diện + Back hoạt động.
+  const openDriveFolder = () => {
+    if (!item?.externalId) return;
+    navigate(
+      { pathname: '/', search: `?type=File&df=${encodeURIComponent(item.id)}` },
+      { state: { driveStack: [{ id: item.externalId, name: item.title, internalId: item.id }] } },
+    );
+    onClose?.();
+  };
+
   // Gmail labels
   const bodyText: string =
     metadata.body ?? metadata.description ?? metadata.contentMarkdown ?? item.snippet ?? '';
+
+  // Class dùng chung cho footer (tránh lặp chuỗi Tailwind dài).
+  const primaryBtn = 'h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors';
+  const secondaryBtn = 'h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors';
+  const iconBtn = 'w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors';
+  const deleteBtn = 'w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors';
+  const moreItem = 'w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors';
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -576,11 +631,15 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         <div className="px-5 py-[18px] border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="flex items-start justify-between mb-3.5">
             <div className="flex items-center gap-3">
-              <div className={`w-[42px] h-[42px] rounded-xl flex items-center justify-center shrink-0 ${tInfo.bg}`}>
-                {fileIsDriveFolder ? <Folder className="w-5 h-5" /> : tInfo.icon}
+              <div className={`w-[42px] h-[42px] rounded-xl flex items-center justify-center shrink-0 ${
+                item.type === 'File' ? 'bg-white border border-slate-200 dark:border-slate-300' : tInfo.bg
+              }`}>
+                {item.type === 'File'
+                  ? typeIcon('File', 'w-6 h-6', undefined, fileIsDriveFolder)
+                  : tInfo.icon}
               </div>
               <div className="flex flex-wrap gap-[6px]">
-                <span className={typeChip}>{t(typeLabelKey(item.type))}</span>
+                <span className={typeChip}>{fileIsDriveFolder ? t('type.folder') : t(typeLabelKey(item.type))}</span>
                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold ${statusColor}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
                   {statusLabel}
@@ -717,6 +776,17 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             </div>
           </div>
 
+          {/* Preview file Drive (không phải folder) — ảnh / thumbnail / icon fallback */}
+          {item.type === 'File' && !fileIsDriveFolder && (
+            <DriveFilePreview
+              itemId={item.id}
+              mimeType={typeof metadata.mimeType === 'string' ? metadata.mimeType : null}
+              sizeBytes={metadata.size != null ? Number(metadata.size) : null}
+              fileName={item.title}
+              webViewLink={typeof metadata.webViewLink === 'string' ? metadata.webViewLink : null}
+            />
+          )}
+
           {/* Form edit for Event */}
           {isEditing && item.type === 'Event' ? (
             <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] p-4 bg-slate-50/50 dark:bg-slate-800/50 space-y-4 mb-[18px]">
@@ -813,7 +883,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             <div className="mt-4">
               <EmailThreadView itemId={item.id} connectionId={item.connectionId} />
             </div>
-          ) : item.type !== 'Ticket' && (
+          ) : (item.type !== 'Ticket' && item.type !== 'File') && (
             <>
               <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500 mb-2">{t('sendEmail.content')}</div>
               <div className="text-[13.5px] text-slate-900 dark:text-slate-100 leading-[1.65] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-[10px] p-[14px]">
@@ -823,191 +893,138 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           )}
         </div>
 
-        {/* Footer actions — per type */}
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 px-5 py-[14px] flex flex-wrap gap-2">
-          {/* Chung cho Event/File/Note/Ticket: quan trọng (isImportant nội bộ) + đánh dấu chưa/đã xem (seenStore).
-              Email có star/mark-read riêng qua Gmail nên loại trừ. */}
-          {/* Quan trọng — dùng field isImportant NỘI BỘ của app cho MỌI loại (kể cả Email).
-              KHÔNG ghi lên provider: đánh dấu quan trọng ở app KHÔNG động vào Gmail STARRED. */}
-          <button
-            onClick={() => importantMutation.mutate(!item.isImportant)}
-            disabled={importantMutation.isPending}
-            className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-          >
-            <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : 'text-slate-400 dark:text-slate-500'}`} />
-            <span>{item.isImportant ? t('item.unmarkImportant') : t('item.markImportant')}</span>
-          </button>
-
-          {/* Đánh dấu chưa/đã xem — Email theo Gmail (write-back read state); còn lại theo seenStore (client). */}
-          {item.type === 'Email' ? (
-            <button
-              onClick={() => patchMutation.mutate({ isUnread: !isUnread })}
-              disabled={patchMutation.isPending}
-              className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-            >
-              {isUnread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
-              <span>{isUnread ? t('item.markRead') : t('item.markUnread')}</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => (unread ? markSeen(item.id) : markUnseen(item.id))}
-              className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-            >
-              {unread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
-              <span>{unread ? t('item.markSeen') : t('item.markUnseen')}</span>
-            </button>
-          )}
-
-          {item.type === 'Email' && (
-            <>
-              {isDraft && (
-                <button
-                  onClick={() => navigate(`/send-email?draftItemId=${item.id}`)}
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" /><span>{t('item.continueEditDraft')}</span>
-                </button>
-              )}
-              {metadata.threadId && (
-                <a
-                  href={`https://mail.google.com/mail/u/0/#all/${metadata.threadId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInGmail')}</span>
-                </a>
-              )}
-              <button
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
-              >
-                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+        {/* Footer actions — hành động CHÍNH bên trái, phụ gộp vào menu "..." bên phải + nút xoá.
+            Trước đây rải 6–7 nút ngang gây ngợp; giờ chỉ 1–2 nút chính hiện, còn lại vào menu. */}
+        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 px-5 py-[14px] flex items-center justify-between gap-2">
+          {/* ── Hành động chính (trái) ── */}
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            {item.type === 'Email' && isDraft && (
+              <button onClick={() => navigate(`/send-email?draftItemId=${item.id}`)} className={primaryBtn}>
+                <Edit3 className="w-4 h-4" /><span>{t('item.continueEditDraft')}</span>
               </button>
-            </>
-          )}
-
-          {item.type === 'Event' && (
-            <>
-              {!isEditing && (
-                <button
-                  onClick={startEditingEvent}
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" /><span>{t('item.editEventBtn')}</span>
-                </button>
-              )}
-              {metadata.htmlLink && (
-                <a
-                  href={metadata.htmlLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInCalendar')}</span>
-                </a>
-              )}
-              {metadata.meetUrl && (
-                <a
-                  href={metadata.meetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>Google Meet</span>
-                </a>
-              )}
-              <button
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
-              >
-                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            )}
+            {item.type === 'Event' && !isEditing && (
+              <button onClick={startEditingEvent} className={primaryBtn}>
+                <Edit3 className="w-4 h-4" /><span>{t('item.editEventBtn')}</span>
               </button>
-            </>
-          )}
+            )}
+            {item.type === 'File' && (
+              <>
+                {fileIsDriveFolder ? (
+                  <button type="button" onClick={openDriveFolder} className={primaryBtn}>
+                    <FolderOpen className="w-4 h-4" /><span>{t('item.openFolder')}</span>
+                  </button>
+                ) : (
+                  <button type="button" onClick={handleDownload} disabled={isDownloading} className={`${primaryBtn} disabled:opacity-60`}>
+                    {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    <span>{isDownloading ? t('item.downloading') : t('item.download')}</span>
+                  </button>
+                )}
+                {canDriveShare && (
+                  <button type="button" onClick={() => setDriveShareOpen(true)} className={secondaryBtn}>
+                    <Share2 className="w-4 h-4" /><span>{t('item.share')}</span>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
 
-          {item.type === 'File' && (
-            <>
-              {canDriveShare && (
-                <button
-                  type="button"
-                  onClick={() => setDriveShareOpen(true)}
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm"
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span>{t('item.share')}</span>
-                </button>
-              )}
-              {fileIsDriveFolder && (
-                <button
-                  type="button"
-                  onClick={() => setCreateSubfolderOpen(true)}
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <FolderPlus className="w-4 h-4" />
-                  <span>{t('drive.createFolder.subfolder')}</span>
-                </button>
-              )}
+          {/* ── Menu "..." (phụ) + Xoá (phải) ── */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="relative" ref={moreRef}>
               <button
-                onClick={startRenamingFile}
-                className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition-colors"
+                type="button"
+                onClick={() => setIsMoreOpen(v => !v)}
+                title={t('common.more')}
+                aria-label={t('common.more')}
+                className={iconBtn}
               >
-                <Edit3 className="w-4 h-4" /><span>{t('item.rename')}</span>
+                <MoreHorizontal className="w-[18px] h-[18px]" />
               </button>
-              {metadata.webViewLink && (
-                <a
-                  href={metadata.webViewLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInDrive')}</span>
-                </a>
-              )}
-              <button
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
-              >
-                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              </button>
-            </>
-          )}
+              {isMoreOpen && (
+                <div className="absolute right-0 bottom-full mb-1.5 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-1.5 z-[70] shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                  {/* Quan trọng (mọi loại) */}
+                  <button
+                    className={moreItem}
+                    disabled={importantMutation.isPending}
+                    onClick={() => { importantMutation.mutate(!item.isImportant); setIsMoreOpen(false); }}
+                  >
+                    <Star className={`w-4 h-4 ${item.isImportant ? 'fill-amber-400 text-amber-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                    <span>{item.isImportant ? t('item.unmarkImportant') : t('item.markImportant')}</span>
+                  </button>
 
-          {item.type === 'Note' && (
+                  {/* Đã/chưa xem — Email theo Gmail; còn lại theo seenStore */}
+                  {item.type === 'Email' ? (
+                    <button
+                      className={moreItem}
+                      disabled={patchMutation.isPending}
+                      onClick={() => { patchMutation.mutate({ isUnread: !isUnread }); setIsMoreOpen(false); }}
+                    >
+                      {isUnread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
+                      <span>{isUnread ? t('item.markRead') : t('item.markUnread')}</span>
+                    </button>
+                  ) : (
+                    <button
+                      className={moreItem}
+                      onClick={() => { if (unread) markSeen(item.id); else markUnseen(item.id); setIsMoreOpen(false); }}
+                    >
+                      {unread ? <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <EyeOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
+                      <span>{unread ? t('item.markSeen') : t('item.markUnseen')}</span>
+                    </button>
+                  )}
+
+                  {/* Đổi tên / tạo folder con — chỉ File */}
+                  {item.type === 'File' && (
+                    <button className={moreItem} onClick={() => { startRenamingFile(); setIsMoreOpen(false); }}>
+                      <Edit3 className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.rename')}</span>
+                    </button>
+                  )}
+                  {item.type === 'File' && fileIsDriveFolder && (
+                    <button className={moreItem} onClick={() => { setCreateSubfolderOpen(true); setIsMoreOpen(false); }}>
+                      <FolderPlus className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('drive.createFolder.subfolder')}</span>
+                    </button>
+                  )}
+
+                  {/* Mở ngoài — theo loại */}
+                  {item.type === 'Email' && metadata.threadId && (
+                    <button className={moreItem} onClick={() => { openExternal(`https://mail.google.com/mail/u/0/#all/${metadata.threadId}`); setIsMoreOpen(false); }}>
+                      <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInGmail')}</span>
+                    </button>
+                  )}
+                  {item.type === 'Event' && metadata.htmlLink && (
+                    <button className={moreItem} onClick={() => { openExternal(metadata.htmlLink); setIsMoreOpen(false); }}>
+                      <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInCalendar')}</span>
+                    </button>
+                  )}
+                  {item.type === 'Event' && metadata.meetUrl && (
+                    <button className={moreItem} onClick={() => { openExternal(metadata.meetUrl); setIsMoreOpen(false); }}>
+                      <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>Google Meet</span>
+                    </button>
+                  )}
+                  {item.type === 'File' && metadata.webViewLink && (
+                    <button className={moreItem} onClick={() => { openExternal(metadata.webViewLink); setIsMoreOpen(false); }}>
+                      <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInDrive')}</span>
+                    </button>
+                  )}
+                  {item.type === 'Ticket' && metadata.issueUrl && (
+                    <button className={moreItem} onClick={() => { openExternal(metadata.issueUrl); setIsMoreOpen(false); }}>
+                      <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('ticket.openInJira')}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleteMutation.isPending}
-              className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
+              title={t('common.delete')}
+              aria-label={t('common.delete')}
+              className={deleteBtn}
             >
               {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
-          )}
-
-          {/* ── Ticket actions — sửa ngay tại field trong panel, footer chỉ còn Mở-Jira + xoá ── */}
-          {item.type === 'Ticket' && (
-            <>
-              {metadata.issueUrl && (
-                <a
-                  href={metadata.issueUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('ticket.openInJira')}</span>
-                </a>
-              )}
-              <button
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteMutation.isPending}
-                className="w-[36px] h-[36px] inline-flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
-              >
-                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              </button>
-            </>
-          )}
+          </div>
         </div>
 
       </div>

@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.DTOs.Drive;
@@ -18,6 +19,7 @@ namespace WorkspaceHub.Api.Controllers
     {
         private readonly IDriveSharingService _driveSharing;
         private readonly IDriveUploadService _driveUpload;
+        private readonly IDriveContentService _driveContent;
         private readonly IValidator<CreateDriveFolderRequest> _createFolderValidator;
         private readonly IValidator<AddDrivePermissionRequest> _addPermissionValidator;
         private readonly IValidator<UpdateDrivePermissionRequest> _updatePermissionValidator;
@@ -25,6 +27,7 @@ namespace WorkspaceHub.Api.Controllers
         public DriveController(
             IDriveSharingService driveSharing,
             IDriveUploadService driveUpload,
+            IDriveContentService driveContent,
             IValidator<CreateDriveFolderRequest> createFolderValidator,
             IValidator<AddDrivePermissionRequest> addPermissionValidator,
             IValidator<UpdateDrivePermissionRequest> updatePermissionValidator,
@@ -32,6 +35,7 @@ namespace WorkspaceHub.Api.Controllers
         {
             _driveSharing = driveSharing;
             _driveUpload = driveUpload;
+            _driveContent = driveContent;
             _createFolderValidator = createFolderValidator;
             _addPermissionValidator = addPermissionValidator;
             _updatePermissionValidator = updatePermissionValidator;
@@ -163,6 +167,55 @@ namespace WorkspaceHub.Api.Controllers
                 foreach (var entry in entries)
                     await entry.Content.DisposeAsync();
             }
+        }
+
+        /// <summary>
+        /// GET /api/drive/items/{itemId}/content — tải/xem nội dung file (BE proxy stream từ Google).
+        /// <c>?dl=true</c> ⟹ Content-Disposition attachment (tải xuống); mặc định inline (preview ảnh).
+        /// Google-native docs (Docs/Sheets/Slides) được export sang PDF/PNG.
+        /// </summary>
+        [HttpGet("items/{itemId:guid}/content")]
+        public async Task<IActionResult> DownloadContent(
+            Guid itemId,
+            [FromQuery] bool dl = false,
+            CancellationToken ct = default)
+        {
+            await using var media = await _driveContent.DownloadAsync(CurrentUserId, itemId, ct);
+
+            var fileName = string.IsNullOrWhiteSpace(media.FileName) ? "download" : media.FileName;
+            var disposition = new ContentDispositionHeaderValue(dl ? "attachment" : "inline");
+            disposition.SetHttpFileName(fileName); // tự xử lý filename* UTF-8 cho tên có dấu.
+
+            Response.ContentType = media.ContentType;
+            if (media.ContentLength is long len && len >= 0)
+                Response.ContentLength = len;
+            Response.Headers.ContentDisposition = disposition.ToString();
+
+            // Stream thẳng ra client — không buffer toàn file vào RAM (file tối đa 100MB).
+            await media.Content.CopyToAsync(Response.Body, ct);
+            return new EmptyResult();
+        }
+
+        /// <summary>
+        /// GET /api/drive/items/{itemId}/thumbnail — ảnh thumbnail để preview (proxy từ Google).
+        /// 200 + ảnh, hoặc 204 nếu file không có thumbnail (folder / Google chưa render).
+        /// </summary>
+        [HttpGet("items/{itemId:guid}/thumbnail")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> GetThumbnail(Guid itemId, CancellationToken ct = default)
+        {
+            await using var media = await _driveContent.GetThumbnailAsync(CurrentUserId, itemId, ct);
+            if (media is null)
+                return NoContent();
+
+            Response.ContentType = media.ContentType;
+            if (media.ContentLength is long len && len >= 0)
+                Response.ContentLength = len;
+            Response.Headers.CacheControl = "private, max-age=300"; // thumbnail đổi hiếm — cache ngắn ở client.
+
+            await media.Content.CopyToAsync(Response.Body, ct);
+            return new EmptyResult();
         }
 
         /// <summary>GET /api/drive/items/{itemId}/permissions — danh sách quyền share.</summary>

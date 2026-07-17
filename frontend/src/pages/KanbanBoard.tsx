@@ -7,7 +7,7 @@ import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey, parseSourceType } from '../lib/itemVisuals';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
-import { isItemUnread, isDraftEmail } from '../lib/itemMeta';
+import { isItemUnread, isDraftEmail, isDriveFolder } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
 import { Plus, Star, GripVertical, AlertCircle } from 'lucide-react';
@@ -246,6 +246,31 @@ export const KanbanBoard = () => {
     onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
   });
 
+  // Đánh dấu quan trọng ngay trên thẻ (như view Danh sách). Optimistic trên cache từng cột board.
+  const toggleImportant = useMutation({
+    mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
+      itemsApi.updateItemImportant(id, isImportant),
+    onMutate: async ({ id, isImportant }) => {
+      await queryClient.cancelQueries({ queryKey: ['items'] });
+      const snapshots = queryClient.getQueriesData<BoardCache>({ queryKey: ['items', 'board'] });
+      snapshots.forEach(([key, data]) => {
+        if (!data) return;
+        queryClient.setQueryData<BoardCache>(key, {
+          ...data,
+          pages: data.pages.map(p => ({
+            ...p,
+            items: p.items.map(it => it.id === id ? { ...it, isImportant } : it),
+          })),
+        });
+      });
+      return { snapshots };
+    },
+    onError: (err, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      handleApiError(err, t('item.saveFail'), { navigate });
+    },
+  });
+
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggingId(id);
     if (selectedItemIds.has(id) && selectedItemIds.size > 1) {
@@ -377,6 +402,7 @@ export const KanbanBoard = () => {
                           // Event/File/Note/Ticket = seenStore (mở detail = đã xem).
                           const unread = isItemUnread(item, seenSet);
                           const seenDim = !unread;
+                          const cardIsFolder = isDriveFolder(item);
 
                           return (
                           <div
@@ -417,8 +443,8 @@ export const KanbanBoard = () => {
                                   className={`w-3.5 h-3.5 shrink-0 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600 ${selectedItemIds.has(item.id) ? 'inline-block' : 'hidden group-hover:inline-block'}`}
                                 />
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
-                                  {typeIcon(item.type, 'w-3.5 h-3.5')}
-                                  {t(typeLabelKey(item.type))}
+                                  {typeIcon(item.type, 'w-3.5 h-3.5', undefined, cardIsFolder)}
+                                  {cardIsFolder ? t('type.folder') : t(typeLabelKey(item.type))}
                                 </span>
                                 {item.folderIds?.map(fId => {
                                   const f = folders.find(fol => fol.id === fId);
@@ -488,9 +514,23 @@ export const KanbanBoard = () => {
                                 ))}
                               </div>
                             )}
-                            <div className="flex items-center justify-end gap-2 mt-auto pt-1">
-                              <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
-                                {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
+                            <div className="flex items-center justify-end gap-1.5 mt-auto pt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleImportant.mutate({ id: item.id, isImportant: !item.isImportant });
+                                }}
+                                aria-label={t('inbox.markImportant')}
+                                className="shrink-0 p-0.5 rounded hover:bg-amber-100/70 dark:hover:bg-amber-500/15 transition-colors"
+                              >
+                                <Star className={`w-3.5 h-3.5 transition-colors ${
+                                  item.isImportant
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'text-slate-300 dark:text-slate-600 hover:text-amber-400'
+                                }`} />
+                              </button>
+                              <span className="text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {timeAgo(item.occurredAt, lang)}
                               </span>
                             </div>

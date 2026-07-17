@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Folder } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { driveApi } from '../../lib/driveApi';
 import { connectionsApi } from '../../lib/connectionsApi';
 import { itemsApi } from '../../lib/itemsApi';
-import { isDriveFolder } from '../../lib/itemMeta';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
@@ -52,7 +51,6 @@ function CreateDriveFolderModalBody({
 
   const [name, setName] = useState('');
   const [userConnectionId, setUserConnectionId] = useState<string | undefined>();
-  const [userParentItemId, setUserParentItemId] = useState<string | undefined>();
 
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
@@ -72,23 +70,20 @@ function CreateDriveFolderModalBody({
     return driveConnections[0]?.id ?? '';
   }, [userConnectionId, defaultConnectionId, driveConnections]);
 
-  const parentItemId = userParentItemId ?? defaultParentItemId ?? '';
-
-  const { data: itemsPage } = useQuery({
-    queryKey: ['items', 'drive-folders', connectionId],
-    queryFn: () =>
-      itemsApi.getItems({
-        types: ['File'],
-        connectionId,
-        limit: 100,
-      }),
-    enabled: !!connectionId,
+  // KHÔNG cho user chọn folder cha — tạo thẳng vào context hiện tại (folder đang mở / detail),
+  // rỗng = My Drive gốc. Chỉ lấy TÊN folder cha để hiện hint "sẽ tạo ở đâu" (reuse cache ['item', id]).
+  const parentItemId = defaultParentItemId ?? '';
+  const { data: parentItem } = useQuery({
+    queryKey: ['item', parentItemId],
+    queryFn: () => itemsApi.getItemById(parentItemId),
+    enabled: !!parentItemId,
   });
 
-  const folderOptions = useMemo(() => {
-    const items = itemsPage?.items ?? [];
-    return items.filter((it) => isDriveFolder(it));
-  }, [itemsPage]);
+  const targetHint = parentItemId
+    ? (parentItem?.title
+        ? t('drive.createFolder.targetNamed').replace('{name}', parentItem.title)
+        : t('drive.createFolder.targetCurrent'))
+    : t('drive.createFolder.targetRoot');
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -145,21 +140,19 @@ function CreateDriveFolderModalBody({
               onChange={(e) => setName(e.target.value)}
               placeholder={t('drive.createFolder.namePlaceholder')}
               className="w-full h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px]"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && name.trim() && connectionId && !createMutation.isPending) {
+                  createMutation.mutate();
+                }
+              }}
             />
           </div>
-          <div>
-            <label className="block text-[13px] font-medium mb-1.5">{t('drive.createFolder.parent')}</label>
-            <Select
-              value={parentItemId}
-              onChange={setUserParentItemId}
-              dropUp
-              options={[
-                { value: '', label: t('drive.createFolder.parentRoot') },
-                ...folderOptions.map((f) => ({ value: f.id, label: f.title })),
-              ]}
-              className="h-9"
-            />
-          </div>
+          {/* Tạo thẳng vào context hiện tại — chỉ báo nơi tạo, không cho chọn. */}
+          <p className="flex items-center gap-1.5 text-[12px] text-slate-500 dark:text-slate-400">
+            <Folder className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+            {targetHint}
+          </p>
         </div>
         <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 rounded-b-xl flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-slate-600">{t('common.cancel')}</button>

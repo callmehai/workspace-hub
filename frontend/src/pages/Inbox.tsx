@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
@@ -18,7 +18,7 @@ import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType } from '../lib/itemVisuals';
+import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType, integrationLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
@@ -28,6 +28,9 @@ import toast from 'react-hot-toast';
 import { sendEmailApi } from '../lib/sendEmailApi';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+
+/** 1 cấp folder Drive trong breadcrumb drill-down. id = externalId (Google), internalId = Item.Id (app). */
+type DriveStackEntry = { id: string; name: string; internalId: string };
 
 // Key i18n cho nhãn status (chip "đang lọc") — tái dùng nhãn cột Kanban.
 const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
@@ -148,6 +151,9 @@ export const Inbox = () => {
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
   const pollMs = usePollingInterval(45_000);
+  // Container cuộn của trang — dùng để kéo lên đầu khi đổi folder/tab/trang (tránh mở folder con
+  // mà vẫn kẹt ở cuối như cũ).
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -163,8 +169,23 @@ export const Inbox = () => {
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Drive folder drill-down state
-  const [driveFolderStack, setDriveFolderStack] = useState<{id: string, name: string, internalId: string}[]>([]);
+  // Drive folder drill-down: stack sống trong history state (location.state.driveStack) → nút Back của
+  // trình duyệt lùi về folder cha đúng như mong đợi, mỗi cấp có URL riêng (?df=<internalId>).
+  const driveFolderStack = useMemo<DriveStackEntry[]>(() => {
+    const s = (location.state as { driveStack?: DriveStackEntry[] } | null)?.driveStack;
+    return Array.isArray(s) ? s : [];
+  }, [location.state]);
+
+  // Điều hướng tới 1 cấp folder (push history + state) — dùng cho double-click & breadcrumb.
+  const navigateDriveStack = (stack: DriveStackEntry[]) => {
+    const params = new URLSearchParams(searchParams);
+    if (stack.length > 0) params.set('df', stack[stack.length - 1].internalId);
+    else params.delete('df');
+    navigate(
+      { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' },
+      { state: { driveStack: stack } },
+    );
+  };
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
   // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
@@ -218,8 +239,8 @@ export const Inbox = () => {
       try {
         const meta = JSON.parse(item.metadataJson);
         if (meta.isFolder && item.externalId) {
-          setDriveFolderStack(prev => [...prev, { id: item.externalId!, name: item.title, internalId: item.id }]);
-          setPage(1);
+          // Push 1 cấp vào history (Back sẽ lùi về folder cha). Page reset qua effect theo ?df.
+          navigateDriveStack([...driveFolderStack, { id: item.externalId, name: item.title, internalId: item.id }]);
           setSelectedId(null);
           return;
         }
@@ -282,12 +303,20 @@ export const Inbox = () => {
     }
   };
 
-  // Đổi context (folder HOẶC nguồn) → về trang 1.
+  // Đổi context (folder / nguồn / cấp folder Drive ?df) → về trang 1. Stack Drive derive từ
+  // history state nên KHÔNG cần reset tay ở đây (đổi tab = navigate mới không state → stack rỗng).
+  const dfParam = searchParams.get('df');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-    setDriveFolderStack([]); // Reset drive drill-down khi đổi tab
-  }, [selectedFolderId, sourceType]);
+  }, [selectedFolderId, sourceType, dfParam]);
+
+  // Kéo lên đầu khi đổi folder Drive / tab / folder context / trang — không kẹt ở cuối.
+  // Scroller THẬT là <main> của MainLayout (không phải div này) → tìm bằng closest('main').
+  useEffect(() => {
+    const scroller = scrollRef.current?.closest('main') ?? scrollRef.current;
+    scroller?.scrollTo({ top: 0 });
+  }, [dfParam, selectedFolderId, sourceType, page]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
     setStatusFilter(prev => prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]);
@@ -487,7 +516,7 @@ export const Inbox = () => {
   const pageNumbers = buildPageNumbers(page, totalPages);
 
   return (
-    <div className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+    <div ref={scrollRef} className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
       <div className="max-w-[1400px] mx-auto px-6 py-5">
 
         {/* ── Toolbar dùng chung với view Bảng — layout GIỐNG HỆT khi đổi view ── */}
@@ -579,12 +608,12 @@ export const Inbox = () => {
         {/* ── Drive Folder Breadcrumb ── */}
         {driveFolderStack.length > 0 && (
           <div className="flex items-center gap-1.5 mb-3 text-[13px] font-medium overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button 
-              onClick={() => { setDriveFolderStack([]); setPage(1); }}
+            <button
+              onClick={() => navigateDriveStack([])}
               className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
             >
               <Home className="w-4 h-4" />
-              {t('nav.allItems')}
+              {sourceType ? t(integrationLabelKey(sourceType)) : t('nav.allItems')}
             </button>
             {driveFolderStack.map((folder, index) => {
               const isLast = index === driveFolderStack.length - 1;
@@ -592,12 +621,7 @@ export const Inbox = () => {
                 <div key={folder.id} className="flex items-center gap-1.5 whitespace-nowrap">
                   <BreadcrumbSeparator className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
                   <button
-                    onClick={() => {
-                      if (!isLast) {
-                        setDriveFolderStack(prev => prev.slice(0, index + 1));
-                        setPage(1);
-                      }
-                    }}
+                    onClick={() => { if (!isLast) navigateDriveStack(driveFolderStack.slice(0, index + 1)); }}
                     className={`transition-colors ${isLast ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
                     disabled={isLast}
                   >

@@ -78,12 +78,16 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
   const hasDrive = driveConnections.length > 0;
   const driveConnectionId = driveConnections[0]?.id ?? '';
 
+  // Đang drill trong 1 folder Drive → chỉ có ý nghĩa tạo/tải nội dung Drive (tạo Ticket/Note/Event
+  // vào folder Drive là vô nghĩa). currentDriveFolderId set = đang trong folder Drive.
+  const inDriveFolder = !!currentDriveFolderId;
+
   // Option hiện = (đang ở "Tất cả mục" HOẶC đúng tab của loại đó) VÀ integration tương ứng Active.
-  // Ghi chú là nội bộ (không integration) → chỉ ở "Tất cả mục".
-  const showNote = !sourceType;
-  const showEvent = (!sourceType || sourceType === 'Event') && hasGcal;
-  const showTicket = (!sourceType || sourceType === 'Ticket') && hasJira;
-  const showDrive = (!sourceType || sourceType === 'File') && hasDrive;
+  // Ghi chú là nội bộ (không integration) → chỉ ở "Tất cả mục". Trong folder Drive → ẩn hết trừ Drive.
+  const showNote = !sourceType && !inDriveFolder;
+  const showEvent = !inDriveFolder && (!sourceType || sourceType === 'Event') && hasGcal;
+  const showTicket = !inDriveFolder && (!sourceType || sourceType === 'Ticket') && hasJira;
+  const showDrive = (inDriveFolder || !sourceType || sourceType === 'File') && hasDrive;
   const hasAnyOption = showNote || showEvent || showTicket || showDrive;
 
   // Đóng menu khi click ra ngoài.
