@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
+import { connectionsApi } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
@@ -10,7 +11,7 @@ import { TagChip, FolderChip } from '../components/tags/TagChip';
 import { isItemUnread, isDraftEmail, isDriveFolder } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
-import { Plus, Star, GripVertical, AlertCircle } from 'lucide-react';
+import { Plus, Star, GripVertical, AlertCircle, Plug } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
@@ -38,6 +39,14 @@ const COLUMNS: { titleKey: TranslationKey, status: ItemStatus, dotColor: string 
 
 /** Số thẻ load mỗi lần cho 1 cột — bấm "Tải thêm" ở đáy cột để lấy tiếp (không còn cap 100). */
 const COL_PAGE_SIZE = 30;
+
+/** Nguồn (tab sidebar) → service cần Active để có dữ liệu (empty-state "chưa kết nối"). */
+const SOURCE_SERVICE: Record<string, { key: string; label: string }> = {
+  Email: { key: 'gmail', label: 'Gmail' },
+  Event: { key: 'gcal', label: 'Google Calendar' },
+  File: { key: 'drive', label: 'Google Drive' },
+  Ticket: { key: 'jira', label: 'Jira' },
+};
 
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
@@ -168,6 +177,21 @@ export const KanbanBoard = () => {
     (inboxQ.isFetching || doingQ.isFetching || doneQ.isFetching) && !isColLoading;
   const isError = inboxQ.isError || doingQ.isError || doneQ.isError;
   const refetchAll = () => { inboxQ.refetch(); doingQ.refetch(); doneQ.refetch(); };
+
+  // Empty-state thông minh (giống Danh sách): board rỗng + chưa kết nối service của nguồn đang xem
+  // → hiện panel dẫn sang trang Kết nối thay vì 3 cột trống khó hiểu.
+  const { data: connectionsList = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+    staleTime: 60_000,
+  });
+  const activeServices = new Set(
+    connectionsList.filter(c => c.status.toLowerCase() === 'active').map(c => c.serviceType.toLowerCase()),
+  );
+  const requiredService = sourceType ? SOURCE_SERVICE[sourceType] : undefined;
+  const missingConnection = requiredService ? !activeServices.has(requiredService.key) : activeServices.size === 0;
+  const boardTotal = colTotalOf(inboxQ) + colTotalOf(doingQ) + colTotalOf(doneQ);
+  const boardEmpty = !isColLoading && !isError && boardTotal === 0;
 
   type BoardCache = InfiniteData<PagedResult<ItemResponse>>;
 
@@ -360,6 +384,24 @@ export const KanbanBoard = () => {
               <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">{t('kanban.loadErrorHint')}</p>
               <button onClick={refetchAll} className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-medium rounded-lg">
                 {t('common.retry')}
+              </button>
+            </div>
+          ) : boardEmpty && missingConnection ? (
+            <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 p-8 text-center max-w-md mx-auto">
+              <div className="w-12 h-12 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center mb-4">
+                <Plug className="w-6 h-6" />
+              </div>
+              <span className="text-slate-900 dark:text-slate-100 text-sm font-semibold mb-1">
+                {requiredService
+                  ? t('inbox.emptyNoConnectionSource', { service: requiredService.label })
+                  : t('inbox.emptyNoConnectionAny')}
+              </span>
+              <button
+                onClick={() => navigate('/integrations')}
+                className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-600 text-[13px] font-semibold text-white hover:bg-brand-700 transition-colors"
+              >
+                <Plug className="w-4 h-4" />
+                {t('nav.integrations')}
               </button>
             </div>
           ) : (

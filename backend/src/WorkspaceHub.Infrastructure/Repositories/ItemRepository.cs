@@ -163,8 +163,19 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         var totalCount = await deduped.CountAsync(ct);
 
         // ── Sort + Paging (DB level) ──
-        var items = await deduped
-            .OrderByDescending(i => i.OccurredAt)
+        // Trong ngữ cảnh Drive (đang duyệt trong 1 folder, hoặc tab chỉ-File) → đẩy FOLDER lên trước
+        // FILE (giống mọi trình quản lý file), rồi mới tới mới-nhất. View khác (Email/All) giữ nguyên
+        // sort theo thời gian — điều kiện dưới chỉ đúng ở view Drive nên không đụng các tab kia.
+        var foldersFirst = driveParentId != null
+            || (types is { Count: 1 } && types[0] == ItemType.File);
+
+        var ordered = foldersFirst
+            ? deduped
+                .OrderByDescending(i => i.MetadataJson != null && i.MetadataJson.Contains("\"isFolder\":true"))
+                .ThenByDescending(i => i.OccurredAt)
+            : deduped.OrderByDescending(i => i.OccurredAt);
+
+        var items = await ordered
             .Skip((page - 1) * limit)
             .Take(limit)
             .ToListAsync(ct);

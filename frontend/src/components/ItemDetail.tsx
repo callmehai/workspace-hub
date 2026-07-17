@@ -1039,7 +1039,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       <ConfirmDialog
         open={deleteConfirmOpen}
         tone="danger"
-        message={t(DELETE_CONFIRM_KEY[item.type] ?? 'item.confirmDeleteNote')}
+        message={
+          fileIsDriveFolder
+            ? t('item.confirmDeleteDriveFolder')
+            : t(DELETE_CONFIRM_KEY[item.type] ?? 'item.confirmDeleteNote')
+        }
         confirmLabel={t('common.delete')}
         loading={deleteMutation.isPending}
         onConfirm={() =>

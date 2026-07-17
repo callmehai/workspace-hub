@@ -172,10 +172,29 @@ export const Inbox = () => {
 
   // Drive folder drill-down: stack sống trong history state (location.state.driveStack) → nút Back của
   // trình duyệt lùi về folder cha đúng như mong đợi, mỗi cấp có URL riêng (?df=<internalId>).
-  const driveFolderStack = useMemo<DriveStackEntry[]>(() => {
+  const dfParam = searchParams.get('df');
+  const stateStack = useMemo<DriveStackEntry[]>(() => {
     const s = (location.state as { driveStack?: DriveStackEntry[] } | null)?.driveStack;
     return Array.isArray(s) ? s : [];
   }, [location.state]);
+
+  // F5 / mở link trực tiếp: còn `?df` nhưng history state đã mất → fetch item để dựng lại 1 cấp,
+  // giữ người dùng TRONG folder thay vì văng về gốc Drive. (Breadcrumb khi đó gọn còn folder hiện tại;
+  // điều hướng bình thường vẫn giữ đủ nhiều cấp qua state.)
+  const { data: dfItem } = useQuery({
+    queryKey: ['item', dfParam],
+    queryFn: () => itemsApi.getItemById(dfParam!),
+    enabled: !!dfParam && stateStack.length === 0,
+    staleTime: 60_000,
+  });
+
+  const driveFolderStack = useMemo<DriveStackEntry[]>(() => {
+    if (stateStack.length > 0) return stateStack;
+    if (dfParam && dfItem?.externalId) {
+      return [{ id: dfItem.externalId, name: dfItem.title, internalId: dfItem.id }];
+    }
+    return [];
+  }, [stateStack, dfParam, dfItem]);
 
   // Điều hướng tới 1 cấp folder (push history + state) — dùng cho double-click & breadcrumb.
   const navigateDriveStack = (stack: DriveStackEntry[]) => {
@@ -306,7 +325,6 @@ export const Inbox = () => {
 
   // Đổi context (folder / nguồn / cấp folder Drive ?df) → về trang 1. Stack Drive derive từ
   // history state nên KHÔNG cần reset tay ở đây (đổi tab = navigate mới không state → stack rỗng).
-  const dfParam = searchParams.get('df');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);

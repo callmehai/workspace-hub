@@ -32,6 +32,14 @@
 - **Tách `lib/driveDrop.ts`** (logic đọc entries + đệ quy cây thư mục + `handleDriveDrop`/`dragHasFiles`) dùng chung, gỡ code lặp trong `DriveDropZone`.
 - **Preview ảnh bấm phóng to (lightbox):** `DriveFilePreview` — ảnh/thumbnail bấm mở overlay toàn màn hình (Esc / bấm nền / nút X để đóng), hover hiện gợi ý "Bấm để phóng to". Thêm i18n `drive.preview.zoom`.
 
+### Sau QA local (3) — polish list/Kanban + điều hướng + gợi ý share
+- **Folder xếp trước file (list Drive):** `ItemRepository` sort thêm `OrderByDescending("isFolder":true)` TRƯỚC `OccurredAt`, **chỉ khi view Drive** (`driveParentId != null` hoặc types == [File]) → các view Email/All giữ nguyên sort thời gian. Folder luôn nổi lên đầu như mọi trình quản lý file.
+- **Cảnh báo xoá folder Drive:** xoá 1 folder → dialog cảnh báo "sẽ chuyển cả thư mục + TOÀN BỘ nội dung vào Thùng rác Drive" (i18n `item.confirmDeleteDriveFolder`), thay câu xoá file thường.
+- **Kanban empty-state "chưa kết nối":** board rỗng + chưa kết nối service của nguồn đang xem → panel dẫn sang trang Kết nối (giống view Danh sách), thay 3 cột trống khó hiểu.
+- **F5 không văng khỏi folder con:** stack drill-down vốn sống trong `location.state` (mất khi reload). Nay nếu còn `?df` mà mất state → fetch item dựng lại 1 cấp → **người dùng vẫn ở trong folder** thay vì bật về gốc Drive. (Breadcrumb khi đó gọn còn folder hiện tại; điều hướng thường vẫn giữ đủ cấp.)
+- **Gợi ý contact khi share:** `DriveShareDialog` — ô mời email có **gợi ý bạn bè** (friend system, chỉ Accepted, lọc theo chuỗi đang gõ) + **validate email** (nút mời khoá tới khi hợp lệ) + **Enter để mời**.
+- **Chưa làm (ghi chú):** (1) *thống nhất branding thẻ Kanban* — thực tế thẻ đã dùng cùng brand-icon + nhãn folder/file như list, khác biệt còn lại chỉ là kiểu nền (pill vs tile), để sau. (2) *Ticket transition đúng mọi Jira project* — map cứng `Inbox→To Do / Doing→In Progress / Done→Done` chỉ đúng khi project dùng đúng 3 status mặc định; fix tổng quát cần **endpoint Jira lấy transitions động** (mảng riêng, chưa làm).
+
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 
 > Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.
