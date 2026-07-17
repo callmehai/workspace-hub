@@ -19,8 +19,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                 table: "CalendarInvitations",
                 column: "InviteeItemId",
                 principalTable: "Items",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                principalColumn: "Id");
         }
 
         /// <inheritdoc />

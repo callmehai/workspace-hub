@@ -823,8 +823,7 @@ namespace WorkspaceHub.Infrastructure.Data.Migrations
                 {
                     b.HasOne("WorkspaceHub.Domain.Entities.Item", "InviteeItem")
                         .WithMany()
-                        .HasForeignKey("InviteeItemId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("InviteeItemId");
 
                     b.HasOne("WorkspaceHub.Domain.Entities.User", "InviteeUser")
                         .WithMany("ReceivedCalendarInvitations")
