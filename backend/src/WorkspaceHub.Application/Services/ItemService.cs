@@ -88,6 +88,7 @@ public class ItemService : IItemService
             request.Assignee,
             request.ConnectionId,
             request.DriveParentId,
+            request.DriveKind,
             page,
             limit,
             ct);

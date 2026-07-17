@@ -73,4 +73,27 @@ public interface IDriveGateway
         bool enable,
         DrivePermissionRole role,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Tải nội dung file (proxy media) — stream về không buffer toàn bộ vào RAM.
+    /// File Google-native (Docs/Sheets/Slides/Drawing) được EXPORT sang PDF/PNG (không tải trực tiếp được).
+    /// </summary>
+    /// <param name="mimeType">MIME của file (quyết định download alt=media vs export).</param>
+    /// <param name="downloadName">Tên gợi ý cho Content-Disposition (kèm đuôi export nếu cần).</param>
+    /// <returns><see cref="DriveMediaResult"/> — caller phải DisposeAsync sau khi stream xong.</returns>
+    Task<DriveMediaResult> DownloadFileAsync(
+        Connection connection,
+        string fileId,
+        string mimeType,
+        string? downloadName,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy thumbnail của file (nếu Google có). Thumbnail là "nice to have":
+    /// file không có thumbnail hoặc fetch lỗi → trả <c>null</c> (không ném).
+    /// </summary>
+    Task<DriveMediaResult?> GetThumbnailAsync(
+        Connection connection,
+        string fileId,
+        CancellationToken ct = default);
 }

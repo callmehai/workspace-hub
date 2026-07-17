@@ -1,16 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
   <defs>
     <linearGradient id="folderBack" x1="24" y1="10" x2="24" y2="38" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#57A6F7"/>
-      <stop offset="1" stop-color="#2E7CE0"/>
+      <stop stop-color="#28B4F6"/>
+      <stop offset="1" stop-color="#0E97ED"/>
     </linearGradient>
     <linearGradient id="folderFront" x1="24" y1="18" x2="24" y2="39" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#9CCEFF"/>
-      <stop offset="1" stop-color="#5AA6F5"/>
+      <stop stop-color="#39BEFF"/>
+      <stop offset="1" stop-color="#17A6F3"/>
     </linearGradient>
+    <!-- gradient logo Google Drive (giống drive.svg app đang dùng) -->
+    <radialGradient id="fdA" cx="-254.817" cy="705.837" gradientTransform="matrix(2.827,1.6322,-1.6322,2.827,1967.2161,-1760.7166)" gradientUnits="userSpaceOnUse" r="82.973">
+      <stop offset="0" stop-color="#ffd24d"/><stop offset="1" stop-color="#f6c338"/>
+    </radialGradient>
+    <radialGradient id="fdB" cx="-254.82" cy="705.836" gradientTransform="matrix(2.827,1.6322,-1.6322,2.827,1967.2161,-1760.7166)" gradientUnits="userSpaceOnUse" r="82.978">
+      <stop offset="0" stop-color="#4387fd"/><stop offset=".65" stop-color="#3078f0"/><stop offset=".91" stop-color="#2b72ea"/><stop offset="1" stop-color="#286ee6"/>
+    </radialGradient>
   </defs>
-  <!-- back plate + tab -->
-  <path d="M6 14q0-4 4-4h7.8q1.2 0 2 .86l2.5 2.78q.8.86 2 .86H38q4 0 4 4v16q0 4-4 4H10q-4 0-4-4V14Z" fill="url(#folderBack)"/>
-  <!-- front pocket (lighter, sits in front for depth) -->
-  <path d="M4.6 21.4q-.3-2.4 2.1-2.4h34.6q2.4 0 2.1 2.4l-1.8 14.2q-.25 2-2.27 2H8.67q-2.02 0-2.27-2l-1.8-14.2Z" fill="url(#folderFront)"/>
+
+  <!-- Phóng to toàn bộ icon (1.2x quanh tâm) cho folder đầy khung hơn -->
+  <g transform="translate(24 24) scale(1.2) translate(-24 -24)">
+    <!-- back plate + tab -->
+    <path d="M6 14q0-4 4-4h7.8q1.2 0 2 .86l2.5 2.78q.8.86 2 .86H38q4 0 4 4v16q0 4-4 4H10q-4 0-4-4V14Z" fill="url(#folderBack)"/>
+    <!-- front pocket (lighter, sits in front for depth) -->
+    <path d="M4.6 21.4q-.3-2.4 2.1-2.4h34.6q2.4 0 2.1 2.4l-1.8 14.2q-.25 2-2.27 2H8.67q-2.02 0-2.27-2l-1.8-14.2Z" fill="url(#folderFront)"/>
+
+    <!-- logo Google Drive nằm GỌN trong túi folder -->
+    <g transform="translate(24 28.5) scale(0.3) translate(-37.57 -32)">
+      <g transform="matrix(.460432 0 0 .460432 57.509647 126.82041)">
+        <path d="M-100.704-145.738l-24.2-41.9 45.3-78.5 24.2 41.9z" fill="#0da960"/>
+        <path d="M-100.704-145.738l24.2-41.9h90.6l-24.2 41.9z" fill="url(#fdB)"/>
+        <path d="M14.096-187.638h-48.4l-45.3-78.5h48.4z" fill="url(#fdA)"/>
+        <path d="M-55.404-187.638h-21.1l10.5-18.3-34.7 60.2z" fill="#2d6fdd"/>
+        <path d="M-34.304-187.638h48.4l-58.9-18.3z" fill="#e5b93c"/>
+        <path d="M-66.004-205.938l10.6-18.3-24.2-41.9z" fill="#0c9b57"/>
+      </g>
+    </g>
+  </g>
 </svg>
