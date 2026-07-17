@@ -400,9 +400,14 @@ export const WorkspaceToolbar = ({
             />
           </FilterGroup>
 
-          {/* Tạo nhanh — 1 dropdown "Mới" gộp mọi option, hiện theo integration đang Active. */}
+          {/* Tạo nhanh — 1 dropdown "Mới": ở "Tất cả mục" full option; tab cụ thể chỉ option
+              hợp loại đó; và chỉ hiện khi integration tương ứng đang Active. */}
           <div className="flex items-center justify-end ml-auto">
-            <WorkspaceNewMenu folder={folder} currentDriveFolderId={currentDriveFolderId} />
+            <WorkspaceNewMenu
+              folder={folder}
+              currentDriveFolderId={currentDriveFolderId}
+              sourceType={sourceType}
+            />
           </div>
         </div>
       </div>

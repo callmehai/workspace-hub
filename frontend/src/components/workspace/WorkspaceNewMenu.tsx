@@ -10,7 +10,7 @@ import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { buildDriveFolderEntries, driveApi, validateDriveUploadFiles } from '../../lib/driveApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
-import type { FolderResponse } from '../../types/items';
+import type { FolderResponse, ItemType } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
 import { CreateEventModal } from './CreateEventModal';
 import { CreateTicketModal } from '../jira/CreateTicketModal';
@@ -21,6 +21,8 @@ interface Props {
   folder: FolderResponse | null;
   /** Folder Drive đang mở (drill-down) — upload/ tạo folder vào đây nếu có. */
   currentDriveFolderId?: string;
+  /** Tab nguồn đang xem (sidebar). null = "Tất cả mục" → full option; tab cụ thể → chỉ option hợp loại đó. */
+  sourceType?: ItemType | null;
 }
 
 /** 1 dòng trong menu "Mới". */
@@ -44,7 +46,7 @@ function MenuItem({
  * Option hiện theo integration đang Active: Ghi chú (nội bộ, luôn có) · Sự kiện (Google
  * Calendar) · Ticket (Jira) · Thư mục mới / Tải tệp / Tải thư mục (Google Drive).
  */
-export function WorkspaceNewMenu({ folder, currentDriveFolderId }: Props) {
+export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = null }: Props) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -75,6 +77,14 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId }: Props) {
   );
   const hasDrive = driveConnections.length > 0;
   const driveConnectionId = driveConnections[0]?.id ?? '';
+
+  // Option hiện = (đang ở "Tất cả mục" HOẶC đúng tab của loại đó) VÀ integration tương ứng Active.
+  // Ghi chú là nội bộ (không integration) → chỉ ở "Tất cả mục".
+  const showNote = !sourceType;
+  const showEvent = (!sourceType || sourceType === 'Event') && hasGcal;
+  const showTicket = (!sourceType || sourceType === 'Ticket') && hasJira;
+  const showDrive = (!sourceType || sourceType === 'File') && hasDrive;
+  const hasAnyOption = showNote || showEvent || showTicket || showDrive;
 
   // Đóng menu khi click ra ngoài.
   useEffect(() => {
@@ -191,6 +201,9 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId }: Props) {
     }
   };
 
+  // Không có option nào hợp tab hiện tại → ẩn hẳn nút "Mới" (vd tab Gmail không có hành động tạo).
+  if (!hasAnyOption) return null;
+
   return (
     <>
       <div className="relative" ref={menuRef}>
@@ -207,14 +220,16 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId }: Props) {
 
         {open && (
           <div className="absolute right-0 top-full mt-2 w-56 z-40 rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 overflow-hidden py-1">
-            {/* Ghi chú — nội bộ app, luôn có */}
-            <MenuItem
-              icon={<StickyNote className="w-4 h-4" />}
-              label={t('toolbar.note')}
-              onClick={() => { setOpen(false); setIsNoteOpen(true); }}
-            />
+            {/* Ghi chú — nội bộ app, chỉ ở "Tất cả mục" */}
+            {showNote && (
+              <MenuItem
+                icon={<StickyNote className="w-4 h-4" />}
+                label={t('toolbar.note')}
+                onClick={() => { setOpen(false); setIsNoteOpen(true); }}
+              />
+            )}
             {/* Sự kiện — cần Google Calendar */}
-            {hasGcal && (
+            {showEvent && (
               <MenuItem
                 icon={<CalendarPlus className="w-4 h-4" />}
                 label={t('toolbar.event')}
@@ -222,7 +237,7 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId }: Props) {
               />
             )}
             {/* Ticket — cần Jira */}
-            {hasJira && (
+            {showTicket && (
               <MenuItem
                 icon={<Ticket className="w-4 h-4" />}
                 label={t('type.ticket')}
@@ -231,9 +246,12 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId }: Props) {
             )}
 
             {/* Nhóm Drive — cần Google Drive */}
-            {hasDrive && (
+            {showDrive && (
               <>
-                <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+                {/* Đường kẻ chỉ khi có option phía trên (tránh divider mồ côi ở đầu menu). */}
+                {(showNote || showEvent || showTicket) && (
+                  <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+                )}
                 <MenuItem
                   icon={<FolderPlus className="w-4 h-4" />}
                   label={t('drive.upload.newFolder')}
