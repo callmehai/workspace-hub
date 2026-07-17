@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, X, UserPlus, Link2, Copy, Check } from 'lucide-react';
@@ -69,16 +69,10 @@ export function DriveShareDialog({
   const [linkRestrictConflict, setLinkRestrictConflict] = useState<DriveLinkRestrictConflict | null>(null);
   // Đang GET restrict-conflict trước khi tắt — chặn spam click.
   const [isPreviewingRestrict, setIsPreviewingRestrict] = useState(false);
-  // Feedback tạm sau khi copy URL.
+  // Feedback tạm sau khi copy URL (tự tắt sau 2s — không dùng effect reset).
   const [copied, setCopied] = useState(false);
 
   const shareUrl = resolveShareUrl(webViewLink, externalId, isFolder);
-
-  // Đóng dialog → reset icon copy.
-  useEffect(() => {
-    if (!isOpen) setCopied(false);
-  }, [isOpen]);
-
 
   const permissionsQuery = useQuery({
     queryKey: ['drive-permissions', itemId],
