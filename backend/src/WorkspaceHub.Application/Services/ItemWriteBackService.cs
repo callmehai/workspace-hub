@@ -14,6 +14,7 @@ public class ItemWriteBackService : IItemWriteBackService
 {
     private readonly IItemRepository _items;
     private readonly IConnectionRepository _connections;
+    private readonly IFolderRepository _folders;
     private readonly IWriteBackGuard _guard;
     private readonly IGmailGateway _gmailGateway;
     private readonly ICalendarGateway _calendarGateway;
@@ -24,6 +25,7 @@ public class ItemWriteBackService : IItemWriteBackService
     public ItemWriteBackService(
         IItemRepository items,
         IConnectionRepository connections,
+        IFolderRepository folders,
         IWriteBackGuard guard,
         IGmailGateway gmailGateway,
         ICalendarGateway calendarGateway,
@@ -33,12 +35,26 @@ public class ItemWriteBackService : IItemWriteBackService
     {
         _items = items;
         _connections = connections;
+        _folders = folders;
         _guard = guard;
         _gmailGateway = gmailGateway;
         _calendarGateway = calendarGateway;
         _driveGateway = driveGateway;
         _jiraGateway = jiraGateway;
         _jiraMapper = jiraMapper;
+    }
+
+    public ItemWriteBackService(
+        IItemRepository items,
+        IConnectionRepository connections,
+        IWriteBackGuard guard,
+        IGmailGateway gmailGateway,
+        ICalendarGateway calendarGateway,
+        IDriveGateway driveGateway,
+        IJiraGateway jiraGateway,
+        IJiraItemMapper jiraMapper)
+        : this(items, connections, null!, guard, gmailGateway, calendarGateway, driveGateway, jiraGateway, jiraMapper)
+    {
     }
 
     private async Task<Connection> GetConnectionAsync(Guid? connectionId, CancellationToken ct)
@@ -52,6 +68,14 @@ public class ItemWriteBackService : IItemWriteBackService
     public async Task<ItemResponse> PatchItemAsync(Guid itemId, Guid userId, PatchItemRequest payload, CancellationToken ct = default)
     {
         var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null && _folders != null)
+        {
+            var isEditor = await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
+            if (isEditor)
+            {
+                item = await _items.GetByIdAsync(itemId, ct);
+            }
+        }
         if (item == null) throw new NotFoundException("Item", itemId);
 
         var conn = await GetConnectionAsync(item.ConnectionId, ct);
@@ -378,6 +402,14 @@ public class ItemWriteBackService : IItemWriteBackService
     {
         // Thiết kế: Xoá item không yêu cầu check ETag vì hành động xoá là dứt điểm, không quan tâm nội dung hiện tại
         var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null && _folders != null)
+        {
+            var isEditor = await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
+            if (isEditor)
+            {
+                item = await _items.GetByIdAsync(itemId, ct);
+            }
+        }
         if (item == null) throw new NotFoundException("Item", itemId);
 
         // Email gộp thread: mỗi thư trong hội thoại là 1 Item row riêng (do sync tách theo message).
