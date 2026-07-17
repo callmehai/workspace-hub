@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Plus, Tag, Settings2,
+  Star, Search, LayoutGrid, List, RefreshCw, Tag, Settings2,
   Briefcase, UserRound, Loader2, ChevronDown, Check,
 } from 'lucide-react';
 import { Select } from '../Select';
@@ -14,11 +14,8 @@ import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
 import { TYPE_FILTERS, STATUS_FILTERS, typeIcon, integrationLabelKey } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse, TagResponse } from '../../types/items';
-import { CreateNoteModal } from './CreateNoteModal';
-import { CreateEventModal } from './CreateEventModal';
-import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
-import { DriveNewMenu } from '../drive/DriveNewMenu';
+import { WorkspaceNewMenu } from './WorkspaceNewMenu';
 
 /*
  * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
@@ -211,9 +208,6 @@ export const WorkspaceToolbar = ({
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isNoteOpen, setIsNoteOpen] = useState(false);
-  const [isEventOpen, setIsEventOpen] = useState(false);
-  const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
@@ -221,9 +215,6 @@ export const WorkspaceToolbar = ({
     queryKey: ['connections'],
     queryFn: connectionsApi.getConnections,
   });
-  const hasActiveDrive = connections.some(
-    (c) => c.serviceType === 'Drive' && c.status === 'Active',
-  );
 
   const jiraConns = connections.filter(
     (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
@@ -300,14 +291,6 @@ export const WorkspaceToolbar = ({
       setIsSyncing(false);
     }
   };
-
-  // Nút tạo nhanh — ở tab lẻ chỉ hiện nút hợp loại đó; "Tất cả mục" hiện đủ.
-  // Ghi chú là loại nội bộ (không phải integration) → chỉ hiện ở "Tất cả mục".
-  const showNote = !sourceType;
-  const showEvent = !sourceType || sourceType === 'Event';
-  const showTicket = !sourceType || sourceType === 'Ticket';
-  const showDriveFolder = hasActiveDrive && (!sourceType || sourceType === 'File');
-  const showCreateRow = showNote || showEvent || showTicket || showDriveFolder;
 
   return (
     <>
@@ -417,41 +400,10 @@ export const WorkspaceToolbar = ({
             />
           </FilterGroup>
 
-          {/* Nút tạo nhanh — dồn về mép phải, cùng dòng lọc thêm. Ẩn cả cụm nếu không có nút hợp tab. */}
-          {showCreateRow && (
-            <div className="flex items-center gap-2.5 flex-wrap justify-end ml-auto">
-              {showNote && (
-                <button
-                  onClick={() => setIsNoteOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                  title={t('toolbar.noteTooltip')}
-                >
-                  <Plus className="w-4 h-4" /> {t('toolbar.note')}
-                </button>
-              )}
-              {showEvent && (
-                <button
-                  onClick={() => setIsEventOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                  title={t('toolbar.eventTooltip')}
-                >
-                  <Plus className="w-4 h-4" /> {t('toolbar.event')}
-                </button>
-              )}
-              {showTicket && (
-                <button
-                  onClick={() => setIsTicketOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                  title={t('toolbar.ticketTooltip')}
-                >
-                  <Plus className="w-4 h-4" /> {t('type.ticket')}
-                </button>
-              )}
-              {showDriveFolder && (
-                <DriveNewMenu defaultParentItemId={currentDriveFolderId} />
-              )}
-            </div>
-          )}
+          {/* Tạo nhanh — 1 dropdown "Mới" gộp mọi option, hiện theo integration đang Active. */}
+          <div className="flex items-center justify-end ml-auto">
+            <WorkspaceNewMenu folder={folder} currentDriveFolderId={currentDriveFolderId} />
+          </div>
         </div>
       </div>
 
@@ -509,9 +461,6 @@ export const WorkspaceToolbar = ({
         )}
       </div>
 
-      <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
-      <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
-      <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
     </>
   );
