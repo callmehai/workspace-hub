@@ -27,6 +27,7 @@ public interface IItemRepository : IGenericRepository<Item>
         string? assigneeAccountId = null,
         Guid? connectionId = null,
         string? driveParentId = null,
+        string? driveKind = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default);

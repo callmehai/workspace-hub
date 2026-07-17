@@ -2,15 +2,16 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
+import { connectionsApi } from '../lib/connectionsApi';
 import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
 import { typeIcon, typeLabelKey, parseSourceType } from '../lib/itemVisuals';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
-import { isItemUnread, isDraftEmail } from '../lib/itemMeta';
+import { isItemUnread, isDraftEmail, isDriveFolder } from '../lib/itemMeta';
 import { useSeenSet } from '../lib/seenStore';
 import type { ItemStatus, ItemType, FolderResponse, ItemResponse, PagedResult } from '../types/items';
-import { Plus, Star, GripVertical, AlertCircle } from 'lucide-react';
+import { Plus, Star, GripVertical, AlertCircle, Plug } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleApiError } from '../lib/errorUtils';
 import { useI18n } from '../hooks/useI18n';
@@ -39,6 +40,14 @@ const COLUMNS: { titleKey: TranslationKey, status: ItemStatus, dotColor: string 
 /** Số thẻ load mỗi lần cho 1 cột — bấm "Tải thêm" ở đáy cột để lấy tiếp (không còn cap 100). */
 const COL_PAGE_SIZE = 30;
 
+/** Nguồn (tab sidebar) → service cần Active để có dữ liệu (empty-state "chưa kết nối"). */
+const SOURCE_SERVICE: Record<string, { key: string; label: string }> = {
+  Email: { key: 'gmail', label: 'Gmail' },
+  Event: { key: 'gcal', label: 'Google Calendar' },
+  File: { key: 'drive', label: 'Google Drive' },
+  Ticket: { key: 'jira', label: 'Jira' },
+};
+
 export const KanbanBoard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -60,6 +69,7 @@ export const KanbanBoard = () => {
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [driveKind, setDriveKind] = useState<'all' | 'folder' | 'file'>('all');
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
@@ -124,9 +134,11 @@ export const KanbanBoard = () => {
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
+  // Lọc folder/file chỉ áp ở tab Drive (Bảng không có drill-down folder nên chỉ cần sourceType File).
+  const effectiveDriveKind = sourceType === 'File' && driveKind !== 'all' ? driveKind : undefined;
 
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search, driveKind: effectiveDriveKind }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -139,6 +151,7 @@ export const KanbanBoard = () => {
       projectKey: effectiveProjectKey,
       assignee: effectiveAssignee,
       search: search || undefined,
+      driveKind: effectiveDriveKind,
       page: pageParam,
       limit: COL_PAGE_SIZE,
     }),
@@ -168,6 +181,21 @@ export const KanbanBoard = () => {
     (inboxQ.isFetching || doingQ.isFetching || doneQ.isFetching) && !isColLoading;
   const isError = inboxQ.isError || doingQ.isError || doneQ.isError;
   const refetchAll = () => { inboxQ.refetch(); doingQ.refetch(); doneQ.refetch(); };
+
+  // Empty-state thông minh (giống Danh sách): board rỗng + chưa kết nối service của nguồn đang xem
+  // → hiện panel dẫn sang trang Kết nối thay vì 3 cột trống khó hiểu.
+  const { data: connectionsList = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+    staleTime: 60_000,
+  });
+  const activeServices = new Set(
+    connectionsList.filter(c => c.status.toLowerCase() === 'active').map(c => c.serviceType.toLowerCase()),
+  );
+  const requiredService = sourceType ? SOURCE_SERVICE[sourceType] : undefined;
+  const missingConnection = requiredService ? !activeServices.has(requiredService.key) : activeServices.size === 0;
+  const boardTotal = colTotalOf(inboxQ) + colTotalOf(doingQ) + colTotalOf(doneQ);
+  const boardEmpty = !isColLoading && !isError && boardTotal === 0;
 
   type BoardCache = InfiniteData<PagedResult<ItemResponse>>;
 
@@ -246,6 +274,33 @@ export const KanbanBoard = () => {
     onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
   });
 
+  // Đánh dấu quan trọng ngay trên thẻ (như view Danh sách). Optimistic trên cache từng cột board.
+  const toggleImportant = useMutation({
+    mutationFn: ({ id, isImportant }: { id: string; isImportant: boolean }) =>
+      itemsApi.updateItemImportant(id, isImportant),
+    onMutate: async ({ id, isImportant }) => {
+      await queryClient.cancelQueries({ queryKey: ['items'] });
+      const snapshots = queryClient.getQueriesData<BoardCache>({ queryKey: ['items', 'board'] });
+      snapshots.forEach(([key, data]) => {
+        if (!data) return;
+        queryClient.setQueryData<BoardCache>(key, {
+          ...data,
+          pages: data.pages.map(p => ({
+            ...p,
+            items: p.items.map(it => it.id === id ? { ...it, isImportant } : it),
+          })),
+        });
+      });
+      return { snapshots };
+    },
+    onError: (err, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      handleApiError(err, t('item.saveFail'), { navigate });
+    },
+    // Reconcile với server sau khi xong (như view Danh sách) — tránh cache board giữ giá trị optimistic lệch.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
+  });
+
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggingId(id);
     if (selectedItemIds.has(id) && selectedItemIds.size > 1) {
@@ -322,6 +377,8 @@ export const KanbanBoard = () => {
           onAssigneeChange={setAssigneeFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
+          driveKind={driveKind}
+          onDriveKindChange={setDriveKind}
         />
 
         {/* Board content */}
@@ -335,6 +392,24 @@ export const KanbanBoard = () => {
               <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">{t('kanban.loadErrorHint')}</p>
               <button onClick={refetchAll} className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-medium rounded-lg">
                 {t('common.retry')}
+              </button>
+            </div>
+          ) : boardEmpty && missingConnection ? (
+            <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 p-8 text-center max-w-md mx-auto">
+              <div className="w-12 h-12 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center mb-4">
+                <Plug className="w-6 h-6" />
+              </div>
+              <span className="text-slate-900 dark:text-slate-100 text-sm font-semibold mb-1">
+                {requiredService
+                  ? t('inbox.emptyNoConnectionSource', { service: requiredService.label })
+                  : t('inbox.emptyNoConnectionAny')}
+              </span>
+              <button
+                onClick={() => navigate('/integrations')}
+                className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-600 text-[13px] font-semibold text-white hover:bg-brand-700 transition-colors"
+              >
+                <Plug className="w-4 h-4" />
+                {t('nav.integrations')}
               </button>
             </div>
           ) : (
@@ -377,6 +452,7 @@ export const KanbanBoard = () => {
                           // Event/File/Note/Ticket = seenStore (mở detail = đã xem).
                           const unread = isItemUnread(item, seenSet);
                           const seenDim = !unread;
+                          const cardIsFolder = isDriveFolder(item);
 
                           return (
                           <div
@@ -417,8 +493,8 @@ export const KanbanBoard = () => {
                                   className={`w-3.5 h-3.5 shrink-0 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-600 ${selectedItemIds.has(item.id) ? 'inline-block' : 'hidden group-hover:inline-block'}`}
                                 />
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-transparent ${typeTileClass(item.type)}`}>
-                                  {typeIcon(item.type, 'w-3.5 h-3.5')}
-                                  {t(typeLabelKey(item.type))}
+                                  {typeIcon(item.type, 'w-3.5 h-3.5', undefined, cardIsFolder)}
+                                  {cardIsFolder ? t('type.folder') : t(typeLabelKey(item.type))}
                                 </span>
                                 {item.folderIds?.map(fId => {
                                   const f = folders.find(fol => fol.id === fId);
@@ -488,9 +564,23 @@ export const KanbanBoard = () => {
                                 ))}
                               </div>
                             )}
-                            <div className="flex items-center justify-end gap-2 mt-auto pt-1">
-                              <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
-                                {item.isImportant && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
+                            <div className="flex items-center justify-end gap-1.5 mt-auto pt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleImportant.mutate({ id: item.id, isImportant: !item.isImportant });
+                                }}
+                                aria-label={t('inbox.markImportant')}
+                                className="shrink-0 p-0.5 rounded hover:bg-amber-100/70 dark:hover:bg-amber-500/15 transition-colors"
+                              >
+                                <Star className={`w-3.5 h-3.5 transition-colors ${
+                                  item.isImportant
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'text-slate-300 dark:text-slate-600 hover:text-amber-400'
+                                }`} />
+                              </button>
+                              <span className="text-[12px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {timeAgo(item.occurredAt, lang)}
                               </span>
                             </div>

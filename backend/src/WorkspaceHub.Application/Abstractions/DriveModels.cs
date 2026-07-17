@@ -18,6 +18,42 @@ public class DriveFileDto
 
 }
 
+/// <summary>
+/// Nội dung media (file content hoặc thumbnail) stream về từ Google Drive để BE proxy xuống client.
+/// Sở hữu <see cref="HttpResponseMessage"/> — <see cref="DisposeAsync"/> đóng cả response lẫn stream
+/// (trả connection về pool). KHÔNG buffer toàn bộ file vào RAM: <see cref="Content"/> là network stream.
+/// </summary>
+public sealed class DriveMediaResult : IAsyncDisposable
+{
+    private readonly HttpResponseMessage _response;
+
+    public DriveMediaResult(HttpResponseMessage response, Stream content, string contentType, long? contentLength)
+    {
+        _response = response;
+        Content = content;
+        ContentType = contentType;
+        ContentLength = contentLength;
+    }
+
+    /// <summary>Network stream nội dung — copy thẳng ra Response.Body.</summary>
+    public Stream Content { get; }
+
+    /// <summary>MIME type để set Response.ContentType (đã tính cả trường hợp export Google-native → PDF).</summary>
+    public string ContentType { get; }
+
+    /// <summary>Content-Length nếu Google trả (null = chunked/unknown).</summary>
+    public long? ContentLength { get; }
+
+    /// <summary>Tên file gợi ý cho Content-Disposition (service set từ Item.Title, kèm đuôi export nếu có).</summary>
+    public string? FileName { get; set; }
+
+    public async ValueTask DisposeAsync()
+    {
+        await Content.DisposeAsync();
+        _response.Dispose();
+    }
+}
+
 public class DriveSyncResult
 {
     public bool Expired { get; set; }

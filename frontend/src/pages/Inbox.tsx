@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { itemsApi, foldersApi } from '../lib/itemsApi';
@@ -18,7 +18,8 @@ import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
-import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType } from '../lib/itemVisuals';
+import { DriveDropZone } from '../components/drive/DriveDropZone';
+import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType, integrationLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
 import { TagChip, FolderChip } from '../components/tags/TagChip';
@@ -28,6 +29,9 @@ import toast from 'react-hot-toast';
 import { sendEmailApi } from '../lib/sendEmailApi';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+
+/** 1 cấp folder Drive trong breadcrumb drill-down. id = externalId (Google), internalId = Item.Id (app). */
+type DriveStackEntry = { id: string; name: string; internalId: string };
 
 // Key i18n cho nhãn status (chip "đang lọc") — tái dùng nhãn cột Kanban.
 const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
@@ -148,6 +152,9 @@ export const Inbox = () => {
   const seenSet = useSeenSet();
   const [searchParams] = useSearchParams();
   const pollMs = usePollingInterval(45_000);
+  // Container cuộn của trang — dùng để kéo lên đầu khi đổi folder/tab/trang (tránh mở folder con
+  // mà vẫn kẹt ở cuối như cũ).
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -156,6 +163,7 @@ export const Inbox = () => {
   const [mailbox, setMailbox] = useState<MailboxValue>('INBOX'); // default = Hộp thư đến (như Gmail)
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [driveKind, setDriveKind] = useState<'all' | 'folder' | 'file'>('all');
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
@@ -163,8 +171,42 @@ export const Inbox = () => {
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Drive folder drill-down state
-  const [driveFolderStack, setDriveFolderStack] = useState<{id: string, name: string, internalId: string}[]>([]);
+  // Drive folder drill-down: stack sống trong history state (location.state.driveStack) → nút Back của
+  // trình duyệt lùi về folder cha đúng như mong đợi, mỗi cấp có URL riêng (?df=<internalId>).
+  const dfParam = searchParams.get('df');
+  const stateStack = useMemo<DriveStackEntry[]>(() => {
+    const s = (location.state as { driveStack?: DriveStackEntry[] } | null)?.driveStack;
+    return Array.isArray(s) ? s : [];
+  }, [location.state]);
+
+  // F5 / mở link trực tiếp: còn `?df` nhưng history state đã mất → fetch item để dựng lại 1 cấp,
+  // giữ người dùng TRONG folder thay vì văng về gốc Drive. (Breadcrumb khi đó gọn còn folder hiện tại;
+  // điều hướng bình thường vẫn giữ đủ nhiều cấp qua state.)
+  const { data: dfItem } = useQuery({
+    queryKey: ['item', dfParam],
+    queryFn: () => itemsApi.getItemById(dfParam!),
+    enabled: !!dfParam && stateStack.length === 0,
+    staleTime: 60_000,
+  });
+
+  const driveFolderStack = useMemo<DriveStackEntry[]>(() => {
+    if (stateStack.length > 0) return stateStack;
+    if (dfParam && dfItem?.externalId) {
+      return [{ id: dfItem.externalId, name: dfItem.title, internalId: dfItem.id }];
+    }
+    return [];
+  }, [stateStack, dfParam, dfItem]);
+
+  // Điều hướng tới 1 cấp folder (push history + state) — dùng cho double-click & breadcrumb.
+  const navigateDriveStack = (stack: DriveStackEntry[]) => {
+    const params = new URLSearchParams(searchParams);
+    if (stack.length > 0) params.set('df', stack[stack.length - 1].internalId);
+    else params.delete('df');
+    navigate(
+      { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' },
+      { state: { driveStack: stack } },
+    );
+  };
 
   // Folder = CONTEXT của trang — DERIVE thẳng từ URL (không state+effect,
   // tránh render frame đầu bị null → header nháy "Tất cả mục" rồi mới hiện tên folder).
@@ -218,8 +260,8 @@ export const Inbox = () => {
       try {
         const meta = JSON.parse(item.metadataJson);
         if (meta.isFolder && item.externalId) {
-          setDriveFolderStack(prev => [...prev, { id: item.externalId!, name: item.title, internalId: item.id }]);
-          setPage(1);
+          // Push 1 cấp vào history (Back sẽ lùi về folder cha). Page reset qua effect theo ?df.
+          navigateDriveStack([...driveFolderStack, { id: item.externalId, name: item.title, internalId: item.id }]);
           setSelectedId(null);
           return;
         }
@@ -282,12 +324,19 @@ export const Inbox = () => {
     }
   };
 
-  // Đổi context (folder HOẶC nguồn) → về trang 1.
+  // Đổi context (folder / nguồn / cấp folder Drive ?df) → về trang 1. Stack Drive derive từ
+  // history state nên KHÔNG cần reset tay ở đây (đổi tab = navigate mới không state → stack rỗng).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-    setDriveFolderStack([]); // Reset drive drill-down khi đổi tab
-  }, [selectedFolderId, sourceType]);
+  }, [selectedFolderId, sourceType, dfParam]);
+
+  // Kéo lên đầu khi đổi folder Drive / tab / folder context / trang — không kẹt ở cuối.
+  // Scroller THẬT là <main> của MainLayout (không phải div này) → tìm bằng closest('main').
+  useEffect(() => {
+    const scroller = scrollRef.current?.closest('main') ?? scrollRef.current;
+    scroller?.scrollTo({ top: 0 });
+  }, [dfParam, selectedFolderId, sourceType, page]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
     setStatusFilter(prev => prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]);
@@ -358,6 +407,10 @@ export const Inbox = () => {
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
+  // Chỉ áp lọc Drive folder/file khi ĐANG ở view Drive (tab Tệp hoặc trong 1 folder Drive) —
+  // tránh chuyển tab khác mà vẫn dính filter (lọc vô hình → list trống khó hiểu).
+  const isDriveScope = sourceType === 'File' || driveFolderStack.length > 0;
+  const effectiveDriveKind = isDriveScope && driveKind !== 'all' ? driveKind : undefined;
 
   const params = {
     statuses: statusFilter.length > 0 ? statusFilter : undefined,
@@ -370,11 +423,12 @@ export const Inbox = () => {
     assignee: effectiveAssignee,
     gmailLabel,
     driveParentId: driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].id : undefined,
+    driveKind: effectiveDriveKind,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, driveKind: params.driveKind, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -389,6 +443,7 @@ export const Inbox = () => {
     assignee: params.assignee,
     gmailLabel: params.gmailLabel,
     driveParentId: params.driveParentId,
+    driveKind: params.driveKind,
   });
 
   const { data, isLoading, isError, refetch, isFetching, isPlaceholderData } = useQuery({
@@ -486,8 +541,18 @@ export const Inbox = () => {
 
   const pageNumbers = buildPageNumbers(page, totalPages);
 
+  // Kéo-thả upload Drive: bật ở tab Drive hoặc "Tất cả mục" (nơi menu Mới cũng cho tạo Drive).
+  const driveConnectionId = connectionsList.find(
+    c => c.serviceType.toLowerCase() === 'drive' && c.status.toLowerCase() === 'active',
+  )?.id;
+  const dropConnectionId = (sourceType === 'File' || sourceType === null) ? driveConnectionId : undefined;
+  const currentDriveParentId = driveFolderStack.length > 0
+    ? driveFolderStack[driveFolderStack.length - 1].internalId
+    : null;
+
   return (
-    <div className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+    <div ref={scrollRef} className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+      <DriveDropZone connectionId={dropConnectionId} parentItemId={currentDriveParentId} folderId={selectedFolderId} className="min-h-full">
       <div className="max-w-[1400px] mx-auto px-6 py-5">
 
         {/* ── Toolbar dùng chung với view Bảng — layout GIỐNG HỆT khi đổi view ── */}
@@ -517,6 +582,8 @@ export const Inbox = () => {
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
           currentDriveFolderId={driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].internalId : undefined}
+          driveKind={driveKind}
+          onDriveKindChange={(k) => { setDriveKind(k); setPage(1); }}
         />
 
         {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở tab Email (sidebar) ── */}
@@ -579,12 +646,12 @@ export const Inbox = () => {
         {/* ── Drive Folder Breadcrumb ── */}
         {driveFolderStack.length > 0 && (
           <div className="flex items-center gap-1.5 mb-3 text-[13px] font-medium overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button 
-              onClick={() => { setDriveFolderStack([]); setPage(1); }}
+            <button
+              onClick={() => navigateDriveStack([])}
               className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
             >
               <Home className="w-4 h-4" />
-              {t('nav.allItems')}
+              {sourceType ? t(integrationLabelKey(sourceType)) : t('nav.allItems')}
             </button>
             {driveFolderStack.map((folder, index) => {
               const isLast = index === driveFolderStack.length - 1;
@@ -592,12 +659,7 @@ export const Inbox = () => {
                 <div key={folder.id} className="flex items-center gap-1.5 whitespace-nowrap">
                   <BreadcrumbSeparator className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
                   <button
-                    onClick={() => {
-                      if (!isLast) {
-                        setDriveFolderStack(prev => prev.slice(0, index + 1));
-                        setPage(1);
-                      }
-                    }}
+                    onClick={() => { if (!isLast) navigateDriveStack(driveFolderStack.slice(0, index + 1)); }}
                     className={`transition-colors ${isLast ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
                     disabled={isLast}
                   >
@@ -852,6 +914,7 @@ export const Inbox = () => {
           </div>
         )}
       </div>
+      </DriveDropZone>
 
       {/* ── Item Detail Drawer ── */}
       {activeItemId && (

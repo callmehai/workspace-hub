@@ -29,6 +29,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? assigneeAccountId = null,
         Guid? connectionId = null,
         string? driveParentId = null,
+        string? driveKind = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -134,6 +135,19 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             query = query.Where(i => i.Type != ItemType.File || (i.MetadataJson != null && i.MetadataJson.Contains("\"isTopLevel\":true")));
         }
 
+        // DriveKind filter — chỉ Thư mục / chỉ Tệp trong view Drive. FE chỉ gửi param này ở ngữ cảnh Drive.
+        // "folder" = metadata có "isFolder":true. "file" = MỌI thứ còn lại (NOT folder) — định nghĩa theo
+        // phần bù để item cũ / metadata hỏng thiếu hẳn field "isFolder" vẫn được coi là tệp (không bị giấu
+        // khỏi tab "Tệp"), thay vì đòi khớp cứng "isFolder":false.
+        if (!string.IsNullOrWhiteSpace(driveKind))
+        {
+            var kind = driveKind.Trim().ToLowerInvariant();
+            if (kind == "folder")
+                query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains("\"isFolder\":true"));
+            else if (kind == "file")
+                query = query.Where(i => i.MetadataJson == null || !i.MetadataJson.Contains("\"isFolder\":true"));
+        }
+
         // ── Search: Title hoặc Snippet ──
         // Ép collation Latin1_General_100_CI_AI ngay trong predicate:
         //   CI = case-insensitive, AI = ACCENT-insensitive → gõ "bao gia" khớp "Báo giá",
@@ -163,8 +177,19 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         var totalCount = await deduped.CountAsync(ct);
 
         // ── Sort + Paging (DB level) ──
-        var items = await deduped
-            .OrderByDescending(i => i.OccurredAt)
+        // Trong ngữ cảnh Drive (đang duyệt trong 1 folder, hoặc tab chỉ-File) → đẩy FOLDER lên trước
+        // FILE (giống mọi trình quản lý file), rồi mới tới mới-nhất. View khác (Email/All) giữ nguyên
+        // sort theo thời gian — điều kiện dưới chỉ đúng ở view Drive nên không đụng các tab kia.
+        var foldersFirst = driveParentId != null
+            || (types is { Count: 1 } && types[0] == ItemType.File);
+
+        var ordered = foldersFirst
+            ? deduped
+                .OrderByDescending(i => i.MetadataJson != null && i.MetadataJson.Contains("\"isFolder\":true"))
+                .ThenByDescending(i => i.OccurredAt)
+            : deduped.OrderByDescending(i => i.OccurredAt);
+
+        var items = await ordered
             .Skip((page - 1) * limit)
             .Take(limit)
             .ToListAsync(ct);

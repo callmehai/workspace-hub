@@ -67,8 +67,12 @@ export const driveApi = {
     /**
      * Upload một file từ máy lên Google Drive (multipart → BE → Google).
      * Dùng `api` chung → hết access token giữa upload vẫn refresh + retry như mọi API khác.
+     * `onProgress` (0–100) để hiện progress bar — dựa trên bytes đã gửi lên BE.
      */
-    uploadFile: async (payload: UploadDriveFilePayload): Promise<ItemResponse> => {
+    uploadFile: async (
+        payload: UploadDriveFilePayload,
+        onProgress?: (percent: number) => void,
+    ): Promise<ItemResponse> => {
         const form = new FormData();
         form.append('connectionId', payload.connectionId);
         if (payload.parentItemId) {
@@ -78,6 +82,9 @@ export const driveApi = {
 
         const response = await api.post<ItemResponse>('/drive/files', form, {
             timeout: UPLOAD_TIMEOUT_MS,
+            onUploadProgress: (e) => {
+                if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+            },
         });
         return response.data;
     },
@@ -86,7 +93,10 @@ export const driveApi = {
      * Upload cả folder từ máy (webkitdirectory).
      * Gửi files[] + paths[] — BE tạo cây folder rồi upload từng file.
      */
-    uploadFolder: async (payload: UploadDriveFolderPayload): Promise<DriveFolderUploadResponse> => {
+    uploadFolder: async (
+        payload: UploadDriveFolderPayload,
+        onProgress?: (percent: number) => void,
+    ): Promise<DriveFolderUploadResponse> => {
         const form = new FormData();
         form.append('connectionId', payload.connectionId);
         if (payload.parentItemId) {
@@ -100,7 +110,12 @@ export const driveApi = {
         const response = await api.post<DriveFolderUploadResponse>(
             '/drive/folders/upload',
             form,
-            { timeout: UPLOAD_TIMEOUT_MS },
+            {
+                timeout: UPLOAD_TIMEOUT_MS,
+                onUploadProgress: (e) => {
+                    if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+                },
+            },
         );
         return response.data;
     },
@@ -165,7 +180,53 @@ export const driveApi = {
         if (response.status === 204) return null;
         return response.data;
     },
+
+    /** Blob nội dung file (preview ảnh) — qua axios để hưởng refresh 401 + cookie auth. */
+    fetchContentBlob: async (itemId: string): Promise<Blob> => {
+        const response = await api.get(`/drive/items/${itemId}/content`, {
+            responseType: 'blob',
+            timeout: UPLOAD_TIMEOUT_MS,
+        });
+        return response.data as Blob;
+    },
+
+    /** Thumbnail preview — Blob hoặc null (204 = file không có thumbnail). */
+    fetchThumbnailBlob: async (itemId: string): Promise<Blob | null> => {
+        const response = await api.get(`/drive/items/${itemId}/thumbnail`, {
+            responseType: 'blob',
+            validateStatus: (s) => s === 200 || s === 204,
+        });
+        if (response.status === 204) return null;
+        const blob = response.data as Blob;
+        return blob && blob.size > 0 ? blob : null;
+    },
+
+    /**
+     * Tải file xuống. Probe /auth/me trước để interceptor refresh token nếu hết hạn,
+     * rồi mở link <a download> — trình duyệt stream thẳng ra đĩa (không buffer 100MB vào RAM).
+     */
+    downloadFile: async (itemId: string, fileName?: string): Promise<void> => {
+        try {
+            await api.get('/auth/me');
+        } catch {
+            // Interceptor lo refresh/redirect; nếu thật sự hết phiên sẽ về /login.
+        }
+        const a = document.createElement('a');
+        a.href = driveContentUrl(itemId, { download: true });
+        if (fileName) a.download = fileName;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    },
 };
+
+/** URL tương đối tới nội dung file — dùng cho thẻ <a download> / <img> fallback (cookie auth tự gửi). */
+export function driveContentUrl(itemId: string, opts?: { download?: boolean }): string {
+    const base = api.defaults.baseURL ?? '/api';
+    const query = opts?.download ? '?dl=true' : '';
+    return `${base}/drive/items/${itemId}/content${query}`;
+}
 
 /** Lấy DriveLinkRestrictConflict từ lỗi axios 409 (PUT tắt link Case 1). */
 export function getLinkRestrictConflictFromError(err: unknown): DriveLinkRestrictConflict | null {

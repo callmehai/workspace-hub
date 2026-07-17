@@ -20,6 +20,7 @@ public record GetItemsRequest(
     string? Assignee = null,      // Jira accountId; "unassigned" = ticket chưa gán người
     Guid? ConnectionId = null,    // Lọc item theo connection (Drive/Gmail/…)
     string? DriveParentId = null, // Lọc item theo thư mục cha Drive
+    string? DriveKind = null,     // Lọc Drive theo loại: "folder" (chỉ thư mục) | "file" (chỉ tệp); null = cả hai
     int Page = 1,
     int Limit = 20);
 

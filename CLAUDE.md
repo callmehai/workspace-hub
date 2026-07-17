@@ -81,6 +81,7 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 - `docs/SETUP.md` — cách chạy local, env, migration
 - `docs/DEPLOY.md` — hạ tầng production (AWS Lightsail), CI/CD, vận hành, truy cập DB, billing
 - `docs/CHANGELOG.md` — lịch sử quyết định thiết kế
+- `docs/OPTIMIZATIONS.md` — điểm chưa tối ưu đã biết (index JSON, SSRF thumbnail, F5 folder…) + hướng fix khi scale
 
 ## Nguyên tắc khi code
 

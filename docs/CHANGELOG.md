@@ -2,6 +2,50 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-17] Drive UX — detail preview/download + phân biệt folder/file ở Kanban
+
+> Nâng chất lượng luồng Drive: drawer chi tiết file "nghèo nàn" → có preview + tải xuống; Kanban trước đây folder và file nhìn y hệt nhau.
+
+- **BE — proxy media (2 endpoint mới):** `GET /api/drive/items/{id}/content` (tải/xem nội dung, `?dl=true` = attachment; Google-native docs export sang PDF/PNG) + `GET /api/drive/items/{id}/thumbnail` (proxy `thumbnailLink`, 204 nếu không có). **Stream thẳng — KHÔNG buffer file 100MB vào RAM** (`HttpCompletionOption.ResponseHeadersRead` + `CopyToAsync(Response.Body)`). Named `HttpClient` "DriveMedia" timeout Infinite, hủy theo CancellationToken. Layer: `IDriveGateway.DownloadFileAsync/GetThumbnailAsync` + `DriveMediaResult` (IAsyncDisposable ôm `HttpResponseMessage`) → service `IDriveContentService` (resolve item→connection, đọc mimeType từ metadata) → controller stream.
+- **Vì sao proxy on-demand thay vì lưu thumbnailLink:** `thumbnailLink`/nội dung Google là URL ngắn hạn cần bearer token → không nhúng trực tiếp `<img>` được, và lưu vào metadata thì phải re-sync. Proxy live bằng token connection: không đổi schema, không re-sync.
+- **Vì sao download = `<a download>` + probe `/auth/me`, KHÔNG blob:** auth là cookie HttpOnly → thẻ `<a>` tự gửi cookie, trình duyệt stream ra đĩa (không nạp 100MB vào RAM trình duyệt). Probe `/auth/me` trước để interceptor refresh token nếu hết hạn. Preview ảnh thì lấy blob qua axios (ảnh nhỏ, cần hưởng refresh 401 cho `<img>`).
+- **FE — detail overhaul:** khối `DriveFilePreview` (ảnh nhỏ = nội dung gốc, ảnh lớn/PDF/video/google-docs = thumbnail, còn lại = icon + nhãn loại + link mở Drive); nút **Tải xuống** (file) / **Mở thư mục** (folder, điều hướng `?openDrive=` để Inbox seed drill-down); header dùng brand icon Drive/folder; bỏ khung "Nội dung" rỗng cho File; mimeType thô → nhãn thân thiện (`friendlyMimeLabel`).
+- **FE — Kanban:** truyền `isDriveFolder` vào `typeIcon` + nhãn **"Thư mục"** (trước đây folder/file đều icon Drive + "Tệp"); sao quan trọng trên thẻ **bấm được** (optimistic trên cache từng cột board) — đồng bộ view Danh sách.
+- **i18n:** thêm `type.folder`, `item.download`/`openFolder`, `drive.preview.*`, `drive.mime.*` (vi/en).
+
+### Sau QA local (cùng ngày) — UX + điều hướng
+- **Footer drawer bớt ngợp:** trước rải 6–7 nút ngang → giờ **hành động chính bên trái** (Tải xuống/Mở thư mục + Chia sẻ), **phụ gộp vào menu "..."** (quan trọng, đã/chưa xem, đổi tên, tạo folder con, mở ngoài) + nút xoá. Áp cho mọi loại item.
+- **Điều hướng folder Drive qua history:** stack folder chuyển từ local state → **`location.state.driveStack` + `?df=<internalId>`** ⟹ **nút Back của trình duyệt lùi về folder cha** đúng (trước đây Back nhảy sang tab khác). Breadcrumb + double-click + "Mở thư mục" đều `navigate` push. Breadcrumb gốc hiện tên nguồn (Drive/…) thay vì luôn "Tất cả mục".
+- **Nút "Mới" context-aware:** đang trong 1 folder Drive → **chỉ hiện option Drive** (Thư mục mới / Tải tệp / Tải thư mục), ẩn Ghi chú/Sự kiện/Ticket (tạo Ticket vào folder Drive là vô nghĩa).
+- **Fix preview vỡ khi mở lại:** object URL phải **tạo + revoke trong CÙNG một effect** — dùng `useMemo` (như bản đầu) khiến StrictMode dev revoke URL mà memo không tính lại → ảnh vỡ. Đổi lại `useState`+`useEffect`.
+- **Thumbnail nét hơn:** proxy nâng size param `=s220`→`=s1024` khi lấy `thumbnailLink`.
+
+### Phase 4 — Upload UX (kéo-thả + tiến độ song song)
+- **Hàng đợi upload toàn cục** `driveUploadStore` (module singleton + pub/sub, KHÔNG phụ thuộc React) → `DriveUploadPanel` mount 1 lần ở `MainLayout`, **sống xuyên trang**. Upload **SONG SONG** (concurrency 3) thay vì tuần tự; mỗi file **1 progress bar** (`axios onUploadProgress`).
+- **Skip file lỗi:** file rỗng / quá 100MB bị **bỏ qua kèm lý do**, không chặn cả lô như trước.
+- **Kéo-thả** (`DriveDropZone`): thả file → upload vào folder đang mở; thả thư mục → upload cả cây (entries API đệ quy). Chỉ phản ứng khi kéo **chứa file** (`types` có `Files`) → không đụng thao tác kéo thẻ Kanban. Bật ở tab Drive / "Tất cả mục".
+- `WorkspaceNewMenu` "Tải tệp"/"Tải thư mục" chuyển sang enqueue store (chạy nền, bỏ toast-loop tuần tự + bỏ block nút "Mới").
+
+### Sau QA local (2) — upload vào folder context + phóng to ảnh
+- **Bug: upload khi đứng trong 1 folder context app (dự án/khách hàng) thì item rơi ra "Tất cả mục", KHÔNG vào folder đó.** Nguyên nhân: upload chỉ tạo Item trên Drive (root), không gán vào folder context — 2 trục độc lập. Fix ở FE: thêm `folderId` (folder context) vào `EnqueueOpts`; sau khi upload thành công gọi `foldersApi.addItemsToFolderBulk(folderId, [itemId])`. Áp cho **cả 3 đường**: kéo-thả (`DriveDropZone` nhận prop `folderId`), nút "Tải tệp"/"Tải thư mục" (`WorkspaceNewMenu` truyền `folder?.id`), và "Thư mục mới" (`CreateDriveFolderModal` nhận `folderContextId`). Upload folder chỉ gán **thư mục gốc** (item folder trùng tên) vào context, không gán từng file/subfolder con. Gán folder hụt (network) KHÔNG đánh sập task — item đã lên Drive.
+  - `parentItemId` (vị trí trên Drive) và `folderId` (folder context app) là **2 trục độc lập** — upload vẫn lên My Drive root, chỉ thêm liên kết ItemFolder.
+- **Tách `lib/driveDrop.ts`** (logic đọc entries + đệ quy cây thư mục + `handleDriveDrop`/`dragHasFiles`) dùng chung, gỡ code lặp trong `DriveDropZone`.
+- **Preview ảnh bấm phóng to (lightbox):** `DriveFilePreview` — ảnh/thumbnail bấm mở overlay toàn màn hình (Esc / bấm nền / nút X để đóng), hover hiện gợi ý "Bấm để phóng to". Thêm i18n `drive.preview.zoom`.
+
+### Sau QA local (3) — polish list/Kanban + điều hướng + gợi ý share
+- **Folder xếp trước file (list Drive):** `ItemRepository` sort thêm `OrderByDescending("isFolder":true)` TRƯỚC `OccurredAt`, **chỉ khi view Drive** (`driveParentId != null` hoặc types == [File]) → các view Email/All giữ nguyên sort thời gian. Folder luôn nổi lên đầu như mọi trình quản lý file.
+- **Filter Tệp/Thư mục cho Drive:** thêm query param `driveKind` (`folder` | `file`) xuyên `GetItemsRequest → ItemService → IItemRepository`. FE: chip **Tất cả / Thư mục / Tệp** ở toolbar, **chỉ hiện ở view Drive** (tab Tệp hoặc trong 1 folder Drive); Inbox + Kanban đều gửi param, và **chỉ áp khi đang ở Drive scope** (đổi tab khác tự bỏ, tránh lọc vô hình). i18n `toolbar.driveKind*`.
+  - `folder` = metadata có `"isFolder":true`; **`file` = phần bù (NOT folder)** — item cũ / metadata tối giản thiếu hẳn field `isFolder` vẫn được coi là tệp, không bị giấu khỏi tab "Tệp" (thay vì đòi khớp cứng `"isFolder":false`).
+
+### Sau review PR #114 — fix + test
+- **Kanban "quan trọng" reconcile server:** mutation `toggleImportant` thêm `onSettled: invalidateQueries(['items'])` — đồng bộ với view Danh sách, tránh cache board giữ giá trị optimistic lệch nếu response server khác kỳ vọng.
+- **Test BE mới:** `DriveContentServiceTests` (10 case — resolve item→connection: đúng user/service/active + folder guard, ủy thác gateway) và `ItemRepositoryDriveFilterTests` (InMemory chạy `GetPagedAsync` thật — filter `driveKind` folder/file **gồm item cũ thiếu `isFolder`** + sort folders-first).
+- **Cảnh báo xoá folder Drive:** xoá 1 folder → dialog cảnh báo "sẽ chuyển cả thư mục + TOÀN BỘ nội dung vào Thùng rác Drive" (i18n `item.confirmDeleteDriveFolder`), thay câu xoá file thường.
+- **Kanban empty-state "chưa kết nối":** board rỗng + chưa kết nối service của nguồn đang xem → panel dẫn sang trang Kết nối (giống view Danh sách), thay 3 cột trống khó hiểu.
+- **F5 không văng khỏi folder con:** stack drill-down vốn sống trong `location.state` (mất khi reload). Nay nếu còn `?df` mà mất state → fetch item dựng lại 1 cấp → **người dùng vẫn ở trong folder** thay vì bật về gốc Drive. (Breadcrumb khi đó gọn còn folder hiện tại; điều hướng thường vẫn giữ đủ cấp.)
+- **Gợi ý contact khi share:** `DriveShareDialog` — ô mời email có **gợi ý bạn bè** (friend system, chỉ Accepted, lọc theo chuỗi đang gõ) + **validate email** (nút mời khoá tới khi hợp lệ) + **Enter để mời**.
+- **Chưa làm (ghi chú):** (1) *thống nhất branding thẻ Kanban* — thực tế thẻ đã dùng cùng brand-icon + nhãn folder/file như list, khác biệt còn lại chỉ là kiểu nền (pill vs tile), để sau. (2) *Ticket transition đúng mọi Jira project* — map cứng `Inbox→To Do / Doing→In Progress / Done→Done` chỉ đúng khi project dùng đúng 3 status mặc định; fix tổng quát cần **endpoint Jira lấy transitions động** (mảng riêng, chưa làm).
+
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 
 > Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.
