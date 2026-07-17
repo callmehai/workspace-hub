@@ -154,7 +154,7 @@ public class DriveUploadServiceTests
             ConnectionId = _connId
         };
 
-        _mapper.Setup(m => m.ToItem(driveDto, _userId, _connId))
+        _mapper.Setup(m => m.ToItem(driveDto, _userId, _connId, It.IsAny<bool?>()))
             .Returns(mappedItem);
 
         var stream = new MemoryStream([1, 2, 3]);
@@ -250,10 +250,10 @@ public class DriveUploadServiceTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileDto);
 
-        _mapper.Setup(m => m.ToItem(folderDto, _userId, _connId))
+        _mapper.Setup(m => m.ToItem(folderDto, _userId, _connId, It.IsAny<bool?>()))
             .Returns(new Item { Id = Guid.NewGuid(), Title = "docs", Type = ItemType.File });
 
-        _mapper.Setup(m => m.ToItem(fileDto, _userId, _connId))
+        _mapper.Setup(m => m.ToItem(fileDto, _userId, _connId, It.IsAny<bool?>()))
             .Returns(new Item { Id = Guid.NewGuid(), Title = "readme.txt", Type = ItemType.File });
 
         var entries = new List<DriveFolderUploadEntry>
@@ -318,7 +318,7 @@ public class DriveUploadServiceTests
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ProviderException("Google Drive upload lỗi giữa chừng."));
 
-        _mapper.Setup(m => m.ToItem(firstDto, _userId, _connId)).Returns(firstItem);
+        _mapper.Setup(m => m.ToItem(firstDto, _userId, _connId, It.IsAny<bool?>())).Returns(firstItem);
 
         var entries = new List<DriveFolderUploadEntry>
         {

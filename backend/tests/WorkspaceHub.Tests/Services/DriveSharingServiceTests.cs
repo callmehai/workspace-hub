@@ -126,7 +126,7 @@ public class DriveSharingServiceTests
                 It.IsAny<Connection>(), "Hợp đồng", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(driveDto);
 
-        _mapper.Setup(m => m.ToItem(driveDto, _userId, _connId))
+        _mapper.Setup(m => m.ToItem(driveDto, _userId, _connId, It.IsAny<bool?>()))
             .Returns(new Item { Id = Guid.NewGuid(), Type = ItemType.File, Title = "Hợp đồng" });
 
         var result = await _service.CreateFolderAsync(_userId, _connId, "Hợp đồng");
@@ -134,6 +134,8 @@ public class DriveSharingServiceTests
         result.Title.Should().Be("Hợp đồng");
         _items.Verify(m => m.AddAsync(It.IsAny<Item>(), It.IsAny<CancellationToken>()), Times.Once);
         _items.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        // Tạo ở root → phải set isTopLevel:true để hiện ngay ở view root (không phải chờ sync).
+        _mapper.Verify(m => m.ToItem(driveDto, _userId, _connId, true), Times.Once);
     }
 
     [Fact]

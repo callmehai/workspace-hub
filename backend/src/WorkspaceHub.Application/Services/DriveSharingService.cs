@@ -64,7 +64,8 @@ public class DriveSharingService : IDriveSharingService
 
         var driveFile = await _gateway.CreateFolderAsync(conn, name.Trim(), parentExternalId, ct);
 
-        var item = _mapper.ToItem(driveFile, userId, connectionId);
+        // Tạo ở My Drive root (parentExternalId == null) → top-level → hiện ngay ở view root.
+        var item = _mapper.ToItem(driveFile, userId, connectionId, isTopLevel: parentExternalId == null);
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);

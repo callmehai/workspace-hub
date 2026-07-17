@@ -66,7 +66,8 @@ public class DriveUploadService : IDriveUploadService
             ct);
 
         // Insert Item local ngay để UI thấy file mới, không chờ sync cron.
-        var item = _mapper.ToItem(driveFile, userId, connectionId);
+        // Upload vào My Drive root (parentExternalId == null) → top-level → hiện ngay ở view root.
+        var item = _mapper.ToItem(driveFile, userId, connectionId, isTopLevel: parentExternalId == null);
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
 
@@ -139,7 +140,9 @@ public class DriveUploadService : IDriveUploadService
                     entry.Content,
                     ct);
 
-                var item = _mapper.ToItem(driveFile, userId, connectionId);
+                // File nằm ngay My Drive root (ParentExternalId == null) → top-level → hiện ngay.
+                var item = _mapper.ToItem(driveFile, userId, connectionId,
+                    isTopLevel: pathResult.ParentExternalId == null);
                 await _items.AddAsync(item, ct);
                 // Save từng file/folder ngay — nếu file sau lỗi, phần đã lên Drive vẫn có Item local.
                 await _items.SaveChangesAsync(ct);
@@ -249,12 +252,15 @@ public class DriveUploadService : IDriveUploadService
                 continue;
             }
 
+            // Folder segment đầu (parentId == null) nằm ngay My Drive root → top-level;
+            // các segment sâu hơn có parent là folder vừa tạo → không top-level.
+            var folderIsTopLevel = parentId == null;
             var created = await _gateway.CreateFolderAsync(conn, segment, parentId, ct);
             folderExternalIds[currentPath] = created.Id;
             parentId = created.Id;
             foldersCreated++;
 
-            var folderItem = _mapper.ToItem(created, userId, connectionId);
+            var folderItem = _mapper.ToItem(created, userId, connectionId, isTopLevel: folderIsTopLevel);
             await _items.AddAsync(folderItem, ct);
             // Persist folder ngay — tránh "mồ côi" trên Drive nếu upload file sau lỗi.
             await _items.SaveChangesAsync(ct);
