@@ -29,6 +29,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? assigneeAccountId = null,
         Guid? connectionId = null,
         string? driveParentId = null,
+        string? driveKind = null,
         int page = 1,
         int limit = 20,
         CancellationToken ct = default)
@@ -132,6 +133,17 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             // Root (All items): hiển thị item Drive NẾU nó được đánh dấu là TopLevel (đã tính toán trong DriveSyncService)
             // Bỏ qua filter này nếu đang browse Workspace Folder (folderId != null) hoặc đang Search.
             query = query.Where(i => i.Type != ItemType.File || (i.MetadataJson != null && i.MetadataJson.Contains("\"isTopLevel\":true")));
+        }
+
+        // DriveKind filter — chỉ Thư mục / chỉ Tệp trong view Drive. Metadata Drive luôn có "isFolder":
+        // folder = true, file = false → match trực tiếp. FE chỉ gửi param này ở ngữ cảnh Drive.
+        if (!string.IsNullOrWhiteSpace(driveKind))
+        {
+            var kind = driveKind.Trim().ToLowerInvariant();
+            if (kind == "folder")
+                query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains("\"isFolder\":true"));
+            else if (kind == "file")
+                query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains("\"isFolder\":false"));
         }
 
         // ── Search: Title hoặc Snippet ──

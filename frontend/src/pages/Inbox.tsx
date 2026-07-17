@@ -163,6 +163,7 @@ export const Inbox = () => {
   const [mailbox, setMailbox] = useState<MailboxValue>('INBOX'); // default = Hộp thư đến (như Gmail)
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [driveKind, setDriveKind] = useState<'all' | 'folder' | 'file'>('all');
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
@@ -406,6 +407,10 @@ export const Inbox = () => {
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
+  // Chỉ áp lọc Drive folder/file khi ĐANG ở view Drive (tab Tệp hoặc trong 1 folder Drive) —
+  // tránh chuyển tab khác mà vẫn dính filter (lọc vô hình → list trống khó hiểu).
+  const isDriveScope = sourceType === 'File' || driveFolderStack.length > 0;
+  const effectiveDriveKind = isDriveScope && driveKind !== 'all' ? driveKind : undefined;
 
   const params = {
     statuses: statusFilter.length > 0 ? statusFilter : undefined,
@@ -418,11 +423,12 @@ export const Inbox = () => {
     assignee: effectiveAssignee,
     gmailLabel,
     driveParentId: driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].id : undefined,
+    driveKind: effectiveDriveKind,
     page,
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, driveKind: params.driveKind, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -437,6 +443,7 @@ export const Inbox = () => {
     assignee: params.assignee,
     gmailLabel: params.gmailLabel,
     driveParentId: params.driveParentId,
+    driveKind: params.driveKind,
   });
 
   const { data, isLoading, isError, refetch, isFetching, isPlaceholderData } = useQuery({
@@ -575,6 +582,8 @@ export const Inbox = () => {
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
           currentDriveFolderId={driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].internalId : undefined}
+          driveKind={driveKind}
+          onDriveKindChange={(k) => { setDriveKind(k); setPage(1); }}
         />
 
         {/* ── Hộp thư kiểu Gmail — CHỈ hiện khi đang ở tab Email (sidebar) ── */}

@@ -69,6 +69,7 @@ export const KanbanBoard = () => {
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [driveKind, setDriveKind] = useState<'all' | 'folder' | 'file'>('all');
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
@@ -133,9 +134,11 @@ export const KanbanBoard = () => {
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
   const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
+  // Lọc folder/file chỉ áp ở tab Drive (Bảng không có drill-down folder nên chỉ cần sourceType File).
+  const effectiveDriveKind = sourceType === 'File' && driveKind !== 'all' ? driveKind : undefined;
 
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search, driveKind: effectiveDriveKind }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -148,6 +151,7 @@ export const KanbanBoard = () => {
       projectKey: effectiveProjectKey,
       assignee: effectiveAssignee,
       search: search || undefined,
+      driveKind: effectiveDriveKind,
       page: pageParam,
       limit: COL_PAGE_SIZE,
     }),
@@ -371,6 +375,8 @@ export const KanbanBoard = () => {
           onAssigneeChange={setAssigneeFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
+          driveKind={driveKind}
+          onDriveKindChange={setDriveKind}
         />
 
         {/* Board content */}
