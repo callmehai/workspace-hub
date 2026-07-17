@@ -20,6 +20,7 @@ public class SendEmailService : ISendEmailService
     private readonly IGoogleContactRepository _googleContacts;
     private readonly IGoogleContactMapper _googleContactMapper;
     private readonly IItemRepository _items;
+    private readonly IFolderRepository _folders;
     private readonly ILogger<SendEmailService> _logger;
 
     public SendEmailService(
@@ -28,6 +29,7 @@ public class SendEmailService : ISendEmailService
         IGoogleContactRepository googleContacts,
         IGoogleContactMapper googleContactMapper,
         IItemRepository items,
+        IFolderRepository folders,
         ILogger<SendEmailService> logger)
     {
         _connections = connections;
@@ -35,6 +37,7 @@ public class SendEmailService : ISendEmailService
         _googleContacts = googleContacts;
         _googleContactMapper = googleContactMapper;
         _items = items;
+        _folders = folders;
         _logger = logger;
     }
 
@@ -88,7 +91,11 @@ public class SendEmailService : ISendEmailService
             ?? throw new NotFoundException("Connection", connectionId);
 
         if (connection.UserId != userId)
-            throw new NotFoundException("Connection", connectionId);
+        {
+            var hasAccess = await _folders.IsConnectionSharedWithUserAsEditorAsync(connectionId, userId, ct);
+            if (!hasAccess)
+                throw new NotFoundException("Connection", connectionId);
+        }
 
         if (connection.ServiceType != ServiceType.Gmail)
             throw new BusinessRuleException("Only Gmail connections can be used for contact suggestions.");
@@ -99,7 +106,7 @@ public class SendEmailService : ISendEmailService
 
     public async Task<EmailThreadResponse> GetThreadAsync(Guid userId, Guid itemId, CancellationToken ct = default)
     {
-        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct, requireEditor: false);
 
         var threadId = GetMetadataString(item.MetadataJson, "threadId");
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
@@ -167,7 +174,7 @@ public class SendEmailService : ISendEmailService
 
     public async Task<SendInThreadResult> ReplyAsync(Guid userId, ReplyEmailRequest request, CancellationToken ct = default)
     {
-        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, request.ConnectionId, request.ItemId, ct);
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, request.ConnectionId, request.ItemId, ct, requireEditor: true);
 
         var threadId = GetMetadataString(item.MetadataJson, "threadId");
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
@@ -240,7 +247,7 @@ public class SendEmailService : ISendEmailService
 
     public async Task<SendInThreadResult> ForwardAsync(Guid userId, ForwardEmailRequest request, CancellationToken ct = default)
     {
-        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, request.ConnectionId, request.ItemId, ct);
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, request.ConnectionId, request.ItemId, ct, requireEditor: true);
 
         var threadId = GetMetadataString(item.MetadataJson, "threadId");
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
@@ -294,7 +301,7 @@ public class SendEmailService : ISendEmailService
         Guid userId, Guid itemId, string messageId, string attachmentId,
         string? filename = null, string? mimeType = null, CancellationToken ct = default)
     {
-        var (connection, _) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+        var (connection, _) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct, requireEditor: false);
 
         // Gmail cấp attachmentId MỚI mỗi lần đọc message/thread, nhưng id cũ vẫn hợp lệ với
         // attachments.get. Vì vậy KHÔNG re-fetch thread để so khớp id (id sẽ lệch → 404 giả);
@@ -308,7 +315,7 @@ public class SendEmailService : ISendEmailService
 
     public async Task<byte[]> GetAttachmentsZipAsync(Guid userId, Guid itemId, string messageId, CancellationToken ct = default)
     {
-        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct);
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct, requireEditor: false);
 
         var threadId = GetMetadataString(item.MetadataJson, "threadId");
         if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
@@ -381,12 +388,28 @@ public class SendEmailService : ISendEmailService
         return list;
     }
 
-    private async Task<(Connection connection, Domain.Entities.Item item)> GetAndValidateConnectionAndItemAsync(Guid userId, Guid? connectionId, Guid itemId, CancellationToken ct)
+    private async Task<(Connection connection, Domain.Entities.Item item)> GetAndValidateConnectionAndItemAsync(
+        Guid userId, Guid? connectionId, Guid itemId, CancellationToken ct, bool requireEditor = false)
     {
         var item = await _items.GetByIdAsync(itemId, ct)
             ?? throw new NotFoundException("Item", itemId);
 
-        if (item.UserId != userId)
+        var isOwner = item.UserId == userId;
+        var isShared = false;
+
+        if (!isOwner)
+        {
+            if (requireEditor)
+            {
+                isShared = await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
+            }
+            else
+            {
+                isShared = await _folders.IsItemSharedWithUserAsync(itemId, userId, ct);
+            }
+        }
+
+        if (!isOwner && !isShared)
             throw new NotFoundException("Item", itemId);
             
         if (item.ConnectionId == null)
@@ -398,7 +421,7 @@ public class SendEmailService : ISendEmailService
         var connection = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct)
             ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
 
-        if (connection.UserId != userId)
+        if (connection.UserId != item.UserId)
             throw new NotFoundException("Connection", item.ConnectionId.Value);
 
         if (connection.ServiceType != ServiceType.Gmail)
@@ -472,7 +495,11 @@ public class SendEmailService : ISendEmailService
             ?? throw new NotFoundException("Connection", request.ConnectionId);
 
         if (connection.UserId != userId)
-            throw new NotFoundException("Connection", request.ConnectionId);
+        {
+            var hasAccess = await CheckConnectionAccessAsync(request.ConnectionId, userId, existingItemId, request.ThreadId, ct);
+            if (!hasAccess)
+                throw new NotFoundException("Connection", request.ConnectionId);
+        }
 
         if (connection.ServiceType != ServiceType.Gmail)
             throw new BusinessRuleException("Only Gmail connections can be used to save drafts.");
@@ -588,7 +615,11 @@ public class SendEmailService : ISendEmailService
             ?? throw new NotFoundException("Item", itemId);
 
         if (item.UserId != userId)
-            throw new NotFoundException("Item", itemId);
+        {
+            var isEditor = await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
+            if (!isEditor)
+                throw new NotFoundException("Item", itemId);
+        }
 
         if (item.ConnectionId == null)
             throw new BusinessRuleException("Item is not associated with any connection.");
@@ -596,7 +627,7 @@ public class SendEmailService : ISendEmailService
         var connection = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct)
             ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
 
-        if (connection.UserId != userId)
+        if (connection.UserId != item.UserId)
             throw new NotFoundException("Connection", item.ConnectionId.Value);
 
         if (connection.ServiceType != ServiceType.Gmail)
@@ -644,7 +675,11 @@ public class SendEmailService : ISendEmailService
             ?? throw new NotFoundException("Item", itemId);
 
         if (item.UserId != userId)
-            throw new NotFoundException("Item", itemId);
+        {
+            var isEditor = await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
+            if (!isEditor)
+                throw new NotFoundException("Item", itemId);
+        }
 
         if (item.ConnectionId == null)
             throw new BusinessRuleException("Item is not associated with any connection.");
@@ -652,7 +687,7 @@ public class SendEmailService : ISendEmailService
         var connection = await _connections.GetByIdTrackedAsync(item.ConnectionId.Value, ct)
             ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
 
-        if (connection.UserId != userId)
+        if (connection.UserId != item.UserId)
             throw new NotFoundException("Connection", item.ConnectionId.Value);
 
         var draftId = await GetOrResolveDraftIdAsync(connection, item, ct);
@@ -694,6 +729,30 @@ public class SendEmailService : ISendEmailService
         }
 
         return resolvedDraftId;
+    }
+
+    private async Task<bool> CheckConnectionAccessAsync(Guid connectionId, Guid userId, Guid? existingItemId, string? threadId, CancellationToken ct)
+    {
+        var connection = await _connections.GetByIdTrackedAsync(connectionId, ct);
+        if (connection == null) return false;
+
+        if (connection.UserId == userId) return true;
+
+        if (existingItemId.HasValue)
+        {
+            return await _folders.IsItemSharedWithUserAsEditorAsync(existingItemId.Value, userId, ct);
+        }
+
+        if (!string.IsNullOrEmpty(threadId))
+        {
+            var item = await _items.GetByThreadAndConnectionAsync(threadId, connectionId, ct);
+            if (item != null)
+            {
+                return await _folders.IsItemSharedWithUserAsEditorAsync(item.Id, userId, ct);
+            }
+        }
+
+        return false;
     }
 }
 

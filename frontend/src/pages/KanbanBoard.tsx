@@ -121,7 +121,7 @@ export const KanbanBoard = () => {
   }, []);
 
   const { data: folders = [] } = useQuery({
-    queryKey: ['folders'],
+    queryKey: ['folders', { includeShared: false }],
     queryFn: () => foldersApi.getFolders()
   });
 
@@ -270,6 +270,7 @@ export const KanbanBoard = () => {
       toast.success(t('item.addedToFolder'));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item', variables.itemId] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => handleApiError(err, 'Lỗi thêm vào thư mục', { navigate })
   });
@@ -630,6 +631,7 @@ export const KanbanBoard = () => {
       <BulkActionBar
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
+        items={items}
       />
     </div>
   );

@@ -58,7 +58,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
 
   // Lấy cả folder do mình sở hữu và folder được chia sẻ với mình
   const { data: folders = [] } = useQuery({
-    queryKey: ['folders'],
+    queryKey: ['folders', { includeShared: true }],
     queryFn: () => foldersApi.getFolders(true),
   });
 
@@ -71,24 +71,24 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const acceptShareMutation = useMutation({
     mutationFn: foldersApi.acceptShare,
     onSuccess: () => {
-      toast.success('Đã chấp nhận chia sẻ thư mục!');
+      toast.success(t('sidebar.shareAcceptSuccess'));
       queryClient.invalidateQueries({ queryKey: ['sharedWithMe'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Lỗi chấp nhận chia sẻ');
+      handleApiError(err, t('sidebar.shareAcceptFail'));
     }
   });
 
   const declineShareMutation = useMutation({
     mutationFn: foldersApi.declineShare,
     onSuccess: () => {
-      toast.success('Đã từ chối chia sẻ thư mục!');
+      toast.success(t('sidebar.shareDeclineSuccess'));
       queryClient.invalidateQueries({ queryKey: ['sharedWithMe'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Lỗi từ chối chia sẻ');
+      handleApiError(err, t('sidebar.shareDeclineFail'));
     }
   });
 
@@ -160,6 +160,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
       toast.success(t('sidebar.itemAssigned'));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item', variables.itemId] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
       handleApiError(err, 'Lỗi gán thư mục');
@@ -173,6 +174,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
       toast.success(`Đã gán ${variables.itemIds.length} mục vào thư mục`);
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
       handleApiError(err, 'Lỗi gán thư mục');
@@ -367,7 +369,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                       }}
                     >
                       <Pencil className="w-3.5 h-3.5" />
-                      Sửa
+                      {t('common.edit')}
                     </button>
                     <button
                       className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2"
@@ -378,7 +380,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                       }}
                     >
                       <Share2 className="w-3.5 h-3.5" />
-                      Chia sẻ
+                      {t('common.share')}
                     </button>
                     <button
                       className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
@@ -388,7 +390,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                       }}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      Xóa
+                      {t('common.delete')}
                     </button>
                   </div>
                 )}
@@ -402,7 +404,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
               <div className="flex items-center justify-between mx-[10px] mt-6 mb-2">
                 <span className="text-[11px] font-semibold tracking-[0.04em] uppercase text-amber-500 dark:text-amber-400 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping shrink-0" />
-                  Lời mời chia sẻ ({pendingShares.length})
+                  {t('sidebar.shareInvitations')} ({pendingShares.length})
                 </span>
               </div>
               <div className="space-y-1.5 mx-[10px] p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
@@ -412,7 +414,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                       {share.folderName}
                     </div>
                     <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                      từ {share.ownerName} ({share.permission === 'Editor' ? 'Sửa' : 'Xem'})
+                      {t('sidebar.from')} {share.ownerName} ({share.permission === 'Editor' ? t('sidebar.permissionEditor') : t('sidebar.permissionViewer')})
                     </div>
                     <div className="flex gap-1.5 mt-1">
                       <button
@@ -420,14 +422,14 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                         disabled={acceptShareMutation.isPending || declineShareMutation.isPending}
                         className="flex-1 py-0.5 text-center bg-brand-600 hover:bg-brand-700 text-white rounded font-medium text-[11px] transition-colors disabled:opacity-50"
                       >
-                        Nhận
+                        {t('sidebar.accept')}
                       </button>
                       <button
                         onClick={() => declineShareMutation.mutate(share.shareId)}
                         disabled={acceptShareMutation.isPending || declineShareMutation.isPending}
                         className="flex-1 py-0.5 text-center bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded font-medium text-[11px] transition-colors disabled:opacity-50"
                       >
-                        Từ chối
+                        {t('sidebar.decline')}
                       </button>
                     </div>
                   </div>
@@ -441,7 +443,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
             <>
               <div className="flex items-center justify-between mx-[10px] mt-6 mb-2">
                 <span className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500">
-                  Được chia sẻ với tôi
+                  {t('sidebar.sharedWithMe')}
                 </span>
               </div>
               {folders.filter(f => !f.isOwner).map(folder => (

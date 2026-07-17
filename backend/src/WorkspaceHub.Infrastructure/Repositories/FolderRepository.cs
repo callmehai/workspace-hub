@@ -196,4 +196,14 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
                                                                fs.AcceptedAt != null &&
                                                                fs.Permission == SharePermission.Editor), ct);
     }
+
+    /// <inheritdoc/>
+    public async Task<bool> IsConnectionSharedWithUserAsEditorAsync(Guid connectionId, Guid userId, CancellationToken ct = default)
+    {
+        return await Db.ItemFolders
+            .AnyAsync(ifj => ifj.Item.ConnectionId == connectionId &&
+                             ifj.Folder.FolderShares.Any(fs => fs.SharedWithUserId == userId &&
+                                                               fs.AcceptedAt != null &&
+                                                               fs.Permission == SharePermission.Editor), ct);
+    }
 }

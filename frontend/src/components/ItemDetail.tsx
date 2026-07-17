@@ -200,7 +200,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   });
 
   const { data: folders = [] } = useQuery({
-    queryKey: ['folders'],
+    queryKey: ['folders', { includeShared: false }],
     queryFn: () => foldersApi.getFolders()
   });
 
@@ -303,6 +303,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       toast.success(t('item.addedToFolder'));
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => handleApiError(err, t('item.addFolderFail'), { navigate })
   });
@@ -313,6 +314,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       toast.success(t('item.removedFromFolder'));
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => handleApiError(err, t('item.removeFolderFail'), { navigate })
   });

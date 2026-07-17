@@ -76,5 +76,10 @@ public interface IItemRepository : IGenericRepository<Item>
     /// Trả về số Item row đã xoá.
     /// </summary>
     Task<int> DeleteThreadAsync(Guid userId, string threadId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tìm một Item theo ThreadId và ConnectionId.
+    /// </summary>
+    Task<Item?> GetByThreadAndConnectionAsync(string threadId, Guid connectionId, CancellationToken ct = default);
 }
 

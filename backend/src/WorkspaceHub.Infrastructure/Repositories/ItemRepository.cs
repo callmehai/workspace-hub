@@ -349,4 +349,11 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     /// </summary>
     private static string EscapeLikePattern(string input) =>
         input.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
+
+    /// <inheritdoc/>
+    public async Task<Item?> GetByThreadAndConnectionAsync(string threadId, Guid connectionId, CancellationToken ct = default)
+    {
+        return await Set.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.ThreadId == threadId && i.ConnectionId == connectionId, ct);
+    }
 }
