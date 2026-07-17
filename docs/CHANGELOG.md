@@ -2,6 +2,16 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
+
+> Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.
+
+- **Case 1:** file + folder mẹ đều `anyone` → `PUT link-sharing` tắt không confirm → **409** + `DriveLinkRestrictConflict`; confirm `confirmRestrictParent: true` → tắt link **cả file lẫn folder mẹ** (file vẫn trong folder).
+- **Case 2:** folder mẹ hạn chế, bật link file → **không popup** (khớp Drive web).
+- **BE:** `DetectLinkRestrictConflictAsync`, `GET .../restrict-conflict`, `LinkSharingRequest.ConfirmRestrictParent`; test Case 1 trên `DriveSharingServiceTests`. `ConflictException.Payload` + middleware ghi payload làm body 409 (một path service→API, tránh 409 chỉ có message).
+- **FE:** `DriveLinkRestrictDialog` (layout gần Drive: tiêu đề, cây quyền, Huỷ / Xoá khỏi thư mục mẹ); wire trong `DriveShareDialog` bắt 409.
+- **Docs:** `docs/API.md`, `docs/DRIVE_FOLDER_SHARING.md` §6.4 / §7.6–7.7 / QA.
+
 ## [2026-07-16] Calendar PR review — partial-update reminders + invitation harden
 
 - **Critical — reminders wipe:** `CalendarGateway.UpdateEventAsync` khi `Reminders == null` từng ghi `UseDefault=true` → PATCH event (đổi title/…) xóa reminder Google. **Sau:** `null` = giữ nguyên từ `Events.Get`; non-null (kể cả list rỗng) = ghi overrides. Contract test: `PatchEvent_WithoutReminders_PassesNullRemindersToGateway`.
@@ -119,6 +129,7 @@ InApp rows trên Hub **không** bị xóa khi sync Google overrides (chỉ thay 
 - **Ba lớp thời gian:** Google Calendar Event (amber, CRUD/write-back), ScheduledEmail Pending (blue, read-only, mở màn Email hẹn giờ), Jira deadline (violet, read-only, mở ItemDetail). Khi vào folder, chỉ Item Event/Ticket đã gắn folder được hiển thị; ScheduledEmail hiện chỉ có ở lịch chung vì schema chưa có FolderId.
 - **Drag/drop:** chỉ Event có `draggable`; month drop giữ giờ hiện tại, week timed-slot drop đổi ngày+giờ, week all-day row đổi thành cả ngày. Jira/ScheduledEmail tuyệt đối read-only trên lịch.
 - **Contract BE cần khớp:** FE gửi `allDay` kèm `start/end` để tương thích API hiện tại; BE Calendar cần map `allDay=true` sang `EventDateTime.Date` để Google lưu đúng event cả ngày. Jira overlay đọc `ItemResponse.dueAt` hoặc `metadata.dueDate`; Jira sync phải populate một trong hai field thì deadline mới xuất hiện.
+
 ## [2026-07-16] SCRUM-64 đổi hướng OTP: Email (Resend) thay cho SMS/Firebase
 
 > **Quyết định scope:** OTP đăng ký chuyển sang **gửi qua email** dùng **Resend**. Bỏ CẢ hai hướng cũ: SMS Twilio (develop) và Firebase Phone Auth (nhánh `fix/login-ux`).

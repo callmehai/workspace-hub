@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using WorkspaceHub.Api.Middleware;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.Drive;
 using Xunit;
 
 namespace WorkspaceHub.Tests.Middleware;
@@ -109,6 +110,45 @@ public class ExceptionMiddlewareTests
         body.Message.Should().Be("An unexpected error occurred."); // message vẫn generic
         body.Details.Should().Contain("secret internal detail");
         body.Details.Should().Contain(nameof(InvalidOperationException));
+    }
+
+    [Fact]
+    public async Task ConflictException_WithPayload_Returns409_PayloadAsBody()
+    {
+        // Case 1 Drive: 409 body = DriveLinkRestrictConflict (không bọc envelope).
+        var payload = new DriveLinkRestrictConflict(
+            Code: DriveLinkRestrictConflict.RestrictAffectsParentCode,
+            ItemId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            ItemTitle: "file.pdf",
+            ItemExternalId: "file-1",
+            ParentItemId: null,
+            ParentExternalId: "folder-1",
+            ParentTitle: "Parent",
+            ItemFromAccess: DriveLinkRestrictConflict.AccessAnyone,
+            ItemToAccess: DriveLinkRestrictConflict.AccessRestricted,
+            ParentFromAccess: DriveLinkRestrictConflict.AccessAnyone,
+            ParentToAccess: DriveLinkRestrictConflict.AccessRestricted);
+
+        var env = new FakeEnvironment(Environments.Production);
+        var middleware = new ExceptionMiddleware(
+            next: _ => throw new ConflictException("need confirm", payload),
+            logger: NullLogger<ExceptionMiddleware>.Instance,
+            env: env);
+
+        var context = new DefaultHttpContext { TraceIdentifier = "trace-payload" };
+        var responseStream = new MemoryStream();
+        context.Response.Body = responseStream;
+
+        await middleware.InvokeAsync(context);
+
+        context.Response.StatusCode.Should().Be((int)HttpStatusCode.Conflict);
+        responseStream.Position = 0;
+        var json = await new StreamReader(responseStream).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(json);
+        doc.RootElement.GetProperty("code").GetString()
+            .Should().Be(DriveLinkRestrictConflict.RestrictAffectsParentCode);
+        doc.RootElement.GetProperty("itemTitle").GetString().Should().Be("file.pdf");
+        doc.RootElement.TryGetProperty("error", out _).Should().BeFalse();
     }
 
     /// <summary>IHostEnvironment giả lập để test nhánh dev/prod mà không cần host thật.</summary>

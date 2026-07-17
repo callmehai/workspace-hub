@@ -64,12 +64,12 @@ public class DriveSyncServiceTests
         _gatewayMock.Setup(g => g.SyncFilesAsync(connection, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DriveSyncResult(false, driveFilesFromApi, "next-token"));
 
-        _mapperMock.Setup(m => m.ToItem(It.IsAny<DriveFileDto>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
-            .Returns((DriveFileDto dto, Guid userId, Guid connId) => new Item 
-            { 
-                Id = Guid.NewGuid(), 
-                ExternalId = dto.Id, 
-                MetadataJson = "{\"isFolder\":true}" 
+        _mapperMock.Setup(m => m.ToItem(It.IsAny<DriveFileDto>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<bool?>()))
+            .Returns((DriveFileDto dto, Guid userId, Guid connId, bool? isTopLevel) => new Item
+            {
+                Id = Guid.NewGuid(),
+                ExternalId = dto.Id,
+                MetadataJson = "{\"isFolder\":true}"
             });
 
         // Act

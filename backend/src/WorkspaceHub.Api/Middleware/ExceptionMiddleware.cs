@@ -14,7 +14,7 @@ namespace WorkspaceHub.Api.Middleware;
 ///   UnauthorizedException                  → 401
 ///   ForbiddenException                     → 403
 ///   NotFoundException                      → 404
-///   ConflictException                      → 409
+///   ConflictException                      → 409 (Payload != null → body = Payload, vd. DriveLinkRestrictConflict)
 ///   BusinessRuleException                  → 422
 ///   CsrfException                          → 400
 ///   ProviderException                      → 502
@@ -118,7 +118,28 @@ public class ExceptionMiddleware
 
         // Lỗi domain đã biết — message an toàn để hiển thị, log ở mức Warning.
         _logger.LogWarning(ex, "Handled domain exception {ErrorType}. TraceId={TraceId}", errorType, traceId);
+
+        // Conflict có Payload (vd. DriveLinkRestrictConflict) → ghi payload làm body 409,
+        // khớp contract FE (không bọc envelope { error, message }).
+        if (ex is ConflictException { Payload: not null } conflictWithPayload)
+        {
+            await WritePayloadAsync(context, statusCode, conflictWithPayload.Payload);
+            return;
+        }
+
         await WriteResponseAsync(context, statusCode, errorType, ex.Message, Array.Empty<string>(), traceId);
+    }
+
+    /// <summary>Ghi object tuỳ ý làm JSON body (camelCase) — dùng cho 409 Case 1 Drive.</summary>
+    private static async Task WritePayloadAsync(HttpContext context, HttpStatusCode statusCode, object payload)
+    {
+        if (context.Response.HasStarted)
+            return;
+
+        context.Response.Clear();
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = (int)statusCode;
+        await context.Response.WriteAsync(JsonSerializer.Serialize(payload, JsonOptions));
     }
 
     private async Task WriteResponseAsync(

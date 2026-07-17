@@ -7,7 +7,7 @@ namespace WorkspaceHub.Application.Mapping;
 
 public class DriveItemMapper : IDriveItemMapper
 {
-    public Item ToItem(DriveFileDto file, Guid userId, Guid connectionId)
+    public Item ToItem(DriveFileDto file, Guid userId, Guid connectionId, bool? isTopLevel = null)
     {
         var metadata = new Dictionary<string, object?>
         {
@@ -20,6 +20,11 @@ public class DriveItemMapper : IDriveItemMapper
 
         if (file.Parents is { Count: > 0 })
             metadata["parents"] = file.Parents;
+
+        // Luồng tạo/upload truyền cờ để item hiện NGAY ở view root (repo lọc "isTopLevel":true).
+        // Null = để trống, DriveSyncService sẽ tự tính sau (giữ hành vi sync cũ).
+        if (isTopLevel.HasValue)
+            metadata["isTopLevel"] = isTopLevel.Value;
 
         return new Item
         {

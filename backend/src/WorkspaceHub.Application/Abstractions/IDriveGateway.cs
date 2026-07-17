@@ -17,6 +17,25 @@ public interface IDriveGateway
         string?parentExternalId,
         CancellationToken ct= default);
 
+    /// <summary>
+    /// Upload file binary từ máy người dùng lên Google Drive.
+    /// Gọi Google API <c>files.create</c> kèm nội dung stream — BE proxy, không load hết file vào RAM.
+    /// </summary>
+    /// <param name="connection">Connection Drive đã OAuth (token lấy qua <see cref="ITokenService"/>).</param>
+    /// <param name="name">Tên file hiển thị trên Drive (vd. report.pdf).</param>
+    /// <param name="mimeType">MIME type (vd. application/pdf). Dùng application/octet-stream nếu không biết.</param>
+    /// <param name="parentExternalId">Google file id của folder cha. Null = upload vào gốc My Drive.</param>
+    /// <param name="content">Stream nội dung file — đọc tuần tự khi Google client upload.</param>
+    /// <param name="ct">Token hủy request.</param>
+    /// <returns>Metadata file vừa tạo trên Drive (id, name, mimeType, size, parents…).</returns>
+    Task<DriveFileDto> UploadFileAsync(
+        Connection connection,
+        string name,
+        string mimeType,
+        string? parentExternalId,
+        Stream content,
+        CancellationToken ct = default);
+
     // Danh sách quyền share của file/folder trên Google Drive.
     Task<IReadOnlyList<DrivePermissionDto>> ListPermissionsAsync(
         Connection connection,

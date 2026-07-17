@@ -31,6 +31,11 @@ public record UpdateDrivePermissionRequest(
 /// <summary>PUT /api/drive/items/{itemId}/link-sharing — bật/tắt "ai có link".</summary>
 /// <param name="Enabled">true = bật link công khai; false = tắt (xóa permission anyone).</param>
 /// <param name="Role">Bắt buộc khi Enabled=true — quyền cho người mở link. Bỏ qua khi tắt.</param>
+/// <param name="ConfirmRestrictParent">
+/// Case 1 (giống Drive): true = user đã confirm popup "Xoá khỏi thư mục mẹ"
+/// → tắt link cả file lẫn folder mẹ. Chỉ có ý nghĩa khi Enabled=false.
+/// </param>
 public record LinkSharingRequest(
     bool Enabled,
-    string? Role = null);
+    string? Role = null,
+    bool ConfirmRestrictParent = false);

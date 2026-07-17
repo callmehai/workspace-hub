@@ -277,6 +277,20 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     }
 
     /// <inheritdoc/>
+    public async Task<Item?> GetByConnectionAndExternalIdAsync(
+        Guid userId,
+        Guid connectionId,
+        string externalId,
+        CancellationToken ct = default)
+    {
+        return await Set.FirstOrDefaultAsync(
+            i => i.UserId == userId
+                 && i.ConnectionId == connectionId
+                 && i.ExternalId == externalId,
+            ct);
+    }
+
+    /// <inheritdoc/>
     public async Task<List<Item>> GetByIdsAndUserAsync(IEnumerable<Guid> itemIds, Guid userId, CancellationToken ct = default)
     {
         return await Set.Where(i => itemIds.Contains(i.Id) && i.UserId == userId).ToListAsync(ct);

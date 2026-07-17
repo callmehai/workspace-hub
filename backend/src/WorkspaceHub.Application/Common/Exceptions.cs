@@ -26,11 +26,22 @@ public class ForbiddenException : Exception
 
 /// <summary>
 /// Lỗi 409 — vi phạm unique constraint hoặc trùng lặp.
-/// Middleware sẽ map sang HTTP 409 Conflict.
+/// Middleware map sang HTTP 409 Conflict.
+/// Khi <see cref="Payload"/> khác null, middleware ghi <b>payload làm body 409</b>
+/// (vd. <c>DriveLinkRestrictConflict</c> cho Case 1 tắt link) — không bọc envelope
+/// <c>{ error, message, ... }</c>, để FE parse đúng contract.
 /// </summary>
 public class ConflictException : Exception
 {
+    /// <summary>Body 409 tuỳ chọn (serialize trực tiếp). Null = envelope lỗi chuẩn.</summary>
+    public object? Payload { get; }
+
     public ConflictException(string message) : base(message) { }
+
+    public ConflictException(string message, object payload) : base(message)
+    {
+        Payload = payload ?? throw new ArgumentNullException(nameof(payload));
+    }
 }
 
 /// <summary>

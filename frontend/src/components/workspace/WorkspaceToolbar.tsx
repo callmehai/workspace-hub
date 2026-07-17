@@ -1,28 +1,22 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+﻿import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueries, useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, RefreshCw, Plus, Tag, Settings2,
-  FolderPlus, Briefcase, UserRound, Loader2, ChevronDown, Check,
+  Star, Search, RefreshCw, Tag, Settings2,
+  Briefcase, UserRound, Loader2, ChevronDown, Check,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { jiraApi, type JiraProject } from '../../lib/jiraApi';
-import { itemsApi } from '../../lib/itemsApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
-import { markSeen } from '../../lib/seenStore';
 import { TYPE_FILTERS, STATUS_FILTERS, typeIcon, integrationLabelKey } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse, TagResponse } from '../../types/items';
-import { CreateNoteModal } from './CreateNoteModal';
-import { CalendarEventEditorModal, type CalendarEventFormValue } from '../calendar/CalendarEventEditorModal';
-import { emptyCalendarForm, formToRange, calendarRangeToApiTimes } from '../../lib/calendarFormUtils';
-import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { TagManagerModal } from '../tags/TagManagerModal';
-import { CreateDriveFolderModal } from '../drive/CreateDriveFolderModal';
 import { WorkspaceViewSwitcher, type WorkspaceView } from './WorkspaceViewSwitcher';
+import { WorkspaceNewMenu } from './WorkspaceNewMenu';
 
 /*
  * Toolbar dùng chung cho các view chính của workspace.
@@ -215,53 +209,17 @@ export const WorkspaceToolbar = ({
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isNoteOpen, setIsNoteOpen] = useState(false);
-  const [isEventOpen, setIsEventOpen] = useState(false);
-  const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
-  const [isDriveFolderOpen, setIsDriveFolderOpen] = useState(false);
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
     queryFn: connectionsApi.getConnections,
   });
-  const hasActiveDrive = connections.some(
-    (c) => c.serviceType === 'Drive' && c.status === 'Active',
-  );
 
   const jiraConns = connections.filter(
     (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
   );
-  const gcalConnections = connections.filter(
-    (c: ConnectionDto) => c.serviceType.toLowerCase() === 'gcal' && c.status.toLowerCase() === 'active'
-  );
-
-  const createEventMutation = useMutation({
-    mutationFn: (form: CalendarEventFormValue) => {
-      const { start, end } = formToRange(form);
-      const times = calendarRangeToApiTimes(start, end, form.allDay);
-      return itemsApi.createEvent({
-        connectionId: form.connectionId,
-        title: form.title,
-        start: times.start,
-        end: times.end,
-        allDay: form.allDay,
-        location: form.location.trim() || undefined,
-        attendees: form.attendees,
-        description: form.description.trim() || undefined,
-        driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
-      });
-    },
-    onSuccess: (created) => {
-      markSeen(created.id);
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-      setIsEventOpen(false);
-      toast.success(t('createEvent.created'));
-    },
-    onError: (err) => handleApiError(err, t('createEvent.createFail'), { navigate }),
-  });
 
   const projectQueries = useQueries({
     queries: jiraConns.map((c: ConnectionDto) => ({
@@ -331,14 +289,7 @@ export const WorkspaceToolbar = ({
     }
   };
 
-  // Nút tạo nhanh — ở tab lẻ chỉ hiện nút hợp loại đó; "Tất cả mục" hiện đủ.
-  // Ghi chú là loại nội bộ (không phải integration) → chỉ hiện ở "Tất cả mục".
-  const showNote = !sourceType;
-  const showEvent = !sourceType || sourceType === 'Event';
-  const showTicket = !sourceType || sourceType === 'Ticket';
-  const showDriveFolder = hasActiveDrive && (!sourceType || sourceType === 'File');
   const isCalendarView = view === 'calendar';
-  const showCreateRow = !isCalendarView && (showNote || showEvent || showTicket || showDriveFolder);
 
   return (
     <>
@@ -427,48 +378,14 @@ export const WorkspaceToolbar = ({
             />
           </FilterGroup>
 
-          {/* Nút tạo nhanh — dồn về mép phải, cùng dòng lọc thêm. Ẩn cả cụm nếu không có nút hợp tab. */}
-          {showCreateRow && (
-            <div className="flex items-center gap-2.5 flex-wrap justify-end ml-auto">
-              {showNote && (
-                <button
-                  onClick={() => setIsNoteOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                  title={t('toolbar.noteTooltip')}
-                >
-                  <Plus className="w-4 h-4" /> {t('toolbar.note')}
-                </button>
-              )}
-              {showEvent && (
-                <button
-                  onClick={() => setIsEventOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                  title={t('toolbar.eventTooltip')}
-                >
-                  <Plus className="w-4 h-4" /> {t('toolbar.event')}
-                </button>
-              )}
-              {showTicket && (
-                <button
-                  onClick={() => setIsTicketOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                  title={t('toolbar.ticketTooltip')}
-                >
-                  <Plus className="w-4 h-4" /> {t('type.ticket')}
-                </button>
-              )}
-              {showDriveFolder && (
-                <button
-                  type="button"
-                  onClick={() => setIsDriveFolderOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] shadow-sm hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <FolderPlus className="w-4 h-4" />
-                  <span>{t('toolbar.driveFolder')}</span>
-                </button>
-              )}
-            </div>
-          )}
+          {/* Tạo nhanh — 1 dropdown "Mới" (Drive upload + calendar editor từ nhánh này). */}
+          <div className="flex items-center justify-end ml-auto">
+            <WorkspaceNewMenu
+              folder={folder}
+              currentDriveFolderId={currentDriveFolderId}
+              sourceType={sourceType}
+            />
+          </div>
         </div>
       </div>
       )}
@@ -527,21 +444,7 @@ export const WorkspaceToolbar = ({
         )}
       </div>
 
-      <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
-      <CalendarEventEditorModal
-        key={isEventOpen ? (gcalConnections[0]?.id ?? 'new') : 'closed'}
-        open={isEventOpen}
-        mode="create"
-        initialValue={emptyCalendarForm(new Date(), gcalConnections[0]?.id ?? '')}
-        connections={gcalConnections}
-        allConnections={connections}
-        saving={createEventMutation.isPending}
-        onClose={() => setIsEventOpen(false)}
-        onSubmit={form => createEventMutation.mutate(form)}
-      />
-      <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <TagManagerModal isOpen={isTagManagerOpen} onClose={() => setIsTagManagerOpen(false)} />
-      <CreateDriveFolderModal isOpen={isDriveFolderOpen} onClose={() => setIsDriveFolderOpen(false)} defaultParentItemId={currentDriveFolderId} />
     </>
   );
 };

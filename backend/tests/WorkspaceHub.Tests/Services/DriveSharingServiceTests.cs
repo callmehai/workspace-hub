@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
+using WorkspaceHub.Application.DTOs.Drive;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Mapping;
 using WorkspaceHub.Application.Services;
@@ -125,7 +126,7 @@ public class DriveSharingServiceTests
                 It.IsAny<Connection>(), "Hợp đồng", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(driveDto);
 
-        _mapper.Setup(m => m.ToItem(driveDto, _userId, _connId))
+        _mapper.Setup(m => m.ToItem(driveDto, _userId, _connId, It.IsAny<bool?>()))
             .Returns(new Item { Id = Guid.NewGuid(), Type = ItemType.File, Title = "Hợp đồng" });
 
         var result = await _service.CreateFolderAsync(_userId, _connId, "Hợp đồng");
@@ -133,6 +134,8 @@ public class DriveSharingServiceTests
         result.Title.Should().Be("Hợp đồng");
         _items.Verify(m => m.AddAsync(It.IsAny<Item>(), It.IsAny<CancellationToken>()), Times.Once);
         _items.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        // Tạo ở root → phải set isTopLevel:true để hiện ngay ở view root (không phải chờ sync).
+        _mapper.Verify(m => m.ToItem(driveDto, _userId, _connId, true), Times.Once);
     }
 
     [Fact]
@@ -256,6 +259,244 @@ public class DriveSharingServiceTests
         result.Should().BeNull();
     }
 
+    /// <summary>
+    /// Regression: controller đã Detect (không conflict) → skipConflictDetect tránh gọi lại ListPermissions/GetFile.
+    /// </summary>
+    [Fact]
+    public async Task SetLinkSharing_Disable_SkipConflictDetect_DoesNotCallDetectApis()
+    {
+        // Có parents → nếu Detect chạy sẽ ListPermissions file + mẹ; skip phải không gọi.
+        const string parentId = "parent-folder-skip";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DrivePermissionDto?)null);
+
+        var result = await _service.SetLinkSharingAsync(
+            _userId,
+            _itemId,
+            enabled: false,
+            confirmRestrictParent: false,
+            skipConflictDetect: true);
+
+        result.Should().BeNull();
+        _gateway.Verify(
+            m => m.ListPermissionsAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _gateway.Verify(
+            m => m.GetFileAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false,
+                It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SetLinkSharing_Disable_Case1WithoutConfirm_ThrowsConflict()
+    {
+        // Case 1: tắt link mà chưa confirm → 409 (ConflictException).
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        _gateway.Setup(m => m.GetFileAsync(It.IsAny<Connection>(), parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DriveFile(parentId, null, "Dungtestfolder", DriveMimeTypes.Folder));
+
+        SetupAnyoneLinkOnFileAndParent(parentId);
+
+        var act = () => _service.SetLinkSharingAsync(
+            _userId, _itemId, enabled: false, confirmRestrictParent: false);
+
+        var ex = await act.Should().ThrowAsync<ConflictException>();
+        var conflict = ex.Which.Payload.Should().BeOfType<DriveLinkRestrictConflict>().Subject;
+        conflict.Code.Should().Be(DriveLinkRestrictConflict.RestrictAffectsParentCode);
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<bool>(),
+                It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task SetLinkSharing_Disable_Case1WithConfirm_RestrictsFileAndParent()
+    {
+        // Confirm popup → tắt link cả file lẫn folder mẹ.
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Item
+            {
+                Id = Guid.NewGuid(),
+                Title = "Dungtestfolder",
+                ExternalId = parentId,
+                ConnectionId = _connId,
+                UserId = _userId,
+                Type = ItemType.File,
+                MetadataJson = """{"isFolder":true}"""
+            });
+
+        SetupAnyoneLinkOnFileAndParent(parentId);
+        // Sau Detect: Ensure/list lại thấy đã tắt (giả lập Google đã apply).
+        SetupLinkClearedAfterFirstList(parentId);
+
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DrivePermissionDto?)null);
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DrivePermissionDto?)null);
+
+        var result = await _service.SetLinkSharingAsync(
+            _userId, _itemId, enabled: false, confirmRestrictParent: true);
+
+        result.Should().BeNull();
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SetLinkSharing_Disable_Case1WithConfirm_FileForbidden_StillSucceeds()
+    {
+        // Sau khi tắt mẹ, xoá anyone trên file bị 403 (kế thừa) → vẫn OK.
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Item
+            {
+                Id = Guid.NewGuid(),
+                Title = "Dungtestfolder",
+                ExternalId = parentId,
+                ConnectionId = _connId,
+                UserId = _userId,
+                Type = ItemType.File,
+                MetadataJson = """{"isFolder":true}"""
+            });
+
+        SetupAnyoneLinkOnFileAndParent(parentId);
+        SetupLinkClearedAfterFirstList(parentId);
+
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DrivePermissionDto?)null);
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("Không đủ quyền gỡ chia sẻ."));
+
+        var result = await _service.SetLinkSharingAsync(
+            _userId, _itemId, enabled: false, confirmRestrictParent: true);
+
+        result.Should().BeNull();
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SetLinkSharing_Disable_Case1WithConfirm_ParentForbidden_ThrowsBusinessRule()
+    {
+        // User chỉ là editor không đủ quyền đổi sharing folder mẹ → tắt link mẹ bị 403.
+        // Phải trả BusinessRuleException (thông báo rõ) thay vì lỗi thô.
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Item
+            {
+                Id = Guid.NewGuid(),
+                Title = "Dungtestfolder",
+                ExternalId = parentId,
+                ConnectionId = _connId,
+                UserId = _userId,
+                Type = ItemType.File,
+                MetadataJson = """{"isFolder":true}"""
+            });
+
+        SetupAnyoneLinkOnFileAndParent(parentId);
+
+        // Tắt link folder mẹ bị Google từ chối quyền.
+        _gateway.Setup(m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), parentId, false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("Không đủ quyền gỡ chia sẻ."));
+
+        var act = () => _service.SetLinkSharingAsync(
+            _userId, _itemId, enabled: false, confirmRestrictParent: true);
+
+        await act.Should().ThrowAsync<BusinessRuleException>();
+
+        // KHÔNG được động tới link file khi chưa tắt được mẹ.
+        _gateway.Verify(
+            m => m.SetLinkSharingAsync(
+                It.IsAny<Connection>(), "drive-file-1", false, It.IsAny<DrivePermissionRole>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>Mock cả file + folder mẹ đang anyone (điều kiện Case 1).</summary>
+    private void SetupAnyoneLinkOnFileAndParent(string parentExternalId)
+    {
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-file", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), parentExternalId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-parent", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+    }
+
+    /// <summary>
+    /// Lần list đầu (Detect) còn anyone; các lần sau (Ensure) đã tắt — giả lập Google apply xong.
+    /// Gọi SAU SetupAnyoneLinkOnFileAndParent để ghi đè mock list.
+    /// </summary>
+    private void SetupLinkClearedAfterFirstList(string parentExternalId)
+    {
+        var fileCalls = 0;
+        var parentCalls = 0;
+        var anyoneFile = new List<DrivePermissionDto>
+        {
+            new() { Id = "link-file", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+        };
+        var anyoneParent = new List<DrivePermissionDto>
+        {
+            new() { Id = "link-parent", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+        };
+        var empty = new List<DrivePermissionDto>();
+
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => ++fileCalls <= 1 ? anyoneFile : empty);
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), parentExternalId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => ++parentCalls <= 1 ? anyoneParent : empty);
+    }
+
     [Fact]
     public async Task CreateFolder_InactiveConnection_ThrowsBusinessRule()
     {
@@ -293,5 +534,94 @@ public class DriveSharingServiceTests
         var act = () => _service.CreateFolderAsync(_userId, _connId, "Folder");
 
         await act.Should().ThrowAsync<NotFoundException>();
+    }
+
+    // ── DetectLinkRestrictConflictAsync (Case 1 — giống Google Drive) ──
+
+    [Fact]
+    public async Task DetectLinkRestrict_NoParents_ReturnsNull()
+    {
+        // File ở gốc My Drive — không có thư mục mẹ → không conflict.
+        SetupDriveItem();
+
+        var result = await _service.DetectLinkRestrictConflictAsync(_userId, _itemId);
+
+        result.Should().BeNull();
+        _gateway.Verify(
+            m => m.ListPermissionsAsync(It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task DetectLinkRestrict_ParentPrivate_FilePublic_ReturnsNull_Case2()
+    {
+        // Case 2: folder mẹ hạn chế, file đang anyone — Drive không hỏi → null.
+        const string parentId = "parent-folder-1";
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"]}"""));
+
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-file", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "owner", Type = DrivePermissionTypes.User, Role = "owner", IsOwner = true }
+            });
+
+        var result = await _service.DetectLinkRestrictConflictAsync(_userId, _itemId);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DetectLinkRestrict_BothAnyone_ReturnsConflict_Case1()
+    {
+        // Case 1: file + folder mẹ đều anyone → conflict (popup Drive).
+        const string parentId = "parent-folder-1";
+        var parentItemId = Guid.NewGuid();
+        SetupDriveConnection();
+        _items.Setup(m => m.GetByIdAndUserAsync(_itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateDriveFileItem(
+                $$"""{"mimeType":"application/pdf","parents":["{{parentId}}"],"isFolder":false}"""));
+        _items.Setup(m => m.GetByConnectionAndExternalIdAsync(
+                _userId, _connId, parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Item
+            {
+                Id = parentItemId,
+                UserId = _userId,
+                Type = ItemType.File,
+                ConnectionId = _connId,
+                ExternalId = parentId,
+                Title = "Dungtestfolder",
+                MetadataJson = """{"isFolder":true}"""
+            });
+
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), "drive-file-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-file", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+        _gateway.Setup(m => m.ListPermissionsAsync(It.IsAny<Connection>(), parentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DrivePermissionDto>
+            {
+                new() { Id = "link-parent", Type = DrivePermissionTypes.Anyone, Role = "reader", IsLink = true }
+            });
+
+        var result = await _service.DetectLinkRestrictConflictAsync(_userId, _itemId);
+
+        result.Should().NotBeNull();
+        result!.Code.Should().Be(DriveLinkRestrictConflict.RestrictAffectsParentCode);
+        result.ParentExternalId.Should().Be(parentId);
+        result.ParentItemId.Should().Be(parentItemId);
+        result.ParentTitle.Should().Be("Dungtestfolder");
+        result.ItemFromAccess.Should().Be("anyone");
+        result.ItemToAccess.Should().Be("restricted");
+        result.ParentFromAccess.Should().Be("anyone");
+        result.ParentToAccess.Should().Be("restricted");
     }
 }

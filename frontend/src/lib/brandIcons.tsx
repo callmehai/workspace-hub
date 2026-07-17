@@ -21,3 +21,6 @@ export const JiraIcon: FC<IconProps> = ({ className }) => (
 export const NoteIcon: FC<IconProps> = ({ className }) => (
   <img src="/icons/note.svg" alt="Note" className={cls(className)} aria-hidden draggable={false} />
 );
+export const FolderIcon: FC<IconProps> = ({ className }) => (
+  <img src="/icons/folder.svg" alt="Folder" className={cls(className)} aria-hidden draggable={false} />
+);

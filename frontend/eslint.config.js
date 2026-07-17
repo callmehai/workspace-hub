@@ -18,5 +18,17 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Tham số/biến đặt tên bắt đầu bằng "_" = cố tình không dùng (vd placeholder vị trí,
+      // chữ ký giữ để tương thích call-site) → không cảnh báo. Convention chuẩn.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
   },
 ])

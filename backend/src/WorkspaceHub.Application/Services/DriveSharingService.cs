@@ -2,6 +2,7 @@
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
+using WorkspaceHub.Application.DTOs.Drive;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
 using WorkspaceHub.Application.Mapping;
@@ -63,7 +64,8 @@ public class DriveSharingService : IDriveSharingService
 
         var driveFile = await _gateway.CreateFolderAsync(conn, name.Trim(), parentExternalId, ct);
 
-        var item = _mapper.ToItem(driveFile, userId, connectionId);
+        // Tạo ở My Drive root (parentExternalId == null) → top-level → hiện ngay ở view root.
+        var item = _mapper.ToItem(driveFile, userId, connectionId, isTopLevel: parentExternalId == null);
 
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
@@ -134,10 +136,151 @@ public class DriveSharingService : IDriveSharingService
         Guid itemId,
         bool enabled,
         DrivePermissionRole role = DrivePermissionRole.Reader,
+        bool confirmRestrictParent = false,
+        bool skipConflictDetect = false,
         CancellationToken ct = default)
     {
         var (item, conn) = await ResolveDriveItemAsync(itemId, userId, ct);
-        return await _gateway.SetLinkSharingAsync(conn, item.ExternalId!, enabled, role, ct);
+
+        // Bật link (Case 2): Drive không hỏi — ghi thẳng lên Google.
+        if (enabled)
+            return await _gateway.SetLinkSharingAsync(conn, item.ExternalId!, true, role, ct);
+
+        // Tắt link — Case 1: folder mẹ đang anyone → cần confirm giống Drive.
+        // skipConflictDetect: caller đã Detect và biết chắc không conflict (tránh gọi Google lần 2).
+        DriveLinkRestrictConflict? conflict = null;
+        if (!skipConflictDetect)
+        {
+            conflict = await DetectLinkRestrictConflictAsync(userId, itemId, ct);
+            if (conflict != null && !confirmRestrictParent)
+            {
+                // Payload = DTO đầy đủ — middleware/controller trả 409 body khớp FE (popup).
+                throw new ConflictException(
+                    "Tắt link file sẽ tắt luôn link thư mục mẹ. Cần xác nhận (confirmRestrictParent).",
+                    conflict);
+            }
+        }
+
+        // User đã confirm popup "Xoá khỏi thư mục mẹ".
+        // Giống Drive: tắt link thư mục mẹ trước (quyền kế thừa xuống con).
+        // Sau đó thử tắt link trực tiếp trên file — nếu 403 (permission kế thừa,
+        // không xoá được trên con) thì coi như xong vì mẹ đã hạn chế.
+        if (conflict != null && confirmRestrictParent)
+        {
+            // Tắt link folder mẹ — bắt buộc (giống nút Drive).
+            // User có thể chỉ là editor không đủ quyền đổi sharing folder mẹ → Google trả 403.
+            // Bọc lại thành thông báo rõ ràng thay vì lỗi thô (Drive gốc ẩn nút này khi thiếu quyền).
+            try
+            {
+                await _gateway.SetLinkSharingAsync(
+                    conn, conflict.ParentExternalId, enable: false, role, ct);
+            }
+            catch (ForbiddenException)
+            {
+                throw new BusinessRuleException(
+                    "Bạn không có quyền tắt link của thư mục mẹ. Hãy nhờ chủ sở hữu thư mục thực hiện.");
+            }
+
+            // Google đôi khi còn trả anyone trên list ngay sau delete — đợi rồi xoá lại nếu cần.
+            await EnsureLinkDisabledAsync(conn, conflict.ParentExternalId, role, ct);
+
+            try
+            {
+                await _gateway.SetLinkSharingAsync(
+                    conn, item.ExternalId!, enable: false, role, ct);
+                await EnsureLinkDisabledAsync(conn, item.ExternalId!, role, ct);
+            }
+            catch (ForbiddenException)
+            {
+                // File chỉ còn anyone kế thừa từ mẹ — đã tắt mẹ là đủ (khớp Drive).
+            }
+
+            return null;
+        }
+
+        // Không Case 1 — tắt link thẳng trên item.
+        return await _gateway.SetLinkSharingAsync(
+            conn, item.ExternalId!, enable: false, role, ct);
+    }
+
+    /// <summary>
+    /// Sau khi tắt link: poll list permissions; nếu vẫn còn anyone thì gọi tắt lại 1 lần.
+    /// Tránh FE refetch ngay thấy anyone cũ (Google lag).
+    /// </summary>
+    private async Task EnsureLinkDisabledAsync(
+        Connection conn,
+        string externalId,
+        DrivePermissionRole role,
+        CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (attempt > 0)
+                await Task.Delay(400, ct);
+
+            var perms = await _gateway.ListPermissionsAsync(conn, externalId, ct);
+            var stillHasLink = perms.Any(p => p.IsLink || DrivePermissionTypes.IsLinkType(p.Type));
+            if (!stillHasLink)
+                return;
+
+            if (attempt < 2)
+            {
+                await _gateway.SetLinkSharingAsync(conn, externalId, enable: false, role, ct);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<DriveLinkRestrictConflict?> DetectLinkRestrictConflictAsync(
+        Guid userId,
+        Guid itemId,
+        CancellationToken ct = default)
+    {
+        var (item, conn) = await ResolveDriveItemAsync(itemId, userId, ct);
+
+        // Folder gốc / không có parents → tắt link không đụng thư mục mẹ.
+        var parentExternalId = TryGetFirstParentExternalId(item);
+        if (string.IsNullOrEmpty(parentExternalId))
+            return null;
+
+        // Quyền hiện tại của file + folder mẹ (hỏi Google live, không cache DB).
+        var itemPerms = await _gateway.ListPermissionsAsync(conn, item.ExternalId!, ct);
+        var parentPerms = await _gateway.ListPermissionsAsync(conn, parentExternalId, ct);
+
+        var itemHasLink = itemPerms.Any(p => p.IsLink || DrivePermissionTypes.IsLinkType(p.Type));
+        var parentHasLink = parentPerms.Any(p => p.IsLink || DrivePermissionTypes.IsLinkType(p.Type));
+
+        // Case 1 chỉ khi CẢ HAI đang "ai có link" — tắt file sẽ kéo theo folder mẹ (giống Drive).
+        // Case 2 (folder private, file public): parentHasLink=false → null, không popup.
+        if (!itemHasLink || !parentHasLink)
+            return null;
+
+        // Tên folder mẹ: ưu tiên Item local đã sync; fallback gọi Google GetFile.
+        var parentLocal = await _items.GetByConnectionAndExternalIdAsync(
+            userId, conn.Id, parentExternalId, ct);
+        var parentTitle = parentLocal?.Title;
+        if (string.IsNullOrWhiteSpace(parentTitle))
+        {
+            var parentFile = await _gateway.GetFileAsync(conn, parentExternalId, ct);
+            parentTitle = string.IsNullOrWhiteSpace(parentFile.Name)
+                ? parentExternalId
+                : parentFile.Name!;
+        }
+
+        var itemTitle = string.IsNullOrWhiteSpace(item.Title) ? item.ExternalId! : item.Title;
+
+        return new DriveLinkRestrictConflict(
+            Code: DriveLinkRestrictConflict.RestrictAffectsParentCode,
+            ItemId: item.Id,
+            ItemTitle: itemTitle,
+            ItemExternalId: item.ExternalId!,
+            ParentItemId: parentLocal?.Id,
+            ParentExternalId: parentExternalId,
+            ParentTitle: parentTitle,
+            ItemFromAccess: DriveLinkRestrictConflict.AccessAnyone,
+            ItemToAccess: DriveLinkRestrictConflict.AccessRestricted,
+            ParentFromAccess: DriveLinkRestrictConflict.AccessAnyone,
+            ParentToAccess: DriveLinkRestrictConflict.AccessRestricted);
     }
 
     // ───────────────────────── Private helpers ─────────────────────────
@@ -217,6 +360,34 @@ public class DriveSharingService : IDriveSharingService
 
         if (name.Trim().Length > 255)
             throw new BusinessRuleException("Tên folder tối đa 255 ký tự.");
+    }
+
+    /// <summary>
+    /// Lấy Google folder id cha đầu tiên từ metadata.parents (sync A6 / upload đã ghi).
+    /// Null = file ở gốc My Drive hoặc metadata chưa có parents.
+    /// </summary>
+    private static string? TryGetFirstParentExternalId(Item item)
+    {
+        if (string.IsNullOrEmpty(item.MetadataJson))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(item.MetadataJson);
+            if (!doc.RootElement.TryGetProperty("parents", out var parents)
+                || parents.ValueKind != JsonValueKind.Array
+                || parents.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            var first = parents[0].GetString();
+            return string.IsNullOrWhiteSpace(first) ? null : first;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
