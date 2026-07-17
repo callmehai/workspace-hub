@@ -18,6 +18,7 @@ import { ItemDetail } from '../components/ItemDetail';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { WorkspaceToolbar } from '../components/workspace/WorkspaceToolbar';
+import { DriveDropZone } from '../components/drive/DriveDropZone';
 import { typeIcon, typeLabelKey, typeSolidTileClass, parseSourceType, integrationLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { PageSizeSelect } from '../components/PageSizeSelect';
@@ -515,8 +516,18 @@ export const Inbox = () => {
 
   const pageNumbers = buildPageNumbers(page, totalPages);
 
+  // Kéo-thả upload Drive: bật ở tab Drive hoặc "Tất cả mục" (nơi menu Mới cũng cho tạo Drive).
+  const driveConnectionId = connectionsList.find(
+    c => c.serviceType.toLowerCase() === 'drive' && c.status.toLowerCase() === 'active',
+  )?.id;
+  const dropConnectionId = (sourceType === 'File' || sourceType === null) ? driveConnectionId : undefined;
+  const currentDriveParentId = driveFolderStack.length > 0
+    ? driveFolderStack[driveFolderStack.length - 1].internalId
+    : null;
+
   return (
     <div ref={scrollRef} className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+      <DriveDropZone connectionId={dropConnectionId} parentItemId={currentDriveParentId} className="min-h-full">
       <div className="max-w-[1400px] mx-auto px-6 py-5">
 
         {/* ── Toolbar dùng chung với view Bảng — layout GIỐNG HỆT khi đổi view ── */}
@@ -876,6 +887,7 @@ export const Inbox = () => {
           </div>
         )}
       </div>
+      </DriveDropZone>
 
       {/* ── Item Detail Drawer ── */}
       {activeItemId && (

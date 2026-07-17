@@ -67,8 +67,12 @@ export const driveApi = {
     /**
      * Upload một file từ máy lên Google Drive (multipart → BE → Google).
      * Dùng `api` chung → hết access token giữa upload vẫn refresh + retry như mọi API khác.
+     * `onProgress` (0–100) để hiện progress bar — dựa trên bytes đã gửi lên BE.
      */
-    uploadFile: async (payload: UploadDriveFilePayload): Promise<ItemResponse> => {
+    uploadFile: async (
+        payload: UploadDriveFilePayload,
+        onProgress?: (percent: number) => void,
+    ): Promise<ItemResponse> => {
         const form = new FormData();
         form.append('connectionId', payload.connectionId);
         if (payload.parentItemId) {
@@ -78,6 +82,9 @@ export const driveApi = {
 
         const response = await api.post<ItemResponse>('/drive/files', form, {
             timeout: UPLOAD_TIMEOUT_MS,
+            onUploadProgress: (e) => {
+                if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+            },
         });
         return response.data;
     },
@@ -86,7 +93,10 @@ export const driveApi = {
      * Upload cả folder từ máy (webkitdirectory).
      * Gửi files[] + paths[] — BE tạo cây folder rồi upload từng file.
      */
-    uploadFolder: async (payload: UploadDriveFolderPayload): Promise<DriveFolderUploadResponse> => {
+    uploadFolder: async (
+        payload: UploadDriveFolderPayload,
+        onProgress?: (percent: number) => void,
+    ): Promise<DriveFolderUploadResponse> => {
         const form = new FormData();
         form.append('connectionId', payload.connectionId);
         if (payload.parentItemId) {
@@ -100,7 +110,12 @@ export const driveApi = {
         const response = await api.post<DriveFolderUploadResponse>(
             '/drive/folders/upload',
             form,
-            { timeout: UPLOAD_TIMEOUT_MS },
+            {
+                timeout: UPLOAD_TIMEOUT_MS,
+                onUploadProgress: (e) => {
+                    if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+                },
+            },
         );
         return response.data;
     },
