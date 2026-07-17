@@ -1,3 +1,5 @@
+using FluentValidation;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
 using WorkspaceHub.Application.Interfaces.Repositories;
@@ -8,19 +10,37 @@ using WorkspaceHub.Domain.Enums;
 namespace WorkspaceHub.Application.Services;
 
 /// <summary>
-/// Business logic cho Folder CRUD.
-/// Chứa toàn bộ logic: ownership check, computed fields (itemCount, isOwner, permission, ownerName).
+/// Business logic cho Folder CRUD và Sharing.
+/// Chứa toàn bộ logic: ownership check, computed fields (itemCount, isOwner, permission, ownerName),
+/// invite share, accept/decline, revoke.
 /// Throw custom exception → middleware map sang status code (xem CONVENTIONS.md).
 /// </summary>
 public class FolderService : IFolderService
 {
     private readonly IFolderRepository _folderRepo;
     private readonly IItemRepository _itemRepo;
+    private readonly IFriendshipRepository _friendships;
+    private readonly INotificationService _notifications;
+    private readonly IValidator<InviteFolderShareRequest> _inviteValidator;
+    private readonly IValidator<UpdateFolderShareRequest> _updateShareValidator;
+    private readonly ILogger<FolderService> _logger;
 
-    public FolderService(IFolderRepository folderRepo, IItemRepository itemRepo)
+    public FolderService(
+        IFolderRepository folderRepo,
+        IItemRepository itemRepo,
+        IFriendshipRepository friendships,
+        INotificationService notifications,
+        IValidator<InviteFolderShareRequest> inviteValidator,
+        IValidator<UpdateFolderShareRequest> updateShareValidator,
+        ILogger<FolderService> logger)
     {
         _folderRepo = folderRepo;
         _itemRepo = itemRepo;
+        _friendships = friendships;
+        _notifications = notifications;
+        _inviteValidator = inviteValidator;
+        _updateShareValidator = updateShareValidator;
+        _logger = logger;
     }
 
     /// <inheritdoc/>
@@ -231,11 +251,198 @@ public class FolderService : IFolderService
         }
     }
 
-    // ───────────────────────── Private helpers ─────────────────────────
+    // ─────────────────────────── Sharing methods ───────────────────────────
 
-    /// <summary>
-    /// Map Folder entity → FolderResponse DTO với computed fields.
-    /// </summary>
+    /// <inheritdoc/>
+    public async Task<FolderShareDto> InviteShareAsync(
+        Guid folderId, Guid requestingUserId, InviteFolderShareRequest request, CancellationToken ct = default)
+    {
+        // 1. Validate input format
+        await _inviteValidator.ValidateAndThrowAsync(request, ct);
+
+        // 2. Kiểm tra folder tồn tại và caller là Owner
+        var folder = await _folderRepo.GetByIdWithOwnerAsync(folderId, ct)
+            ?? throw new NotFoundException(nameof(Folder), folderId);
+
+        if (folder.OwnerId != requestingUserId)
+            throw new ForbiddenException("Chỉ Owner mới được chia sẻ folder.");
+
+        // 3. Không được share với chính mình
+        if (request.FriendUserId == requestingUserId)
+            throw new BusinessRuleException("Không thể chia sẻ folder với chính mình.");
+
+        // 4. Kiểm tra FriendUserId là bạn bè đã accept (cả 2 chiều)
+        var friendship = await _friendships.GetBetweenAsync(requestingUserId, request.FriendUserId, ct);
+        if (friendship is null || friendship.Status != FriendshipStatus.Accepted)
+            throw new BusinessRuleException("Chỉ có thể chia sẻ folder với bạn bè đã kết bạn.");
+
+        // 5. Kiểm tra chưa share (kể cả pending)
+        var alreadyShared = await _folderRepo.ShareExistsAsync(folderId, request.FriendUserId, ct);
+        if (alreadyShared)
+            throw new ConflictException("Folder đã được chia sẻ với người dùng này.");
+
+        // 6. Parse permission
+        if (!Enum.TryParse<SharePermission>(request.Permission, ignoreCase: true, out var permission))
+            throw new BusinessRuleException($"Permission không hợp lệ: {request.Permission}");
+
+        // 7. Tạo FolderShare (pending: AcceptedAt = null)
+        var share = new FolderShare
+        {
+            Id = Guid.NewGuid(),
+            FolderId = folderId,
+            SharedWithUserId = request.FriendUserId,
+            CreatedByUserId = requestingUserId,
+            Permission = permission,
+            CreatedAt = DateTime.UtcNow,
+            AcceptedAt = null  // pending
+        };
+
+        await _folderRepo.AddShareAsync(share, ct);
+        await _folderRepo.SaveChangesAsync(ct);
+
+        // 8. Load lại với navigations để map DTO
+        var saved = await _folderRepo.GetShareByIdAsync(share.Id, ct)!;
+
+        // 9. Gửi notification cho người được mời (best-effort)
+        await SendShareNotificationSafeAsync(
+            saved!.SharedWithUserId,
+            folder.Owner?.FullName ?? "Someone",
+            folder.Name,
+            ct);
+
+        return MapShareToDto(saved!);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<FolderShareDto>> GetSharesForFolderAsync(
+        Guid folderId, Guid requestingUserId, CancellationToken ct = default)
+    {
+        // Kiểm tra caller là Owner
+        var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, requestingUserId, ct);
+        if (!isOwner)
+            throw new ForbiddenException("Chỉ Owner mới được xem danh sách chia sẻ.");
+
+        var shares = await _folderRepo.GetSharesByFolderAsync(folderId, ct);
+        return shares.Select(MapShareToDto).ToList().AsReadOnly();
+    }
+
+    /// <inheritdoc/>
+    public async Task<FolderShareDto> UpdateShareRoleAsync(
+        Guid folderId, Guid shareId, Guid requestingUserId, UpdateFolderShareRequest request, CancellationToken ct = default)
+    {
+        // 1. Validate input
+        await _updateShareValidator.ValidateAndThrowAsync(request, ct);
+
+        // 2. Kiểm tra caller là Owner của folder
+        var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, requestingUserId, ct);
+        if (!isOwner)
+            throw new ForbiddenException("Chỉ Owner mới được thay đổi quyền chia sẻ.");
+
+        // 3. Lấy share — phải thuộc folder này
+        var share = await _folderRepo.GetShareByIdAsync(shareId, ct)
+            ?? throw new NotFoundException(nameof(FolderShare), shareId);
+
+        if (share.FolderId != folderId)
+            throw new NotFoundException(nameof(FolderShare), shareId);
+
+        // 4. Parse permission
+        if (!Enum.TryParse<SharePermission>(request.Permission, ignoreCase: true, out var permission))
+            throw new BusinessRuleException($"Permission không hợp lệ: {request.Permission}");
+
+        // 5. Cập nhật
+        share.Permission = permission;
+        await _folderRepo.SaveChangesAsync(ct);
+
+        return MapShareToDto(share);
+    }
+
+    /// <inheritdoc/>
+    public async Task RevokeShareAsync(
+        Guid folderId, Guid shareId, Guid requestingUserId, CancellationToken ct = default)
+    {
+        // Kiểm tra caller là Owner
+        var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, requestingUserId, ct);
+        if (!isOwner)
+            throw new ForbiddenException("Chỉ Owner mới được thu hồi quyền chia sẻ.");
+
+        var share = await _folderRepo.GetShareByIdAsync(shareId, ct)
+            ?? throw new NotFoundException(nameof(FolderShare), shareId);
+
+        if (share.FolderId != folderId)
+            throw new NotFoundException(nameof(FolderShare), shareId);
+
+        _folderRepo.RemoveShare(share);
+        await _folderRepo.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<SharedFolderDto>> GetFoldersSharedWithMeAsync(
+        Guid userId, CancellationToken ct = default)
+    {
+        var shares = await _folderRepo.GetSharesForUserAsync(userId, ct);
+        return shares.Select(fs => new SharedFolderDto(
+            ShareId: fs.Id,
+            FolderId: fs.FolderId,
+            FolderName: fs.Folder.Name,
+            OwnerUserId: fs.Folder.OwnerId,
+            OwnerName: fs.Folder.Owner?.FullName ?? "Unknown",
+            Permission: fs.Permission.ToString(),
+            Status: fs.AcceptedAt.HasValue ? "Accepted" : "Pending",
+            SharedAt: fs.CreatedAt
+        )).ToList().AsReadOnly();
+    }
+
+    /// <inheritdoc/>
+    public async Task<FolderShareDto> AcceptShareAsync(
+        Guid shareId, Guid userId, CancellationToken ct = default)
+    {
+        var share = await _folderRepo.GetShareByIdAsync(shareId, ct)
+            ?? throw new NotFoundException(nameof(FolderShare), shareId);
+
+        // Chỉ người được share mới accept được
+        if (share.SharedWithUserId != userId)
+            throw new ForbiddenException("Chỉ người được mời mới có thể chấp nhận lời mời chia sẻ.");
+
+        // Đã accept rồi
+        if (share.AcceptedAt.HasValue)
+            throw new ConflictException("Lời mời chia sẻ này đã được chấp nhận trước đó.");
+
+        share.AcceptedAt = DateTime.UtcNow;
+        await _folderRepo.SaveChangesAsync(ct);
+
+        return MapShareToDto(share);
+    }
+
+    /// <inheritdoc/>
+    public async Task DeclineShareAsync(
+        Guid shareId, Guid userId, CancellationToken ct = default)
+    {
+        var share = await _folderRepo.GetShareByIdAsync(shareId, ct)
+            ?? throw new NotFoundException(nameof(FolderShare), shareId);
+
+        // Chỉ người được share mới decline được
+        if (share.SharedWithUserId != userId)
+            throw new ForbiddenException("Chỉ người được mời mới có thể từ chối lời mời chia sẻ.");
+
+        // Decline = xoá row (không giữ trạng thái)
+        _folderRepo.RemoveShare(share);
+        await _folderRepo.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task LeaveFolderAsync(
+        Guid folderId, Guid userId, CancellationToken ct = default)
+    {
+        var share = await _folderRepo.GetShareByFolderAndUserAsync(folderId, userId, ct)
+            ?? throw new NotFoundException($"Không tìm thấy chia sẻ cho folder '{folderId}' và user '{userId}'");
+
+        _folderRepo.RemoveShare(share);
+        await _folderRepo.SaveChangesAsync(ct);
+    }
+
+    // ─────────────────────────── Private helpers ───────────────────────────
+
+    /// <summary>Map Folder entity → FolderResponse DTO với computed fields.</summary>
     private static FolderResponse MapToDto(Folder folder, Guid currentUserId)
     {
         var isOwner = folder.OwnerId == currentUserId;
@@ -264,5 +471,37 @@ public class FolderService : IFolderService
             IsOwner: isOwner,
             Permission: permission,
             OwnerName: folder.Owner?.FullName ?? "Unknown");
+    }
+
+    /// <summary>Map FolderShare entity → FolderShareDto.</summary>
+    private static FolderShareDto MapShareToDto(FolderShare fs) => new(
+        ShareId: fs.Id,
+        FolderId: fs.FolderId,
+        FolderName: fs.Folder?.Name ?? string.Empty,
+        SharedWithUserId: fs.SharedWithUserId,
+        SharedWithUserName: fs.SharedWithUser?.FullName ?? string.Empty,
+        SharedWithUserAvatar: fs.SharedWithUser?.AvatarUrl,
+        Permission: fs.Permission.ToString(),
+        Status: fs.AcceptedAt.HasValue ? "Accepted" : "Pending",
+        SharedAt: fs.CreatedAt);
+
+    /// <summary>Gửi notification khi share invite — best-effort, không throw nếu lỗi.</summary>
+    private async Task SendShareNotificationSafeAsync(
+        Guid targetUserId, string ownerName, string folderName, CancellationToken ct)
+    {
+        try
+        {
+            await _notifications.CreateAndSendAsync(
+                targetUserId,
+                NotificationType.ShareInvite,
+                $"{ownerName} đã chia sẻ folder '{folderName}' với bạn",
+                $"{{\"from\":\"{ownerName}\",\"folder\":\"{folderName}\"}}",
+                "/",
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Gửi notification ShareInvite tới {UserId} thất bại", targetUserId);
+        }
     }
 }

@@ -48,3 +48,43 @@ public record ItemFolderResponse(
     Guid FolderId, 
     int Position, 
     DateTime AddedAt);
+
+// ───────────────────────── Folder Sharing DTOs ─────────────────────────
+
+/// <summary>POST /api/folders/{id}/shares — mời bạn bè vào folder.</summary>
+public record InviteFolderShareRequest(
+    Guid FriendUserId,
+    string Permission);  // "Viewer" | "Editor"
+
+/// <summary>PATCH /api/folders/{id}/shares/{shareId} — đổi quyền của 1 share.</summary>
+public record UpdateFolderShareRequest(
+    string Permission);  // "Viewer" | "Editor"
+
+/// <summary>
+/// Response cho 1 share entry (owner xem danh sách ai được share).
+/// Status: "Pending" (AcceptedAt=null) | "Accepted" (AcceptedAt!=null).
+/// </summary>
+public record FolderShareDto(
+    Guid ShareId,
+    Guid FolderId,
+    string FolderName,
+    Guid SharedWithUserId,
+    string SharedWithUserName,
+    string? SharedWithUserAvatar,
+    string Permission,
+    string Status,
+    DateTime SharedAt);
+
+/// <summary>
+/// Folder được chia sẻ với user hiện tại (GET /api/folders/shared-with-me).
+/// </summary>
+public record SharedFolderDto(
+    Guid ShareId,
+    Guid FolderId,
+    string FolderName,
+    Guid OwnerUserId,
+    string OwnerName,
+    string Permission,
+    string Status,
+    DateTime SharedAt);
+

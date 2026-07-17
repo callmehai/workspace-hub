@@ -50,20 +50,33 @@ public class ItemService : IItemService
         var page = Math.Max(1, request.Page);
         var limit = Math.Clamp(request.Limit, 1, 100);
 
-        // Validate folder ownership
+        // Validate folder ownership and permission
+        Guid? folderOwnerId = null;
         if (request.FolderId.HasValue)
         {
-            var isOwner = await _folderRepo.ExistsByOwnerAsync(request.FolderId.Value, userId, ct);
-            // TODO: khi shared folder được implement, mở rộng check này để include viewer access
+            var folderId = request.FolderId.Value;
+            var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
             if (!isOwner)
             {
-                // Return empty if folder doesn't exist or belongs to another user
-                return new PagedResult<ItemResponse>(new List<ItemResponse>().AsReadOnly(), 0, page, limit);
+                // Kiểm tra xem thư mục có được chia sẻ với user này và đã được chấp nhận (Accepted) chưa
+                var share = await _folderRepo.GetShareByFolderAndUserAsync(folderId, userId, ct);
+                if (share == null || !share.AcceptedAt.HasValue)
+                {
+                    // Trả danh sách trống nếu không có quyền
+                    return new PagedResult<ItemResponse>(new List<ItemResponse>().AsReadOnly(), 0, page, limit);
+                }
+
+                var folder = await _folderRepo.GetByIdWithOwnerAsync(folderId, ct);
+                if (folder != null)
+                {
+                    folderOwnerId = folder.OwnerId;
+                }
             }
         }
 
+        var targetOwnerId = folderOwnerId ?? userId;
         var (items, totalCount, threadCounts) = await _itemRepo.GetPagedAsync(
-            userId,
+            targetOwnerId,
             request.FolderId,
             request.Statuses,
             request.Types,
@@ -103,8 +116,19 @@ public class ItemService : IItemService
     public async Task<ItemResponse> UpdateStatusAsync(
         Guid userId, Guid itemId, UpdateItemStatusRequest request, CancellationToken ct = default)
     {
-        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
-            ?? throw new NotFoundException(nameof(Item), itemId);
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null)
+        {
+            // Kiểm tra xem item có thuộc folder được chia sẻ với quyền Editor hay không
+            var isEditor = await _folderRepo.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
+            if (isEditor)
+            {
+                item = await _itemRepo.GetByIdAsync(itemId, ct);
+            }
+        }
+
+        if (item == null)
+            throw new NotFoundException(nameof(Item), itemId);
 
         item.Status = request.Status;
 
@@ -168,8 +192,19 @@ public class ItemService : IItemService
     /// <inheritdoc/>
     public async Task<ItemResponse> GetItemByIdAsync(Guid userId, Guid itemId, CancellationToken ct = default)
     {
-        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
-            ?? throw new NotFoundException(nameof(Item), itemId);
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null)
+        {
+            // Kiểm tra xem item có thuộc thư mục nào được chia sẻ (Accepted) với user hay không
+            var isShared = await _folderRepo.IsItemSharedWithUserAsync(itemId, userId, ct);
+            if (isShared)
+            {
+                item = await _itemRepo.GetByIdAsync(itemId, ct);
+            }
+        }
+
+        if (item == null)
+            throw new NotFoundException(nameof(Item), itemId);
 
         return MapToResponse(item);
     }

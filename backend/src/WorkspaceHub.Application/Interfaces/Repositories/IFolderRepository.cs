@@ -47,6 +47,38 @@ public interface IFolderRepository : IGenericRepository<Folder>
 
     /// <summary>Gỡ nhiều Item khỏi Folder.</summary>
     void RemoveItemsFolder(IEnumerable<ItemFolder> itemFolders);
+
+    // ───── Share operations ─────
+
+    /// <summary>Lấy 1 FolderShare theo Id, include User + Folder navigations.</summary>
+    Task<FolderShare?> GetShareByIdAsync(Guid shareId, CancellationToken ct = default);
+
+    /// <summary>Danh sách shares của 1 folder (để owner xem), include SharedWithUser + Folder.</summary>
+    Task<IReadOnlyList<FolderShare>> GetSharesByFolderAsync(Guid folderId, CancellationToken ct = default);
+
+    /// <summary>Danh sách shares của user hiện tại (shared-with-me), include Folder + Owner.</summary>
+    Task<IReadOnlyList<FolderShare>> GetSharesForUserAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Kiểm tra folder đã share với user chưa (tránh duplicate).</summary>
+    Task<bool> ShareExistsAsync(Guid folderId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>Lấy share record cụ thể theo folderId và userId.</summary>
+    Task<FolderShare?> GetShareByFolderAndUserAsync(Guid folderId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>Thêm FolderShare mới vào DB.</summary>
+    Task AddShareAsync(FolderShare share, CancellationToken ct = default);
+
+    /// <summary>Xóa FolderShare (revoke hoặc decline).</summary>
+    void RemoveShare(FolderShare share);
+
+    /// <summary>Kiểm tra xem một item có nằm trong thư mục được chia sẻ với user không.</summary>
+    Task<bool> IsItemSharedWithUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>Kiểm tra xem một item có nằm trong thư mục được chia sẻ với user với quyền Editor không.</summary>
+    Task<bool> IsItemSharedWithUserAsEditorAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 }
+
+
+
 
 

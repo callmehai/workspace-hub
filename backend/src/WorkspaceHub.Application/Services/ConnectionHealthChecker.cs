@@ -47,7 +47,11 @@ public class ConnectionHealthChecker : IConnectionHealthChecker
 
             try
             {
-                await EnsureSingleConnectionSyncedAsync(conn.Id, userId, ct);
+                // Giới hạn thời gian sync cho mỗi connection tối đa 5 giây
+                // để tránh API bên thứ 3 chậm/lỗi làm nghẽn và timeout cả request lấy items của user
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(5));
+                await EnsureSingleConnectionSyncedAsync(conn.Id, userId, cts.Token);
             }
             catch (Exception ex)
             {

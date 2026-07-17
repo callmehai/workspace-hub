@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Calendar.v3;
 using Google.Apis.Calendar.v3.Data;
@@ -34,9 +34,14 @@ public class GoogleCalendarGateway : IGoogleCalendarGateway
         var request = service.Events.List("primary");
 
         if (!string.IsNullOrEmpty(syncToken))
+        {
             request.SyncToken = syncToken;
+        }
         else
+        {
             request.TimeMinDateTimeOffset = DateTimeOffset.UtcNow.AddMonths(-3);
+            request.TimeMaxDateTimeOffset = DateTimeOffset.UtcNow.AddYears(1); // Chỉ đồng bộ các sự kiện tối đa 1 năm tới
+        }
 
         var eventsDto = new List<CalendarEventDto>();
         string? nextSyncToken = null;

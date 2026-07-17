@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Domain.Entities;
+using WorkspaceHub.Domain.Enums;
 using WorkspaceHub.Infrastructure.Data;
 
 namespace WorkspaceHub.Infrastructure.Repositories;
@@ -125,5 +126,74 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
     public void RemoveItemsFolder(IEnumerable<ItemFolder> itemFolders)
     {
         Db.ItemFolders.RemoveRange(itemFolders);
+    }
+
+    // ───── Share operations ─────
+
+    /// <inheritdoc/>
+    public async Task<FolderShare?> GetShareByIdAsync(Guid shareId, CancellationToken ct = default)
+        => await Db.FolderShares
+            .Include(fs => fs.Folder)
+                .ThenInclude(f => f.Owner)
+            .Include(fs => fs.SharedWithUser)
+            .FirstOrDefaultAsync(fs => fs.Id == shareId, ct);
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<FolderShare>> GetSharesByFolderAsync(Guid folderId, CancellationToken ct = default)
+        => await Db.FolderShares
+            .AsNoTracking()
+            .Include(fs => fs.SharedWithUser)
+            .Include(fs => fs.Folder)
+            .Where(fs => fs.FolderId == folderId)
+            .OrderBy(fs => fs.CreatedAt)
+            .ToListAsync(ct);
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<FolderShare>> GetSharesForUserAsync(Guid userId, CancellationToken ct = default)
+        => await Db.FolderShares
+            .AsNoTracking()
+            .Include(fs => fs.Folder)
+                .ThenInclude(f => f.Owner)
+            .Where(fs => fs.SharedWithUserId == userId
+                         && !fs.Folder.IsArchived
+                         && (fs.ExpiresAt == null || fs.ExpiresAt > DateTime.UtcNow))
+            .OrderByDescending(fs => fs.AcceptedAt ?? fs.CreatedAt)
+            .ToListAsync(ct);
+
+    /// <inheritdoc/>
+    public async Task<bool> ShareExistsAsync(Guid folderId, Guid userId, CancellationToken ct = default)
+        => await Db.FolderShares.AnyAsync(fs => fs.FolderId == folderId && fs.SharedWithUserId == userId, ct);
+
+    /// <inheritdoc/>
+    public async Task<FolderShare?> GetShareByFolderAndUserAsync(Guid folderId, Guid userId, CancellationToken ct = default)
+        => await Db.FolderShares
+            .Include(fs => fs.Folder)
+            .Include(fs => fs.SharedWithUser)
+            .FirstOrDefaultAsync(fs => fs.FolderId == folderId && fs.SharedWithUserId == userId, ct);
+
+    /// <inheritdoc/>
+    public async Task AddShareAsync(FolderShare share, CancellationToken ct = default)
+        => await Db.FolderShares.AddAsync(share, ct);
+
+    /// <inheritdoc/>
+    public void RemoveShare(FolderShare share)
+        => Db.FolderShares.Remove(share);
+
+    /// <inheritdoc/>
+    public async Task<bool> IsItemSharedWithUserAsync(Guid itemId, Guid userId, CancellationToken ct = default)
+    {
+        return await Db.ItemFolders
+            .AnyAsync(ifj => ifj.ItemId == itemId &&
+                             ifj.Folder.FolderShares.Any(fs => fs.SharedWithUserId == userId && fs.AcceptedAt != null), ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> IsItemSharedWithUserAsEditorAsync(Guid itemId, Guid userId, CancellationToken ct = default)
+    {
+        return await Db.ItemFolders
+            .AnyAsync(ifj => ifj.ItemId == itemId &&
+                             ifj.Folder.FolderShares.Any(fs => fs.SharedWithUserId == userId &&
+                                                               fs.AcceptedAt != null &&
+                                                               fs.Permission == SharePermission.Editor), ct);
     }
 }

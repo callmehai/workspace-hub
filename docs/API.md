@@ -130,7 +130,25 @@ Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B. Sync issue
 - `POST /api/connections/oauth/callback` — `{code, state}` → đổi token, gọi `/oauth/token/accessible-resources` lấy **cloudId**, lưu `ProviderAccountId = cloudId`, tạo 1 Connection ServiceType=Jira. (400 CSRF/scope thiếu, 409 trùng cloudId)
 
 ## Folders / Folder Shares / Tags / Important Contacts / Notifications
-Không đổi (trừ Tags — xem dưới). Xem bản trước. List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (target — $filter/$orderby trên IQueryable, scope theo CurrentUserId trước).
+Xem các phần bên dưới để biết chi tiết về Folder, Folder Sharing, Tags, Important Contacts và Notifications.
+List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (scope theo CurrentUserId trước).
+
+### Folders & Folder Sharing (SCRUM-37/38)
+- `GET /api/folders?includeShared=true` — Trả danh sách folders owned by hoặc shared with user.
+- `POST /api/folders` — Tạo folder mới.
+- `PUT /api/folders/{id}` — Cập nhật folder metadata (chỉ Owner).
+- `DELETE /api/folders/{id}` — Xoá folder (chỉ Owner).
+- `POST /api/folders/{id}/items` — Gắn item vào folder (chỉ Owner).
+- `DELETE /api/folders/{id}/items/{itemId}` — Gỡ item khỏi folder (chỉ Owner).
+- `GET /api/folders/shared-with-me` — Danh sách folder được chia sẻ với user hiện tại (chỉ đã accept).
+- `POST /api/folders/shares/{shareId}/accept` — Chấp nhận lời mời chia sẻ.
+- `POST /api/folders/shares/{shareId}/decline` — Từ chối lời mời chia sẻ.
+- `POST /api/folders/{id}/shares` — Mời bạn bè vào folder (chỉ Owner). Body: `{ friendUserId, permission: "Viewer" | "Editor" }`.
+- `GET /api/folders/{id}/shares` — Xem danh sách ai được share folder này (chỉ Owner).
+- `PATCH /api/folders/{id}/shares/{shareId}` — Đổi quyền 1 share (chỉ Owner). Body: `{ permission: "Viewer" | "Editor" }`.
+- `DELETE /api/folders/{id}/shares/{shareId}` — Revoke share (chỉ Owner).
+- `DELETE /api/folders/{id}/leave` — Rời khỏi folder được chia sẻ.
+
 
 ### Tags — ✅ SCRUM-70 (BE, CRUD + assign)
 Label private của user (không share), gắn cho Item qua junction `TagAssignment` (m-n). Tên tag **không** unique toàn hệ thống nhưng **unique trong 1 user**. Mọi endpoint owner-scoped theo `CurrentUserId`.

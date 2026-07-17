@@ -2,6 +2,20 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-17] Folder Sharing with Permission Management (SCRUM-37/38)
+
+> Chia sẻ thư mục nội bộ cho bạn bè trong hệ thống với các mức quyền Viewer hoặc Editor, hỗ trợ xem danh sách chia sẻ, cập nhật vai trò, thu hồi quyền truy cập, chấp nhận/từ chối lời mời và rời thư mục được chia sẻ.
+
+- **Domain & Database Migration:** Thêm `Editor` vào `SharePermission` enum và cột `CreatedAt` vào bảng `FolderShares` (migration `AddFolderShareCreatedAt`).
+- **Backend Service & Controllers:**
+  - Bổ sung các DTO: `InviteFolderShareRequest`, `UpdateFolderShareRequest`, `FolderShareDto`, `SharedFolderDto` (kèm `ShareId`).
+  - Cài đặt 7 API endpoints tương ứng trong `FoldersController`: mời bạn bè (`POST /shares`), đổi quyền (`PATCH /shares/{shareId}`), thu hồi quyền (`DELETE /shares/{shareId}`), xem danh sách chia sẻ (`GET /shares`), xem danh sách được chia sẻ với mình (`GET /shared-with-me`), chấp nhận lời mời (`POST /shares/{shareId}/accept`), từ chối lời mời (`POST /shares/{shareId}/decline`), và rời thư mục (`DELETE /{id}/leave`).
+  - Kiểm tra các ràng buộc nghiệp vụ: chỉ chủ sở hữu thư mục mới có quyền mời/đổi quyền/thu hồi; chỉ người được share mới chấp nhận/từ chối/rời thư mục; chỉ chia sẻ được cho bạn bè đã accept kết bạn.
+- **Frontend UI & Components:**
+  - Thêm type definitions (`types/folders.ts`) và REST API bindings (`inviteShare`, `getShares`, `updateShareRole`, `revokeShare`, `getSharedWithMe`, `acceptShare`, `declineShare`, `leaveFolder`).
+  - Tạo component `FolderShareDialog` quản lý danh sách truy cập, gửi lời mời và đổi vai trò/gỡ quyền.
+  - Cải tiến `Sidebar.tsx` phân loại danh mục thư mục thành "Thư mục của tôi" và "Được chia sẻ với tôi"; tích hợp nút "Chia sẻ" (Owner) và "Rời thư mục" (Teammate) vào dropdown menu của từng folder.
+
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 
 > Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.
