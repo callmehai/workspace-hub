@@ -20,6 +20,12 @@
 - **Fix preview vỡ khi mở lại:** object URL phải **tạo + revoke trong CÙNG một effect** — dùng `useMemo` (như bản đầu) khiến StrictMode dev revoke URL mà memo không tính lại → ảnh vỡ. Đổi lại `useState`+`useEffect`.
 - **Thumbnail nét hơn:** proxy nâng size param `=s220`→`=s1024` khi lấy `thumbnailLink`.
 
+### Phase 4 — Upload UX (kéo-thả + tiến độ song song)
+- **Hàng đợi upload toàn cục** `driveUploadStore` (module singleton + pub/sub, KHÔNG phụ thuộc React) → `DriveUploadPanel` mount 1 lần ở `MainLayout`, **sống xuyên trang**. Upload **SONG SONG** (concurrency 3) thay vì tuần tự; mỗi file **1 progress bar** (`axios onUploadProgress`).
+- **Skip file lỗi:** file rỗng / quá 100MB bị **bỏ qua kèm lý do**, không chặn cả lô như trước.
+- **Kéo-thả** (`DriveDropZone`): thả file → upload vào folder đang mở; thả thư mục → upload cả cây (entries API đệ quy). Chỉ phản ứng khi kéo **chứa file** (`types` có `Files`) → không đụng thao tác kéo thẻ Kanban. Bật ở tab Drive / "Tất cả mục".
+- `WorkspaceNewMenu` "Tải tệp"/"Tải thư mục" chuyển sang enqueue store (chạy nền, bỏ toast-loop tuần tự + bỏ block nút "Mới").
+
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 
 > Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.
