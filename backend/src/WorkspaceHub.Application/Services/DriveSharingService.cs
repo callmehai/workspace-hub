@@ -147,15 +147,17 @@ public class DriveSharingService : IDriveSharingService
             return await _gateway.SetLinkSharingAsync(conn, item.ExternalId!, true, role, ct);
 
         // Tắt link — Case 1: folder mẹ đang anyone → cần confirm giống Drive.
-        // skipConflictDetect: controller đã Detect và trả 409 nếu có conflict → không gọi lại.
+        // skipConflictDetect: caller đã Detect và biết chắc không conflict (tránh gọi Google lần 2).
         DriveLinkRestrictConflict? conflict = null;
         if (!skipConflictDetect)
         {
             conflict = await DetectLinkRestrictConflictAsync(userId, itemId, ct);
             if (conflict != null && !confirmRestrictParent)
             {
+                // Payload = DTO đầy đủ — middleware/controller trả 409 body khớp FE (popup).
                 throw new ConflictException(
-                    "Tắt link file sẽ tắt luôn link thư mục mẹ. Cần xác nhận (confirmRestrictParent) hoặc dùng GET restrict-conflict.");
+                    "Tắt link file sẽ tắt luôn link thư mục mẹ. Cần xác nhận (confirmRestrictParent).",
+                    conflict);
             }
         }
 

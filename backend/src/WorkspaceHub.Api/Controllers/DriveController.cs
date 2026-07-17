@@ -242,27 +242,18 @@ namespace WorkspaceHub.Api.Controllers
         {
             await _linkSharingValidator.ValidateAndThrowAsync(request, ct);
 
-            // Preview Case 1 trước khi ghi — trả 409 + DTO để FE hiện dialog (không silent).
-            if (!request.Enabled && !request.ConfirmRestrictParent)
-            {
-                var conflict = await _driveSharing.DetectLinkRestrictConflictAsync(
-                    CurrentUserId, itemId, ct);
-                if (conflict != null)
-                    return Conflict(conflict);
-            }
-
             var role = request.Enabled
                 ? ParseRole(request.Role!)
                 : DrivePermissionRole.Reader;
-            // Controller đã Detect khi tắt-link không confirm → skip Detect lần 2 trong service.
-            var skipConflictDetect = !request.Enabled && !request.ConfirmRestrictParent;
+            // Case 1 chưa confirm → service ném ConflictException(Payload=DriveLinkRestrictConflict)
+            // → ExceptionMiddleware trả 409 body = DTO (FE hiện popup).
             var result = await _driveSharing.SetLinkSharingAsync(
                 CurrentUserId,
                 itemId,
                 request.Enabled,
                 role,
                 request.ConfirmRestrictParent,
-                skipConflictDetect,
+                skipConflictDetect: false,
                 ct);
             return Ok(result);
         }
