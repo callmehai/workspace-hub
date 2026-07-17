@@ -34,13 +34,14 @@ public class CalendarGateway : ICalendarGateway
         using var service = await BuildCalendarServiceAsync(connection, ct);
         var request = service.Events.List("primary");
 
-        if (!string.IsNullOrEmpty(syncToken))
-            request.SyncToken = syncToken;
-        else
-            request.TimeMinDateTimeOffset = DateTimeOffset.UtcNow.AddMonths(-3);
+        var options = !string.IsNullOrEmpty(syncToken)
+            ? CalendarSyncRequestOptions.ForIncrementalSync(syncToken)
+            : CalendarSyncRequestOptions.ForInitialSync(DateTimeOffset.UtcNow);
 
-        // Expand recurring events into instances (required for initial sync; safe with syncToken).
-        request.SingleEvents = true;
+        request.SyncToken = options.SyncToken;
+        request.TimeMinDateTimeOffset = options.TimeMin;
+        request.SingleEvents = options.SingleEvents;
+        request.EventTypes = EventsResource.ListRequest.EventTypesEnum.Default__;
 
         var eventsDto = new List<CalendarEventDto>();
         var cancelledIds = new List<string>();

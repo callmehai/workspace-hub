@@ -2,6 +2,13 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-17] Calendar sync — bỏ birthday/holiday khỏi WorkspaceHub
+
+- **Lý do:** Birthday là `eventType=birthday` đặc biệt, có recurrence hằng năm; Google holiday thường nằm ở calendar phụ/subscribed calendar. Đưa các mục này vào Items/Inbox/Kanban làm UI nhiễu và dễ bung nhiều occurrence tương lai.
+- **Sau:** `CalendarGateway.SyncEventsAsync` chỉ sync event chính (`eventTypes=default`) từ `primary`, không kéo birthday/special event vào app. Holiday calendar phụ vẫn không sync vì MVP chỉ đọc `primary`.
+- **Giới hạn:** full sync Calendar giữ `TimeMin=now-3 months`; không đặt `TimeMax` để tránh đóng băng cửa sổ sync tương lai. Incremental sync vẫn dùng syncToken và cùng filter `eventTypes=default`.
+- **Dữ liệu cũ:** không tự cleanup birthday đã lỡ sync trong DB; owner sẽ dọn thủ công nếu cần.
+
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 
 > Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.

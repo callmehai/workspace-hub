@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import axios from 'axios';
 import {
   AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink,
   Flag, Loader2, Mail, MapPin, Plus, Users, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { foldersApi, itemsApi } from '../lib/itemsApi';
+import { driveApi } from '../lib/driveApi';
 import { scheduledEmailsApi, type ScheduledEmailDto } from '../lib/scheduledEmailsApi';
 import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import type { CalendarEventDetailResponse, ItemResponse, PagedResult, PatchItemRequest } from '../types/items';
+import type { DrivePermissionRole } from '../types/drive';
 import { useI18n } from '../hooks/useI18n';
 import { usePollingInterval } from '../hooks/usePollingInterval';
 import type { TranslationKey } from '../i18n/translations';
@@ -25,6 +28,11 @@ import { ItemDetail } from '../components/ItemDetail';
 import { EventDetailPopup } from '../components/calendar/EventDetailPopup';
 import { CalendarInvitationDialog } from '../components/calendar/CalendarInvitationDialog';
 import { CalendarGuestNotificationDialog } from '../components/calendar/CalendarGuestNotificationDialog';
+import {
+  CalendarDriveAccessDialog,
+  type DriveAccessChoice,
+  type DriveAccessFileNeed,
+} from '../components/calendar/CalendarDriveAccessDialog';
 import { calendarInvitationsApi, type CalendarInvitation, type CalendarInvitationStatus } from '../lib/calendarInvitationsApi';
 import {
   addDays,
@@ -224,6 +232,20 @@ interface PendingGuestSubmit {
   removedCount: number;
 }
 
+interface PendingDriveAccessSubmit {
+  form: CalendarEventFormValue;
+  sendUpdates: boolean;
+  needsAccess: DriveAccessFileNeed[];
+}
+
+function normalizeAccessEmail(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function hasDuplicatePermissionError(error: unknown) {
+  return axios.isAxiosError(error) && error.response?.status === 409;
+}
+
 function invitationToEntry(invitation: CalendarInvitation): CalendarEntry {
   return {
     id: `invitation-${invitation.id}`,
@@ -350,6 +372,10 @@ export function CalendarPage() {
     canManageGuestPermissions?: boolean;
   } | null>(null);
   const [pendingGuestSubmit, setPendingGuestSubmit] = useState<PendingGuestSubmit | null>(null);
+  const [pendingDriveAccessSubmit, setPendingDriveAccessSubmit] = useState<PendingDriveAccessSubmit | null>(null);
+  const [uploadedDriveItemIds, setUploadedDriveItemIds] = useState<string[]>([]);
+  const [driveAccessResolving, setDriveAccessResolving] = useState(false);
+  const [driveAccessSaving, setDriveAccessSaving] = useState(false);
   const [moreDay, setMoreDay] = useState<Date | null>(null);
   const linkedEventOpenedRef = useRef<string | null>(null);
 
@@ -575,6 +601,8 @@ export function CalendarPage() {
     onSuccess: () => {
       toast.success(t('calendar.created'));
       setPendingGuestSubmit(null);
+      setPendingDriveAccessSubmit(null);
+      setUploadedDriveItemIds([]);
       setEditor(null);
       refreshCalendar();
       queryClient.invalidateQueries({ queryKey: ['folders'] });
@@ -664,6 +692,8 @@ export function CalendarPage() {
     onSuccess: () => {
       toast.success(t('calendar.updated'));
       setPendingGuestSubmit(null);
+      setPendingDriveAccessSubmit(null);
+      setUploadedDriveItemIds([]);
       setEditor(null);
       setSelectedEntry(null);
       setSelectedEntryAnchor(null);
@@ -727,6 +757,8 @@ export function CalendarPage() {
   const openCreate = (day: Date, startTime = '09:00', allDay = false) => {
     const value = emptyCalendarForm(day, firstConnectionId, startTime);
     value.allDay = allDay;
+    setUploadedDriveItemIds([]);
+    setPendingDriveAccessSubmit(null);
     setEditor({ mode: 'create', value });
   };
 
@@ -752,6 +784,66 @@ export function CalendarPage() {
     });
   };
 
+  const resolveDriveAccessNeeds = async (form: CalendarEventFormValue): Promise<DriveAccessFileNeed[]> => {
+    const guestEmails = Array.from(new Set(form.attendees.map(normalizeAccessEmail).filter(Boolean)));
+    const itemIds = Array.from(new Set(form.driveItemIds));
+    if (guestEmails.length === 0 || itemIds.length === 0) return [];
+
+    const uploadedSet = new Set(uploadedDriveItemIds);
+    const needs = await Promise.all(itemIds.map(async itemId => {
+      const item = await itemsApi.getItemById(itemId).catch(() => null);
+      const title = item?.title || itemId;
+
+      if (uploadedSet.has(itemId)) {
+        return {
+          itemId,
+          title,
+          missingEmails: guestEmails,
+          uploadedThisSession: true,
+        } satisfies DriveAccessFileNeed;
+      }
+
+      const permissions = await driveApi.listPermissions(itemId);
+      const hasLinkAccess = permissions.items.some(permission =>
+        permission.isLink || permission.type.toLocaleLowerCase() === 'anyone',
+      );
+      if (hasLinkAccess) return null;
+
+      const explicitEmails = new Set(
+        permissions.items
+          .map(permission => normalizeAccessEmail(permission.emailAddress ?? ''))
+          .filter(Boolean),
+      );
+      const missingEmails = guestEmails.filter(email => !explicitEmails.has(email));
+      if (missingEmails.length === 0) return null;
+
+      return {
+        itemId,
+        title,
+        missingEmails,
+        uploadedThisSession: false,
+      } satisfies DriveAccessFileNeed;
+    }));
+
+    return needs.filter((need): need is DriveAccessFileNeed => need !== null);
+  };
+
+  const continueEditorSubmitAfterGuestChoice = async (form: CalendarEventFormValue, sendUpdates: boolean) => {
+    setDriveAccessResolving(true);
+    try {
+      const needsAccess = await resolveDriveAccessNeeds(form);
+      if (needsAccess.length > 0) {
+        setPendingDriveAccessSubmit({ form, sendUpdates, needsAccess });
+        return;
+      }
+      executeEditorSubmit(form, sendUpdates);
+    } catch (error) {
+      handleApiError(error, t('calendar.updateFailed'), { navigate });
+    } finally {
+      setDriveAccessResolving(false);
+    }
+  };
+
   const submitEditor = (form: CalendarEventFormValue) => {
     if (!editor) return;
 
@@ -765,14 +857,52 @@ export function CalendarPage() {
       return;
     }
 
-    executeEditorSubmit(form, true);
+    void continueEditorSubmitAfterGuestChoice(form, true);
   };
 
   const submitPendingGuestChanges = (sendUpdates: boolean) => {
     if (!pendingGuestSubmit) return;
     const { form } = pendingGuestSubmit;
     setPendingGuestSubmit(null);
-    executeEditorSubmit(form, sendUpdates);
+    void continueEditorSubmitAfterGuestChoice(form, sendUpdates);
+  };
+
+  const submitPendingDriveAccess = async (
+    choice: DriveAccessChoice,
+    role: DrivePermissionRole,
+  ) => {
+    if (!pendingDriveAccessSubmit) return;
+
+    setDriveAccessSaving(true);
+    try {
+      if (choice === 'people') {
+        for (const file of pendingDriveAccessSubmit.needsAccess) {
+          for (const email of file.missingEmails) {
+            try {
+              await driveApi.addPermission(file.itemId, { email, role, notify: false });
+            } catch (error) {
+              if (!hasDuplicatePermissionError(error)) throw error;
+            }
+          }
+        }
+      } else if (choice === 'link') {
+        for (const file of pendingDriveAccessSubmit.needsAccess) {
+          await driveApi.setLinkSharing(file.itemId, { enabled: true, role });
+        }
+      }
+
+      const { form, sendUpdates } = pendingDriveAccessSubmit;
+      setPendingDriveAccessSubmit(null);
+      executeEditorSubmit(form, sendUpdates);
+    } catch (error) {
+      handleApiError(
+        error,
+        lang === 'vi' ? 'Không cập nhật được quyền truy cập Drive.' : 'Could not update Drive access.',
+        { navigate },
+      );
+    } finally {
+      setDriveAccessSaving(false);
+    }
   };
 
   const dragStart = (event: DragEvent, entry: CalendarEntry) => {
@@ -1308,7 +1438,7 @@ export function CalendarPage() {
           connections={gcalConnections}
           allConnections={connections}
           folderName={currentFolder?.name}
-          saving={createMutation.isPending || updateMutation.isPending}
+          saving={createMutation.isPending || updateMutation.isPending || driveAccessResolving}
           htmlLink={editor.mode === 'edit' ? editor.entry?.htmlLink : undefined}
           onDelete={editor.mode === 'edit' && editor.entry && editor.canManageGuestPermissions !== false
             ? () => { setEditor(null); setDeleteEntry(editor.entry!); }
@@ -1317,7 +1447,15 @@ export function CalendarPage() {
           canManageGuestPermissions={editor.canManageGuestPermissions}
           onClose={() => {
             setPendingGuestSubmit(null);
+            setPendingDriveAccessSubmit(null);
+            setUploadedDriveItemIds([]);
             setEditor(null);
+          }}
+          onDrivePickerSelectMeta={meta => {
+            if (meta.uploadedThisSessionIds.length === 0) return;
+            setUploadedDriveItemIds(current => (
+              Array.from(new Set([...current, ...meta.uploadedThisSessionIds]))
+            ));
           }}
           onSubmit={submitEditor}
         />
@@ -1331,6 +1469,15 @@ export function CalendarPage() {
         onBack={() => setPendingGuestSubmit(null)}
         onDontSend={() => submitPendingGuestChanges(false)}
         onSend={() => submitPendingGuestChanges(true)}
+      />
+
+      <CalendarDriveAccessDialog
+        open={pendingDriveAccessSubmit !== null}
+        files={pendingDriveAccessSubmit?.needsAccess ?? []}
+        guests={pendingDriveAccessSubmit?.form.attendees ?? []}
+        saving={driveAccessSaving}
+        onCancel={() => setPendingDriveAccessSubmit(null)}
+        onSave={(choice, role) => void submitPendingDriveAccess(choice, role)}
       />
 
       {selectedEntry && selectedEntry.kind === 'event' && selectedEntry.item && selectedEntry.invitation?.status !== 'NeedsAction' && (
@@ -1353,6 +1500,8 @@ export function CalendarPage() {
             formVal.guestsCanModify = detailedItem.guestsCanModify;
             formVal.guestsCanInviteOthers = detailedItem.guestsCanInviteOthers;
             formVal.guestsCanSeeOtherGuests = detailedItem.guestsCanSeeOtherGuests;
+            setUploadedDriveItemIds([]);
+            setPendingDriveAccessSubmit(null);
             setEditor({
               mode: 'edit',
               value: formVal,

@@ -1,17 +1,24 @@
-import { useState, useMemo, useRef, type ChangeEvent } from 'react';
+import { useEffect, useState, useMemo, useRef, type ChangeEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Search, Grid, List, FileText, Check, AlertCircle, Loader2, CloudUpload } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { DriveIcon } from '../../lib/brandIcons';
 import { itemsApi } from '../../lib/itemsApi';
+import { driveApi, validateDriveUploadFiles } from '../../lib/driveApi';
 import { useI18n } from '../../hooks/useI18n';
+import { handleApiError } from '../../lib/errorUtils';
 import type { ItemResponse } from '../../types/items';
+
+export interface DrivePickerSelectMeta {
+  uploadedThisSessionIds: string[];
+}
 
 interface GoogleDrivePickerModalProps {
   open: boolean;
   connectionId: string;
   initialSelectedIds: string[];
   onClose: () => void;
-  onSelect: (selectedIds: string[]) => void;
+  onSelect: (selectedIds: string[], meta: DrivePickerSelectMeta) => void;
 }
 
 type TabType = 'drive' | 'computer';
@@ -29,24 +36,39 @@ export function GoogleDrivePickerModal({
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Simulated upload states
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<{ name: string; size: number } | null>(null);
-  const [localMockedFiles, setLocalMockedFiles] = useState<ItemResponse[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<ItemResponse[]>([]);
+  const [uploadedThisSessionIds, setUploadedThisSessionIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch Drive files
   const { data: driveFilesData, isLoading, isError } = useQuery({
     queryKey: ['items', 'drive-files', connectionId],
-    queryFn: () => itemsApi.getItems({ types: ['File'], limit: 100 }),
+    queryFn: () => itemsApi.getItems({ types: ['File'], connectionId, limit: 100 }),
     enabled: open && !!connectionId,
   });
 
+  useEffect(() => {
+    if (!open) return;
+    setSelectedIds(initialSelectedIds);
+    setUploadedFiles([]);
+    setUploadedThisSessionIds([]);
+    setUploading(false);
+    setUploadedFile(null);
+    setActiveTab('drive');
+    setSearchQuery('');
+  }, [open, initialSelectedIds]);
+
   const driveFiles = useMemo(() => {
     const apiFiles = driveFilesData?.items || [];
-    return [...localMockedFiles, ...apiFiles];
-  }, [driveFilesData, localMockedFiles]);
+    const merged = [...uploadedFiles, ...apiFiles];
+    const seen = new Set<string>();
+    return merged.filter(file => {
+      if (seen.has(file.id)) return false;
+      seen.add(file.id);
+      return true;
+    });
+  }, [driveFilesData, uploadedFiles]);
 
   const handleToggleSelect = (fileId: string) => {
     setSelectedIds(current => {
@@ -59,7 +81,7 @@ export function GoogleDrivePickerModal({
   };
 
   const handleInsert = () => {
-    onSelect(selectedIds);
+    onSelect(selectedIds, { uploadedThisSessionIds });
     onClose();
   };
 
@@ -93,55 +115,38 @@ export function GoogleDrivePickerModal({
     return result;
   }, [driveFiles, activeTab, searchQuery]);
 
-  const handleSimulatedUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const validationKey = validateDriveUploadFiles([file]);
+    if (validationKey) {
+      toast.error(t(validationKey));
+      e.target.value = '';
+      return;
+    }
+    if (!connectionId) {
+      toast.error(lang === 'vi' ? 'Chưa có kết nối Google Drive.' : 'Google Drive connection is missing.');
+      e.target.value = '';
+      return;
+    }
+
     setUploading(true);
-    setUploadProgress(0);
     setUploadedFile({ name: file.name, size: file.size });
-
-    // Simulate progress upload
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += 10;
-      setUploadProgress(currentProgress);
-      if (currentProgress >= 100) {
-        clearInterval(interval);
-        
-        // Add new mocked file to localMockedFiles
-        const newMockItem: ItemResponse = {
-          id: `mock-file-${Date.now()}`,
-          title: file.name,
-          snippet: '',
-          type: 'File',
-          status: 'Inbox',
-          isImportant: false,
-          occurredAt: new Date().toISOString(),
-          dueAt: null,
-          externalId: null,
-          folderIds: [],
-          tags: [],
-          connectionId: connectionId || 'simulated-conn-id',
-          metadataJson: JSON.stringify({
-            mimeType: file.type || 'application/octet-stream',
-            size: file.size,
-            starred: false,
-            shared: false,
-          }),
-        };
-
-        setLocalMockedFiles(prev => [newMockItem, ...prev]);
-        setSelectedIds(prev => [...prev, newMockItem.id]);
-        
-        // Finalize state and switch tab
-        setTimeout(() => {
-          setUploading(false);
-          setUploadedFile(null);
-          setActiveTab('drive'); // switch to drive tab to view it
-        }, 500);
-      }
-    }, 150);
+    try {
+      const uploaded = await driveApi.uploadFile({ connectionId, file });
+      setUploadedFiles(prev => [uploaded, ...prev]);
+      setUploadedThisSessionIds(prev => Array.from(new Set([...prev, uploaded.id])));
+      setSelectedIds(prev => Array.from(new Set([...prev, uploaded.id])));
+      setActiveTab('drive');
+      toast.success(lang === 'vi' ? 'Đã tải tệp lên Drive.' : 'File uploaded to Drive.');
+    } catch (error) {
+      handleApiError(error, lang === 'vi' ? 'Không tải được tệp lên Drive.' : 'Could not upload the file to Drive.');
+    } finally {
+      setUploading(false);
+      setUploadedFile(null);
+      e.target.value = '';
+    }
   };
 
   if (!open) return null;
@@ -269,14 +274,14 @@ export function GoogleDrivePickerModal({
                   e.preventDefault();
                   const file = e.dataTransfer.files?.[0];
                   if (file) {
-                    handleSimulatedUpload({ target: { files: [file] } } as unknown as ChangeEvent<HTMLInputElement>);
+                    handleUpload({ target: { files: [file], value: '' } } as unknown as ChangeEvent<HTMLInputElement>);
                   }
                 }}
               >
                 <input
                   type="file"
                   ref={fileInputRef}
-                  onChange={handleSimulatedUpload}
+                  onChange={handleUpload}
                   className="hidden"
                 />
                 
@@ -288,12 +293,12 @@ export function GoogleDrivePickerModal({
                     </div>
                     <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 max-w-xs mx-auto overflow-hidden">
                       <div 
-                        className="bg-brand-600 h-full rounded-full transition-all duration-150" 
-                        style={{ width: `${uploadProgress}%` }}
+                        className="bg-brand-600 h-full rounded-full animate-pulse" 
+                        style={{ width: '70%' }}
                       />
                     </div>
                     <div className="text-[11.5px] text-slate-400 dark:text-slate-500">
-                      {uploadProgress}%
+                      {lang === 'vi' ? 'Đang gửi lên Google Drive' : 'Sending to Google Drive'}
                     </div>
                   </div>
                 ) : (

@@ -19,7 +19,7 @@ import type { ConnectionDto } from '../../lib/connectionsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
 import { itemsApi, foldersApi } from '../../lib/itemsApi';
-import { GoogleDrivePickerModal } from '../drive/GoogleDrivePickerModal';
+import { GoogleDrivePickerModal, type DrivePickerSelectMeta } from '../drive/GoogleDrivePickerModal';
 import { DriveIcon } from '../../lib/brandIcons';
 import { driveItemOpenUrl, resolveGmailSuggestConnection } from '../../lib/calendarFormUtils';
 import toast from 'react-hot-toast';
@@ -172,6 +172,7 @@ interface CalendarEventEditorModalProps {
   onDelete?: () => void;
   canInviteOthers?: boolean;
   canManageGuestPermissions?: boolean;
+  onDrivePickerSelectMeta?: (meta: DrivePickerSelectMeta) => void;
   onClose: () => void;
   onSubmit: (value: CalendarEventFormValue) => void;
 }
@@ -188,6 +189,7 @@ export function CalendarEventEditorModal({
   onDelete,
   canInviteOthers = true,
   canManageGuestPermissions = true,
+  onDrivePickerSelectMeta,
   onClose,
   onSubmit,
 }: CalendarEventEditorModalProps) {
@@ -327,6 +329,14 @@ export function CalendarEventEditorModal({
   const suggestConnectionId = useMemo(
     () => (allConnections ? resolveGmailSuggestConnection(allConnections, form.connectionId) : undefined),
     [allConnections, form.connectionId],
+  );
+  const driveConnectionId = useMemo(
+    () => allConnections?.find(
+      connection =>
+        connection.serviceType.toLowerCase() === 'drive'
+        && connection.status.toLowerCase() === 'active',
+    )?.id ?? '',
+    [allConnections],
   );
 
   useEffect(() => {
@@ -887,7 +897,7 @@ export function CalendarEventEditorModal({
                   <div className="min-w-0 flex-1">
                     <button
                       type="button"
-                      disabled={!form.connectionId}
+                      disabled={!driveConnectionId}
                       onClick={() => {
                         setOpenOverlay(null);
                         setDrivePickerOpen(true);
@@ -1357,10 +1367,13 @@ export function CalendarEventEditorModal({
       
       <GoogleDrivePickerModal
         open={drivePickerOpen}
-        connectionId={form.connectionId}
+        connectionId={driveConnectionId}
         initialSelectedIds={form.driveItemIds}
         onClose={() => setDrivePickerOpen(false)}
-        onSelect={selectedIds => setForm(curr => ({ ...curr, driveItemIds: selectedIds }))}
+        onSelect={(selectedIds, meta) => {
+          setForm(curr => ({ ...curr, driveItemIds: selectedIds }));
+          onDrivePickerSelectMeta?.(meta);
+        }}
       />
     </div>
   );
