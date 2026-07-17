@@ -342,6 +342,9 @@ export const vi = {
   'drive.share.linkOn': 'Đã bật link chia sẻ',
   'drive.share.linkOff': 'Đã tắt link chia sẻ',
   'drive.share.linkOffWithParent': 'Đã tắt link file và thư mục mẹ',
+  'drive.share.copyLink': 'Sao chép',
+  'drive.share.linkCopied': 'Đã sao chép link',
+  'drive.share.copyLinkFail': 'Không sao chép được link',
   'drive.share.restrictParentTitle': 'Xoá quyền truy cập khỏi thư mục mẹ?',
   'drive.share.restrictParentBody':
     'Việc xoá đường liên kết đến mục này cũng sẽ xoá đường liên kết đến thư mục mẹ của mục này. Bạn cũng có thể tạo thư mục có quyền truy cập bị giới hạn.',
@@ -1172,6 +1175,9 @@ export const en: Record<TranslationKey, string> = {
   'drive.share.linkOn': 'Link sharing enabled',
   'drive.share.linkOff': 'Link sharing disabled',
   'drive.share.linkOffWithParent': 'Link sharing turned off for file and parent folder',
+  'drive.share.copyLink': 'Copy',
+  'drive.share.linkCopied': 'Link copied',
+  'drive.share.copyLinkFail': 'Could not copy link',
   'drive.share.restrictParentTitle': 'Remove access from parent folder?',
   'drive.share.restrictParentBody':
     'Removing the link to this item will also remove the link to its parent folder. You can also create a folder with restricted access.',
