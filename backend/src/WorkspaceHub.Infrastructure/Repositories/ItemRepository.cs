@@ -135,15 +135,17 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             query = query.Where(i => i.Type != ItemType.File || (i.MetadataJson != null && i.MetadataJson.Contains("\"isTopLevel\":true")));
         }
 
-        // DriveKind filter — chỉ Thư mục / chỉ Tệp trong view Drive. Metadata Drive luôn có "isFolder":
-        // folder = true, file = false → match trực tiếp. FE chỉ gửi param này ở ngữ cảnh Drive.
+        // DriveKind filter — chỉ Thư mục / chỉ Tệp trong view Drive. FE chỉ gửi param này ở ngữ cảnh Drive.
+        // "folder" = metadata có "isFolder":true. "file" = MỌI thứ còn lại (NOT folder) — định nghĩa theo
+        // phần bù để item cũ / metadata hỏng thiếu hẳn field "isFolder" vẫn được coi là tệp (không bị giấu
+        // khỏi tab "Tệp"), thay vì đòi khớp cứng "isFolder":false.
         if (!string.IsNullOrWhiteSpace(driveKind))
         {
             var kind = driveKind.Trim().ToLowerInvariant();
             if (kind == "folder")
                 query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains("\"isFolder\":true"));
             else if (kind == "file")
-                query = query.Where(i => i.MetadataJson != null && i.MetadataJson.Contains("\"isFolder\":false"));
+                query = query.Where(i => i.MetadataJson == null || !i.MetadataJson.Contains("\"isFolder\":true"));
         }
 
         // ── Search: Title hoặc Snippet ──

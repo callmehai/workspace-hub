@@ -297,6 +297,8 @@ export const KanbanBoard = () => {
       ctx?.snapshots.forEach(([key, data]) => queryClient.setQueryData(key, data));
       handleApiError(err, t('item.saveFail'), { navigate });
     },
+    // Reconcile với server sau khi xong (như view Danh sách) — tránh cache board giữ giá trị optimistic lệch.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
   });
 
   const handleDragStart = (e: React.DragEvent, id: string) => {

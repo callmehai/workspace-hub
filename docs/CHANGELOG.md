@@ -34,7 +34,12 @@
 
 ### Sau QA local (3) — polish list/Kanban + điều hướng + gợi ý share
 - **Folder xếp trước file (list Drive):** `ItemRepository` sort thêm `OrderByDescending("isFolder":true)` TRƯỚC `OccurredAt`, **chỉ khi view Drive** (`driveParentId != null` hoặc types == [File]) → các view Email/All giữ nguyên sort thời gian. Folder luôn nổi lên đầu như mọi trình quản lý file.
-- **Filter Tệp/Thư mục cho Drive:** thêm query param `driveKind` (`folder` | `file`) xuyên `GetItemsRequest → ItemService → IItemRepository` (match `"isFolder":true/false` trong metadata). FE: chip **Tất cả / Thư mục / Tệp** ở toolbar, **chỉ hiện ở view Drive** (tab Tệp hoặc trong 1 folder Drive); Inbox + Kanban đều gửi param, và **chỉ áp khi đang ở Drive scope** (đổi tab khác tự bỏ, tránh lọc vô hình). i18n `toolbar.driveKind*`.
+- **Filter Tệp/Thư mục cho Drive:** thêm query param `driveKind` (`folder` | `file`) xuyên `GetItemsRequest → ItemService → IItemRepository`. FE: chip **Tất cả / Thư mục / Tệp** ở toolbar, **chỉ hiện ở view Drive** (tab Tệp hoặc trong 1 folder Drive); Inbox + Kanban đều gửi param, và **chỉ áp khi đang ở Drive scope** (đổi tab khác tự bỏ, tránh lọc vô hình). i18n `toolbar.driveKind*`.
+  - `folder` = metadata có `"isFolder":true`; **`file` = phần bù (NOT folder)** — item cũ / metadata tối giản thiếu hẳn field `isFolder` vẫn được coi là tệp, không bị giấu khỏi tab "Tệp" (thay vì đòi khớp cứng `"isFolder":false`).
+
+### Sau review PR #114 — fix + test
+- **Kanban "quan trọng" reconcile server:** mutation `toggleImportant` thêm `onSettled: invalidateQueries(['items'])` — đồng bộ với view Danh sách, tránh cache board giữ giá trị optimistic lệch nếu response server khác kỳ vọng.
+- **Test BE mới:** `DriveContentServiceTests` (10 case — resolve item→connection: đúng user/service/active + folder guard, ủy thác gateway) và `ItemRepositoryDriveFilterTests` (InMemory chạy `GetPagedAsync` thật — filter `driveKind` folder/file **gồm item cũ thiếu `isFolder`** + sort folders-first).
 - **Cảnh báo xoá folder Drive:** xoá 1 folder → dialog cảnh báo "sẽ chuyển cả thư mục + TOÀN BỘ nội dung vào Thùng rác Drive" (i18n `item.confirmDeleteDriveFolder`), thay câu xoá file thường.
 - **Kanban empty-state "chưa kết nối":** board rỗng + chưa kết nối service của nguồn đang xem → panel dẫn sang trang Kết nối (giống view Danh sách), thay 3 cột trống khó hiểu.
 - **F5 không văng khỏi folder con:** stack drill-down vốn sống trong `location.state` (mất khi reload). Nay nếu còn `?df` mà mất state → fetch item dựng lại 1 cấp → **người dùng vẫn ở trong folder** thay vì bật về gốc Drive. (Breadcrumb khi đó gọn còn folder hiện tại; điều hướng thường vẫn giữ đủ cấp.)
