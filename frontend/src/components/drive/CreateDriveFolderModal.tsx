@@ -5,7 +5,7 @@ import { Loader2, Folder } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { driveApi } from '../../lib/driveApi';
 import { connectionsApi } from '../../lib/connectionsApi';
-import { itemsApi } from '../../lib/itemsApi';
+import { itemsApi, foldersApi } from '../../lib/itemsApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
@@ -17,6 +17,8 @@ interface Props {
   defaultConnectionId?: string;
   /** Gợi ý folder cha (từ ItemDetail khi đang xem folder Drive) */
   defaultParentItemId?: string | null;
+  /** Folder CONTEXT app đang xem — gán folder mới tạo vào (null = "Tất cả mục", không gán). */
+  folderContextId?: string | null;
 }
 
 type BodyProps = Omit<Props, 'isOpen'>;
@@ -27,6 +29,7 @@ export function CreateDriveFolderModal({
   onClose,
   defaultConnectionId,
   defaultParentItemId = null,
+  folderContextId = null,
 }: Props) {
   // Unmount body khi đóng → reset form, không cần useEffect setState
   if (!isOpen) return null;
@@ -36,6 +39,7 @@ export function CreateDriveFolderModal({
       onClose={onClose}
       defaultConnectionId={defaultConnectionId}
       defaultParentItemId={defaultParentItemId}
+      folderContextId={folderContextId}
     />
   );
 }
@@ -44,6 +48,7 @@ function CreateDriveFolderModalBody({
   onClose,
   defaultConnectionId,
   defaultParentItemId = null,
+  folderContextId = null,
 }: BodyProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -86,12 +91,22 @@ function CreateDriveFolderModalBody({
     : t('drive.createFolder.targetRoot');
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      driveApi.createFolder({
+    mutationFn: async () => {
+      const created = await driveApi.createFolder({
         connectionId,
         name: name.trim(),
         parentItemId: parentItemId || null,
-      }),
+      });
+      // Đứng trong 1 folder context app → gán folder mới vào đó để hiện ngay (không rơi ra "Tất cả mục").
+      if (folderContextId) {
+        try {
+          await foldersApi.addItemsToFolderBulk(folderContextId, [created.id]);
+        } catch {
+          /* folder đã tạo trên Drive; gán context hụt không chặn luồng */
+        }
+      }
+      return created;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       toast.success(t('drive.createFolder.created'));

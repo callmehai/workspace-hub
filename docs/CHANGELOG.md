@@ -26,6 +26,12 @@
 - **Kéo-thả** (`DriveDropZone`): thả file → upload vào folder đang mở; thả thư mục → upload cả cây (entries API đệ quy). Chỉ phản ứng khi kéo **chứa file** (`types` có `Files`) → không đụng thao tác kéo thẻ Kanban. Bật ở tab Drive / "Tất cả mục".
 - `WorkspaceNewMenu` "Tải tệp"/"Tải thư mục" chuyển sang enqueue store (chạy nền, bỏ toast-loop tuần tự + bỏ block nút "Mới").
 
+### Sau QA local (2) — upload vào folder context + phóng to ảnh
+- **Bug: upload khi đứng trong 1 folder context app (dự án/khách hàng) thì item rơi ra "Tất cả mục", KHÔNG vào folder đó.** Nguyên nhân: upload chỉ tạo Item trên Drive (root), không gán vào folder context — 2 trục độc lập. Fix ở FE: thêm `folderId` (folder context) vào `EnqueueOpts`; sau khi upload thành công gọi `foldersApi.addItemsToFolderBulk(folderId, [itemId])`. Áp cho **cả 3 đường**: kéo-thả (`DriveDropZone` nhận prop `folderId`), nút "Tải tệp"/"Tải thư mục" (`WorkspaceNewMenu` truyền `folder?.id`), và "Thư mục mới" (`CreateDriveFolderModal` nhận `folderContextId`). Upload folder chỉ gán **thư mục gốc** (item folder trùng tên) vào context, không gán từng file/subfolder con. Gán folder hụt (network) KHÔNG đánh sập task — item đã lên Drive.
+  - `parentItemId` (vị trí trên Drive) và `folderId` (folder context app) là **2 trục độc lập** — upload vẫn lên My Drive root, chỉ thêm liên kết ItemFolder.
+- **Tách `lib/driveDrop.ts`** (logic đọc entries + đệ quy cây thư mục + `handleDriveDrop`/`dragHasFiles`) dùng chung, gỡ code lặp trong `DriveDropZone`.
+- **Preview ảnh bấm phóng to (lightbox):** `DriveFilePreview` — ảnh/thumbnail bấm mở overlay toàn màn hình (Esc / bấm nền / nút X để đóng), hover hiện gợi ý "Bấm để phóng to". Thêm i18n `drive.preview.zoom`.
+
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 
 > Khi tắt link file mà folder mẹ đang "ai có link", app hỏi user giống Google Drive — không silent apply.

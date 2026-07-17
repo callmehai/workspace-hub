@@ -106,6 +106,7 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
     enqueueFiles(Array.from(files), {
       connectionId: driveConnectionId,
       parentItemId: currentDriveFolderId || null,
+      folderId: folder?.id ?? null,
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -124,6 +125,7 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
     enqueueFolder(folderName, buildDriveFolderEntries(list), {
       connectionId: driveConnectionId,
       parentItemId: currentDriveFolderId || null,
+      folderId: folder?.id ?? null,
     });
     if (folderInputRef.current) folderInputRef.current.value = '';
   };
@@ -224,6 +226,7 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
         onClose={() => setIsFolderModalOpen(false)}
         defaultConnectionId={driveConnectionId}
         defaultParentItemId={currentDriveFolderId}
+        folderContextId={folder?.id ?? null}
       />
     </>
   );

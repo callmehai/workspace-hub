@@ -527,7 +527,7 @@ export const Inbox = () => {
 
   return (
     <div ref={scrollRef} className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
-      <DriveDropZone connectionId={dropConnectionId} parentItemId={currentDriveParentId} className="min-h-full">
+      <DriveDropZone connectionId={dropConnectionId} parentItemId={currentDriveParentId} folderId={selectedFolderId} className="min-h-full">
       <div className="max-w-[1400px] mx-auto px-6 py-5">
 
         {/* ── Toolbar dùng chung với view Bảng — layout GIỐNG HỆT khi đổi view ── */}

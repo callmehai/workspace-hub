@@ -1,4 +1,6 @@
 import { driveApi } from './driveApi';
+import { foldersApi } from './itemsApi';
+import { isDriveFolder } from './itemMeta';
 import { MAX_DRIVE_FILE_BYTES } from '../types/drive';
 import type { DriveFolderUploadEntry } from '../types/drive';
 import type { TranslationKey } from '../i18n/translations';
@@ -69,6 +71,25 @@ function validateFile(file: File): TranslationKey | null {
 export interface EnqueueOpts {
   connectionId: string;
   parentItemId: string | null;
+  /**
+   * Folder CONTEXT của app (dự án/khách hàng) để gán item mới upload vào — độc lập với `parentItemId`
+   * (vị trí trên Drive). null/undefined = đang ở "Tất cả mục" → không gán. Nhờ vậy đứng trong 1 thư mục
+   * app rồi upload/kéo-thả thì item hiện ngay trong thư mục đó, không rơi hết ra "Tất cả mục".
+   */
+  folderId?: string | null;
+}
+
+/**
+ * Gán item mới upload vào folder context app (nếu đang đứng trong 1 folder). Item ĐÃ upload thành công
+ * lên Drive — gán folder lỗi (hiếm, network) KHÔNG được đánh sập task, chỉ nuốt lỗi.
+ */
+async function assignToFolderContext(itemIds: string[], folderId?: string | null) {
+  if (!folderId || itemIds.length === 0) return;
+  try {
+    await foldersApi.addItemsToFolderBulk(folderId, itemIds);
+  } catch {
+    /* item vẫn upload xong; không chặn luồng vì gán folder hụt */
+  }
 }
 
 /** Thêm nhiều file vào hàng đợi (song song). File lỗi → task 'skipped' kèm lý do. */
@@ -85,10 +106,11 @@ export function enqueueFiles(files: File[], opts: EnqueueOpts) {
     setTasks([...tasks, { id, name: file.name, kind: 'file', progress: 0, status: 'uploading' }]);
     queue.push(async () => {
       try {
-        await driveApi.uploadFile(
+        const item = await driveApi.uploadFile(
           { connectionId: opts.connectionId, file, parentItemId: opts.parentItemId },
           (percent) => patchTask(id, { progress: percent }),
         );
+        await assignToFolderContext([item.id], opts.folderId);
         patchTask(id, { status: 'done', progress: 100 });
       } catch {
         patchTask(id, { status: 'error' });
@@ -109,6 +131,11 @@ export function enqueueFolder(folderName: string, entries: DriveFolderUploadEntr
         { connectionId: opts.connectionId, entries, parentItemId: opts.parentItemId },
         (percent) => patchTask(id, { progress: percent }),
       );
+      // Gán RIÊNG thư mục gốc (không phải mọi file/subfolder con) vào folder context — chính nó đại diện
+      // cho cả cây trong danh sách app. Gốc = item folder trùng tên; fallback item đầu (tạo trước tiên).
+      const rootItem =
+        result.items.find((it) => isDriveFolder(it) && it.title === folderName) ?? result.items[0];
+      if (rootItem) await assignToFolderContext([rootItem.id], opts.folderId);
       const failed = result.failed?.length ?? 0;
       patchTask(id, {
         status: failed > 0 ? 'error' : 'done',

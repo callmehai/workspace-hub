@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { ExternalLink, Loader2, ZoomIn, X } from 'lucide-react';
 import { driveApi } from '../../lib/driveApi';
 import { drivePreviewKind, friendlyMimeLabel } from '../../lib/driveFile';
 import { DriveIcon } from '../../lib/brandIcons';
@@ -49,6 +49,15 @@ export function DriveFilePreview({ itemId, mimeType, sizeBytes, fileName, webVie
     return () => URL.revokeObjectURL(objectUrl);
   }, [blob]);
 
+  // Lightbox phóng to ảnh — Esc để đóng.
+  const [zoomed, setZoomed] = useState(false);
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setZoomed(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [zoomed]);
+
   const frame =
     'mb-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 overflow-hidden';
 
@@ -64,16 +73,51 @@ export function DriveFilePreview({ itemId, mimeType, sizeBytes, fileName, webVie
     );
   }
 
-  // Có ảnh/thumbnail → hiển thị.
+  // Có ảnh/thumbnail → hiển thị. Bấm để phóng to (lightbox toàn màn hình).
   if (kind !== 'icon' && url && !isError) {
+    const alt = t('drive.preview.imageAlt').replace('{name}', fileName);
     return (
-      <div className={`${frame} flex items-center justify-center`}>
-        <img
-          src={url}
-          alt={t('drive.preview.imageAlt').replace('{name}', fileName)}
-          className="max-h-72 w-full object-contain"
-        />
-      </div>
+      <>
+        <div className={frame}>
+          <button
+            type="button"
+            onClick={() => setZoomed(true)}
+            title={t('drive.preview.zoom')}
+            className="group relative block w-full cursor-zoom-in"
+          >
+            <img src={url} alt={alt} className="max-h-72 w-full object-contain" />
+            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-slate-900/60 px-2 py-1 text-[11px] font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity">
+              <ZoomIn className="w-3.5 h-3.5" />
+              {t('drive.preview.zoom')}
+            </span>
+          </button>
+        </div>
+
+        {zoomed && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+            onClick={() => setZoomed(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={alt}
+          >
+            <img
+              src={url}
+              alt={alt}
+              className="max-h-[92vh] max-w-[92vw] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              type="button"
+              onClick={() => setZoomed(false)}
+              aria-label={t('common.close')}
+              className="absolute top-4 right-4 inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+      </>
     );
   }
 
