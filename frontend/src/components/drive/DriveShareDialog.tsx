@@ -79,6 +79,7 @@ export function DriveShareDialog({
     if (!isOpen) setCopied(false);
   }, [isOpen]);
 
+
   const permissionsQuery = useQuery({
     queryKey: ['drive-permissions', itemId],
     queryFn: () => driveApi.listPermissions(itemId),
