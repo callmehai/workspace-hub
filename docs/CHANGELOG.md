@@ -59,6 +59,14 @@ chỉ nên cấp `Editor` cho người thực sự tin tưởng. `Viewer` an to�
 - **`ItemWriteBackService` còn constructor overload truyền `_folders = null!`** để giữ 370 test cũ — code smell, sửa phải đụng toàn bộ test nên để nguyên.
 - **`FolderShares.CreatedAt` default `0001-01-01`** cho row cũ (migration `AddFolderShareCreatedAt` dùng `DateTime.MinValue`). Vô hại vì tính năng mới, chưa có data cũ.
 
+## [2026-07-18] Bỏ dropdown "Dự án" (site) của Jira — giữ lọc "Người phụ trách" (auto chọn project duy nhất)
+
+> Thực tế đồ án chỉ có **1 Jira site / 1 project** → dropdown chọn dự án trong toolbar chỉ có đúng 1 lựa chọn ⟹ thừa, gây rối. Gỡ nó nhưng **giữ bộ lọc theo người phụ trách**.
+
+- **Gỡ dropdown "Dự án"** (`toolbar.allProjects`) khỏi `WorkspaceToolbar` + state/param/debounce `projectKey` ở `Inbox.tsx`/`KanbanBoard.tsx` + props `projectKeyFilter`/`onProjectKeyChange` + badge "Project:" ở Inbox. FE không còn gửi `projectKey` (BE vẫn nhận, vô hại).
+- **Giữ lọc "Người phụ trách" — bỏ phụ thuộc chọn project:** trước đây assignee chỉ hiện khi user chọn 1 project (assignable-users theo project). Giờ toolbar **tự lấy project đầu tiên** (`availableProjects[0]` — thực tế là project duy nhất) để nạp danh sách người → dropdown "Người phụ trách" hiện thẳng ở tab Jira, không cần chọn dự án. Filter value = `accountId` (hoặc `unassigned`) → `GET /api/items?assignee=`. Nếu sau này có nhiều project, danh sách người lấy theo project đầu (đủ dùng cho phạm vi đồ án).
+- **Giữ nguyên:** form **Tạo ticket** (`CreateTicketModal`) vẫn chọn project + assignee như cũ; cache `['jira']` giữ + invalidate sau sync.
+
 ## [2026-07-18] Jira multi-site từng-grant-một + callback UPSERT (fix nút "Kết nối lại")
 
 > QA multi-account phát hiện 2 vấn đề ở luồng connect: (1) cùng account Atlassian không thêm được site thứ 2 — `JiraStrategy` luôn lấy `resources[0]` → 409 trùng cloudId; (2) trùng đúng service+account → 409 "Hãy ngắt kết nối trước" — tức nút **"Kết nối lại"** (connection Error) xưa giờ luôn 409, phải disconnect mới reconnect được.
@@ -91,6 +99,14 @@ chỉ nên cấp `Editor` cho người thực sự tin tưởng. `Viewer` an to�
 ### Sau review đa chiều (cùng ngày) — 2 fix multi-Drive
 - **Upload/tạo folder vào đúng Drive account của folder đang mở:** `DriveStackEntry` (drill-down) nay mang `connectionId` của folder. Trước đây ở view "Tất cả tài khoản", drill vào folder của Drive account B rồi upload lại lấy `driveConns[0]` (account A) → BE reject "parent khác connection". Nay đích upload = connection **sở hữu folder** (truyền `currentDriveFolderConnectionId` xuyên `Inbox → WorkspaceToolbar → WorkspaceNewMenu`); ngoài folder mới ưu tiên account đang lọc rồi Drive-đầu.
 - **Tự bỏ lọc account khi account rớt Active:** effect ở Inbox + Kanban clear `accountFilter` khi account đang lọc bị disconnect/Error (dropdown ẩn khi <2 account nhưng `connectionId` cũ vẫn áp → list/board lọc ngầm vô hình; Kanban không có nút clear filters).
+
+## [2026-07-17] Calendar sync — bỏ birthday/holiday khỏi WorkspaceHub
+
+- **Lý do:** Birthday là `eventType=birthday` đặc biệt, có recurrence hằng năm; Google holiday thường nằm ở calendar phụ/subscribed calendar. Đưa các mục này vào Items/Inbox/Kanban làm UI nhiễu và dễ bung nhiều occurrence tương lai.
+- **Sau:** `CalendarGateway.SyncEventsAsync` chỉ sync event chính (`eventTypes=default`) từ `primary`, không kéo birthday/special event vào app. Holiday calendar phụ vẫn không sync vì MVP chỉ đọc `primary`.
+- **Giới hạn:** full sync Calendar giữ `TimeMin=now-3 months`; không đặt `TimeMax` để tránh đóng băng cửa sổ sync tương lai. Incremental sync vẫn dùng syncToken và cùng filter `eventTypes=default`.
+- **Dữ liệu cũ:** không tự cleanup birthday đã lỡ sync trong DB; owner sẽ dọn thủ công nếu cần.
+
 
 ## [2026-07-17] Drive UX — detail preview/download + phân biệt folder/file ở Kanban
 
@@ -159,6 +175,130 @@ chỉ nên cấp `Editor` cho người thực sự tin tưởng. `Viewer` an to�
 - **BE:** `DetectLinkRestrictConflictAsync`, `GET .../restrict-conflict`, `LinkSharingRequest.ConfirmRestrictParent`; test Case 1 trên `DriveSharingServiceTests`. `ConflictException.Payload` + middleware ghi payload làm body 409 (một path service→API, tránh 409 chỉ có message).
 - **FE:** `DriveLinkRestrictDialog` (layout gần Drive: tiêu đề, cây quyền, Huỷ / Xoá khỏi thư mục mẹ); wire trong `DriveShareDialog` bắt 409.
 - **Docs:** `docs/API.md`, `docs/DRIVE_FOLDER_SHARING.md` §6.4 / §7.6–7.7 / QA.
+
+## [2026-07-18] CalendarInvitation InviteeItemId — NoAction + null hoá service layer
+
+- **Không dùng ON DELETE SET NULL:** SQL Server Msg 1785 (multiple cascade paths) — `OrganizerItemId` đã `CASCADE` → `Items`; thêm `InviteeItemId SET NULL` bị reject. Migration `CalendarInvitationInviteeItemSetNull` thực tế no-op (FK vẫn NoAction).
+- **Fix:** giữ `DeleteBehavior.NoAction`; trước khi xoá Item invitee → `ClearInviteeItemLinksAsync` / `ExecuteUpdate` null `InviteeItemId` (giữ row RSVP) tại `CalendarSyncService`, `ItemWriteBackService.DeleteItemAsync`, `ItemRepository.DeleteByConnectionIdAsync`.
+
+## [2026-07-16] Calendar PR review — partial-update reminders + invitation harden
+
+- **Critical — reminders wipe:** `CalendarGateway.UpdateEventAsync` khi `Reminders == null` từng ghi `UseDefault=true` → PATCH event (đổi title/…) xóa reminder Google. **Sau:** `null` = giữ nguyên từ `Events.Get`; non-null (kể cả list rỗng) = ghi overrides. Contract test: `PatchEvent_WithoutReminders_PassesNullRemindersToGateway`.
+- **Important — InviteeItem FK:** ban đầu định `NoAction` → SET NULL (migration `CalendarInvitationInviteeItemSetNull`) — **không khả thi trên SQL Server** (xem [2026-07-18]); giữ NoAction + null hoá ở service.
+- **Important — RSVP pending:** `ReconcileSyncedEventAsync` khi push RSVP local lên Google lỗi (`ProviderException` / `ForbiddenException`) giữ `GoogleSyncPending=true` + Status local; không ghi đè bằng Google `needsAction`.
+
+## [2026-07-15] Calendar reminder notification — format thời gian
+
+- **Bug:** In-app reminder (`EventReminderProcessorService`) khi không có Snippet nhét `OccurredAt.ToString("o")` vào `preview` → toast/dropdown hiện raw ISO (`2026-07-15T00:00:00.0000000Z`).
+- **Sau:** Body = `{ itemTitle, start, allDay, preview? }` — `preview` chỉ còn text snippet; FE `formatNotificationDisplay` format `start` qua `formatEventWhen` (all-day = ngày UTC + nhãn «Cả ngày»). Legacy row ISO trong `preview` vẫn được nhận diện và format lại.
+
+## [2026-07-15] Calendar invitee: hiện event khi còn NeedsAction
+
+- **Trước:** FE chỉ render invitation/synced item khi `Accepted`/`Tentative` → khách chưa RSVP không thấy event trên lịch (dù đã có noti «sự kiện mới»).
+- **Sau:** giống Google — `NeedsAction` vẫn hiện; chỉ ẩn `Declined`. Click event chưa RSVP mở dialog phản hồi (không mở EventDetailPopup chồng).
+
+## [2026-07-15] All-day reminder `timeOfDay` ↔ Google Calendar minutes
+
+- **Bug:** Hub lưu/UI đúng `1 tuần · trước lúc · 14:00`, nhưng write-back chỉ gửi `weeks×10080` (bỏ `TimeOfDay`) → Google hiện `1 week before at 12:00am`. **Không phải** lệch timezone UTC↔ICT.
+- **Docs Google:** [Reminders](https://developers.google.com/workspace/calendar/api/concepts/reminders) — API chỉ có `minutes` trước start; all-day start = 00:00 ngày event.
+- **Code:** `GoogleCalendarReminderMapper` + `MapToGoogleReminders` / `SyncLocalReminders`. `InApp` không đẩy Google; sync chỉ thay `GooglePopup`/`GoogleEmail` (InApp rows giữ nguyên). Tests: `GoogleCalendarReminderMapperTests`.
+
+### Design — §1 Mapping (lõi)
+
+Google chỉ lưu **minutes** trước **00:00** ngày all-day. Hub lưu **offset + timeOfDay**.
+
+#### Write Hub → Google (`MapToGoogleReminders`)
+
+| Unit | `timeOfDay`? | `minutes` gửi Google |
+| --- | --- | --- |
+| Minutes / Hours | bỏ qua | như hiện tại (`value` / `value×60`) |
+| Days / Weeks | không / `"00:00"` | `value × 1440` hoặc `× 10080` |
+| Days / Weeks | có (vd `"14:00"`) | `unitMinutes − (h×60+m)` — vd 1 tuần @ 14:00 → **9240** |
+
+`InApp` không đẩy Google (giữ như hiện tại).
+
+#### Sync Google → Hub (`CalendarSyncService`)
+
+| `minutes` | Kết quả Hub |
+| --- | --- |
+| `< 1440` | `OffsetUnit=Minutes`, `TimeOfDay=null` |
+| `≥ 1440` | decode Google-style all-day: `days = ceil(minutes/1440)` (chia hết → `minutes/1440`); nếu `days % 7 == 0` → `Weeks = days/7`, else `Days`; `timeOfDayMinutes = days×1440 − minutes` → `"HH:mm"` (vd **9240 → 1 week @ 14:00**) |
+
+InApp rows trên Hub **không** bị xóa khi sync Google overrides (chỉ thay `GooglePopup` / `GoogleEmail`).
+
+> **Ghi chú implement:** với event **timed** (`allDay=false`) luôn giữ Minutes thô. Với event **all-day**, decode all-day style cả khi `minutes < 1440` (vd 900 → `1 Day` @ `09:00`) để round-trip UI Google không mất giờ.
+
+#### Ví dụ đối chiếu
+
+| Hub (UI) | Google `minutes` | Google UI |
+| --- | --- | --- |
+| 1 tuần · 14:00 | **9240** (`10080 − 840`) | 1 week before at **2:00pm** |
+| 1 tuần · (không / 00:00) | **10080** | 1 week before at **12:00am** ← bug cũ vẫn gửi case này dù Hub là 14:00 |
+| 1 ngày · 09:00 | **900** (`1440 − 540`) | 1 day before at **9:00am** |
+| 30 phút (timed) | **30** | 30 minutes before |
+
+## [2026-07-14] Calendar guest email prompt + dọn attendee metadata cũ
+
+- Khi create/edit làm thay đổi danh sách khách, FE hiển thị hộp thoại ba lựa chọn giống Google Calendar: quay lại chỉnh sửa, lưu nhưng không gửi email, hoặc gửi email. API nhận `sendUpdates`; Calendar gateway map sang Google `none|all` (mặc định vẫn là `all` để tương thích client cũ).
+- Quyết định về phạm vi email guest: dialog trong WorkspaceHub chỉ là UI chọn có để Google Calendar gửi notification hay không; request sang Google vẫn dùng `sendUpdates=all` khi chọn gửi và `sendUpdates=none` khi không gửi. Google Calendar API chỉ công khai ba mức `sendUpdates`: `all` (notifications sent to all guests), `externalOnly` (non-Google Calendar guests only), `none` (no notifications); không có tham số target riêng người vừa thêm/xóa, nên việc Google có tự lọc/suppress email theo diff là hành vi nội bộ không được API cam kết. Nguồn docs: https://developers.google.com/workspace/calendar/api/v3/reference/events/update, https://developers.google.com/workspace/calendar/api/v3/reference/events/patch, https://developers.google.com/workspace/calendar/api/v3/reference/events/insert.
+- `sendUpdates=false` chỉ tắt email do Google Calendar gửi; invitation và notification in-app vẫn được reconcile để user WorkspaceHub nhận lời mời trong app.
+- Fix lỗi xóa khách cuối cùng: Google trả `attendees=null`, backend nay xóa khóa `attendees` khỏi metadata local thay vì giữ danh sách cũ. Khi mở editor, FE ưu tiên attendee live từ endpoint calendar details để tự sửa cả snapshot cũ trước lần sync tiếp theo.
+- Thêm unit test cho việc truyền lựa chọn không gửi email và dọn metadata khi attendee cuối cùng bị xóa.
+
+## [2026-07-13] Calendar invitations + RSVP trong app + guest permissions
+
+- Google Calendar là nguồn sự thật của event; create/update có attendees dùng `sendUpdates=all`, vì vậy email mời do Google Calendar gửi. Gmail chỉ được tái sử dụng cho contact suggestions, không gửi email mời trùng.
+- Thêm `CalendarInvitations` để user nội bộ nhận notification và phản hồi `Accepted/Tentative/Declined` ngay trong WorkspaceHub. Event được reconcile giữa organizer/invitee bằng `iCalUID`; nếu invitee chưa connect GCal thì lưu `GoogleSyncPending` nhưng event accepted/tentative vẫn hiện trong app.
+- Sync hai chiều cập nhật attendee response và liên kết `InviteeItemId`; thay đổi attendee từ phía Google cũng tạo/gỡ invitation nội bộ ở lần sync kế tiếp.
+- Ba quyền Google (`guestsCanModify`, `guestsCanInviteOthers`, `guestsCanSeeOtherGuests`) được lưu metadata, ghi/đọc Google và enforce ở backend. UI ẩn sửa/xóa/guest list tương ứng; organizer luôn có toàn quyền.
+
+## [2026-07-12] Jira deadline trên Calendar — sync `fields.duedate`
+
+- **Gap:** FE overlay Jira đã có (violet, read-only) nhưng `JiraItemMapper` không map `fields.duedate` → `DueAt`/`metadata.dueDate` luôn null → ticket không lên lịch; overlap query còn match ticket theo `OccurredAt=updated` (sai).
+- **BE:** `JiraGateway` request thêm field `duedate`; `JiraIssue.DueDate`; mapper: có due → `OccurredAt`=start ngày UTC, `DueAt`=end exclusive (+1 ngày, all-day), `metadata.dueDate`=`yyyy-MM-dd`; không due → `OccurredAt=updated`, `DueAt`=null`. `JiraSyncService` + `PatchTicketAsync` cập nhật `DueAt` khi re-sync/remap.
+- **Query:** `ItemRepository` calendar overlap loại Ticket không có `DueAt` (chỉ deadline mới lên lịch).
+- **Re-sync:** ticket đã sync trước đó cần sync lại connection Jira để populate deadline.
+- **Tests:** `JiraItemMapperTests` (+2 case due date).
+
+## [2026-07-12] Gỡ bỏ khái niệm "task" khỏi Calendar — chỉ Google Calendar Event
+
+- **Lý do:** "task" chỉ là nhãn app-only (`metadata.calendarType="task"`) trên `ItemType.Event`, **không** dùng Google Tasks API. Gây phức tạp (nhánh `isTask` rải BE, merge metadata, toggle UI) mà không có giá trị thật.
+- **BE:** xóa `CalendarType` khỏi `PatchItemRequest`/`CreateEventRequest`; `End` **luôn bắt buộc** khi create (all-day FE gửi ngày kế); bỏ mọi nhánh `isTask` trong `ItemWriteBackService` (luôn cho location/attendees); xóa `CalendarSyncMetadataMerge` → sync ghi thẳng metadata Google.
+- **FE:** bỏ toggle Event/Task + `calendarType` khỏi modal/form utils/types, xóa i18n keys `typeEvent`/`typeTask`/`taskDueDate`/`taskNotes`/`createTask`…
+- **DB:** không migration — row cũ có `calendarType` bị ignore, hiển thị như all-day event thường; sync sau ghi đè metadata.
+- **Docs:** `docs/superpowers/specs/2026-07-12-remove-calendar-task-design.md`.
+- **Tests:** bỏ `PatchEvent_TaskWithAllDayFalse_*` + `CalendarSyncMetadataMergeTests`; 334/334 pass.
+
+## [2026-07-11] Calendar all-day ↔ timed write-back (Google PATCH vs UPDATE)
+
+- **Bug:** Kéo event cả ngày xuống slot có giờ (week view) → Google **400 Invalid start time** → app **502**. Nguyên nhân: `Events.Patch` merge giữ `start.date` cũ cùng `start.dateTime` mới (Google cấm lẫn hai loại).
+- **Fix:** `CalendarGateway.UpdateEventAsync` dùng **GET + `Events.Update`**; helper `ApplyUpdateTimes` thay whole `Start`/`End` (chỉ `date` hoặc chỉ `dateTime` + `TimeZone=UTC`).
+- **Docs:** `docs/superpowers/specs/2026-07-11-calendar-all-day-timed-google-update-vs-patch.md`
+- **Tests:** `ItemWriteBackServicePatchEventTests.cs` (9 case all-day/timed/task).
+
+## [2026-07-11] Calendar sync Drive attachments + gộp gateway
+
+- **Bug/gap đã fix:** Event gắn file Drive trên Google Calendar → sync về app → `metadataJson` có `driveAttachments` (map `Event.attachments[]`).
+- **Match `fileId` → `driveItemIds`:** Google Calendar `attachment.fileId` = Drive Item `ExternalId` (cùng Google file id). Sync lookup `Item` type `File` theo user + `ExternalId` → ghi `metadata.driveItemIds` (Guid nội bộ) khi file đã sync Drive; không match thì chỉ có `driveAttachments` (link hiển thị vẫn OK).
+- **Metadata merge:** Khi sync update, preserve `calendarType` (app-only); refresh attachment snapshot từ Google.
+- **Refactor:** Gộp `GoogleCalendarGateway` vào `CalendarGateway` — một `ICalendarGateway` cho sync + CRUD. Xóa `IGoogleCalendarGateway`.
+- **Docs:** `docs/superpowers/specs/2026-07-11-calendar-sync-attachments-gateway-merge-design.md`, `docs/superpowers/plans/2026-07-11-calendar-sync-attachments-gateway-merge-plan.md`.
+
+## [2026-07-10] Calendar edit + sync hoàn thiện (BE + FE)
+
+- **PATCH Event parity create:** `PatchItemRequest` thêm `allDay`; `UpdateEventAsync` mirror `InsertEventAsync` (all-day `Date`, Drive attachments); sau patch cập nhật `occurredAt`/`dueAt` + `metadata.start`/`end`/`allDay`/`description`/`driveItemIds`.
+- **Sync:** `CalendarEventDto` có `ETag`/`AllDay`; mapper dùng `Start`/`End` cho `OccurredAt`/`DueAt`; incremental sync xóa Item khi Google trả `status=cancelled`.
+- **Query lịch:** `GET /api/items?occurredFrom&occurredTo` (UTC, overlap) — Calendar FE chỉ tải event trong grid tháng/tuần (`limit` max 200).
+- **FE:** một modal `CalendarEventEditorModal` cho create/edit (Calendar, Inbox toolbar, ItemDetail); invalidate `calendar-items` sau PATCH; drag week slot → `allDay=false`.
+
+## [2026-07-10] Calendar workspace view (FE)
+
+- **View thứ ba có kiểm soát:** thêm route `/calendar` cạnh Danh sách/Bảng; chỉ hiện nút Lịch ở **Tất cả mục**, nguồn **Google Calendar (Event)** và folder. Email/Jira/Drive chỉ có Danh sách–Bảng; nếu deep-link `/calendar?type=Email|Ticket|File` thì redirect về Danh sách đúng nguồn. View switcher và Sidebar giữ nguyên `?folder=` khi đổi view/context.
+- **Hai chế độ:** Tháng + Tuần; tuần chia slot 30 phút (07:00–21:00) và có hàng **Cả ngày**. Click slot mở form với ngày/giờ có sẵn; điều hướng được các tháng/tuần và quay về hôm nay.
+- **Ba lớp thời gian:** Google Calendar Event (amber, CRUD/write-back), ScheduledEmail Pending (blue, read-only, mở màn Email hẹn giờ), Jira deadline (violet, read-only, mở ItemDetail). Khi vào folder, chỉ Item Event/Ticket đã gắn folder được hiển thị; ScheduledEmail hiện chỉ có ở lịch chung vì schema chưa có FolderId.
+- **Drag/drop:** chỉ Event có `draggable`; month drop giữ giờ hiện tại, week timed-slot drop đổi ngày+giờ, week all-day row đổi thành cả ngày. Jira/ScheduledEmail tuyệt đối read-only trên lịch.
+- **Contract BE cần khớp:** FE gửi `allDay` kèm `start/end` để tương thích API hiện tại; BE Calendar cần map `allDay=true` sang `EventDateTime.Date` để Google lưu đúng event cả ngày. Jira overlay đọc `ItemResponse.dueAt` hoặc `metadata.dueDate`; Jira sync phải populate một trong hai field thì deadline mới xuất hiện.
+
 ## [2026-07-16] SCRUM-64 đổi hướng OTP: Email (Resend) thay cho SMS/Firebase
 
 > **Quyết định scope:** OTP đăng ký chuyển sang **gửi qua email** dùng **Resend**. Bỏ CẢ hai hướng cũ: SMS Twilio (develop) và Firebase Phone Auth (nhánh `fix/login-ux`).

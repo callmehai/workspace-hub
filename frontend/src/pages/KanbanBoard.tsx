@@ -70,9 +70,7 @@ export const KanbanBoard = () => {
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [driveKind, setDriveKind] = useState<'all' | 'folder' | 'file'>('all');
-  const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
-  const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
-  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>(''); // lọc ticket Jira theo người phụ trách
   const [accountFilter, setAccountFilter] = useState<string>(''); // lọc theo tài khoản (connectionId); '' = tất cả
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,15 +116,6 @@ export const KanbanBoard = () => {
     }, 350);
   }, []);
 
-  const projectKeyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleProjectKeyChange = useCallback((val: string) => {
-    setProjectKeyFilter(val);
-    if (projectKeyDebounceRef.current) clearTimeout(projectKeyDebounceRef.current);
-    projectKeyDebounceRef.current = setTimeout(() => {
-      setDebouncedProjectKey(val.trim());
-    }, 350);
-  }, []);
-
   const { data: folders = [] } = useQuery({
     queryKey: ['folders', { includeShared: false }],
     queryFn: () => foldersApi.getFolders()
@@ -137,15 +126,14 @@ export const KanbanBoard = () => {
    * (kiểu Jira/Trello) — load COL_PAGE_SIZE thẻ đầu, bấm "Tải thêm" ở đáy cột để lấy tiếp.
    * Số trên header cột = TỔNG THẬT từ server (total của envelope), không phải số đã load.
    */
-  // Scope theo nguồn: có tab ⟹ khoá 1 loại (bỏ qua chip loại); tab Jira mới áp project.
+  // Scope theo nguồn: có tab ⟹ khoá 1 loại (bỏ qua chip loại).
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
-  const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
   // Lọc folder/file chỉ áp ở tab Drive (Bảng không có drill-down folder nên chỉ cần sourceType File).
   const effectiveDriveKind = sourceType === 'File' && driveKind !== 'all' ? driveKind : undefined;
 
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, connectionId: accountFilter || undefined, search, driveKind: effectiveDriveKind }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, assignee: effectiveAssignee, connectionId: accountFilter || undefined, search, driveKind: effectiveDriveKind }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -155,7 +143,6 @@ export const KanbanBoard = () => {
       types: effectiveTypes,
       isImportant: importantOnly || undefined,
       tagIds: tagFilters.length > 0 ? tagFilters : undefined,
-      projectKey: effectiveProjectKey,
       assignee: effectiveAssignee,
       connectionId: accountFilter || undefined,
       search: search || undefined,
@@ -390,8 +377,6 @@ export const KanbanBoard = () => {
           onToggleTagFilter={(id) =>
             setTagFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
           onClearTagFilters={() => setTagFilters([])}
-          projectKeyFilter={projectKeyFilter}
-          onProjectKeyChange={handleProjectKeyChange}
           assigneeFilter={assigneeFilter}
           onAssigneeChange={setAssigneeFilter}
           accountFilter={accountFilter}

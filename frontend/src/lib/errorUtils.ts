@@ -11,13 +11,24 @@ export interface ApiErrorResponse {
 
 export interface HandleApiErrorOptions {
   onConflict?: () => void;
+  conflictMessage?: string;
   navigate?: (path: string) => void;
   silent?: boolean;
 }
 
+/** Status HTTP từ lỗi Axios (nếu có). */
+export function getApiErrorStatus(err: unknown): number | undefined {
+  if (axios.isAxiosError(err)) return err.response?.status;
+  return undefined;
+}
+
+export function isNotFoundApiError(err: unknown): boolean {
+  return getApiErrorStatus(err) === 404;
+}
+
 /**
  * Parse lỗi Axios theo format backend chuẩn và hiển thị toast.
- * Ưu tiên: Xử lý status code (409, 403, 502) > details[] > message > fallbackMessage
+ * Ưu tiên: Xử lý status code (404, 409, 403, 502) > details[] > message > fallbackMessage
  */
 export const handleApiError = (
   err: unknown,
@@ -32,9 +43,16 @@ export const handleApiError = (
     const status = err.response?.status;
     const data = err.response?.data as ApiErrorResponse | undefined;
 
+    if (status === 404) {
+      if (!options?.silent) {
+        toast.error(data?.message || translate('item.notFoundHint'));
+      }
+      return;
+    }
+
     if (status === 409) {
       if (!options?.silent) {
-        toast.error(data?.message || translate('errors.conflict'));
+        toast.error(options?.conflictMessage || data?.message || translate('errors.conflict'));
       }
       if (options?.onConflict) {
         options.onConflict();

@@ -227,7 +227,11 @@ export const Integrations = () => {
       // Metadata Jira (project + assignee) suy từ ticket vừa sync → phải refetch cùng.
       queryClient.invalidateQueries({ queryKey: ['jira'] });
     },
-    onError: (err) => handleApiError(err, t('integrations.syncFail')),
+    onError: (err) => {
+      // 502 đã ghi Status=Error trên BE — invalidate để badge «Lỗi đồng bộ» hiện ngay, không cần F5.
+      handleApiError(err, t('integrations.syncFail'));
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+    },
   });
 
   const handleConnect = (integrationKey: string, serviceType: string, serviceName: string) => {

@@ -25,6 +25,8 @@ public class ItemsController : ApiControllerBase
     private readonly IValidator<CreateEventRequest> _createEventValidator;
     private readonly IValidator<CreateTicketRequest> _createTicketValidator;
     private readonly IValidator<PatchItemRequest> _patchItemValidator;
+    private readonly IValidator<RsvpRequest> _rsvpValidator;
+    private readonly IValidator<SendEmailToGuestsRequest> _sendEmailValidator;
 
     public ItemsController(
         IItemService itemService,
@@ -35,7 +37,9 @@ public class ItemsController : ApiControllerBase
         IValidator<CreateNoteRequest> createNoteValidator,
         IValidator<CreateEventRequest> createEventValidator,
         IValidator<CreateTicketRequest> createTicketValidator,
-        IValidator<PatchItemRequest> patchItemValidator)
+        IValidator<PatchItemRequest> patchItemValidator,
+        IValidator<RsvpRequest> rsvpValidator,
+        IValidator<SendEmailToGuestsRequest> sendEmailValidator)
     {
         _itemService = itemService;
         _writeBackService = writeBackService;
@@ -46,6 +50,8 @@ public class ItemsController : ApiControllerBase
         _createEventValidator = createEventValidator;
         _createTicketValidator = createTicketValidator;
         _patchItemValidator = patchItemValidator;
+        _rsvpValidator = rsvpValidator;
+        _sendEmailValidator = sendEmailValidator;
     }
 
     /// <summary>
@@ -100,6 +106,46 @@ public class ItemsController : ApiControllerBase
     {
         var item = await _itemService.GetItemByIdAsync(CurrentUserId, id, ct);
         return Ok(item);
+    }
+
+    /// <summary>
+    /// GET /api/items/{id}/calendar-details — lấy chi tiết sự kiện lịch từ Google Calendar kèm nhắc nhở.
+    /// </summary>
+    [HttpGet("{id:guid}/calendar-details")]
+    public async Task<ActionResult<CalendarEventDetailResponse>> GetCalendarEventDetail(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var detail = await _itemService.GetCalendarEventDetailAsync(CurrentUserId, id, ct);
+        return Ok(detail);
+    }
+
+    /// <summary>
+    /// PATCH /api/items/{id}/rsvp — cập nhật RSVP cho sự kiện.
+    /// </summary>
+    [HttpPatch("{id:guid}/rsvp")]
+    public async Task<IActionResult> RsvpEvent(
+        Guid id,
+        [FromBody] RsvpRequest request,
+        CancellationToken ct = default)
+    {
+        await _rsvpValidator.ValidateAndThrowAsync(request, ct);
+        await _itemService.RsvpEventAsync(CurrentUserId, id, request, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// POST /api/items/{id}/send-email-guests — gửi email mời khách hoặc nội dung chi tiết sự kiện.
+    /// </summary>
+    [HttpPost("{id:guid}/send-email-guests")]
+    public async Task<IActionResult> SendEmailToGuests(
+        Guid id,
+        [FromBody] SendEmailToGuestsRequest request,
+        CancellationToken ct = default)
+    {
+        await _sendEmailValidator.ValidateAndThrowAsync(request, ct);
+        await _itemService.SendEmailToGuestsAsync(CurrentUserId, id, request, ct);
+        return NoContent();
     }
 
     /// <summary>

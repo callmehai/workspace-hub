@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../hooks/useI18n';
 import { Link } from 'react-router-dom';
 import { notificationsApi } from '../../lib/notificationsApi';
-import { UNREAD_COUNT_KEY, NOTIFICATIONS_LIST_KEY } from '../../hooks/useNotificationHub';
+import { UNREAD_COUNT_KEY, NOTIFICATIONS_LIST_KEY } from '../../hooks/notificationHub/useNotificationHub';
 import { NotificationsDropdown } from './NotificationsDropdown';
 import { ThemeLangControls } from '../ThemeLangControls';
 import { usePollingInterval } from '../../hooks/usePollingInterval';

@@ -42,9 +42,9 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const currentFolder = searchParams.get('folder');
   const currentType = searchParams.get('type'); // scope integration (?type=Email|Event|File|Ticket)
 
-  // Folder = CONTEXT (không phải filter). Context có 2 view: Danh sách (/) và Bảng (/kanban).
+  // Folder = CONTEXT (không phải filter). Context có 3 view: Danh sách, Bảng và Lịch.
   // Đổi context giữ nguyên view đang xem; đổi view (trong page) giữ nguyên context.
-  const isItemsView = location.pathname === '/' || location.pathname === '/kanban';
+  const isItemsView = location.pathname === '/' || location.pathname === '/kanban' || location.pathname === '/calendar';
   const viewPath = isItemsView ? location.pathname : '/';
 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
@@ -144,7 +144,10 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
 
   // Chọn 1 nguồn (integration) → scope trang theo loại đó. Loại trừ lẫn nhau với folder.
   const handleSourceClick = (type: string) => {
-    navigate(`${viewPath}?type=${type}`);
+    // Chỉ Google Calendar có view Lịch. Từ /calendar mà chuyển sang Email/Jira/Drive
+    // thì về Danh sách của nguồn đó, tránh một calendar rỗng/không đúng ngữ nghĩa.
+    const targetPath = type === 'Event' ? '/calendar' : (location.pathname === '/calendar' ? '/' : viewPath);
+    navigate(`${targetPath}?type=${type}`);
     onMobileClose?.();
   };
 

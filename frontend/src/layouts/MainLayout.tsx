@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
 import { DriveUploadPanel } from '../components/drive/DriveUploadPanel';
-import { useNotificationHub } from '../hooks/useNotificationHub';
+import { useNotificationHub } from '../hooks/notificationHub/useNotificationHub';
 
 export const MainLayout = () => {
   useNotificationHub();

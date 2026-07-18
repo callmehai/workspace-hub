@@ -230,6 +230,7 @@ if (builder.Configuration.GetValue<bool>("Cron:SyncAutoRun"))
 {
     builder.Services.AddHostedService<WorkspaceHub.Api.BackgroundJobs.ConnectionSyncProcessorService>();
 }
+builder.Services.AddHostedService<WorkspaceHub.Api.BackgroundJobs.EventReminderProcessorService>();
 
 var app = builder.Build();
 

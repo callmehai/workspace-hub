@@ -19,6 +19,8 @@ public record GetItemsRequest(
     string? GmailLabel = null,
     string? Assignee = null,      // Jira accountId; "unassigned" = ticket chưa gán người
     Guid? ConnectionId = null,    // Lọc item theo connection (Drive/Gmail/…)
+    DateTime? OccurredFrom = null, // UTC inclusive — overlap filter (Event calendar range)
+    DateTime? OccurredTo = null,   // UTC exclusive
     string? DriveParentId = null, // Lọc item theo thư mục cha Drive
     string? DriveKind = null,     // Lọc Drive theo loại: "folder" (chỉ thư mục) | "file" (chỉ tệp); null = cả hai
     int Page = 1,
@@ -60,16 +62,34 @@ public record PatchItemRequest(
     string? StatusTransition = null,    // id hoặc tên transition (đổi status qua transition)
     List<string>? Labels = null,        // set toàn bộ labels (thay vì add/remove)
     string? Comment = null,             // thêm comment (thao tác riêng, không sửa field)
-    string? IssueType = null            // đổi loại issue (Task/Bug/Story...) qua PUT /issue
+    string? IssueType = null,           // đổi loại issue (Task/Bug/Story...) qua PUT /issue
+    // ── Google Calendar (Type=Event) — SCRUM-37
+    bool? AllDay = null,
+    List<Guid>? DriveItemIds = null,     // danh sách file đính kèm từ Drive
+    List<EventReminderDto>? Reminders = null,
+    List<string>? Recurrence = null,
+    bool? GuestsCanModify = null,
+    bool? GuestsCanInviteOthers = null,
+    bool? GuestsCanSeeOtherGuests = null,
+    bool? SendUpdates = null
 );
 
 public record CreateEventRequest(
     Guid ConnectionId,
     string Title,
     DateTimeOffset Start,
-    DateTimeOffset End,
+    DateTimeOffset End,                 // bắt buộc; all-day: FE gửi ngày kế tiếp
     string? Location = null,
-    List<string>? Attendees = null
+    List<string>? Attendees = null,
+    string? Description = null,
+    bool AllDay = false,
+    List<Guid>? DriveItemIds = null,     // ID Item Drive trong DB — BE resolve ra fileId/title/mimeType
+    List<EventReminderDto>? Reminders = null,
+    List<string>? Recurrence = null,
+    bool GuestsCanModify = false,
+    bool GuestsCanInviteOthers = true,
+    bool GuestsCanSeeOtherGuests = true,
+    bool SendUpdates = true
 );
 
 /// <summary>
@@ -133,5 +153,69 @@ public record ItemTag(
     Guid Id,
     string Name,
     string Color);
+
+// ───────────────────────── Calendar RSVP & Reminders DTOs ─────────────────────────
+
+public record EventReminderDto(
+    Guid? Id,
+    ReminderType ReminderType,
+    int OffsetValue,
+    ReminderUnit OffsetUnit,
+    string? TimeOfDay
+);
+
+public record CalendarEventAttendeeDto(
+    string Email,
+    string? DisplayName,
+    string? ResponseStatus,
+    string? Comment,
+    bool Organizer
+);
+
+public record CalendarDriveAttachmentDto(
+    string FileId,
+    string? Title,
+    string? MimeType,
+    string? FileUrl
+);
+
+public record CalendarEventDetailResponse(
+    Guid Id,
+    string Title,
+    string? Description,
+    DateTimeOffset? Start,
+    DateTimeOffset? End,
+    bool AllDay,
+    string? Location,
+    string? MeetUrl,
+    string? HtmlLink,
+    string? OrganizerEmail,
+    string? OrganizerDisplayName,
+    List<CalendarEventAttendeeDto> Attendees,
+    List<CalendarDriveAttachmentDto> DriveAttachments,
+    string? OwningCalendarName,
+    List<EventReminderDto> Reminders,
+    List<string> Recurrence,
+    string? ICalUid,
+    bool GuestsCanModify,
+    bool GuestsCanInviteOthers,
+    bool GuestsCanSeeOtherGuests,
+    bool CanEdit,
+    bool CanInviteOthers,
+    bool CanSeeGuestList,
+    bool IsOrganizer
+);
+
+public record RsvpRequest(
+    string Response, // "accepted" | "declined" | "tentative"
+    string? Comment
+);
+
+public record SendEmailToGuestsRequest(
+    List<string> RecipientEmails,
+    string Subject,
+    string BodyHtml,
+    bool SendCopyToMe
+);
 
 

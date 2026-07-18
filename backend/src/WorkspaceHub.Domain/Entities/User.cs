@@ -39,4 +39,5 @@ public class User
     public ICollection<ImportantContact> ImportantContacts { get; set; } = new List<ImportantContact>();
     public ICollection<ScheduledEmail> ScheduledEmails { get; set; } = new List<ScheduledEmail>();
     public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public ICollection<CalendarInvitation> ReceivedCalendarInvitations { get; set; } = new List<CalendarInvitation>();
 }

@@ -104,8 +104,36 @@ public enum NotificationType
     SyncError,
     ScheduleSent,
     ItemSynced,
+    CalendarReminder,
+    CalendarInvite,
     FriendRequest,   // nhận lời mời kết bạn
     FriendAccepted   // lời mời kết bạn được chấp nhận
+}
+
+/// <summary>Trạng thái phản hồi lời mời Calendar, tương ứng responseStatus của Google.</summary>
+public enum CalendarInvitationStatus
+{
+    NeedsAction,
+    Accepted,
+    Tentative,
+    Declined
+}
+
+/// <summary>Kênh nhắc nhở — lưu cột <c>ReminderType</c> (enum string).</summary>
+public enum ReminderType
+{
+    GooglePopup,
+    GoogleEmail,
+    InApp
+}
+
+/// <summary>Đơn vị thời gian nhắc nhở.</summary>
+public enum ReminderUnit
+{
+    Minutes,
+    Hours,
+    Days,
+    Weeks
 }
 
 /// <summary>Trạng thái quan hệ bạn bè. Decline/unfriend = xoá row (không lưu trạng thái từ chối).</summary>

@@ -28,6 +28,8 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         string? gmailLabel = null,
         string? assigneeAccountId = null,
         Guid? connectionId = null,
+        DateTime? occurredFrom = null,
+        DateTime? occurredTo = null,
         string? driveParentId = null,
         string? driveKind = null,
         int page = 1,
@@ -119,6 +121,18 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         if (connectionId.HasValue)
         {
             query = query.Where(i => i.ConnectionId == connectionId.Value);
+        }
+
+        // Calendar range overlap: start < rangeEnd AND end > rangeStart (OccurredAt=start, DueAt=end).
+        // Ticket chỉ hiện trên lịch khi có deadline (DueAt); không dùng OccurredAt=updated làm mốc lịch.
+        if (occurredFrom.HasValue || occurredTo.HasValue)
+        {
+            var rangeStart = occurredFrom ?? DateTime.MinValue;
+            var rangeEnd = occurredTo ?? DateTime.MaxValue;
+            query = query.Where(i =>
+                (i.Type != ItemType.Ticket || i.DueAt.HasValue) &&
+                i.OccurredAt < rangeEnd &&
+                (i.DueAt ?? i.OccurredAt) > rangeStart);
         }
 
         // DriveParentId filter — hierarchical Google Drive view (SCRUM-79 extension)
@@ -264,6 +278,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         // Tracked (KHÔNG AsNoTracking) để cập nhật item persist khi SaveChanges.
         var items = await Set
             .Include(i => i.ItemFolders)
+            .Include(i => i.Reminders)
             .Where(i => i.ConnectionId == connectionId && i.ExternalId != null)
             .ToListAsync(ct);
 
@@ -282,6 +297,7 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             .Include(i => i.ItemFolders)
             .Include(i => i.TagAssignments)
                 .ThenInclude(ta => ta.Tag)
+            .Include(i => i.Reminders)
             .FirstOrDefaultAsync(i => i.Id == itemId && i.UserId == userId, ct);
     }
 
@@ -306,6 +322,21 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     }
 
     /// <inheritdoc/>
+    public async Task<List<Item>> GetFilesByExternalIdsAsync(Guid userId, IEnumerable<string> externalIds, CancellationToken ct = default)
+    {
+        var ids = externalIds.Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        if (ids.Count == 0)
+            return [];
+
+        return await Set
+            .Where(i => i.UserId == userId
+                && i.Type == ItemType.File
+                && i.ExternalId != null
+                && ids.Contains(i.ExternalId))
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
     {
         // 1. Delete associated ItemFolders
@@ -318,7 +349,16 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             .Where(x => x.Item.ConnectionId == connectionId)
             .ExecuteDeleteAsync(ct);
 
-        // 3. Delete the Items themselves
+        // 3. Null InviteeItemId trước khi ExecuteDelete Items (FK NoAction — SQL Server không cho
+        // SET NULL khi OrganizerItemId đã CASCADE cùng trỏ Items). OrganizerItem CASCADE tự xoá invitation.
+        var now = DateTime.UtcNow;
+        await Db.CalendarInvitations
+            .Where(ci => ci.InviteeItem != null && ci.InviteeItem.ConnectionId == connectionId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(ci => ci.InviteeItemId, (Guid?)null)
+                .SetProperty(ci => ci.UpdatedAt, now), ct);
+
+        // 4. Delete the Items themselves
         await Set
             .Where(i => i.ConnectionId == connectionId)
             .ExecuteDeleteAsync(ct);

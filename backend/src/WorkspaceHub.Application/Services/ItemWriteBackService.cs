@@ -22,6 +22,7 @@ public class ItemWriteBackService : IItemWriteBackService
     private readonly IDriveGateway _driveGateway;
     private readonly IJiraGateway _jiraGateway;
     private readonly IJiraItemMapper _jiraMapper;
+    private readonly ICalendarInvitationService? _calendarInvitations;
 
     public ItemWriteBackService(
         IItemRepository items,
@@ -32,7 +33,8 @@ public class ItemWriteBackService : IItemWriteBackService
         ICalendarGateway calendarGateway,
         IDriveGateway driveGateway,
         IJiraGateway jiraGateway,
-        IJiraItemMapper jiraMapper)
+        IJiraItemMapper jiraMapper,
+        ICalendarInvitationService? calendarInvitations = null)
     {
         _items = items;
         _connections = connections;
@@ -43,6 +45,7 @@ public class ItemWriteBackService : IItemWriteBackService
         _driveGateway = driveGateway;
         _jiraGateway = jiraGateway;
         _jiraMapper = jiraMapper;
+        _calendarInvitations = calendarInvitations;
     }
 
     public ItemWriteBackService(
@@ -110,20 +113,24 @@ public class ItemWriteBackService : IItemWriteBackService
         if (!payload.IsUnread.HasValue && !payload.IsStarred.HasValue && payload.AddLabels == null && payload.RemoveLabels == null &&
             !payload.IsTrashed.HasValue && payload.Title == null && payload.Start == null &&
             payload.End == null && payload.Location == null && payload.Attendees == null &&
-            payload.Name == null)
+            payload.Name == null && payload.Description == null &&
+            payload.DriveItemIds == null && !payload.AllDay.HasValue && payload.Reminders == null &&
+            payload.Recurrence == null && !payload.GuestsCanModify.HasValue &&
+            !payload.GuestsCanInviteOthers.HasValue && !payload.GuestsCanSeeOtherGuests.HasValue)
         {
             throw new BusinessRuleException("No fields provided for update.");
         }
 
         string? providerEtag = null;
+        CalendarEvent? liveCalendarEvent = null;
         switch (item.Type)
         {
             case ItemType.Email:
                 providerEtag = await _gmailGateway.GetMessageETagAsync(conn, item.ExternalId, ct);
                 break;
             case ItemType.Event:
-                var ev = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
-                providerEtag = ev.ETag;
+                liveCalendarEvent = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
+                providerEtag = liveCalendarEvent.ETag;
                 break;
             case ItemType.File:
                 var file = await _driveGateway.GetFileAsync(conn, item.ExternalId, ct);
@@ -146,7 +153,7 @@ public class ItemWriteBackService : IItemWriteBackService
         switch (item.Type)
         {
             case ItemType.Email:
-                if (payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null || payload.Name != null)
+                if (payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null || payload.Name != null || payload.SendUpdates.HasValue)
                     throw new BusinessRuleException("Invalid fields for Email writeback.");
 
                 var addLabels = new List<string>();
@@ -208,32 +215,165 @@ public class ItemWriteBackService : IItemWriteBackService
             case ItemType.Event:
                 if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.IsTrashed != null || payload.Name != null)
                     throw new BusinessRuleException("Invalid fields for Event writeback.");
-                    
+
+                var currentMeta = ParseMetadataDict(item.MetadataJson);
+                var organizerEmail = liveCalendarEvent?.OrganizerEmail ?? ReadMetaString(currentMeta, "organizerEmail") ?? conn.ProviderAccountId;
+                var isOrganizer = string.Equals(organizerEmail, conn.ProviderAccountId, StringComparison.OrdinalIgnoreCase);
+                if (!isOrganizer)
+                {
+                    var guestsCanModify = liveCalendarEvent?.GuestsCanModify ?? ReadMetaBool(currentMeta, "guestsCanModify");
+                    var guestsCanInviteOthers = liveCalendarEvent?.GuestsCanInviteOthers ?? ReadMetaBool(currentMeta, "guestsCanInviteOthers", true);
+                    if (!guestsCanModify)
+                        throw new ForbiddenException("Organizer does not allow guests to modify this event.");
+                    if (payload.Attendees != null && !guestsCanInviteOthers)
+                        throw new ForbiddenException("Organizer does not allow guests to invite other people.");
+                    if (payload.GuestsCanModify.HasValue || payload.GuestsCanInviteOthers.HasValue || payload.GuestsCanSeeOtherGuests.HasValue)
+                        throw new ForbiddenException("Only the organizer can change guest permissions.");
+                }
+                var existingAllDay = ReadMetaAllDay(currentMeta);
+                var effectiveAllDay = payload.AllDay ?? existingAllDay;
+
+                var timeChanged = payload.Start.HasValue || payload.End.HasValue || payload.AllDay.HasValue;
+                DateTimeOffset? effectiveStart = payload.Start ?? (timeChanged ? ReadEventStart(currentMeta, item) : null);
+                DateTimeOffset? effectiveEnd = payload.End ?? (timeChanged ? ReadEventEnd(currentMeta, item) : null);
+
+                IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
+                if (payload.DriveItemIds != null)
+                {
+                    if (payload.DriveItemIds.Count > 0)
+                    {
+                        var driveItems = await _items.GetByIdsAndUserAsync(payload.DriveItemIds, userId, ct);
+                        driveAttachments = driveItems
+                            .Where(di => di.ExternalId != null)
+                            .Select(di =>
+                            {
+                                var dm = ParseMetadataDict(di.MetadataJson);
+                                var mt = ReadMetaString(dm, "mimeType");
+                                var url = ReadMetaString(dm, "webViewLink");
+                                return new CalendarDriveAttachment(di.ExternalId!, di.Title, mt, url);
+                            })
+                            .ToList();
+                    }
+                    else
+                    {
+                        driveAttachments = Array.Empty<CalendarDriveAttachment>();
+                    }
+                }
+
                 var evDto = new CalendarEvent(
                     item.ExternalId,
                     providerEtag,
                     payload.Title,
-                    null,
-                    payload.Start,
-                    payload.End,
+                    payload.Description,
+                    effectiveStart,
+                    effectiveEnd,
                     payload.Location,
-                    payload.Attendees
+                    payload.Attendees,
+                    timeChanged ? effectiveAllDay : existingAllDay,
+                    driveAttachments,
+                    null, // fullAttendees (only used for read)
+                    null, // meetUrl (only used for read)
+                    null, // htmlLink (only used for read)
+                    MapToGoogleReminders(payload.Reminders, timeChanged ? effectiveAllDay : existingAllDay),
+                    payload.Recurrence,
+                    OrganizerEmail: null,
+                    SelfResponseStatus: null,
+                    ICalUid: null,
+                    GuestsCanModify: payload.GuestsCanModify,
+                    GuestsCanInviteOthers: payload.GuestsCanInviteOthers,
+                    GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests,
+                    SendUpdates: payload.SendUpdates ?? true
                 );
 
                 var updatedEvent = await _calendarGateway.UpdateEventAsync(conn, "primary", item.ExternalId, evDto, ct);
                 newETag = updatedEvent.ETag;
-                item.Title = updatedEvent.Summary ?? "No Title";
-                item.OccurredAt = updatedEvent.Start?.UtcDateTime ?? DateTime.UtcNow;
-                if (updatedEvent.End.HasValue) item.DueAt = updatedEvent.End.Value.UtcDateTime;
+                item.Title = updatedEvent.Summary ?? item.Title;
+                if (updatedEvent.Description != null) item.Snippet = updatedEvent.Description;
 
-                var metaDictEvent = string.IsNullOrEmpty(item.MetadataJson) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.MetadataJson) ?? new Dictionary<string, object>();
+                if (updatedEvent.Start.HasValue)
+                    item.OccurredAt = updatedEvent.Start.Value.UtcDateTime;
+                if (updatedEvent.End.HasValue)
+                    item.DueAt = updatedEvent.End.Value.UtcDateTime;
+
+                var metaDictEvent = ParseMetadataDict(item.MetadataJson);
                 if (updatedEvent.Location != null) metaDictEvent["location"] = updatedEvent.Location;
-                if (updatedEvent.Attendees != null) metaDictEvent["attendees"] = updatedEvent.Attendees;
+                if (payload.Attendees != null)
+                {
+                    if (updatedEvent.Attendees is { Count: > 0 })
+                        metaDictEvent["attendees"] = updatedEvent.Attendees;
+                    else
+                        metaDictEvent.Remove("attendees");
+                }
+                else if (updatedEvent.Attendees is { Count: > 0 })
+                {
+                    metaDictEvent["attendees"] = updatedEvent.Attendees;
+                }
+                if (payload.Description != null) metaDictEvent["description"] = payload.Description;
+                if (updatedEvent.Recurrence != null && updatedEvent.Recurrence.Count > 0)
+                    metaDictEvent["recurrence"] = updatedEvent.Recurrence;
+                else
+                    metaDictEvent.Remove("recurrence");
+                metaDictEvent["organizerEmail"] = updatedEvent.OrganizerEmail ?? conn.ProviderAccountId;
+                metaDictEvent["selfResponseStatus"] = updatedEvent.SelfResponseStatus ?? "accepted";
+                if (!string.IsNullOrWhiteSpace(updatedEvent.ICalUid)) metaDictEvent["iCalUid"] = updatedEvent.ICalUid;
+                metaDictEvent["guestsCanModify"] = updatedEvent.GuestsCanModify ?? false;
+                metaDictEvent["guestsCanInviteOthers"] = updatedEvent.GuestsCanInviteOthers ?? true;
+                metaDictEvent["guestsCanSeeOtherGuests"] = updatedEvent.GuestsCanSeeOtherGuests ?? true;
+                if (payload.DriveItemIds != null)
+                {
+                    metaDictEvent["driveItemIds"] = payload.DriveItemIds;
+                    if (driveAttachments != null && driveAttachments.Count > 0)
+                    {
+                        metaDictEvent["driveAttachments"] = ToDriveAttachmentMetadata(driveAttachments);
+                    }
+                    else
+                    {
+                        metaDictEvent.Remove("driveAttachments");
+                    }
+                }
+
+                if (timeChanged || updatedEvent.Start.HasValue)
+                {
+                    var allDayForMeta = updatedEvent.AllDay || effectiveAllDay;
+                    if (allDayForMeta)
+                    {
+                        metaDictEvent["allDay"] = true;
+                        if (updatedEvent.Start.HasValue)
+                            metaDictEvent["start"] = updatedEvent.Start.Value.ToString("yyyy-MM-dd");
+                        if (updatedEvent.End.HasValue)
+                            metaDictEvent["end"] = updatedEvent.End.Value.ToString("yyyy-MM-dd");
+                    }
+                    else
+                    {
+                        metaDictEvent.Remove("allDay");
+                        if (updatedEvent.Start.HasValue)
+                            metaDictEvent["start"] = updatedEvent.Start.Value.UtcDateTime.ToString("o");
+                        if (updatedEvent.End.HasValue)
+                            metaDictEvent["end"] = updatedEvent.End.Value.UtcDateTime.ToString("o");
+                    }
+                }
+
+                if (payload.Reminders != null)
+                {
+                    item.Reminders.Clear();
+                    foreach (var r in payload.Reminders)
+                    {
+                        item.Reminders.Add(new EventReminder
+                        {
+                            ReminderType = NormalizeReminderType(r.ReminderType),
+                            OffsetValue = r.OffsetValue,
+                            OffsetUnit = r.OffsetUnit,
+                            TimeOfDay = r.TimeOfDay,
+                            IsSent = false
+                        });
+                    }
+                }
+
                 item.MetadataJson = JsonSerializer.Serialize(metaDictEvent);
                 break;
 
             case ItemType.File:
-                if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null)
+                if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null || payload.Title != null || payload.Start != null || payload.End != null || payload.Location != null || payload.Attendees != null || payload.SendUpdates.HasValue)
                     throw new BusinessRuleException("Invalid fields for File writeback.");
                     
                 // Thiết kế: Chấp nhận rủi ro partial write nếu update Name thành công nhưng Trash thất bại.
@@ -263,6 +403,16 @@ public class ItemWriteBackService : IItemWriteBackService
         if (newETag != null) item.ETag = newETag;
         
         await _items.SaveChangesAsync(ct);
+        if (_calendarInvitations != null && item.Type == ItemType.Event && item.ConnectionId != null && item.ExternalId != null)
+        {
+            var meta = ParseMetadataDict(item.MetadataJson);
+            var organizer = ReadMetaString(meta, "organizerEmail");
+            if (string.IsNullOrWhiteSpace(organizer) || string.Equals(organizer, conn.ProviderAccountId, StringComparison.OrdinalIgnoreCase))
+            {
+                var live = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
+                await _calendarInvitations.ReconcileOrganizerEventAsync(item, live, ct);
+            }
+        }
         return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
 
@@ -273,22 +423,98 @@ public class ItemWriteBackService : IItemWriteBackService
         if (conn.UserId != userId) throw new ForbiddenException("Not your connection.");
         if (conn.ServiceType != ServiceType.GCal) throw new BusinessRuleException("Connection is not for Calendar.");
 
+        var effectiveEnd = payload.End;
+        var effectiveAllDay = payload.AllDay;
+
+        // Đổi itemId nội bộ của Drive thành fileId/link để Google Calendar gắn attachment.
+        IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
+        if (payload.DriveItemIds != null && payload.DriveItemIds.Count > 0)
+        {
+            var driveItems = await _items.GetByIdsAndUserAsync(payload.DriveItemIds, userId, ct);
+            driveAttachments = driveItems
+                .Where(item => item.ExternalId != null)
+                .Select(item =>
+                {
+                    string? webViewLink = null;
+                    string? mimeType = null;
+                    if (!string.IsNullOrEmpty(item.MetadataJson))
+                    {
+                        try
+                        {
+                            var meta = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.MetadataJson);
+                            if (meta != null)
+                            {
+                                if (meta.TryGetValue("webViewLink", out var wvl)) webViewLink = wvl.GetString();
+                                if (meta.TryGetValue("mimeType", out var mt)) mimeType = mt.GetString();
+                            }
+                        }
+                        catch { /* ignore parse errors */ }
+                    }
+                    return new CalendarDriveAttachment(item.ExternalId!, item.Title, mimeType, webViewLink);
+                })
+                .ToList();
+        }
+
         var evDto = new CalendarEvent(
             "",
             null,
             payload.Title,
-            null,
+            payload.Description,
             payload.Start,
-            payload.End,
+            effectiveEnd,
             payload.Location,
-            payload.Attendees
+            payload.Attendees,
+            effectiveAllDay,
+            driveAttachments,
+            null, // fullAttendees
+            null, // meetUrl
+            null, // htmlLink
+            MapToGoogleReminders(payload.Reminders, effectiveAllDay),
+            payload.Recurrence,
+            OrganizerEmail: null,
+            SelfResponseStatus: null,
+            ICalUid: null,
+            GuestsCanModify: payload.GuestsCanModify,
+            GuestsCanInviteOthers: payload.GuestsCanInviteOthers,
+            GuestsCanSeeOtherGuests: payload.GuestsCanSeeOtherGuests,
+            SendUpdates: payload.SendUpdates
         );
 
+        // Event được tạo sau khi FE đã xử lý quyền Drive nếu có guest + attachment.
         var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
 
         var metaDict = new Dictionary<string, object>();
         if (created.Location != null) metaDict["location"] = created.Location;
-        if (created.Attendees != null) metaDict["attendees"] = created.Attendees;
+        if (created.Attendees is { Count: > 0 }) metaDict["attendees"] = created.Attendees;
+        if (created.Description != null) metaDict["description"] = created.Description;
+        if (created.Recurrence != null && created.Recurrence.Count > 0) metaDict["recurrence"] = created.Recurrence;
+        metaDict["organizerEmail"] = created.OrganizerEmail ?? conn.ProviderAccountId;
+        metaDict["selfResponseStatus"] = created.SelfResponseStatus ?? "accepted";
+        if (!string.IsNullOrWhiteSpace(created.ICalUid)) metaDict["iCalUid"] = created.ICalUid;
+        metaDict["guestsCanModify"] = created.GuestsCanModify ?? payload.GuestsCanModify;
+        metaDict["guestsCanInviteOthers"] = created.GuestsCanInviteOthers ?? payload.GuestsCanInviteOthers;
+        metaDict["guestsCanSeeOtherGuests"] = created.GuestsCanSeeOtherGuests ?? payload.GuestsCanSeeOtherGuests;
+        if (created.AllDay) metaDict["allDay"] = true;
+
+        if (effectiveAllDay)
+        {
+            metaDict["start"] = payload.Start.ToString("yyyy-MM-dd");
+            metaDict["end"] = effectiveEnd.ToString("yyyy-MM-dd");
+        }
+        else
+        {
+            metaDict["start"] = (created.Start?.UtcDateTime ?? payload.Start.UtcDateTime).ToString("o");
+            metaDict["end"] = (created.End?.UtcDateTime ?? effectiveEnd.UtcDateTime).ToString("o");
+        }
+
+        if (payload.DriveItemIds != null && payload.DriveItemIds.Count > 0)
+            metaDict["driveItemIds"] = payload.DriveItemIds;
+
+        // Lưu thông tin Drive attachments vào metadata để FE hiển thị.
+        if (driveAttachments != null && driveAttachments.Count > 0)
+        {
+            metaDict["driveAttachments"] = ToDriveAttachmentMetadata(driveAttachments);
+        }
 
         var item = new Item
         {
@@ -299,15 +525,39 @@ public class ItemWriteBackService : IItemWriteBackService
             ETag = created.ETag,
             Title = created.Summary ?? "New Event",
             Snippet = created.Description ?? "",
-            OccurredAt = created.Start?.UtcDateTime ?? DateTime.UtcNow,
-            DueAt = created.End?.UtcDateTime,
+            // All-day: dùng ngày theo offset gốc (khớp metadata["start"/"end"] = "yyyy-MM-dd"),
+            // KHÔNG .UtcDateTime.Date (chuyển UTC trước làm lệch -1 ngày ở tz dương như +07:00).
+            OccurredAt = effectiveAllDay
+                ? DateTime.SpecifyKind(payload.Start.Date, DateTimeKind.Utc)
+                : (created.Start?.UtcDateTime ?? DateTime.UtcNow),
+            DueAt = effectiveAllDay
+                ? DateTime.SpecifyKind(effectiveEnd.Date, DateTimeKind.Utc)
+                : created.End?.UtcDateTime,
             MetadataJson = JsonSerializer.Serialize(metaDict)
         };
 
+        if (payload.Reminders != null)
+        {
+            foreach (var r in payload.Reminders)
+            {
+                item.Reminders.Add(new EventReminder
+                {
+                    ReminderType = NormalizeReminderType(r.ReminderType),
+                    OffsetValue = r.OffsetValue,
+                    OffsetUnit = r.OffsetUnit,
+                    TimeOfDay = r.TimeOfDay,
+                    IsSent = false
+                });
+            }
+        }
+
         await _items.AddAsync(item, ct);
         await _items.SaveChangesAsync(ct);
+        if (_calendarInvitations != null)
+            await _calendarInvitations.ReconcileOrganizerEventAsync(item, created, ct);
         return new ItemResponse(item.Id, item.Type, item.Title, item.Snippet, item.Status, item.OccurredAt, item.DueAt, item.IsImportant, item.ExternalId, item.MetadataJson, item.ItemFolders.Select(f => f.FolderId).ToList(), item.TagAssignments.Where(ta => ta.Tag != null).Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color)).ToList(), item.ConnectionId);
     }
+
 
     public async Task<ItemResponse> CreateTicketAsync(Guid userId, CreateTicketRequest payload, CancellationToken ct = default)
     {
@@ -354,7 +604,7 @@ public class ItemWriteBackService : IItemWriteBackService
         // Reject field của Google (Email/Event/File) gửi nhầm vào ticket.
         if (payload.IsUnread != null || payload.IsStarred != null || payload.AddLabels != null || payload.RemoveLabels != null ||
             payload.IsTrashed != null || payload.Title != null || payload.Start != null || payload.End != null ||
-            payload.Location != null || payload.Attendees != null || payload.Name != null)
+            payload.Location != null || payload.Attendees != null || payload.Name != null || payload.SendUpdates.HasValue)
         {
             throw new BusinessRuleException("Invalid fields for Jira ticket writeback.");
         }
@@ -408,6 +658,7 @@ public class ItemWriteBackService : IItemWriteBackService
         item.MetadataJson = mapped.MetadataJson;
         item.ETag = mapped.ETag;
         item.OccurredAt = mapped.OccurredAt;
+        item.DueAt = mapped.DueAt;
         item.Status = mapped.Status;
 
         await _items.SaveChangesAsync(ct);
@@ -504,7 +755,93 @@ public class ItemWriteBackService : IItemWriteBackService
             }
         }
 
+        // Event invitee copy có thể bị CalendarInvitation.InviteeItemId trỏ tới (FK NoAction).
+        if (item.Type == ItemType.Event && _calendarInvitations != null)
+            await _calendarInvitations.ClearInviteeItemLinksAsync(new[] { item.Id }, ct);
+
         _items.Remove(item);
         await _items.SaveChangesAsync(ct);
     }
+
+    private static List<Dictionary<string, object?>> ToDriveAttachmentMetadata(IReadOnlyList<CalendarDriveAttachment> attachments)
+        => attachments.Select(a => new Dictionary<string, object?>
+        {
+            ["fileId"] = a.FileId,
+            ["title"] = a.Title,
+            ["mimeType"] = a.MimeType,
+            ["fileUrl"] = a.FileUrl,
+        }).ToList();
+
+    private static Dictionary<string, object> ParseMetadataDict(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return new Dictionary<string, object>();
+        return JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
+    }
+
+    private static bool ReadMetaAllDay(Dictionary<string, object> meta)
+    {
+        if (!meta.TryGetValue("allDay", out var val)) return false;
+        return val switch
+        {
+            JsonElement je => je.ValueKind == JsonValueKind.True,
+            bool b => b,
+            _ => false
+        };
+    }
+
+    private static bool ReadMetaBool(Dictionary<string, object> meta, string key, bool fallback = false)
+    {
+        if (!meta.TryGetValue(key, out var value)) return fallback;
+        return value switch
+        {
+            bool b => b,
+            JsonElement element when element.ValueKind is JsonValueKind.True or JsonValueKind.False => element.GetBoolean(),
+            _ => fallback
+        };
+    }
+
+    private static string? ReadMetaString(Dictionary<string, object> meta, string key)
+    {
+        if (!meta.TryGetValue(key, out var val)) return null;
+        return val switch
+        {
+            JsonElement je when je.ValueKind == JsonValueKind.String => je.GetString(),
+            string s => s,
+            _ => val?.ToString()
+        };
+    }
+
+    private static DateTimeOffset? ReadMetaDateTime(Dictionary<string, object> meta, string key, DateTime? fallbackUtc)
+    {
+        var raw = ReadMetaString(meta, key);
+        if (!string.IsNullOrEmpty(raw) && DateTimeOffset.TryParse(raw, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var dto))
+            return dto;
+        return fallbackUtc.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(fallbackUtc.Value, DateTimeKind.Utc)) : null;
+    }
+
+    private static DateTimeOffset ReadEventStart(Dictionary<string, object> meta, Item item)
+        => ReadMetaDateTime(meta, "start", item.OccurredAt) ?? new DateTimeOffset(item.OccurredAt, TimeSpan.Zero);
+
+    private static DateTimeOffset? ReadEventEnd(Dictionary<string, object> meta, Item item)
+        => ReadMetaDateTime(meta, "end", item.DueAt) ?? (item.DueAt.HasValue ? new DateTimeOffset(item.DueAt.Value, TimeSpan.Zero) : null);
+
+    private static List<CalendarEventReminder>? MapToGoogleReminders(IReadOnlyList<EventReminderDto>? localReminders, bool allDayStyle)
+    {
+        if (localReminders == null) return null;
+        var list = new List<CalendarEventReminder>();
+        foreach (var r in localReminders)
+        {
+            var minutes = GoogleCalendarReminderMapper.ToGoogleMinutes(r.OffsetUnit, r.OffsetValue, r.TimeOfDay, allDayStyle);
+
+            var reminderType = NormalizeReminderType(r.ReminderType);
+            if (reminderType == ReminderType.GooglePopup)
+                list.Add(new CalendarEventReminder("popup", minutes));
+            else if (reminderType == ReminderType.GoogleEmail)
+                list.Add(new CalendarEventReminder("email", minutes));
+        }
+        return list;
+    }
+
+    private static ReminderType NormalizeReminderType(ReminderType reminderType)
+        => Enum.IsDefined(reminderType) ? reminderType : ReminderType.GooglePopup;
 }

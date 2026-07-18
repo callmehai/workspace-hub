@@ -117,6 +117,7 @@ public class JiraSyncService : IJiraSyncService
         existing.MetadataJson = mapped.MetadataJson;
         existing.ETag = mapped.ETag;
         existing.OccurredAt = mapped.OccurredAt;
+        existing.DueAt = mapped.DueAt;
         // KHÔNG đụng IsImportant: Jira không có khái niệm "quan trọng" nên mapper luôn trả false
         // → re-sync sẽ xoá mất cờ user tự đánh dấu trong app. Đây là field thuần local.
         existing.Status = mapped.Status;

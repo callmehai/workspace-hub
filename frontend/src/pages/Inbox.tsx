@@ -165,9 +165,7 @@ export const Inbox = () => {
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [driveKind, setDriveKind] = useState<'all' | 'folder' | 'file'>('all');
-  const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
-  const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
-  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>(''); // lọc ticket Jira theo người phụ trách
   const [accountFilter, setAccountFilter] = useState<string>(''); // lọc theo tài khoản (connectionId); '' = tất cả
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -374,16 +372,6 @@ export const Inbox = () => {
     }, 350);
   }, []);
 
-  const projectKeyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleProjectKeyChange = useCallback((val: string) => {
-    setProjectKeyFilter(val);
-    if (projectKeyDebounceRef.current) clearTimeout(projectKeyDebounceRef.current);
-    projectKeyDebounceRef.current = setTimeout(() => {
-      setDebouncedProjectKey(val.trim());
-      setPage(1);
-    }, 350);
-  }, []);
-
   const { data: folders = [] } = useQuery({
     queryKey: ['folders', { includeShared: false }],
     queryFn: () => foldersApi.getFolders()
@@ -424,7 +412,6 @@ export const Inbox = () => {
   const requiredService = sourceType ? SOURCE_SERVICE[sourceType] : undefined;
   const missingConnection = requiredService ? !activeServices.has(requiredService.key) : activeServices.size === 0;
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
-  const effectiveProjectKey = sourceType === 'Ticket' ? (debouncedProjectKey || undefined) : undefined;
   const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
   // Chỉ áp lọc Drive folder/file khi ĐANG ở view Drive (tab Tệp hoặc trong 1 folder Drive) —
   // tránh chuyển tab khác mà vẫn dính filter (lọc vô hình → list trống khó hiểu).
@@ -438,7 +425,6 @@ export const Inbox = () => {
     search: search || undefined,
     folderId: selectedFolderId || undefined,
     tagIds: tagFilters.length > 0 ? tagFilters : undefined,
-    projectKey: effectiveProjectKey,
     assignee: effectiveAssignee,
     connectionId: accountFilter || undefined,
     gmailLabel,
@@ -448,7 +434,7 @@ export const Inbox = () => {
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, connectionId: params.connectionId, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, driveKind: params.driveKind, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, assignee: params.assignee, connectionId: params.connectionId, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, driveKind: params.driveKind, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -459,7 +445,6 @@ export const Inbox = () => {
     search: params.search,
     folderId: params.folderId,
     tagIds: params.tagIds,
-    projectKey: params.projectKey,
     assignee: params.assignee,
     connectionId: params.connectionId,
     gmailLabel: params.gmailLabel,
@@ -546,8 +531,6 @@ export const Inbox = () => {
     setImportantOnly(false);
     setSearchInput('');
     setSearch('');
-    setProjectKeyFilter('');
-    setDebouncedProjectKey('');
     setAssigneeFilter('');
     setAccountFilter('');
     setPage(1);
@@ -556,7 +539,7 @@ export const Inbox = () => {
   const currentFolder = selectedFolderId
     ? folders.find(f => f.id === selectedFolderId) ?? null
     : null;
-  const hasActiveFilters = Boolean(statusFilter.length > 0 || (!sourceType && typeFilter.length > 0) || importantOnly || tagFilters.length > 0 || search || effectiveProjectKey);
+  const hasActiveFilters = Boolean(statusFilter.length > 0 || (!sourceType && typeFilter.length > 0) || importantOnly || tagFilters.length > 0 || search || effectiveAssignee);
 
   const isEmpty = !isLoading && !isError && items.length === 0;
   const showList = !isLoading && !isError && items.length > 0;
@@ -601,8 +584,6 @@ export const Inbox = () => {
             setPage(1);
           }}
           onClearTagFilters={() => { setTagFilters([]); setPage(1); }}
-          projectKeyFilter={projectKeyFilter}
-          onProjectKeyChange={handleProjectKeyChange}
           assigneeFilter={assigneeFilter}
           onAssigneeChange={(v) => { setAssigneeFilter(v); setPage(1); }}
           accountFilter={accountFilter}
@@ -667,7 +648,6 @@ export const Inbox = () => {
             ))}
             {importantOnly && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">⭐ {t('toolbar.important')}</span>}
             {search && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">"{search}"</span>}
-            {effectiveProjectKey && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">Project: {effectiveProjectKey}</span>}
             <button onClick={clearFilters} className="text-brand-600 dark:text-brand-400 hover:underline ml-1">{t('inbox.clearFilters')}</button>
           </div>
         )}

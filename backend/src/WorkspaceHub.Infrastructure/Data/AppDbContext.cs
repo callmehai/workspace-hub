@@ -31,6 +31,8 @@ public class AppDbContext : DbContext
     public DbSet<GoogleContact> GoogleContacts => Set<GoogleContact>();
     public DbSet<ScheduledEmail> ScheduledEmails => Set<ScheduledEmail>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<EventReminder> EventReminders => Set<EventReminder>();
+    public DbSet<CalendarInvitation> CalendarInvitations => Set<CalendarInvitation>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<FriendInvite> FriendInvites => Set<FriendInvite>();
 
@@ -50,6 +52,8 @@ public class AppDbContext : DbContext
         cfg.Properties<GoogleContactSource>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<NotificationType>().HaveConversion<string>().HaveMaxLength(30);
         cfg.Properties<AuthProvider>().HaveConversion<string>().HaveMaxLength(10);
+        cfg.Properties<ReminderUnit>().HaveConversion<string>().HaveMaxLength(20);
+        cfg.Properties<CalendarInvitationStatus>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<FriendshipStatus>().HaveConversion<string>().HaveMaxLength(20);
         cfg.Properties<FriendTier>().HaveConversion<string>().HaveMaxLength(20);
 
@@ -312,6 +316,46 @@ public class AppDbContext : DbContext
                 .WithMany(u => u.Notifications)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<EventReminder>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ReminderType).HasMaxLength(20).HasConversion<string>();
+            e.Property(x => x.TimeOfDay).HasMaxLength(10);
+            e.HasOne(x => x.EventItem)
+                .WithMany(i => i.Reminders)
+                .HasForeignKey(x => x.EventItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<CalendarInvitation>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.InviteeEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.GoogleEventId).HasMaxLength(512).IsRequired();
+            e.Property(x => x.ICalUid).HasMaxLength(512);
+            e.HasIndex(x => new { x.OrganizerItemId, x.InviteeEmail }).IsUnique();
+            e.HasIndex(x => new { x.InviteeUserId, x.Status, x.UpdatedAt });
+            e.HasIndex(x => new { x.ICalUid, x.InviteeEmail })
+                .HasFilter("[ICalUid] IS NOT NULL");
+
+            e.HasOne(x => x.OrganizerItem)
+                .WithMany()
+                .HasForeignKey(x => x.OrganizerItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.OrganizerUser)
+                .WithMany()
+                .HasForeignKey(x => x.OrganizerUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(x => x.InviteeUser)
+                .WithMany(x => x.ReceivedCalendarInvitations)
+                .HasForeignKey(x => x.InviteeUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(x => x.InviteeItem)
+                .WithMany()
+                .HasForeignKey(x => x.InviteeItemId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         // ---------- Seed: Integration Google + Atlassian ----------
