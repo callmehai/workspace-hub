@@ -56,9 +56,10 @@ export function formatEventWhen(
 
   const lang = options?.lang ?? resolveUiLang();
   const locale = localeTag(lang);
-  const utcMidnight =
-    d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
-  const allDay = options?.allDay === true || (options?.allDay === undefined && utcMidnight);
+  // Chỉ coi all-day khi có cờ tường minh, hoặc giá trị gốc là date-only ("YYYY-MM-DD").
+  // KHÔNG suy đoán theo midnight-UTC: sự kiện 07:00 VN = 00:00:00 UTC sẽ bị mất giờ.
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const allDay = options?.allDay === true || (options?.allDay === undefined && dateOnly);
 
   if (allDay) {
     const date = d.toLocaleDateString(locale, {

@@ -17,6 +17,11 @@ public class EventReminderProcessorService : BackgroundService
     private readonly ILogger<EventReminderProcessorService> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(60);
 
+    // timeOfDay ("HH:mm") của reminder all-day là giờ treo-tường theo múi giờ hiển thị
+    // của app (VN = UTC+7, khớp cách all-day date lưu midnight-UTC đại diện ngày VN).
+    // Trigger phải là mốc UTC thật để so với DateTime.UtcNow → trừ offset này.
+    private static readonly TimeSpan DisplayUtcOffset = TimeSpan.FromHours(7);
+
     public EventReminderProcessorService(
         IServiceScopeFactory scopeFactory,
         ILogger<EventReminderProcessorService> logger)
@@ -138,7 +143,9 @@ public class EventReminderProcessorService : BackgroundService
             var parts = timeOfDay.Split(':');
             if (parts.Length == 2 && int.TryParse(parts[0], out var hr) && int.TryParse(parts[1], out var min))
             {
-                return new DateTime(baseDate.Year, baseDate.Month, baseDate.Day, hr, min, 0, DateTimeKind.Utc);
+                // hr:min là giờ VN → trừ offset ra UTC thật (vd 09:00 VN → 02:00 UTC).
+                return new DateTime(baseDate.Year, baseDate.Month, baseDate.Day, hr, min, 0, DateTimeKind.Utc)
+                    - DisplayUtcOffset;
             }
         }
 

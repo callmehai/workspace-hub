@@ -162,8 +162,13 @@ public class CalendarInvitationService : ICalendarInvitationService
         }
         else
         {
-            invitation.Status = ParseStatus(calendarEvent.SelfResponseStatus);
-            invitation.GoogleSyncPending = false;
+            // Không ghi đè RSVP local vừa gửi bằng giá trị Google còn stale (needsAction).
+            var googleStatus = ParseStatus(calendarEvent.SelfResponseStatus);
+            if (ShouldApplyGoogleStatus(invitation, googleStatus))
+            {
+                invitation.Status = googleStatus;
+                invitation.GoogleSyncPending = false;
+            }
         }
         invitation.UpdatedAt = DateTime.UtcNow;
         if (invitation.Status != CalendarInvitationStatus.NeedsAction)
