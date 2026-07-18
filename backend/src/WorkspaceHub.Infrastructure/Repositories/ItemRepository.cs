@@ -346,6 +346,21 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
     }
 
     /// <inheritdoc/>
+    public async Task<List<Item>> GetDriveItemsByConnectionsAsync(Guid userId, IReadOnlyList<Guid> connectionIds, CancellationToken ct = default)
+    {
+        if (connectionIds.Count == 0)
+            return [];
+
+        return await Set
+            .Where(i => i.UserId == userId
+                && i.Type == ItemType.File
+                && !i.IsArchived
+                && i.ConnectionId != null
+                && connectionIds.Contains(i.ConnectionId.Value))
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
     public async Task DeleteByConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
     {
         // 1. Delete associated ItemFolders

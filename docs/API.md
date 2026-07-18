@@ -138,8 +138,8 @@ List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (scope theo 
 - `POST /api/folders` — Tạo folder mới.
 - `PUT /api/folders/{id}` — Cập nhật folder metadata (chỉ Owner).
 - `DELETE /api/folders/{id}` — Xoá folder (chỉ Owner).
-- `POST /api/folders/{id}/items` — Gắn item vào folder (chỉ Owner).
-- `DELETE /api/folders/{id}/items/{itemId}` — Gỡ item khỏi folder (chỉ Owner).
+- `POST /api/folders/{id}/items` — Gắn item vào folder (chỉ Owner). **Nếu item là folder Google Drive** → tự gắn kèm **toàn bộ item con đệ quy** (theo `metadata.parents`) để account được share thấy nội dung bên trong, không chỉ mỗi folder rỗng. Bulk `.../items/bulk` cũng vậy.
+- `DELETE /api/folders/{id}/items/{itemId}` — Gỡ item khỏi folder (chỉ Owner). Folder Drive → gỡ kèm con đệ quy (đối xứng với add).
 - `GET /api/folders/shared-with-me` — Danh sách folder được chia sẻ với user hiện tại (chỉ đã accept).
 - `POST /api/folders/shares/{shareId}/accept` — Chấp nhận lời mời chia sẻ.
 - `POST /api/folders/shares/{shareId}/decline` — Từ chối lời mời chia sẻ.

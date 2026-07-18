@@ -40,6 +40,18 @@ Popup chi tiết event chưa gate theo `item.isOwner`. Với item của người
 > **Hạn chế còn lại (ghi để giải thích khi bảo vệ):** Editor vẫn có toàn quyền ghi lên tài khoản provider
 > của owner — xem `docs/FOLDER-SHARING-REVIEW.md` §4.
 
+## [2026-07-19] Folder Sharing — nhét folder Drive kéo theo toàn bộ item con
+
+**Bug.** Nhét một **folder Google Drive** vào một app-Folder rồi share folder đó cho account phụ (Viewer): account phụ chỉ thấy đúng cái folder Drive, **không thấy nội dung bên trong**.
+
+**Nguyên nhân.** Quan hệ cha-con Drive KHÔNG có FK/junction — chỉ nằm trong `Item.MetadataJson.parents` (mảng externalId). "Nhét item" chỉ tạo **một** junction `ItemFolder` cho đúng cái item được chọn. Owner vẫn duyệt được con vì FE điều hướng Drive theo cấp qua filter `driveParentId` (quét toàn bộ Drive item của owner theo `metadata.parents`, độc lập với membership app-Folder). Nhưng Viewer bị `ItemRepository.GetPagedAsync` lọc cứng theo `ItemFolders.Any(FolderId == folderId)` → con không có junction nên bị loại.
+
+**Fix (BE, `FolderService`).** Khi item được add là folder Drive (`metadata.isFolder == true`), dựng cây cha-con Drive trong memory (query toàn bộ Drive item của owner theo `ConnectionId`, map `parents`→con), BFS đệ quy từ `ExternalId` của folder rồi tạo `ItemFolder` cho **tất cả con mọi cấp**. Áp cho cả add đơn (`AddItemToFolderAsync`) lẫn bulk (`AddItemsToFolderAsync`); dedupe theo junction đã có + các item được request cùng lượt (tránh trùng PK khi chọn cả folder lẫn file bên trong). Đối xứng: `RemoveItemFromFolderAsync` gỡ folder Drive → gỡ luôn junction của con (tránh nội dung "mồ côi" account share vẫn thấy). Thêm repo method `IItemRepository.GetDriveItemsByConnectionsAsync`.
+
+> **Hạn chế đã biết (chấp nhận cho đồ án):** file MỚI được sync vào folder Drive SAU khi đã nhét sẽ không tự có junction (đọc = on-demand, không có logic kế thừa membership ở `DriveSyncService`). Nhét lại folder sẽ bổ sung các con mới (dedupe an toàn).
+
+> **Quan hệ với fix `browsingDriveFolder` (entry cùng ngày ở trên):** hai fix bổ trợ, không đè nhau. `browsingDriveFolder` bỏ filter workspace-folder khi **duyệt cấp vào** một thư mục Drive (dựa `driveParentId`) — phục vụ điều hướng cây Drive. Fix này tạo **junction thật** cho con → con thuộc app-Folder về mặt membership, nên hiện đúng cả khi share (Viewer list phẳng theo `folderId`) lẫn khi remove/đối xứng.
+
 ## [2026-07-18] Folder Sharing — fix desync xoá thread + Editor thao tác Jira + hạn chế đã biết
 
 > Review tính năng System Folder Sharing (nhánh `feat/System-Folder-Sharing`). Phân tích đầy đủ: `docs/FOLDER-SHARING-REVIEW.md`.
