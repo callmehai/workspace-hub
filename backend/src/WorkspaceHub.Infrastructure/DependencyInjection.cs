@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<IScheduledEmailRepository, ScheduledEmailRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<ICalendarInvitationRepository, CalendarInvitationRepository>();
         services.AddScoped<IFriendshipRepository, FriendshipRepository>();
         services.AddScoped<IFriendInviteRepository, FriendInviteRepository>();
 
@@ -125,7 +126,6 @@ public static class DependencyInjection
             c => c.Timeout = Timeout.InfiniteTimeSpan);
         
         // Gateways dùng cho luồng Sync (Đọc/Đồng bộ background job)
-        services.AddScoped<IGoogleCalendarGateway, GoogleCalendarGateway>();
         services.AddScoped<IGoogleDriveGateway, GoogleDriveGateway>();
         // AdminService đặt tại Infrastructure vì cần inject AppDbContext trực tiếp
         // (EF projection no-N+1 cho ConnectionCount/ItemCount — xem AdminService.cs).

@@ -47,6 +47,11 @@ export const scheduledEmailsApi = {
     return { value: [], '@odata.count': 0 };
   },
 
+  getScheduledEmailById: async (id: string): Promise<ScheduledEmailDto> => {
+    const response = await api.get(`/scheduled-emails/${id}`);
+    return response.data;
+  },
+
   createScheduledEmail: async (data: CreateScheduledEmailRequest): Promise<ScheduledEmailDto> => {
     const response = await api.post('/scheduled-emails', data);
     return response.data;

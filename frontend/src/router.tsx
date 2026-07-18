@@ -15,6 +15,7 @@ import { GoogleCallback } from './pages/auth/GoogleCallback';
 import { VerifyOtp } from './pages/auth/VerifyOtp';
 import { AdminRoute } from './components/auth/AdminRoute';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { CalendarPage } from './pages/CalendarPage';
 
 export const router = createBrowserRouter([
   {
@@ -56,6 +57,10 @@ export const router = createBrowserRouter([
           {
             path: 'kanban',
             element: <KanbanBoard />,
+          },
+          {
+            path: 'calendar',
+            element: <CalendarPage />,
           },
           {
             path: 'integrations',

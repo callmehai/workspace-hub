@@ -13,6 +13,9 @@ public class UserRepository : GenericRepository<User>, IUserRepository
     public Task<User?> GetByEmailAsync(string email, CancellationToken ct = default)
         => Set.FirstOrDefaultAsync(u => u.Email == email, ct);
 
+    public async Task<IReadOnlyList<User>> GetByEmailsAsync(IReadOnlyCollection<string> emails, CancellationToken ct = default)
+        => emails.Count == 0 ? [] : await Set.Where(u => emails.Contains(u.Email)).ToListAsync(ct);
+
     public Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
         => Set.AnyAsync(u => u.Email == email, ct);
 

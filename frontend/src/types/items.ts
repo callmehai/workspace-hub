@@ -32,6 +32,8 @@ export interface ItemResponse {
   threadId?: string | null;
   /** Số message trong thread (Email gộp thread). 1 = thư đơn. */
   threadCount?: number;
+  /** Populated when item is hydrated from calendar-details (not on list API). */
+  reminders?: EventReminderDto[];
 }
 
 export interface UpdateItemStatusRequest {
@@ -93,8 +95,11 @@ export interface PatchItemRequest {
   end?: string; // ISO DateTime
   location?: string;
   attendees?: string[];
+  /** Calendar UI contract: true = event cả ngày. BE Calendar cần map sang EventDateTime.Date. */
+  allDay?: boolean;
   name?: string;
   statusTransition?: string;
+  driveItemIds?: string[];
   // ── Jira (Type=Ticket) — SCRUM-57. Content is editable (unlike Email).
   summary?: string;
   description?: string;
@@ -103,6 +108,66 @@ export interface PatchItemRequest {
   labels?: string[];           // replaces all labels (no spaces allowed per Jira)
   comment?: string;            // adds a new comment (separate operation)
   issueType?: string;          // change issue type (Task/Bug/Story...) via PUT /issue
+  reminders?: EventReminderDto[];
+  recurrence?: string[];
+  guestsCanModify?: boolean;
+  guestsCanInviteOthers?: boolean;
+  guestsCanSeeOtherGuests?: boolean;
+  /** Whether Google Calendar should email attendees about this update. */
+  sendUpdates?: boolean;
+}
+
+export interface EventReminderDto {
+  id?: string | null;
+  reminderType: ReminderType;
+  offsetValue: number;
+  offsetUnit: 'Minutes' | 'Hours' | 'Days' | 'Weeks';
+  timeOfDay?: string; // "HH:mm" e.g., "09:00"
+}
+
+export type ReminderType = 'GooglePopup' | 'GoogleEmail' | 'InApp';
+
+export interface CalendarEventAttendeeDto {
+  email: string;
+  displayName?: string | null;
+  responseStatus?: string | null;
+  comment?: string | null;
+  organizer?: boolean;
+}
+
+export interface CalendarDriveAttachmentDto {
+  fileId: string;
+  title?: string | null;
+  mimeType?: string | null;
+  fileUrl?: string | null;
+}
+
+/** GET /api/items/{id}/calendar-details */
+export interface CalendarEventDetailResponse {
+  id: string;
+  title: string;
+  description?: string | null;
+  start?: string | null;
+  end?: string | null;
+  allDay: boolean;
+  location?: string | null;
+  meetUrl?: string | null;
+  htmlLink?: string | null;
+  organizerEmail?: string | null;
+  organizerDisplayName?: string | null;
+  attendees: CalendarEventAttendeeDto[];
+  driveAttachments: CalendarDriveAttachmentDto[];
+  owningCalendarName?: string | null;
+  reminders: EventReminderDto[];
+  recurrence: string[];
+  iCalUid?: string | null;
+  guestsCanModify: boolean;
+  guestsCanInviteOthers: boolean;
+  guestsCanSeeOtherGuests: boolean;
+  canEdit: boolean;
+  canInviteOthers: boolean;
+  canSeeGuestList: boolean;
+  isOrganizer: boolean;
 }
 
 /**
@@ -124,9 +189,19 @@ export interface CreateEventRequest {
   connectionId: string;
   title: string;
   start: string;
-  end: string;
+  end: string;                // required; all-day: gửi ngày kế tiếp
   location?: string;
   attendees?: string[];
+  description?: string;
+  allDay?: boolean;
+  driveItemIds?: string[];    // Item IDs (Guid) of Drive files to attach
+  reminders?: EventReminderDto[];
+  recurrence?: string[];
+  guestsCanModify?: boolean;
+  guestsCanInviteOthers?: boolean;
+  guestsCanSeeOtherGuests?: boolean;
+  /** Whether Google Calendar should email invitations to attendees. Defaults to true. */
+  sendUpdates?: boolean;
 }
 
 // ── Tags (SCRUM-70/71) ──

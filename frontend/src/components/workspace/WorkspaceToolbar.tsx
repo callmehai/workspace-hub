@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+﻿import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
-  Star, Search, LayoutGrid, List, RefreshCw, Tag, Settings2,
+  Star, Search, RefreshCw, Tag, Settings2,
   UserRound, Loader2, ChevronDown, Check, AtSign,
 } from 'lucide-react';
 import { Select } from '../Select';
@@ -16,11 +16,12 @@ import { TYPE_FILTERS, STATUS_FILTERS, typeIcon, integrationLabelKey } from '../
 import type { ItemType, ItemStatus, FolderResponse, TagResponse } from '../../types/items';
 import type { TranslationKey } from '../../i18n/translations';
 import { TagManagerModal } from '../tags/TagManagerModal';
+import { WorkspaceViewSwitcher, type WorkspaceView } from './WorkspaceViewSwitcher';
 import { WorkspaceNewMenu } from './WorkspaceNewMenu';
 
 /*
- * Toolbar dùng chung cho 2 view của workspace (Danh sách "/" + Bảng "/kanban").
- * MỤC TIÊU: đổi view KHÔNG thay đổi layout — mọi hàng GIỐNG HỆT nhau ở 2 view:
+ * Toolbar dùng chung cho các view chính của workspace.
+ * MỤC TIÊU: đổi view KHÔNG làm mất context folder/source:
  *   Hàng 1: context + actions · Hàng 2: chips (trạng thái + loại + quan trọng)
  *   Hàng 3: search full-width.
  * Ở Bảng, chip Trạng thái = lọc CỘT hiển thị (chọn "Đang xử lý" → chỉ hiện cột đó).
@@ -180,7 +181,7 @@ function TagFilterDropdown({
 }
 
 interface WorkspaceToolbarProps {
-  view: 'list' | 'board';
+  view: WorkspaceView;
   folder: FolderResponse | null;
   /** Context không tìm thấy trong list folders (share/ẩn) nhưng vẫn đang chọn */
   folderId: string | null;
@@ -283,15 +284,6 @@ export const WorkspaceToolbar = ({
     staleTime: 5 * 60_000,
   });
 
-  // Giữ NGUYÊN context khi đổi view (Danh sách ↔ Bảng): cả folder LẪN nguồn (tab Email/Jira/…).
-  const q = (() => {
-    const p = new URLSearchParams();
-    if (folderId) p.set('folder', folderId);
-    if (sourceType) p.set('type', sourceType);
-    const s = p.toString();
-    return s ? `?${s}` : '';
-  })();
-
   const handleSyncAll = async () => {
     try {
       setIsSyncing(true);
@@ -307,11 +299,16 @@ export const WorkspaceToolbar = ({
         toast.success(t('toolbar.syncDone'), { id: toastId });
         queryClient.invalidateQueries({ queryKey: ['items'] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
-        // Cache Jira (project cho form tạo ticket) làm mới sau sync.
+        // Metadata Jira (project + assignee) — refetch cùng sau sync (#111).
         queryClient.invalidateQueries({ queryKey: ['jira'] });
+        if (view === 'calendar') {
+          queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+          queryClient.invalidateQueries({ queryKey: ['calendar-scheduled-emails'] });
+        }
       } catch (err) {
         toast.error(t('integrations.syncErrorToast'), { id: toastId });
         handleApiError(err, t('integrations.syncErrorToast'), { navigate });
+        queryClient.invalidateQueries({ queryKey: ['connections'] });
       }
     } catch (err) {
       handleApiError(err, t('integrations.connectionsError'), { navigate });
@@ -319,6 +316,8 @@ export const WorkspaceToolbar = ({
       setIsSyncing(false);
     }
   };
+
+  const isCalendarView = view === 'calendar';
 
   return (
     <>
@@ -357,33 +356,12 @@ export const WorkspaceToolbar = ({
             <span>{t('toolbar.sync')}</span>
           </button>
 
-          {/* View switcher — luôn giữ ?folder= khi đổi view */}
-          <div className="flex items-center gap-1 p-[3px] bg-white border border-slate-200 rounded-[9px] dark:bg-slate-800 dark:border-slate-700">
-            <button
-              onClick={() => view !== 'list' && navigate(`/${q}`)}
-              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${view === 'list'
-                  ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
-                  : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
-                }`}
-            >
-              <List className="w-4 h-4" />
-              <span>{t('toolbar.list')}</span>
-            </button>
-            <button
-              onClick={() => view !== 'board' && navigate(`/kanban${q}`)}
-              className={`flex items-center gap-1.5 px-[11px] py-1.5 rounded-[7px] text-[13px] transition-colors ${view === 'board'
-                  ? 'bg-brand-50 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300'
-                  : 'text-slate-500 font-medium hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'
-                }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              <span>{t('toolbar.board')}</span>
-            </button>
-          </div>
+          <WorkspaceViewSwitcher view={view} folderId={folderId} sourceType={sourceType} />
         </div>
       </div>
 
-      {/* ── Hàng 2: filter CHIA TẦNG — Tier 1: Trạng thái · Loại · | Tier 2: Lọc thêm (Quan trọng + Tag) ── */}
+      {/* ── Hàng 2: filter — ẩn ở view Lịch (CalendarPage có filter riêng) ── */}
+      {!isCalendarView && (
       <div className="mb-4 space-y-2.5">
         {/* Tier 1 — facet chính: trạng thái & loại item */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -442,8 +420,7 @@ export const WorkspaceToolbar = ({
             />
           </FilterGroup>
 
-          {/* Tạo nhanh — 1 dropdown "Mới": ở "Tất cả mục" full option; tab cụ thể chỉ option
-              hợp loại đó; và chỉ hiện khi integration tương ứng đang Active. */}
+          {/* Tạo nhanh — 1 dropdown "Mới" (Drive upload + calendar editor từ nhánh này). */}
           <div className="flex items-center justify-end ml-auto">
             <WorkspaceNewMenu
               folder={folder}
@@ -454,6 +431,7 @@ export const WorkspaceToolbar = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* ── Hàng 3: search full-width — vị trí + kích thước GIỐNG HỆT 2 view ── */}
       <div className="flex gap-2 mb-4">
@@ -463,7 +441,7 @@ export const WorkspaceToolbar = ({
             type="text"
             value={searchInput}
             onChange={e => onSearchChange(e.target.value)}
-            placeholder={t('toolbar.search')}
+            placeholder={isCalendarView ? t('calendar.search') : t('toolbar.search')}
             className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>

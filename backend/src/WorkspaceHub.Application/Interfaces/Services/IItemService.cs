@@ -39,4 +39,19 @@ public interface IItemService
     /// Cập nhật cờ quan trọng (IsImportant) của Item.
     /// </summary>
     Task<ItemResponse> ToggleImportantAsync(Guid userId, Guid itemId, bool isImportant, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy chi tiết sự kiện lịch từ Google Calendar kèm cấu hình nhắc nhở local.
+    /// </summary>
+    Task<CalendarEventDetailResponse> GetCalendarEventDetailAsync(Guid userId, Guid itemId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cập nhật phản hồi RSVP của user lên Google Calendar.
+    /// </summary>
+    Task RsvpEventAsync(Guid userId, Guid itemId, RsvpRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gửi email nội dung chi tiết sự kiện đến danh sách khách mời.
+    /// </summary>
+    Task SendEmailToGuestsAsync(Guid userId, Guid itemId, SendEmailToGuestsRequest request, CancellationToken ct = default);
 }

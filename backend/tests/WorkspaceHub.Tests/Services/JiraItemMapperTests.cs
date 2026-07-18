@@ -23,13 +23,15 @@ public class JiraItemMapperTests
         JsonElement? description = null,
         DateTimeOffset? updated = null,
         string? statusCategoryKey = "indeterminate",
-        string? statusName = "In Progress") =>
+        string? statusName = "In Progress",
+        DateTimeOffset? dueDate = null) =>
         new(
             id, key, "SCRUM", "Scrum Project", summary, description,
             statusName, "Loc Hoang", "account123", "High", "Task",
             "https://api.atlassian.com/ex/jira/cloud-1/browse/SCRUM-1",
             updated,
-            statusCategoryKey);
+            statusCategoryKey,
+            dueDate);
 
     [Fact]
     public void ToItem_SetsTypeTicketAndBasicFields()
@@ -106,15 +108,42 @@ public class JiraItemMapperTests
     }
 
     [Fact]
-    public void ToItem_UpdatedSetsETagAndOccurredAt()
+    public void ToItem_UpdatedSetsETagAndOccurredAt_WhenNoDueDate()
     {
         var updated = new DateTimeOffset(2026, 6, 28, 10, 0, 0, TimeSpan.FromHours(7));
         var item = _mapper.ToItem(SampleIssue(updated: updated), Guid.NewGuid(), Guid.NewGuid());
 
         item.OccurredAt.Should().Be(updated.UtcDateTime);
         item.OccurredAt.Kind.Should().Be(DateTimeKind.Utc);
+        item.DueAt.Should().BeNull();
         // ETag dùng làm version-token cho conflict (SCRUM-57) — derive từ updated.
         item.ETag.Should().Be(updated.UtcDateTime.ToString("O"));
+    }
+
+    [Fact]
+    public void ToItem_WithDueDate_SetsCalendarFieldsAndMetadata()
+    {
+        var updated = new DateTimeOffset(2026, 6, 28, 10, 0, 0, TimeSpan.Zero);
+        var dueDate = new DateTimeOffset(2026, 7, 15, 0, 0, 0, TimeSpan.Zero);
+        var item = _mapper.ToItem(SampleIssue(updated: updated, dueDate: dueDate), Guid.NewGuid(), Guid.NewGuid());
+
+        item.OccurredAt.Should().Be(new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc));
+        item.DueAt.Should().Be(new DateTime(2026, 7, 16, 0, 0, 0, DateTimeKind.Utc));
+        item.ETag.Should().Be(updated.UtcDateTime.ToString("O"));
+
+        var md = JsonDocument.Parse(item.MetadataJson).RootElement;
+        md.GetProperty("dueDate").GetString().Should().Be("2026-07-15");
+    }
+
+    [Fact]
+    public void ToItem_WithDueDate_OccurredAtUsesDueNotUpdated()
+    {
+        var updated = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var dueDate = new DateTimeOffset(2026, 8, 20, 0, 0, 0, TimeSpan.Zero);
+        var item = _mapper.ToItem(SampleIssue(updated: updated, dueDate: dueDate), Guid.NewGuid(), Guid.NewGuid());
+
+        item.OccurredAt.Should().Be(new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc));
+        item.OccurredAt.Should().NotBe(updated.UtcDateTime);
     }
 
     [Fact]

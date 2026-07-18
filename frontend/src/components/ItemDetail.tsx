@@ -21,13 +21,15 @@ import { DriveFilePreview } from './drive/DriveFilePreview';
 import { CreateDriveFolderModal } from './drive/CreateDriveFolderModal';
 import { connectionsApi } from '../lib/connectionsApi';
 import { type PatchItemRequest, type FolderResponse, type ItemResponse, type PagedResult } from '../types/items';
-import { handleApiError } from '../lib/errorUtils';
+import { handleApiError, isNotFoundApiError } from '../lib/errorUtils';
 import { getStatusLabel, isItemUnread, isDriveFolder } from '../lib/itemMeta';
 import { useSeenSet, markSeen, markUnseen } from '../lib/seenStore';
 import { typeIcon, typeLabelKey } from '../lib/itemVisuals';
 import type { TranslationKey } from '../i18n/translations';
 import { useI18n } from '../hooks/useI18n';
 import toast from 'react-hot-toast';
+import { CalendarEventEditorModal, type CalendarEventFormValue } from './calendar/CalendarEventEditorModal';
+import { calendarFormToPatch, formatJiraDueDate, itemToCalendarForm } from '../lib/calendarFormUtils';
 
 interface ItemDetailProps {
   itemId: string;
@@ -79,8 +81,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
   const seenSet = useSeenSet();
 
-  const [isEditing, setIsEditing] = useState(false);
   const [isAddingToFolder, setIsAddingToFolder] = useState(false);
+  const [folderSearch, setFolderSearch] = useState('');
   const addFolderRef = useRef<HTMLDivElement>(null);
   const [isAddingTag, setIsAddingTag] = useState(false);
   const addTagRef = useRef<HTMLDivElement>(null);
@@ -89,17 +91,22 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
 
+  const closeFolderPicker = () => {
+    setIsAddingToFolder(false);
+    setFolderSearch('');
+  };
+
   // Đóng dropdown "Thêm vào thư mục" khi click ra ngoài / nhấn Esc.
   useEffect(() => {
     if (!isAddingToFolder) return;
     const onDocClick = (e: MouseEvent) => {
-      if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) setIsAddingToFolder(false);
+      if (addFolderRef.current && !addFolderRef.current.contains(e.target as Node)) closeFolderPicker();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsAddingToFolder(false); };
-    document.addEventListener('mousedown', onDocClick);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeFolderPicker(); };
+    document.addEventListener('mousedown', onDocClick, true);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('mousedown', onDocClick, true);
       document.removeEventListener('keydown', onKey);
     };
   }, [isAddingToFolder]);
@@ -134,13 +141,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
     };
   }, [isAddingTag]);
 
-  const [eventForm, setEventForm] = useState({
-    title: '',
-    start: '',
-    end: '',
-    location: '',
-    attendees: ''
-  });
+  const [eventEditorOpen, setEventEditorOpen] = useState(false);
 
   // ── Kéo cạnh trái để đổi độ rộng drawer (nhớ qua localStorage) ──
   const DRAWER_MIN = 420;
@@ -180,7 +181,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   // Fetch item by ID.
   // placeholderData: mồi từ cache list/board đang có → drawer mở TỨC THÌ với data sẵn,
   // fetch chi tiết chạy nền — không còn màn spinner nháy trước khi hiện nội dung.
-  const { data: item, isLoading, isError, refetch } = useQuery({
+  const { data: item, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['item', itemId],
     queryFn: () => itemsApi.getItemById(itemId),
     enabled: !!itemId,
@@ -198,10 +199,31 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       return undefined;
     },
   });
+  const isNotFound = isNotFoundApiError(error);
+
+  useEffect(() => {
+    if (!isError || !error || isNotFound) return;
+    handleApiError(error, t('item.loadError'));
+  }, [isError, error, isNotFound, t]);
 
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
     queryFn: () => foldersApi.getFolders()
+  });
+
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections'],
+    queryFn: connectionsApi.getConnections,
+    enabled: !!item && item.type === 'Event',
+  });
+  const gcalConnections = connections.filter(
+    c => c.serviceType.toLowerCase() === 'gcal' && c.status.toLowerCase() === 'active',
+  );
+
+  const { data: calendarDetail } = useQuery({
+    queryKey: ['calendar-event-detail', itemId],
+    queryFn: () => itemsApi.getCalendarEventDetail(itemId),
+    enabled: !!item && item.type === 'Event',
   });
 
   // Mutate item (writeback PATCH)
@@ -225,7 +247,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       if (!variables._isAutoRead) {
         toast.success(t('item.saved'));
       }
-      setIsEditing(false);
       setIsRenamingFile(false);
 
       // Instant UI update
@@ -237,6 +258,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       // Still invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      if (updatedItem.type === 'Event') {
+        queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+      }
     },
     onError: (err, variables, context) => {
       // rollback optimistic read/unread
@@ -390,15 +414,35 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
       <div className="fixed inset-0 z-50 flex justify-end">
         <div onClick={onClose} className="absolute inset-0 bg-slate-900/40 dark:bg-black/50" />
         <div className="relative w-full max-w-[462px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col items-center justify-center p-6 text-slate-500 dark:text-slate-400" style={{ animation: 'wh-slide-in .25s ease' }}>
-          <AlertCircle className="w-12 h-12 text-rose-500 dark:text-rose-400 mb-3" />
-          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">{t('item.loadError')}</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-xs mb-4">{t('item.loadErrorHint')}</p>
-          <button
-            onClick={() => refetch()}
-            className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
-          >
-            {t('item.reload')}
-          </button>
+          <AlertCircle className={`w-12 h-12 mb-3 ${isNotFound ? 'text-slate-400 dark:text-slate-500' : 'text-rose-500 dark:text-rose-400'}`} />
+          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
+            {isNotFound ? t('item.notFound') : t('item.loadError')}
+          </h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-xs mb-4">
+            {isNotFound ? t('item.notFoundHint') : t('item.loadErrorHint')}
+          </p>
+          <div className="flex items-center gap-2">
+            {!isNotFound && (
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+              >
+                {t('item.reload')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isNotFound
+                  ? 'bg-brand-600 text-white hover:bg-brand-700'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              {t('common.close')}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -493,56 +537,16 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         )
       });
     }
-    if (item.dueAt) rows.push({ label: 'Due date', value: new Date(item.dueAt).toLocaleString(dl) });
+    const dueDateLabel = formatJiraDueDate(item, metadata, lang);
+    if (dueDateLabel) rows.push({ label: 'Due date', value: dueDateLabel });
   }
 
-  // Event form edits
-  const startEditingEvent = () => {
-    let startVal = '';
-    let endVal = '';
-    if (metadata.start) startVal = new Date(metadata.start).toISOString().slice(0, 16);
-    if (metadata.end) endVal = new Date(metadata.end).toISOString().slice(0, 16);
+  // Event edit opens full modal (parity with Calendar create)
+  const openEventEditor = () => setEventEditorOpen(true);
 
-    setEventForm({
-      title: item.title,
-      start: startVal || new Date(item.occurredAt).toISOString().slice(0, 16),
-      end: endVal,
-      location: metadata.location || '',
-      attendees: metadata.attendees ? metadata.attendees.join(', ') : ''
-    });
-    setIsEditing(true);
-  };
-
-  const handleSaveEvent = () => {
-    if (!eventForm.title || !eventForm.start || !eventForm.end) {
-      toast.error(t('item.eventNeedFields'));
-      return;
-    }
-    const startIso = new Date(eventForm.start).toISOString();
-    const endIso = new Date(eventForm.end).toISOString();
-
-    if (new Date(startIso) >= new Date(endIso)) {
-      toast.error(t('item.eventTimeOrder'));
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const attendeesArray = eventForm.attendees
-      ? eventForm.attendees.split(',').map(email => email.trim()).filter(email => email.length > 0)
-      : [];
-
-    const invalidEmails = attendeesArray.filter(email => !emailRegex.test(email));
-    if (invalidEmails.length > 0) {
-      toast.error(t('item.invalidEmails', { emails: invalidEmails.join(', ') }));
-      return;
-    }
-
-    patchMutation.mutate({
-      title: eventForm.title,
-      start: startIso,
-      end: endIso,
-      location: eventForm.location || undefined,
-      attendees: attendeesArray
+  const handleSaveEventFromModal = (form: CalendarEventFormValue) => {
+    patchMutation.mutate(calendarFormToPatch(form), {
+      onSuccess: () => setEventEditorOpen(false),
     });
   };
 
@@ -696,7 +700,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
             {/* Add to folder button & dropdown */}
             <div className="relative" ref={addFolderRef}>
               <button
-                onClick={() => setIsAddingToFolder(!isAddingToFolder)}
+                onClick={() => {
+                  if (isAddingToFolder) closeFolderPicker();
+                  else {
+                    setFolderSearch('');
+                    setIsAddingToFolder(true);
+                  }
+                }}
                 className="inline-flex items-center justify-center gap-1 h-[26px] px-2 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-[12px] font-medium"
                 title={t('item.addToFolder')}
               >
@@ -706,23 +716,36 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
               {isAddingToFolder && (
                 <div className="absolute top-full left-0 mt-1.5 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1.5 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
+                    <input
+                      type="text"
+                      placeholder={lang === 'vi' ? 'Tìm thư mục...' : 'Search folders...'}
+                      value={folderSearch}
+                      onChange={e => setFolderSearch(e.target.value)}
+                      className="w-full px-2 py-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
                   {folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).length === 0 ? (
                     <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{t('item.noMoreFolders')}</div>
+                  ) : folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase())).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 text-center">{lang === 'vi' ? 'Không tìm thấy' : 'No folders found'}</div>
                   ) : (
-                    folders.filter((f: FolderResponse) => !item.folderIds?.includes(f.id)).map((f: FolderResponse) => (
-                      <button
-                        key={f.id}
-                        onClick={() => {
-                          addToFolderMutation.mutate(f.id);
-                          setIsAddingToFolder(false);
-                        }}
-                        disabled={addToFolderMutation.isPending}
-                        className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
-                      >
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
-                        <span className="truncate">{f.name}</span>
-                      </button>
-                    ))
+                    folders
+                      .filter((f: FolderResponse) => !item.folderIds?.includes(f.id) && f.name.toLowerCase().includes(folderSearch.toLowerCase()))
+                      .map((f: FolderResponse) => (
+                        <button
+                          key={f.id}
+                          onClick={() => {
+                            addToFolderMutation.mutate(f.id);
+                            closeFolderPicker();
+                          }}
+                          disabled={addToFolderMutation.isPending}
+                          className="w-full text-left px-3 py-2 text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color || '#f59e0b' }}></span>
+                          <span className="truncate">{f.name}</span>
+                        </button>
+                      ))
                   )}
                 </div>
               )}
@@ -788,75 +811,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
           )}
 
           {/* Form edit for Event */}
-          {isEditing && item.type === 'Event' ? (
-            <div className="border border-slate-200 dark:border-slate-800 rounded-[10px] p-4 bg-slate-50/50 dark:bg-slate-800/50 space-y-4 mb-[18px]">
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('item.editEvent')}</h3>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.eventTitle')}</label>
-                <input
-                  type="text"
-                  value={eventForm.title}
-                  onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.startLocal')}</label>
-                  <input
-                    type="datetime-local"
-                    value={eventForm.start}
-                    onChange={e => setEventForm({ ...eventForm, start: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.endLocal')}</label>
-                  <input
-                    type="datetime-local"
-                    value={eventForm.end}
-                    onChange={e => setEventForm({ ...eventForm, end: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.location')}</label>
-                <input
-                  type="text"
-                  value={eventForm.location}
-                  onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t('item.attendeesComma')}</label>
-                <input
-                  type="text"
-                  value={eventForm.attendees}
-                  onChange={e => setEventForm({ ...eventForm, attendees: e.target.value })}
-                  placeholder="vd1@gmail.com, vd2@gmail.com"
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleSaveEvent}
-                  disabled={patchMutation.isPending}
-                  className="px-3.5 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700 transition-colors flex items-center gap-1.5"
-                >
-                  {patchMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{t('common.save')}</span>
-                </button>
-              </div>
-            </div>
-          ) : item.type === 'Ticket' ? (
+          {item.type === 'Ticket' ? (
             /* ── Ticket: inline edit từng field + comment + attachment ── */
             <JiraTicketPanel
               item={item}
@@ -903,8 +858,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                 <Edit3 className="w-4 h-4" /><span>{t('item.continueEditDraft')}</span>
               </button>
             )}
-            {item.type === 'Event' && !isEditing && (
-              <button onClick={startEditingEvent} className={primaryBtn}>
+            {item.type === 'Event' && !eventEditorOpen && (
+              <button onClick={openEventEditor} className={primaryBtn}>
                 <Edit3 className="w-4 h-4" /><span>{t('item.editEventBtn')}</span>
               </button>
             )}
@@ -1067,6 +1022,23 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
         defaultConnectionId={item.connectionId ?? undefined}
         defaultParentItemId={fileIsDriveFolder ? item.id : null}
       />
+
+      {item.type === 'Event' && (
+        <CalendarEventEditorModal
+          key={item.id}
+          open={eventEditorOpen}
+          mode="edit"
+          initialValue={{
+            ...itemToCalendarForm(item),
+            reminders: calendarDetail?.reminders ?? [],
+          }}
+          connections={gcalConnections}
+          allConnections={connections}
+          saving={patchMutation.isPending}
+          onClose={() => setEventEditorOpen(false)}
+          onSubmit={handleSaveEventFromModal}
+        />
+      )}
     </div>
   );
 };

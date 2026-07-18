@@ -117,6 +117,7 @@ public class JiraSyncService : IJiraSyncService
         existing.MetadataJson = mapped.MetadataJson;
         existing.ETag = mapped.ETag;
         existing.OccurredAt = mapped.OccurredAt;
+        existing.DueAt = mapped.DueAt;
         existing.IsImportant = mapped.IsImportant;
         existing.Status = mapped.Status;
     }

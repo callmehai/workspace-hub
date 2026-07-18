@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown, Plus, StickyNote, CalendarPlus, Ticket,
   FolderPlus, Upload, FolderUp,
@@ -8,10 +9,14 @@ import toast from 'react-hot-toast';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
 import { buildDriveFolderEntries } from '../../lib/driveApi';
 import { enqueueFiles, enqueueFolder } from '../../lib/driveUploadStore';
+import { itemsApi } from '../../lib/itemsApi';
+import { handleApiError } from '../../lib/errorUtils';
+import { markSeen } from '../../lib/seenStore';
+import { emptyCalendarForm, formToRange, calendarRangeToApiTimes } from '../../lib/calendarFormUtils';
 import { useI18n } from '../../hooks/useI18n';
 import type { FolderResponse, ItemType } from '../../types/items';
 import { CreateNoteModal } from './CreateNoteModal';
-import { CreateEventModal } from './CreateEventModal';
+import { CalendarEventEditorModal, type CalendarEventFormValue } from '../calendar/CalendarEventEditorModal';
 import { CreateTicketModal } from '../jira/CreateTicketModal';
 import { CreateDriveFolderModal } from '../drive/CreateDriveFolderModal';
 
@@ -49,6 +54,8 @@ function MenuItem({
  */
 export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = null, preferredDriveConnectionId }: Props) {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +76,10 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
     c.serviceType.toLowerCase() === svc && c.status.toLowerCase() === 'active';
   const hasGcal = connections.some(isActive('gcal'));
   const hasJira = connections.some(isActive('jira'));
+  const gcalConnections = useMemo(
+    () => connections.filter(isActive('gcal')),
+    [connections],
+  );
   const driveConnections = useMemo(
     () => connections.filter(isActive('drive')),
     [connections],
@@ -91,6 +102,32 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
   const showTicket = !inDriveFolder && (!sourceType || sourceType === 'Ticket') && hasJira;
   const showDrive = (inDriveFolder || !sourceType || sourceType === 'File') && hasDrive;
   const hasAnyOption = showNote || showEvent || showTicket || showDrive;
+
+  const createEventMutation = useMutation({
+    mutationFn: (form: CalendarEventFormValue) => {
+      const { start, end } = formToRange(form);
+      const times = calendarRangeToApiTimes(start, end, form.allDay);
+      return itemsApi.createEvent({
+        connectionId: form.connectionId,
+        title: form.title,
+        start: times.start,
+        end: times.end,
+        allDay: form.allDay,
+        location: form.location.trim() || undefined,
+        attendees: form.attendees,
+        description: form.description.trim() || undefined,
+        driveItemIds: form.driveItemIds.length > 0 ? form.driveItemIds : undefined,
+      });
+    },
+    onSuccess: (created) => {
+      markSeen(created.id);
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+      setIsEventOpen(false);
+      toast.success(t('createEvent.created'));
+    },
+    onError: (err) => handleApiError(err, t('createEvent.createFail'), { navigate }),
+  });
 
   // Đóng menu khi click ra ngoài.
   useEffect(() => {
@@ -225,7 +262,17 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
       </div>
 
       <CreateNoteModal isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} folder={folder} />
-      <CreateEventModal isOpen={isEventOpen} onClose={() => setIsEventOpen(false)} />
+      <CalendarEventEditorModal
+        key={isEventOpen ? (gcalConnections[0]?.id ?? 'new') : 'closed'}
+        open={isEventOpen}
+        mode="create"
+        initialValue={emptyCalendarForm(new Date(), gcalConnections[0]?.id ?? '')}
+        connections={gcalConnections}
+        allConnections={connections}
+        saving={createEventMutation.isPending}
+        onClose={() => setIsEventOpen(false)}
+        onSubmit={form => createEventMutation.mutate(form)}
+      />
       <CreateTicketModal isOpen={isTicketOpen} onClose={() => setIsTicketOpen(false)} />
       <CreateDriveFolderModal
         isOpen={isFolderModalOpen}

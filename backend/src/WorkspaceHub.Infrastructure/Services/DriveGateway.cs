@@ -263,10 +263,9 @@ public class DriveGateway : IDriveGateway
         try
         {
             using var drive = await BuildDriveServiceAsync(connection, ct);
-            // Tạo một đối tượng permission mới với thông tin về loại, vai trò và địa chỉ email của người dùng.
+            // Share trực tiếp cho một guest cụ thể với role FE chọn.
             var permission = new Google.Apis.Drive.v3.Data.Permission
             {
-                //Loại là "User" vì đang tạo quyền cho một người dùng cụ thể.
                 Type = DrivePermissionTypes.User,
                 Role = DrivePermissionRoles.ToApiValue(role),
                 EmailAddress = email
@@ -366,7 +365,7 @@ public class DriveGateway : IDriveGateway
         }
         try
         {
-            //Tạo permission mới với type = anyone và role = roleValue
+            // Bật "ai có link" khi file chưa có permission anyone.
             using var drive = await BuildDriveServiceAsync(connection, ct);
             var permission = new Google.Apis.Drive.v3.Data.Permission
             {

@@ -3,7 +3,7 @@ import type {
   PagedResult, ItemResponse, UpdateItemStatusRequest, CreateNoteRequest, 
   FolderResponse, AddItemToFolderRequest, ItemFolderResponse, ItemStatus, ItemType,
   PatchItemRequest, CreateEventRequest, CreateFolderRequest, UpdateFolderRequest,
-  CreateTicketRequest
+  CreateTicketRequest, CalendarEventDetailResponse,
 } from '../types/items';
 
 export interface GetItemsParams {
@@ -20,6 +20,10 @@ export interface GetItemsParams {
   /** Lọc ticket Jira theo người phụ trách (accountId); "unassigned" = chưa gán. */
   assignee?: string;
   connectionId?: string;
+  /** UTC inclusive — overlap filter for calendar month/week grid */
+  occurredFrom?: string;
+  /** UTC exclusive */
+  occurredTo?: string;
   driveParentId?: string;
   /** Lọc Drive theo loại: 'folder' = chỉ thư mục, 'file' = chỉ tệp. Bỏ trống = cả hai. */
   driveKind?: 'folder' | 'file';
@@ -153,6 +157,19 @@ export const itemsApi = {
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
+  },
+
+  getCalendarEventDetail: async (id: string): Promise<CalendarEventDetailResponse> => {
+    const response = await api.get(`/items/${id}/calendar-details`);
+    return response.data;
+  },
+
+  rsvpEvent: async (id: string, responseStatus: string, comment?: string): Promise<void> => {
+    await api.patch(`/items/${id}/rsvp`, { response: responseStatus, comment });
+  },
+
+  sendEmailToGuests: async (id: string, request: { recipientEmails: string[], subject: string, bodyHtml: string, sendCopyToMe: boolean }): Promise<void> => {
+    await api.post(`/items/${id}/send-email-guests`, request);
   },
 };
 

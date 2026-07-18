@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scheduledEmailsApi, type CreateScheduledEmailRequest, type ScheduledEmailDto } from '../lib/scheduledEmailsApi';
 import type { ODataResponse } from '../lib/odata';
@@ -191,6 +192,23 @@ export const ScheduledEmails = () => {
   // Detail modal
   const [selectedEmail, setSelectedEmail] = useState<ScheduledEmailDto | null>(null);
 
+  // Mở popup chi tiết trực tiếp qua ?open={id} (deep-link từ Calendar).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
+  const { data: openedEmail } = useQuery({
+    queryKey: ['scheduled-email', openId],
+    queryFn: () => scheduledEmailsApi.getScheduledEmailById(openId!),
+    enabled: !!openId,
+  });
+  const emailForModal = selectedEmail ?? (openId ? openedEmail ?? null : null);
+
+  useEffect(() => {
+    if (!openId || !openedEmail) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('open');
+    setSearchParams(next, { replace: true });
+  }, [openId, openedEmail, searchParams, setSearchParams]);
+
   // Fetch connections for the dropdown
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
@@ -337,10 +355,10 @@ export const ScheduledEmails = () => {
 
   return (
     <>
-      {selectedEmail && (
+      {emailForModal && (
         <DetailModal
-          email={selectedEmail}
-          connectionName={connections.find(c => c.id === selectedEmail.connectionId)?.providerAccountId || 'Unknown'}
+          email={emailForModal}
+          connectionName={connections.find(c => c.id === emailForModal.connectionId)?.providerAccountId || 'Unknown'}
           onClose={() => setSelectedEmail(null)}
           onCancel={(id) => cancelMutation.mutate(id, { onSuccess: () => setSelectedEmail(null) })}
           isCancelling={cancelMutation.isPending}

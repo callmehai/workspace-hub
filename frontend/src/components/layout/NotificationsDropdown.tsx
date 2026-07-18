@@ -7,7 +7,7 @@ import { notificationsApi } from '../../lib/notificationsApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { formatNotificationDisplay } from '../../lib/notificationDisplay';
 import type { ODataResponse } from '../../lib/odata';
-import { NOTIFICATIONS_LIST_KEY, UNREAD_COUNT_KEY } from '../../hooks/useNotificationHub';
+import { NOTIFICATIONS_LIST_KEY, UNREAD_COUNT_KEY } from '../../hooks/notificationHub/useNotificationHub';
 import { useI18n } from '../../hooks/useI18n';
 import type { NotificationDto } from '../../types/notifications';
 

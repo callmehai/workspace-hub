@@ -15,7 +15,10 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
                        // Jira (SCRUM-57)
                        x.Summary != null || x.Description != null || x.Assignee != null ||
                        x.Priority != null || x.StatusTransition != null || x.Labels != null || x.Comment != null ||
-                       x.IssueType != null)
+                       x.IssueType != null ||
+                       // Event edits (SCRUM-37)
+                       x.AllDay.HasValue || x.DriveItemIds != null || x.Reminders != null || x.Recurrence != null ||
+                       x.GuestsCanModify.HasValue || x.GuestsCanInviteOthers.HasValue || x.GuestsCanSeeOtherGuests.HasValue)
             .WithMessage("Request body must contain at least one field to update.");
 
         RuleFor(x => x.Start)
@@ -34,9 +37,13 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .WithMessage("RemoveLabels list cannot contain empty label IDs.");
 
         RuleFor(x => x.Attendees)
-            .Must(attendees => attendees!.All(a => !string.IsNullOrWhiteSpace(a)))
+            .Must(attendees => attendees!.Count <= 200 && attendees.All(a => !string.IsNullOrWhiteSpace(a)))
             .When(x => x.Attendees != null)
-            .WithMessage("Attendees list cannot contain empty emails.");
+            .WithMessage("Attendees must contain at most 200 non-empty emails.");
+
+        RuleForEach(x => x.Attendees)
+            .EmailAddress().WithMessage("Each attendee must be a valid email address.")
+            .When(x => x.Attendees != null);
 
         RuleFor(x => x.Name)
             .Must(name => name != null && name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) < 0)
@@ -54,5 +61,15 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .Must(labels => labels!.All(l => !string.IsNullOrWhiteSpace(l) && !l.Any(char.IsWhiteSpace)))
             .When(x => x.Labels != null)
             .WithMessage("Labels cannot be empty or contain whitespace.");
+
+        // Event edits (SCRUM-37): giới hạn số Drive attachment như Create → tránh 502 mờ.
+        RuleFor(x => x.DriveItemIds)
+            .Must(ids => ids!.Count <= 20)
+            .When(x => x.DriveItemIds != null)
+            .WithMessage("Maximum 20 Drive files can be attached.");
+
+        RuleForEach(x => x.Reminders)
+            .SetValidator(new EventReminderDtoValidator())
+            .When(x => x.Reminders != null);
     }
 }

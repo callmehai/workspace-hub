@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -23,7 +24,7 @@ public class JiraGateway : IJiraGateway
     private const string DefaultJql = "(assignee = currentUser() OR reporter = currentUser()) ORDER BY updated ASC";
 
     private static readonly string[] RequestedFields =
-        ["summary", "description", "status", "assignee", "priority", "issuetype", "project", "updated"];
+        ["summary", "description", "status", "assignee", "priority", "issuetype", "project", "updated", "duedate"];
 
     public JiraGateway(IAtlassianTokenService tokenService, IHttpClientFactory httpClientFactory)
     {
@@ -672,12 +673,34 @@ public class JiraGateway : IJiraGateway
         if (!string.IsNullOrEmpty(updatedStr) && DateTimeOffset.TryParse(updatedStr, out var parsed))
             updated = parsed;
 
+        DateTimeOffset? dueDate = ParseDueDate(fields);
+
         // KHÔNG build issueUrl ở đây: browse URL của Jira Cloud là https://{site}.atlassian.net/browse/{KEY},
         // cần TÊN SITE — không phải cloudId (UUID). Connection chỉ lưu cloudId nên chưa dựng được link đúng.
         // Để null thay vì emit link sai (api.atlassian.com/.../browse → API error khi click). Site URL: phase sau.
         return new JiraIssue(
             id, key, projectKey, projectName, summary, description,
-            statusName, assignee, assigneeAccountId, priorityName, issueTypeName, null, updated, statusCategoryKey);
+            statusName, assignee, assigneeAccountId, priorityName, issueTypeName, null, updated, statusCategoryKey, dueDate);
+    }
+
+    /// <summary>Jira trả duedate dạng "yyyy-MM-dd" (date-only, UTC calendar date).</summary>
+    private static DateTimeOffset? ParseDueDate(JsonElement fields)
+    {
+        var dueStr = GetString(fields, "duedate");
+        if (string.IsNullOrWhiteSpace(dueStr))
+            return null;
+
+        if (DateTime.TryParseExact(
+                dueStr.Trim(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dateOnly))
+        {
+            return new DateTimeOffset(dateOnly, TimeSpan.Zero);
+        }
+
+        return DateTimeOffset.TryParse(dueStr, out var parsed) ? parsed : null;
     }
 
     private static string? GetString(JsonElement el, string prop) =>
