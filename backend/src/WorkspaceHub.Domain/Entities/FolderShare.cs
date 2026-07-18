@@ -2,7 +2,7 @@ using WorkspaceHub.Domain.Enums;
 
 namespace WorkspaceHub.Domain.Entities;
 
-/// <summary>Owner mời teammate xem folder. MVP chỉ Viewer (read-only metadata).</summary>
+/// <summary>Owner mời bạn bè xem/chỉnh folder. AcceptedAt=null → Pending (invite chưa accept).</summary>
 public class FolderShare
 {
     public Guid Id { get; set; }
@@ -10,7 +10,8 @@ public class FolderShare
     public Guid SharedWithUserId { get; set; }
     public Guid CreatedByUserId { get; set; }
     public SharePermission Permission { get; set; } = SharePermission.Viewer;
-    public DateTime? AcceptedAt { get; set; }   // null = pending
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;   // khi tạo share / gửi invite
+    public DateTime? AcceptedAt { get; set; }   // null = pending; not null = accepted
     public DateTime? ExpiresAt { get; set; }
 
     // Navigation

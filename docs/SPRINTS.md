@@ -160,8 +160,6 @@
 
 ---
 
-## Ngoài scope (KHÔNG có ticket Jira)
-
 Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — chỉ là định hướng tương lai, đừng code, đừng gán số SCRUM (số 39–46 nay đã dùng cho việc khác; Jira giờ là 54→60):
 
 - Webhook / push realtime (Gmail watch + Pub/Sub, Calendar/Drive/Jira watch) thay sync on-demand.
@@ -169,7 +167,7 @@ Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — ch�
 
 ---
 
-## Friend system nội bộ app (2026-07-10 — VÀO scope, CHƯA có ticket Jira, cần tạo)
+## Friend system nội bộ app & Folder Sharing (2026-07-10 — VÀO scope)
 
 > Owner quyết định 2026-07-10: **bỏ hướng Google Contacts/People API (PR #100)** — bạn bè chỉ có ý nghĩa trong app, không dùng bên thứ 3. Nền tảng ĐÃ CODE XONG trên nhánh `feature/friends-system` (chi tiết: CHANGELOG [2026-07-10], DATABASE.md §Friendships, API.md §Friends).
 
@@ -177,4 +175,6 @@ Các ý tưởng dưới đây **không nằm trong Jira hiện tại** — ch�
 |---|---|
 | BE: Friendships + FriendInvites (migration `AddFriendSystem`), FriendService (kết bạn theo email, invite link, consume khi đăng ký, notification FriendRequest/FriendAccepted), `/api/friends/*`, unit test | ✅ Done |
 | FE: trang `/friends` (kết bạn, accept/decline, bạn thân ⭐, copy link mời), sidebar, RegisterPage banner+prefill từ `?inviteToken=` | ✅ Done |
-| Tương lai: share folder cho bạn theo role, tạo event cùng bạn, nhóm bạn tuỳ biến | ⏳ chưa làm |
+| BE+FE: Folder Sharing: chia sẻ folder cho bạn bè theo role (Viewer/Editor), quản lý quyền truy cập, chấp nhận/từ chối lời mời và rời thư mục | ✅ Done |
+| Review + hoàn thiện Folder Sharing (2026-07-18, Lộc) — **BE phân quyền:** fix desync xoá thread email, Editor thao tác Jira comment/attachment, Editor mark important, Editor reply/gửi email trong folder share (helper `CanAccessDraftAsync`), message 403 dễ hiểu cho Viewer, thêm `ItemResponse.isOwner` + `EmailThreadResponse.ownerEmail`. **FE:** i18n hoá dialog chia sẻ (31 key `share.*`), `FriendMultiSelect` (search + chọn nhiều + chọn nhanh bạn thân), `Select` render qua portal (hết bị dialog cắt), 403 không đá sang `/integrations`, ẩn nút "mở trên provider" với người được share. **Bug ngoài phạm vi:** sync không còn ghi đè cờ quan trọng (Jira/Drive/Gmail), reply/send không mất attachment, bỏ auto-save nháp gây nhiễu. Build 0 warning, 370/370 test pass. Chi tiết: `docs/FOLDER-SHARING-REVIEW.md`, CHANGELOG [2026-07-18] | ✅ Done |
+| Tương lai: tạo event cùng bạn, nhóm bạn tuỳ biến | ⏳ chưa làm |

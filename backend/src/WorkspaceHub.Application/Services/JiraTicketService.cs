@@ -13,19 +13,36 @@ public class JiraTicketService : IJiraTicketService
     private readonly IItemRepository _items;
     private readonly IConnectionRepository _connections;
     private readonly IJiraGateway _gateway;
+    private readonly IFolderRepository _folders;
 
-    public JiraTicketService(IItemRepository items, IConnectionRepository connections, IJiraGateway gateway)
+    public JiraTicketService(IItemRepository items, IConnectionRepository connections, IJiraGateway gateway,
+        IFolderRepository folders)
     {
         _items = items;
         _connections = connections;
         _gateway = gateway;
+        _folders = folders;
     }
 
     // ── Resolve item→(connection, issueKey) + kiểm ownership + Jira active ──
     private async Task<(Connection Conn, string Key)> ResolveAsync(Guid itemId, Guid userId, CancellationToken ct)
     {
-        var item = await _items.GetByIdAndUserAsync(itemId, userId, ct)
-            ?? throw new NotFoundException("Item", itemId);
+        // Owner HOẶC shared-Editor (mirror ItemWriteBackService) — trước đây chỉ check owner
+        // nên Editor của folder chứa ticket bị 404 ở mọi thao tác comment/attachment.
+        var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null && await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct))
+            item = await _items.GetByIdAsync(itemId, ct);
+        if (item == null)
+        {
+            // Viewer của folder chia sẻ cố comment/đính kèm → 403 kèm giải thích, thay vì
+            // 404 "Item with id '...' was not found" (lộ GUID, người dùng không hiểu vì sao).
+            if (await _folders.IsItemSharedWithUserAsync(itemId, userId, ct))
+                throw new ForbiddenException(
+                    "Bạn chỉ có quyền xem mục này trong thư mục được chia sẻ. Hãy yêu cầu chủ sở hữu cấp quyền chỉnh sửa.");
+
+            throw new NotFoundException("Item", itemId);
+        }
+
         if (item.Type != ItemType.Ticket) throw new BusinessRuleException("Item không phải ticket Jira.");
         if (item.ExternalId == null) throw new BusinessRuleException("Ticket thiếu issue key.");
         if (item.ConnectionId == null) throw new BusinessRuleException("Ticket không gắn connection.");

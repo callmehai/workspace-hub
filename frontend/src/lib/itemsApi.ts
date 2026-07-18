@@ -5,6 +5,12 @@ import type {
   PatchItemRequest, CreateEventRequest, CreateFolderRequest, UpdateFolderRequest,
   CreateTicketRequest, CalendarEventDetailResponse,
 } from '../types/items';
+import type {
+  SharedFolderDto,
+  FolderShareDto,
+  InviteFolderShareRequest,
+  UpdateFolderShareRequest,
+} from '../types/folders';
 
 export interface GetItemsParams {
   folderId?: string;
@@ -209,6 +215,44 @@ export const foldersApi = {
   removeItemsFromFolderBulk: async (folderId: string, itemIds: string[]): Promise<void> => {
     // using HTTP DELETE with a body requires config.data in axios
     await api.delete(`/folders/${folderId}/items/bulk`, { data: { itemIds } });
+  },
+
+  // ── Folder Sharing Endpoints ──
+  inviteShare: async (folderId: string, request: InviteFolderShareRequest): Promise<FolderShareDto> => {
+    const response = await api.post(`/folders/${folderId}/shares`, request);
+    return response.data;
+  },
+
+  getShares: async (folderId: string): Promise<FolderShareDto[]> => {
+    const response = await api.get(`/folders/${folderId}/shares`);
+    return response.data;
+  },
+
+  updateShareRole: async (folderId: string, shareId: string, request: UpdateFolderShareRequest): Promise<FolderShareDto> => {
+    const response = await api.patch(`/folders/${folderId}/shares/${shareId}`, request);
+    return response.data;
+  },
+
+  revokeShare: async (folderId: string, shareId: string): Promise<void> => {
+    await api.delete(`/folders/${folderId}/shares/${shareId}`);
+  },
+
+  getSharedWithMe: async (): Promise<SharedFolderDto[]> => {
+    const response = await api.get('/folders/shared-with-me');
+    return response.data;
+  },
+
+  acceptShare: async (shareId: string): Promise<FolderShareDto> => {
+    const response = await api.post(`/folders/shares/${shareId}/accept`);
+    return response.data;
+  },
+
+  declineShare: async (shareId: string): Promise<void> => {
+    await api.post(`/folders/shares/${shareId}/decline`);
+  },
+
+  leaveFolder: async (folderId: string): Promise<void> => {
+    await api.delete(`/folders/${folderId}/leave`);
   }
 };
 

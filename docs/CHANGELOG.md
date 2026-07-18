@@ -2,6 +2,63 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-18] Folder Sharing — fix desync xoá thread + Editor thao tác Jira + hạn chế đã biết
+
+> Review tính năng System Folder Sharing (nhánh `feat/System-Folder-Sharing`). Phân tích đầy đủ: `docs/FOLDER-SHARING-REVIEW.md`.
+
+**Mô hình: "owner connection as proxy".** Người B (được share) KHÔNG có token Google/Jira. Item luôn giữ `ConnectionId` của owner A; B thao tác được là nhờ server kiểm tra share-check rồi dùng **token của A** để gọi provider. Ranh giới bảo mật nằm ở lớp share-check, không nằm ở token. Token của A không rò rỉ ra response (`ItemResponse` chỉ có `ConnectionId` — GUID vô hại) và endpoint item không nhận `connectionId` từ client nên **không mượn chéo connection được**.
+
+### Đã fix — phân quyền shared folder (BE)
+- **Xoá thread email của folder share để lại "email ma" (desync).** `ItemWriteBackService.DeleteItemAsync` truyền `userId` (người thao tác) vào `_items.DeleteThreadAsync`, nhưng hàm này lọc `WHERE Item.UserId == userId` — khi shared-Editor xoá thì các row thuộc owner A không khớp → **Gmail đã trash nhưng item local còn nguyên**. Fix: truyền `item.UserId` (owner). Chỉ nhánh **thread email** dính lỗi; nhánh xoá đơn lẻ Event/File/Ticket dùng `_items.Remove(item)` vốn đã đúng.
+- **Editor bị 404 ở mọi thao tác comment/attachment Jira.** `JiraTicketService.ResolveAsync` chỉ dùng `GetByIdAndUserAsync` (owner-only), không có fallback share-check. Fix: thêm `IFolderRepository` + fallback `IsItemSharedWithUserAsEditorAsync`.
+- **Editor không đánh dấu "quan trọng" được (404).** `ItemService.ToggleImportantAsync` thiếu fallback share-check (cùng loại bug với Jira). Đã thêm.
+- **Editor không reply/gửi được email trong folder chia sẻ.** Hai tầng chặn: (1) `CheckConnectionAccessAsync` `return` sớm ở nhánh `existingItemId` — nháp reply MỚI chưa thuộc folder nào nên luôn false, chặn mất nhánh `threadId` vốn mới đúng (quyền đến từ email gốc cùng thread) → 404 `Connection not found`; (2) `SaveDraftAsync`/`SendDraftAsync`/`DiscardDraftAsync` chặn cứng `item.UserId != userId` — nháp tạo bằng connection của owner nên luôn mang `UserId` của owner → 404 `Item not found`. Fix: gom helper **`CanAccessDraftAsync`** (owner OR Editor trên nháp OR Editor trên email gốc cùng thread) dùng chung cho cả 3 hàm.
+- **Message lỗi khó hiểu khi Viewer thao tác ghi.** Trước trả 404 `"Item with id '<guid>' was not found"` (lộ GUID). Nay: nếu user CÓ quyền xem (shared-Viewer) mà thao tác ghi → **403** kèm câu giải thích *"Bạn chỉ có quyền xem mục này…"*; thật sự không có quyền → vẫn 404 (không lộ sự tồn tại của item). Áp cho `UpdateStatus`, `ToggleImportant`, `PatchItem`, `DeleteItem`, và Jira comment/attachment.
+- **`ItemResponse.IsOwner` (mới).** `item.UserId == currentUserId`. FE dùng để ẩn hành động chỉ owner làm được (mở trong Gmail/Drive/Calendar/Jira, chia sẻ file Drive) — người được share không có quyền trên tài khoản provider của owner.
+- **`EmailThreadResponse.OwnerEmail` (mới).** Email của hộp thư chứa thread. FE cần biết "tôi là ai" để dựng danh sách người nhận khi Reply; người được share KHÔNG sở hữu connection của owner nên không tự tra ra được → trước đây `me` rỗng làm hỏng lọc To/Cc.
+
+### Đã fix — UI/UX chia sẻ folder (FE)
+- **`FolderShareDialog` i18n hoá toàn bộ** (~31 key `share.*` vi/en) — trước hardcode tiếng Việt, hiện sai khi app để tiếng Anh. Rà thêm `Sidebar` còn 5 chuỗi hardcode → thêm 4 key `sidebar.*`.
+- **Chọn người để chia sẻ:** thay `<select>` native bằng **`FriendMultiSelect`** (component mới) — có ô tìm kiếm (bỏ dấu tiếng Việt: gõ "hai" khớp "Hải"), **checkbox chọn nhiều người**, chip hiển thị người đã chọn, và **nút chọn nhanh toàn bộ bạn thân**. Mời nhiều người qua `Promise.allSettled` → một người lỗi không làm hỏng cả lô.
+- **Dropdown quyền** dùng lại `Select` custom (khớp tông brand) thay `<select>` native.
+- **`Select` render menu qua React portal.** Menu `absolute` bị `overflow-hidden|auto` của dialog **cắt** mất (z-index không cứu được vì overflow cắt theo hình học). Nay portal ra `document.body` + `position: fixed`, tự đo vị trí trigger, **auto flip-up** khi thiếu chỗ, bám theo khi cuộn/resize. Ảnh hưởng 9 nơi đang dùng `Select` — đều hết nguy cơ bị cắt; prop `dropUp` cũ vẫn được tôn trọng.
+- **403 không còn đá người dùng sang `/integrations`.** `errorUtils` điều hướng với MỌI lỗi 403 — vốn dành cho lỗi thiếu OAuth scope, nhưng thực tế **không có chỗ nào trong BE ném 403 vì thiếu scope**, tất cả 403 đều là phân quyền nghiệp vụ. Nay chỉ điều hướng khi BE trả `error === 'MissingScopeError'`.
+
+### Đã fix — bug ngoài phạm vi sharing (phát hiện khi test)
+- **Sync ghi đè mất cờ "quan trọng".** `IsImportant` là field **thuần LOCAL**, không đồng bộ với provider (Jira/Drive không có khái niệm này; nhãn IMPORTANT của Gmail là khái niệm riêng). Nhưng `JiraSyncService`/`DriveSyncService`/`GmailSyncService` đều gán `existing.IsImportant = mapped.IsImportant` khi re-sync → xoá sạch cờ user tự đánh dấu. Fix: **không đụng `IsImportant` ở nhánh update** cho cả 3 provider; chỉ set lúc TẠO item mới (Gmail vẫn tự đánh dấu theo `ImportantContacts` như cũ).
+- **Reply/Send email mất tệp đính kèm.** Cả `EmailThreadView` và `SendEmail` có nhánh `if (draftItemId)` gọi `updateDraft` → `sendDraft`, nhưng payload lưu nháp **không kèm `attachments`**. Vì auto-save nháp chạy nền nên gần như MỌI lần gửi đều đi nhánh này → tệp rơi mất dù UI vẫn hiện đã chọn. Fix: truyền `attachments` vào lần lưu nháp cuối. *(Đã kiểm tra: màn **Scheduled email KHÔNG dính** — gọi thẳng API, không qua draft.)*
+- **Bỏ auto-save nháp khi đang gõ ở ô reply.** Debounce 2s: hễ ngừng gõ 2 giây là tạo nháp trên Gmail → nháp nhảy vào danh sách item giữa lúc soạn, gõ xong gửi luôn vẫn để lại nháp rác. Nay chỉ lưu nháp khi **rời ô soạn mà còn nội dung** (unmount) + lần lưu cuối trước khi gửi. Lợi ích phụ: gửi đi thẳng nhánh `reply()` thay vì `updateDraft→sendDraft`, tránh hẳn class bug attachment ở luồng này. *(Màn Send email giữ nguyên auto-save — code độc lập.)*
+
+### Sau review PR #118
+- **Notification share invite dựng JSON bằng `JsonSerializer`** thay vì nội suy chuỗi — tên folder/người chứa `"` hoặc `\` làm vỡ JSON ⇒ notification hỏng im lặng (đã bọc try/catch nên không crash).
+- **Đồng bộ hợp đồng lỗi cho email:** Viewer reply/forward giờ trả **403** kèm giải thích như item/Jira, trước đây còn trả 404 (lệch với tài liệu).
+- **i18n nốt Sidebar:** `sidebar.ownerLabel` / `sidebar.leaveFolder` / `sidebar.confirmLeave` (tooltip chủ sở hữu, nút + confirm rời thư mục còn hardcode tiếng Việt).
+- **Bỏ validation kép:** `FolderService` không còn tự validate `InviteFolderShareRequest`/`UpdateFolderShareRequest` — controller đã làm, giống mọi endpoint Folder khác (bỏ luôn 2 `IValidator` khỏi constructor).
+- **Nit:** bỏ `!` vô nghĩa trên `Task` (`GetShareByIdAsync(...)!` → `?? throw`), sửa doc comment `GetFoldersSharedWithMeAsync` (trả **cả Pending** để Sidebar hiện lời mời, không phải "chỉ đã accept"), dọn dòng trắng thừa cuối `IFolderRepository.cs`.
+- **Thêm 9 unit test cho phân quyền share** (370 → **379 pass**): Editor đổi trạng thái/đánh dấu quan trọng item của người khác, Viewer bị 403, không liên quan → 404, `IsOwner` đúng cho item của mình/người khác, và **xoá thread email dùng `item.UserId` (owner) chứ không phải người thao tác** — chốt lại bug "email ma".
+
+### ⚠️ Ý nghĩa thực sự của quyền Editor — ĐỌC KỸ khi demo/defense
+
+**`Editor` KHÔNG phải "chỉnh sửa trong app" mà là TOÀN QUYỀN GHI trên tài khoản provider của owner.**
+Vì mọi write-back chạy qua token của owner, một shared-Editor có thể:
+- **Trash cả thread email trên Gmail của owner** (`DeleteItemAsync` → `TrashThreadAsync`), xoá vĩnh viễn nếu thư đã ở Trash/Spam.
+- **Xoá/đổi tên file trên Drive**, **xoá/sửa event trên Calendar**, **xoá issue Jira** của owner.
+- **Gửi email từ hộp thư của owner** (reply/forward) — người nhận thấy mail đến từ owner.
+- **Comment/đính kèm trên Jira dưới danh nghĩa owner**.
+- **Xem gợi ý danh bạ của owner** (`suggest-contacts` chạy qua connection owner).
+
+Đây là hệ quả tất yếu của mô hình proxy, không phải lỗi. Nhưng nó **vượt xa mức "chia sẻ để cùng xem"** —
+chỉ nên cấp `Editor` cho người thực sự tin tưởng. `Viewer` an toàn: chỉ đọc, mọi thao tác ghi bị chặn 403.
+
+### Hạn chế đã biết (chấp nhận trong phạm vi đồ án — để giải thích khi defense)
+- **Logout KHÔNG thu hồi quyền của B.** Auth app (JWT cookie + refresh Redis) tách biệt hoàn toàn với OAuth connection; A logout thì token Google/Jira vẫn nằm trong DB và tự refresh → B vẫn dùng được. Đây là **đúng thiết kế** (giống Google Drive: share xong logout người kia vẫn xem được), chỉ Disconnect hoặc revoke phía Google mới thu hồi.
+- **Disconnect xoá sạch item → folder share có thể trống đột ngột.** `DisconnectAsync` hard-delete toàn bộ Item + ItemFolder của connection, không cảnh báo A cũng không notify B. Chưa chặn (bản đầy đủ cần archive + notify + confirm — ngoài phạm vi đồ án).
+- **Reply/Forward gửi từ hộp thư của owner A.** B (Editor) reply thì người nhận thấy mail đến từ A (`connection.ProviderAccountId` = A). **Có chủ đích** — đúng vai trò "Editor đại diện A xử lý". (Đã fix để luồng này chạy được — xem mục "Đã fix" ở trên.)
+- **Share-check ở mức "folder bất kỳ có chứa item"**, chưa siết theo folder cụ thể. Item ↔ Folder là many-to-many nên về lý thuyết item nằm ở cả folder private lẫn folder share thì đọc được qua đường share. Không lộ khi dùng bình thường; siết folder-scope đụng cả FE nên tạm chấp nhận.
+- **Thiếu check `connection.Status` ở write-back Google** (Jira thì có) → khi connection của A hỏng, B nhận lỗi 500/502 khó hiểu thay vì thông báo có ngữ nghĩa.
+- **`ItemWriteBackService` còn constructor overload truyền `_folders = null!`** để giữ 370 test cũ — code smell, sửa phải đụng toàn bộ test nên để nguyên.
+- **`FolderShares.CreatedAt` default `0001-01-01`** cho row cũ (migration `AddFolderShareCreatedAt` dùng `DateTime.MinValue`). Vô hại vì tính năng mới, chưa có data cũ.
+
 ## [2026-07-18] Bỏ dropdown "Dự án" (site) của Jira — giữ lọc "Người phụ trách" (auto chọn project duy nhất)
 
 > Thực tế đồ án chỉ có **1 Jira site / 1 project** → dropdown chọn dự án trong toolbar chỉ có đúng 1 lựa chọn ⟹ thừa, gây rối. Gỡ nó nhưng **giữ bộ lọc theo người phụ trách**.
@@ -94,6 +151,20 @@
 - **F5 không văng khỏi folder con:** stack drill-down vốn sống trong `location.state` (mất khi reload). Nay nếu còn `?df` mà mất state → fetch item dựng lại 1 cấp → **người dùng vẫn ở trong folder** thay vì bật về gốc Drive. (Breadcrumb khi đó gọn còn folder hiện tại; điều hướng thường vẫn giữ đủ cấp.)
 - **Gợi ý contact khi share:** `DriveShareDialog` — ô mời email có **gợi ý bạn bè** (friend system, chỉ Accepted, lọc theo chuỗi đang gõ) + **validate email** (nút mời khoá tới khi hợp lệ) + **Enter để mời**.
 - **Chưa làm (ghi chú):** (1) *thống nhất branding thẻ Kanban* — thực tế thẻ đã dùng cùng brand-icon + nhãn folder/file như list, khác biệt còn lại chỉ là kiểu nền (pill vs tile), để sau. (2) *Ticket transition đúng mọi Jira project* — map cứng `Inbox→To Do / Doing→In Progress / Done→Done` chỉ đúng khi project dùng đúng 3 status mặc định; fix tổng quát cần **endpoint Jira lấy transitions động** (mảng riêng, chưa làm).
+
+## [2026-07-17] Folder Sharing with Permission Management (SCRUM-37/38)
+
+> Chia sẻ thư mục nội bộ cho bạn bè trong hệ thống với các mức quyền Viewer hoặc Editor, hỗ trợ xem danh sách chia sẻ, cập nhật vai trò, thu hồi quyền truy cập, chấp nhận/từ chối lời mời và rời thư mục được chia sẻ.
+
+- **Domain & Database Migration:** Thêm `Editor` vào `SharePermission` enum và cột `CreatedAt` vào bảng `FolderShares` (migration `AddFolderShareCreatedAt`).
+- **Backend Service & Controllers:**
+  - Bổ sung các DTO: `InviteFolderShareRequest`, `UpdateFolderShareRequest`, `FolderShareDto`, `SharedFolderDto` (kèm `ShareId`).
+  - Cài đặt 7 API endpoints tương ứng trong `FoldersController`: mời bạn bè (`POST /shares`), đổi quyền (`PATCH /shares/{shareId}`), thu hồi quyền (`DELETE /shares/{shareId}`), xem danh sách chia sẻ (`GET /shares`), xem danh sách được chia sẻ với mình (`GET /shared-with-me`), chấp nhận lời mời (`POST /shares/{shareId}/accept`), từ chối lời mời (`POST /shares/{shareId}/decline`), và rời thư mục (`DELETE /{id}/leave`).
+  - Kiểm tra các ràng buộc nghiệp vụ: chỉ chủ sở hữu thư mục mới có quyền mời/đổi quyền/thu hồi; chỉ người được share mới chấp nhận/từ chối/rời thư mục; chỉ chia sẻ được cho bạn bè đã accept kết bạn.
+- **Frontend UI & Components:**
+  - Thêm type definitions (`types/folders.ts`) và REST API bindings (`inviteShare`, `getShares`, `updateShareRole`, `revokeShare`, `getSharedWithMe`, `acceptShare`, `declineShare`, `leaveFolder`).
+  - Tạo component `FolderShareDialog` quản lý danh sách truy cập, gửi lời mời và đổi vai trò/gỡ quyền.
+  - Cải tiến `Sidebar.tsx` phân loại danh mục thư mục thành "Thư mục của tôi" và "Được chia sẻ với tôi"; tích hợp nút "Chia sẻ" (Owner) và "Rời thư mục" (Teammate) vào dropdown menu của từng folder.
 
 ## [2026-07-16] Google Drive — Case 1 tắt link giống Drive (mở rộng SCRUM-79)
 

@@ -28,8 +28,11 @@ public class ItemWriteBackServiceDeleteEventInviteeLinkTests
 
     public ItemWriteBackServiceDeleteEventInviteeLinkTests()
     {
+        // Test này không đụng luồng folder chia sẻ → mock rỗng là đủ.
+        // (Overload 8-tham-số cũ không nhận được `calendarInvitations`, phải dùng ctor chính.)
         _service = new ItemWriteBackService(
-            _items.Object, _connections.Object, new WriteBackGuard(NullLogger<WriteBackGuard>.Instance),
+            _items.Object, _connections.Object, new Mock<IFolderRepository>().Object,
+            new WriteBackGuard(NullLogger<WriteBackGuard>.Instance),
             _gmail.Object, _calendar.Object, _drive.Object,
             _jira.Object, new JiraItemMapper(),
             _invitations.Object);

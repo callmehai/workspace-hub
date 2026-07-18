@@ -47,7 +47,14 @@ public class ConnectionHealthChecker : IConnectionHealthChecker
 
             try
             {
-                await EnsureSingleConnectionSyncedAsync(conn.Id, userId, ct);
+                // Giới hạn thời gian sync mỗi connection để API bên thứ 3 chậm/lỗi không nghẽn
+                // request lấy items. Sync chỉ persist + set LastSyncedAt ở CUỐI, nên nếu cancel
+                // giữa chừng thì mất sạch tiến độ và LastSyncedAt vẫn null → mỗi GET lại thử lại
+                // vô hạn. 5s quá ngắn cho initial sync/hộp thư lớn → nới 15s (delta sync <1s nên
+                // debounce vẫn che các lần sau). Fix triệt để: persist theo batch (ngoài phạm vi PR).
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(15));
+                await EnsureSingleConnectionSyncedAsync(conn.Id, userId, cts.Token);
             }
             catch (Exception ex)
             {

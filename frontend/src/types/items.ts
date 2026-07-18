@@ -32,6 +32,13 @@ export interface ItemResponse {
   threadId?: string | null;
   /** Số message trong thread (Email gộp thread). 1 = thư đơn. */
   threadCount?: number;
+  /**
+   * false = item của người khác, đang xem qua folder được chia sẻ.
+   * Dùng để ẩn hành động chỉ owner làm được (mở trong Gmail/Drive/Calendar/Jira —
+   * người được share không có quyền trên tài khoản provider của owner).
+   * Mặc định true khi BE không trả (item cũ / cache).
+   */
+  isOwner?: boolean;
   /** Populated when item is hydrated from calendar-details (not on list API). */
   reminders?: EventReminderDto[];
 }

@@ -65,11 +65,11 @@ export const handleApiError = (
         return; // Interceptor đã xử lý CsrfError
       }
       if (!options?.silent) {
-        // Ưu tiên message BE (vd. không đủ quyền gỡ share) — tránh luôn bảo "thiếu scope".
+        // Ưu tiên message BE (vd. Viewer folder chia sẻ cố sửa, "not your connection").
+        // KHÔNG điều hướng sang /integrations: BE không phát 403-thiếu-scope (mọi
+        // ForbiddenException → "ForbiddenError"; lỗi scope/token thật đi 401/502). Trước đây
+        // mọi 403 đều đá người dùng sang màn Kết nối dịch vụ, rất khó hiểu.
         toast.error(data?.message || translate('errors.forbiddenScope'));
-        if (options?.navigate) {
-          options.navigate('/integrations');
-        }
       }
       return;
     }
