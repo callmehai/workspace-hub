@@ -485,11 +485,13 @@ public class ItemWriteBackService : IItemWriteBackService
             ETag = created.ETag,
             Title = created.Summary ?? "New Event",
             Snippet = created.Description ?? "",
+            // All-day: dùng ngày theo offset gốc (khớp metadata["start"/"end"] = "yyyy-MM-dd"),
+            // KHÔNG .UtcDateTime.Date (chuyển UTC trước làm lệch -1 ngày ở tz dương như +07:00).
             OccurredAt = effectiveAllDay
-                ? payload.Start.UtcDateTime.Date
+                ? DateTime.SpecifyKind(payload.Start.Date, DateTimeKind.Utc)
                 : (created.Start?.UtcDateTime ?? DateTime.UtcNow),
             DueAt = effectiveAllDay
-                ? effectiveEnd.UtcDateTime.Date
+                ? DateTime.SpecifyKind(effectiveEnd.Date, DateTimeKind.Utc)
                 : created.End?.UtcDateTime,
             MetadataJson = JsonSerializer.Serialize(metaDict)
         };

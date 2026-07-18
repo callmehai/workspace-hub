@@ -149,9 +149,12 @@ public class CalendarInvitationService : ICalendarInvitationService
                     ToGoogleStatus(invitation.Status), comment: null, ct: ct);
                 invitation.GoogleSyncPending = false;
             }
-            catch (Exception ex) when (ex is ProviderException or ForbiddenException)
+            catch (Exception ex) when (ex is ProviderException or ForbiddenException or NotFoundException)
             {
                 // Giữ GoogleSyncPending + Status local; không ghi đè từ Google needsAction.
+                // NotFoundException: event đã bị xoá trên Google — không đẩy RSVP được nữa, bỏ pending.
+                if (ex is NotFoundException)
+                    invitation.GoogleSyncPending = false;
                 invitation.UpdatedAt = DateTime.UtcNow;
                 await _invitations.SaveChangesAsync(ct);
                 return;
@@ -203,10 +206,19 @@ public class CalendarInvitationService : ICalendarInvitationService
 
             if (googleEvent != null)
             {
-                await _calendar.RsvpEventAsync(
-                    connection, "primary", googleEvent.Id,
-                    ToGoogleStatus(request.Response), request.Comment, ct);
-                synced = true;
+                try
+                {
+                    await _calendar.RsvpEventAsync(
+                        connection, "primary", googleEvent.Id,
+                        ToGoogleStatus(request.Response), request.Comment, ct);
+                    synced = true;
+                }
+                catch (Exception ex) when (ex is ProviderException or ForbiddenException)
+                {
+                    // Provider lỗi (502/scope/token): giữ RSVP local + GoogleSyncPending,
+                    // lần sync sau đẩy lên. Không để user mất trắng thao tác.
+                    synced = false;
+                }
             }
         }
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Interfaces.Repositories;
 using WorkspaceHub.Application.Interfaces.Services;
@@ -15,19 +16,22 @@ public class CalendarSyncService : ICalendarSyncService
     private readonly IItemRepository _items;
     private readonly IConnectionRepository _connections;
     private readonly ICalendarInvitationService _calendarInvitations;
+    private readonly ILogger<CalendarSyncService> _logger;
 
     public CalendarSyncService(
         ICalendarGateway gateway,
         ICalendarItemMapper mapper,
         IItemRepository items,
         IConnectionRepository connections,
-        ICalendarInvitationService calendarInvitations)
+        ICalendarInvitationService calendarInvitations,
+        ILogger<CalendarSyncService> logger)
     {
         _gateway = gateway;
         _mapper = mapper;
         _items = items;
         _connections = connections;
         _calendarInvitations = calendarInvitations;
+        _logger = logger;
     }
 
     public async Task<SyncResult> SyncConnectionAsync(Connection connection, CancellationToken ct = default)
@@ -102,8 +106,21 @@ public class CalendarSyncService : ICalendarSyncService
                 _items.Remove(toDelete);
         }
 
+        // Reconcile là best-effort: một event lỗi (vd RSVP tới event đã bị xoá trên Google)
+        // không được chặn việc persist syncToken — nếu không, cursor không tiến và sync lặp lỗi mãi.
         foreach (var (localItem, calendarEvent) in reconciliations)
-            await _calendarInvitations.ReconcileSyncedEventAsync(connection, localItem, calendarEvent, ct);
+        {
+            try
+            {
+                await _calendarInvitations.ReconcileSyncedEventAsync(connection, localItem, calendarEvent, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Reconcile invitation failed for item {ItemId} (event {ExternalId}); bỏ qua, cursor vẫn tiến.",
+                    localItem.Id, localItem.ExternalId);
+            }
+        }
 
         connection.CursorType = CursorType.SyncToken;
         connection.CursorValue = result.NextSyncToken;
