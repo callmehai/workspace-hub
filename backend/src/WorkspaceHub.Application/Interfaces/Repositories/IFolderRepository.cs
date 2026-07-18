@@ -79,4 +79,11 @@ public interface IFolderRepository : IGenericRepository<Folder>
 
     /// <summary>Kiểm tra xem một connection có nằm trong thư mục được chia sẻ với user với quyền Editor không.</summary>
     Task<bool> IsConnectionSharedWithUserAsEditorAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Kiểm tra một connection có nằm trong thư mục được chia sẻ với user (mọi quyền, đã accept) không —
+    /// dùng cấp quyền ĐỌC cho item con của folder Drive được share (con không có junction riêng nên
+    /// check theo connection, nhất quán với cơ chế list duyệt theo driveParentId).
+    /// </summary>
+    Task<bool> IsConnectionSharedWithUserAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
 }
