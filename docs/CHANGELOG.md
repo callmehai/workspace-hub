@@ -2,12 +2,46 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-18] Jira multi-site từng-grant-một + callback UPSERT (fix nút "Kết nối lại")
+
+> QA multi-account phát hiện 2 vấn đề ở luồng connect: (1) cùng account Atlassian không thêm được site thứ 2 — `JiraStrategy` luôn lấy `resources[0]` → 409 trùng cloudId; (2) trùng đúng service+account → 409 "Hãy ngắt kết nối trước" — tức nút **"Kết nối lại"** (connection Error) xưa giờ luôn 409, phải disconnect mới reconnect được.
+
+- **Jira chọn site chưa connect:** Atlassian KHÔNG cho biết user chọn site nào ở màn consent (`accessible-resources` trả **cộng dồn** mọi site đã cấp quyền) → heuristic: lấy site đầu tiên **chưa có connection Active** của user. Connect lần 2 cùng account = ăn site kế tiếp. Khác quyết định "bỏ Jira multi-site" trước đó: mỗi site giờ đến từ **1 grant riêng** (authorize riêng) → refresh token **độc lập**, KHÔNG dính vụ "nhiều site chung 1 refresh token xoay vòng" (vụ đó chỉ xảy ra khi tách N site từ CÙNG 1 grant). `ExchangeCodeRequest.ExistingActiveProviderAccountIds` mang danh sách account Active cùng provider vào strategy (Google bỏ qua).
+- **Callback UPSERT thay 409:** trùng đúng `(UserId,Provider,ServiceType,ProviderAccountId)` → cập nhật AccessToken/RefreshToken (giữ cái cũ nếu provider không trả mới) + `Status=Active`, giữ `CursorValue` (cursor delta-sync vẫn hợp lệ cùng account). Nút "Kết nối lại" hoạt động thật; connect lại account đã Active = làm mới token, vô hại. Jira mọi site đều Active → rơi về site đầu → upsert.
+- **Lưu ý QA:** cần verify bằng account Atlassian thật có ≥2 site: connect 2 lần → 2 connection 2 cloudId; sync/refresh site này không làm site kia rớt token (giả định grant mới không revoke grant cũ — hành vi chuẩn multi-device của OAuth).
+
+## [2026-07-18] Gửi mail — bỏ auto-tạo nháp (giật màn) → nút "Lưu nháp" chủ động
+
+> Bug UX ở trang Gửi mail: điền người nhận + chọn template → sau ~2s tự tạo nháp → **màn giật/load lại toàn trang** + lưu nháp ngoài ý muốn.
+
+- **Root cause:** debounce 2s auto-**tạo** nháp (`createDraft`) khi chưa có nháp; `onSuccess` set `draftItemId` → bật lại 2 query `draft-item`/`draft-thread` (`enabled: !!draftItemId`) → **loading guard render spinner toàn màn** → form nháy + hydrate lại.
+- **Fix:** (1) tách `hydrateDraftId` (chỉ nháp mở từ URL mới fetch+hydrate) khỏi `draftItemId` (dùng cho save) → nháp **tự tạo trong phiên KHÔNG fetch lại** ⟹ hết giật. (2) Auto-save **chỉ update nháp ĐÃ tồn tại** (`if (!draftItemId) return` ở cả debounce lẫn save-on-unmount) — **không** tự tạo nháp. (3) Thêm nút **"Lưu nháp"** để user chủ động tạo nháp lần đầu; sau đó auto-save (update) tiếp quản. i18n `sendEmail.saveDraft`/`draftEmpty`.
+- **Giữ nguyên:** mở nháp từ Inbox (URL `?draftItemId=`) vẫn hydrate + auto-save như cũ; gửi thẳng không qua nháp vẫn hoạt động.
+- **Fix kèm (đa tài khoản):** nháp gắn cứng 1 mailbox Gmail — BE chặn `updateDraft` khi `item.ConnectionId != request.ConnectionId` ("Draft connection mismatch"). Multi-account làm lộ: đổi dropdown "Kết nối" sang account khác khi đang có nháp → auto-save fail âm thầm + Gửi lỗi 422. Fix: **khoá selector tài khoản khi `draftItemId` tồn tại** (+ hint `sendEmail.connectionLocked`) và ghim `conn=resolvedConn` lúc tạo nháp (tránh `resolvedConn` trôi về `activeGmail[0]`). Chưa có nháp → vẫn đổi account tự do.
+
+## [2026-07-18] Multi-connection per integration — nhiều tài khoản Google mỗi service (chưa có ticket Jira)
+
+> Cho phép 1 user kết nối **nhiều tài khoản Google** (nhiều Gmail/Calendar/Drive khác email). Hoá ra **mô hình B đã thiết kế sẵn** cho đa tài khoản → chủ yếu là mở UI + 1 chỉnh nhỏ OAuth.
+
+- **Vì sao gần như không đụng backend:** unique index `(UserId,Provider,ServiceType,ProviderAccountId)` đã gồm `ProviderAccountId` (2 Gmail khác email = 2 row hợp lệ); connect flow đã chặn trùng theo *account* (không theo service); sync/write-back/send/scheduled đều theo `connectionId` tường minh. Không đổi schema, không đổi dedup.
+- **BE — điểm THEN CHỐT (`prompt=select_account`):** CHỈ `GoogleAuthUrlBuilder.BuildForService` đổi `prompt=consent` → `prompt=select_account consent`. Không có `select_account`, Google tự dùng account đang đăng nhập → **không thêm được account thứ 2**. Giữ `consent` (đi cùng `access_type=offline`) để luôn được cấp lại refresh token. `BuildForLogin` KHÔNG đổi (Google Sign-In giữ nguyên). **`JiraStrategy` giữ `consent`** — Jira không multi-connection (xem dưới).
+- **FE — trang Kết nối (Integrations):** mỗi service render **N account** (thay `connections.find` → `.filter`), mỗi account có Sync/Ngắt/Kết nối lại riêng (mutations vốn đã theo `connectionId`) + nút **"Thêm tài khoản"**. i18n `integrations.addAccount`/`accountsCount`, `toolbar.allAccounts`.
+- **FE — bộ lọc tài khoản (Inbox/Kanban):** dropdown "Tài khoản" ở `WorkspaceToolbar` (chỉ hiện khi nguồn đang xem có ≥2 account; Gmail/Calendar/Drive — bỏ Jira vì đã có lọc project/assignee + cloudId GUID khó đọc) → truyền `connectionId` vào `GET /api/items` (param sẵn có). Reset khi đổi tab (tránh lọc vô hình). Drive upload/kéo-thả ưu tiên account đang lọc làm đích.
+- **Jira: chỉ Google mở UI multi-account (chốt scope):** `select_account` + nút "Thêm tài khoản" + bộ lọc "Tài khoản" (Inbox/Kanban) **chỉ áp cho Google**. Card Jira **không** có nút "Thêm tài khoản" và `JiraStrategy` giữ `prompt=consent`. Hành vi connect/reconnect Jira (chọn site chưa connect + callback UPSERT) xem entry **"Jira multi-site từng-grant-một"** phía trên — đó là track riêng, không phải Google-style multi-account.
+- **Giữ nguyên (đủ dùng):** Friends contact-suggest + gửi invite dùng Gmail-đầu (`FirstOrDefault`) — rất hiếm khi nhiều Gmail; không phá vỡ gì.
+- **Lưu ý QA:** multi-account Google phải test bằng OAuth **thật** — dev thiếu `id_token` rơi về `dev-placeholder@gmail.com` → 2 account "dev" đụng unique index.
+
+### Sau review đa chiều (cùng ngày) — 2 fix multi-Drive
+- **Upload/tạo folder vào đúng Drive account của folder đang mở:** `DriveStackEntry` (drill-down) nay mang `connectionId` của folder. Trước đây ở view "Tất cả tài khoản", drill vào folder của Drive account B rồi upload lại lấy `driveConns[0]` (account A) → BE reject "parent khác connection". Nay đích upload = connection **sở hữu folder** (truyền `currentDriveFolderConnectionId` xuyên `Inbox → WorkspaceToolbar → WorkspaceNewMenu`); ngoài folder mới ưu tiên account đang lọc rồi Drive-đầu.
+- **Tự bỏ lọc account khi account rớt Active:** effect ở Inbox + Kanban clear `accountFilter` khi account đang lọc bị disconnect/Error (dropdown ẩn khi <2 account nhưng `connectionId` cũ vẫn áp → list/board lọc ngầm vô hình; Kanban không có nút clear filters).
+
 ## [2026-07-17] Calendar sync — bỏ birthday/holiday khỏi WorkspaceHub
 
 - **Lý do:** Birthday là `eventType=birthday` đặc biệt, có recurrence hằng năm; Google holiday thường nằm ở calendar phụ/subscribed calendar. Đưa các mục này vào Items/Inbox/Kanban làm UI nhiễu và dễ bung nhiều occurrence tương lai.
 - **Sau:** `CalendarGateway.SyncEventsAsync` chỉ sync event chính (`eventTypes=default`) từ `primary`, không kéo birthday/special event vào app. Holiday calendar phụ vẫn không sync vì MVP chỉ đọc `primary`.
 - **Giới hạn:** full sync Calendar giữ `TimeMin=now-3 months`; không đặt `TimeMax` để tránh đóng băng cửa sổ sync tương lai. Incremental sync vẫn dùng syncToken và cùng filter `eventTypes=default`.
 - **Dữ liệu cũ:** không tự cleanup birthday đã lỡ sync trong DB; owner sẽ dọn thủ công nếu cần.
+
 
 ## [2026-07-17] Drive UX — detail preview/download + phân biệt folder/file ở Kanban
 

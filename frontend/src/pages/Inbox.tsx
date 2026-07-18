@@ -30,8 +30,9 @@ import { sendEmailApi } from '../lib/sendEmailApi';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-/** 1 cấp folder Drive trong breadcrumb drill-down. id = externalId (Google), internalId = Item.Id (app). */
-type DriveStackEntry = { id: string; name: string; internalId: string };
+/** 1 cấp folder Drive trong breadcrumb drill-down. id = externalId (Google), internalId = Item.Id (app).
+ *  connectionId = Drive account SỞ HỮU folder — cần cho upload/tạo folder (BE bắt parent cùng connection). */
+type DriveStackEntry = { id: string; name: string; internalId: string; connectionId?: string | null };
 
 // Key i18n cho nhãn status (chip "đang lọc") — tái dùng nhãn cột Kanban.
 const STATUS_LABEL_KEY: Record<ItemStatus, TranslationKey> = {
@@ -167,6 +168,7 @@ export const Inbox = () => {
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
+  const [accountFilter, setAccountFilter] = useState<string>(''); // lọc theo tài khoản (connectionId); '' = tất cả
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -192,7 +194,7 @@ export const Inbox = () => {
   const driveFolderStack = useMemo<DriveStackEntry[]>(() => {
     if (stateStack.length > 0) return stateStack;
     if (dfParam && dfItem?.externalId) {
-      return [{ id: dfItem.externalId, name: dfItem.title, internalId: dfItem.id }];
+      return [{ id: dfItem.externalId, name: dfItem.title, internalId: dfItem.id, connectionId: dfItem.connectionId }];
     }
     return [];
   }, [stateStack, dfParam, dfItem]);
@@ -261,7 +263,7 @@ export const Inbox = () => {
         const meta = JSON.parse(item.metadataJson);
         if (meta.isFolder && item.externalId) {
           // Push 1 cấp vào history (Back sẽ lùi về folder cha). Page reset qua effect theo ?df.
-          navigateDriveStack([...driveFolderStack, { id: item.externalId, name: item.title, internalId: item.id }]);
+          navigateDriveStack([...driveFolderStack, { id: item.externalId, name: item.title, internalId: item.id, connectionId: item.connectionId }]);
           setSelectedId(null);
           return;
         }
@@ -331,6 +333,13 @@ export const Inbox = () => {
     setPage(1);
   }, [selectedFolderId, sourceType, dfParam]);
 
+  // Đổi nguồn (tab) → bỏ lọc theo tài khoản: account thuộc service của nguồn CŨ, để nguyên sẽ
+  // lọc vô hình (connectionId không khớp item nguồn mới → list trống khó hiểu).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAccountFilter('');
+  }, [sourceType]);
+
   // Kéo lên đầu khi đổi folder Drive / tab / folder context / trang — không kẹt ở cuối.
   // Scroller THẬT là <main> của MainLayout (không phải div này) → tìm bằng closest('main').
   useEffect(() => {
@@ -393,6 +402,16 @@ export const Inbox = () => {
     queryFn: connectionsApi.getConnections,
     staleTime: 60_000,
   });
+
+  // Account đang lọc bị disconnect/Error (rớt khỏi tập Active) → bỏ lọc: dropdown ẩn khi <2 account
+  // nhưng connectionId cũ vẫn áp vào query → list/board lọc ngầm vô hình (trống khó hiểu).
+  useEffect(() => {
+    if (accountFilter && !connectionsList.some(c => c.id === accountFilter && c.status.toLowerCase() === 'active')) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAccountFilter('');
+    }
+  }, [accountFilter, connectionsList]);
+
   const SOURCE_SERVICE: Record<string, { key: string; label: string }> = {
     Email: { key: 'gmail', label: 'Gmail' },
     Event: { key: 'gcal', label: 'Google Calendar' },
@@ -421,6 +440,7 @@ export const Inbox = () => {
     tagIds: tagFilters.length > 0 ? tagFilters : undefined,
     projectKey: effectiveProjectKey,
     assignee: effectiveAssignee,
+    connectionId: accountFilter || undefined,
     gmailLabel,
     driveParentId: driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].id : undefined,
     driveKind: effectiveDriveKind,
@@ -428,7 +448,7 @@ export const Inbox = () => {
     limit,
   };
 
-  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, driveKind: params.driveKind, page, limit }];
+  const queryKey = ['items', { statuses: params.statuses, types: params.types, isImportant: params.isImportant, search: params.search, folderId: params.folderId, tagIds: params.tagIds, projectKey: params.projectKey, assignee: params.assignee, connectionId: params.connectionId, gmailLabel: params.gmailLabel, driveParentId: params.driveParentId, driveKind: params.driveKind, page, limit }];
 
   // Khóa bộ lọc (không gồm page/limit) — so sánh total chỉ trong cùng context lọc, tránh invalidate
   // nhầm khi đổi chip Tất cả ↔ Email (total khác nhau vì lọc, không phải cron sync).
@@ -441,6 +461,7 @@ export const Inbox = () => {
     tagIds: params.tagIds,
     projectKey: params.projectKey,
     assignee: params.assignee,
+    connectionId: params.connectionId,
     gmailLabel: params.gmailLabel,
     driveParentId: params.driveParentId,
     driveKind: params.driveKind,
@@ -498,7 +519,7 @@ export const Inbox = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedItemIds(new Set());
-  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilters, search, selectedFolderId, mailbox]);
+  }, [page, limit, statusFilter, typeFilter, importantOnly, tagFilters, search, selectedFolderId, mailbox, accountFilter]);
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -528,6 +549,7 @@ export const Inbox = () => {
     setProjectKeyFilter('');
     setDebouncedProjectKey('');
     setAssigneeFilter('');
+    setAccountFilter('');
     setPage(1);
   };
 
@@ -542,13 +564,17 @@ export const Inbox = () => {
   const pageNumbers = buildPageNumbers(page, totalPages);
 
   // Kéo-thả upload Drive: bật ở tab Drive hoặc "Tất cả mục" (nơi menu Mới cũng cho tạo Drive).
-  const driveConnectionId = connectionsList.find(
+  const currentDriveFolder = driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1] : null;
+  const driveConns = connectionsList.filter(
     c => c.serviceType.toLowerCase() === 'drive' && c.status.toLowerCase() === 'active',
-  )?.id;
+  );
+  // Đích upload Drive: (1) đang trong 1 folder → BẮT BUỘC connection SỞ HỮU folder (BE chặn parent
+  // khác connection); (2) else account đang lọc; (3) else Drive đầu tiên còn Active.
+  const driveConnectionId = currentDriveFolder?.connectionId
+    ?? driveConns.find(c => c.id === accountFilter)?.id
+    ?? driveConns[0]?.id;
   const dropConnectionId = (sourceType === 'File' || sourceType === null) ? driveConnectionId : undefined;
-  const currentDriveParentId = driveFolderStack.length > 0
-    ? driveFolderStack[driveFolderStack.length - 1].internalId
-    : null;
+  const currentDriveParentId = currentDriveFolder?.internalId ?? null;
 
   return (
     <div ref={scrollRef} className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
@@ -579,9 +605,12 @@ export const Inbox = () => {
           onProjectKeyChange={handleProjectKeyChange}
           assigneeFilter={assigneeFilter}
           onAssigneeChange={(v) => { setAssigneeFilter(v); setPage(1); }}
+          accountFilter={accountFilter}
+          onAccountChange={(v) => { setAccountFilter(v); setPage(1); }}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
-          currentDriveFolderId={driveFolderStack.length > 0 ? driveFolderStack[driveFolderStack.length - 1].internalId : undefined}
+          currentDriveFolderId={currentDriveFolder?.internalId ?? undefined}
+          currentDriveFolderConnectionId={currentDriveFolder?.connectionId ?? undefined}
           driveKind={driveKind}
           onDriveKindChange={(k) => { setDriveKind(k); setPage(1); }}
         />

@@ -137,7 +137,19 @@ public class ConnectionsService : IConnectionsService
             throw new BusinessRuleException($"Chưa cấu hình ClientSecret cho '{integrationKey}'");
 
         // Bước 4 — Đổi code lấy token (logic riêng của từng provider).
-        var request = new ExchangeCodeRequest(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType);
+        var provider = Enum.Parse<ProviderType>(integration.Provider);
+
+        // Account đang Active cùng provider — cho strategy đa site (Jira) chọn site CHƯA kết nối.
+        var existingActiveAccountIds = (await _connections.GetByUserIdAsync(userId, ct))
+            .Where(c => c.Provider == provider && c.Status == ConnectionStatus.Active)
+            .Select(c => c.ProviderAccountId)
+            .Distinct()
+            .ToList();
+
+        var request = new ExchangeCodeRequest(code, clientId, clientSecret, redirectUri, integration, payload.ServiceType)
+        {
+            ExistingActiveProviderAccountIds = existingActiveAccountIds
+        };
         var tokenResult = await strategy.ExchangeCodeAsync(request, ct);
 
         if (tokenResult.GrantedServices.Count == 0)
@@ -149,9 +161,10 @@ public class ConnectionsService : IConnectionsService
             ? string.Empty
             : _tokenProtector.Protect(tokenResult.RefreshToken);
         var expiresAt = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn);
-        var provider = Enum.Parse<ProviderType>(integration.Provider);
 
         // Bước 6 — Tạo một Connection riêng cho mỗi service được cấp quyền.
+        // Trùng ĐÚNG service+account đã có → KHÔNG 409 nữa: cập nhật token + Active (chính là
+        // luồng "Kết nối lại" — trước đây 409 làm nút Reconnect vô dụng, phải ngắt kết nối trước).
         var results = new List<ConnectionItem>();
         foreach (var svcType in tokenResult.GrantedServices)
         {
@@ -160,8 +173,15 @@ public class ConnectionsService : IConnectionsService
 
             if (existing is not null)
             {
-                // Tự động ngắt kết nối cũ (xoá sạch Items, ScheduledEmails liên quan) để tránh lỗi/trùng lặp
-                await DisconnectAsync(existing.Id, userId, ct);
+                existing.AccessTokenEncrypted = accessTokenEncrypted;
+                if (!string.IsNullOrEmpty(refreshTokenEncrypted))
+                    existing.RefreshTokenEncrypted = refreshTokenEncrypted; // provider không trả refresh mới → giữ cái cũ
+                existing.ExpiresAt = expiresAt;
+                existing.Status = ConnectionStatus.Active;
+                // Giữ CursorValue — cursor delta-sync cũ vẫn hợp lệ với cùng account.
+                results.Add(new ConnectionItem(
+                    existing.Id, existing.ServiceType.ToString(), existing.Status.ToString()));
+                continue;
             }
 
             var connection = new Connection
