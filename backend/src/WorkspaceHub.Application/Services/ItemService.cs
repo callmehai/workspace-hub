@@ -211,12 +211,10 @@ public class ItemService : IItemService
         var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct);
         if (item == null)
         {
-            // Kiểm tra xem item có thuộc thư mục nào được chia sẻ (Accepted) với user hay không
-            var isShared = await _folderRepo.IsItemSharedWithUserAsync(itemId, userId, ct);
-            if (isShared)
-            {
-                item = await _itemRepo.GetByIdAsync(itemId, ct);
-            }
+            // Item không thuộc user → thử quyền chia sẻ (ĐỌC, Viewer trở lên).
+            var candidate = await _itemRepo.GetByIdAsync(itemId, ct);
+            if (candidate != null && await CanReadSharedAsync(candidate, userId, ct))
+                item = candidate;
         }
 
         if (item == null)
@@ -421,6 +419,21 @@ public class ItemService : IItemService
     }
 
     // ───────────────────────── Private helpers ─────────────────────────
+
+    /// <summary>
+    /// User có quyền ĐỌC item qua chia sẻ không? Đúng khi: item nằm trực tiếp trong folder được chia sẻ
+    /// (có junction), HOẶC item là file/folder Drive con của folder Drive được share — con không có
+    /// junction riêng (thiết kế parent-only) nên xét theo connection được share với user.
+    /// </summary>
+    private async Task<bool> CanReadSharedAsync(Item item, Guid userId, CancellationToken ct)
+    {
+        if (await _folderRepo.IsItemSharedWithUserAsync(item.Id, userId, ct))
+            return true;
+
+        return item.Type == ItemType.File
+               && item.ConnectionId.HasValue
+               && await _folderRepo.IsConnectionSharedWithUserAsync(item.ConnectionId.Value, userId, ct);
+    }
 
     /// <summary>
     /// Ném lỗi khi user KHÔNG có quyền GHI lên item. Phân biệt 2 tình huống để message dễ hiểu:
