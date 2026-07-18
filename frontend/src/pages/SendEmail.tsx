@@ -40,6 +40,10 @@ export const SendEmail = () => {
   const [files, setFiles] = useState<File[]>([]);
 
   const [draftItemId, setDraftItemId] = useState<string | null>(initialDraftItemId);
+  // Chỉ HYDRATE (nạp form từ server) cho nháp mở từ URL ban đầu. Nháp TỰ TẠO trong phiên KHÔNG fetch lại
+  // — nếu không, set draftItemId sẽ bật lại 2 query draft → loading guard render spinner toàn màn
+  // (form nháy/mất nội dung đang gõ). Hằng số trong suốt phiên (không đổi khi tạo nháp mới).
+  const [hydrateDraftId] = useState<string | null>(initialDraftItemId);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [lastSavedState, setLastSavedState] = useState<string>('');
 
@@ -54,19 +58,19 @@ export const SendEmail = () => {
   );
   const resolvedConn = conn || activeGmail[0]?.id || '';
 
-  // Load existing draft — metadata local (connectionId + thread linkage).
+  // Load existing draft — metadata local (connectionId + thread linkage). CHỈ cho nháp mở từ URL.
   const { data: draftItem, isLoading: isLoadingDraft } = useQuery({
-    queryKey: ['draft-item', draftItemId],
-    queryFn: () => itemsApi.getItemById(draftItemId!),
-    enabled: !!draftItemId,
+    queryKey: ['draft-item', hydrateDraftId],
+    queryFn: () => itemsApi.getItemById(hydrateDraftId!),
+    enabled: !!hydrateDraftId,
   });
 
   // NỘI DUNG nháp (subject/body/recipients) sống trên Gmail — metadata local (định dạng sync)
   // KHÔNG chứa body. Fetch thread live để lấy nội dung THẬT của message DRAFT.
   const { data: draftThread, isLoading: isLoadingThread } = useQuery({
-    queryKey: ['draft-thread', draftItemId],
-    queryFn: () => sendEmailApi.getThread(draftItemId!),
-    enabled: !!draftItemId,
+    queryKey: ['draft-thread', hydrateDraftId],
+    queryFn: () => sendEmailApi.getThread(hydrateDraftId!),
+    enabled: !!hydrateDraftId,
     retry: false,
     staleTime: 0,
   });
@@ -79,7 +83,7 @@ export const SendEmail = () => {
   // Hydrate form 1 lần: ƯU TIÊN nội dung live từ Gmail (draftThread), fallback metadata local.
   // Chờ thread settled (xong/lỗi) rồi mới nạp — tránh hiện form rỗng trước khi có content.
   React.useEffect(() => {
-    const threadSettled = !draftItemId || !isLoadingThread;
+    const threadSettled = !hydrateDraftId || !isLoadingThread;
     if (draftItem && threadSettled && !isDraftLoadedRef.current) {
       try {
         const meta = JSON.parse(draftItem.metadataJson || '{}');
@@ -123,7 +127,7 @@ export const SendEmail = () => {
         console.error('Error hydrating draft', e);
       }
     }
-  }, [draftItem, draftThread, isLoadingThread, draftItemId, resolvedConn]);
+  }, [draftItem, draftThread, isLoadingThread, hydrateDraftId, resolvedConn]);
 
   // Chữ ký THẬT từ Gmail của connection (rỗng nếu chưa đặt / connection cũ thiếu scope settings.basic).
   const { data: signature = '' } = useQuery({
@@ -187,7 +191,10 @@ export const SendEmail = () => {
     if (isDiscardedRef.current) return;
     const { to, cc, bcc, subject, body, resolvedConn, draftItemId, lastSavedState } = latestDataRef.current;
     if (!resolvedConn) return;
-    
+    // CHỈ auto-save khi nháp ĐÃ tồn tại (user chủ động bấm "Lưu nháp" hoặc đang sửa nháp có sẵn).
+    // KHÔNG tự tạo nháp mới — tránh lưu nháp ngoài ý muốn + hết cảnh giật màn khi set draftItemId.
+    if (!draftItemId) return;
+
     // Check if anything has actually changed from the last saved state
     const currentStateStr = JSON.stringify({ to, cc, bcc, subject, body, resolvedConn });
     if (currentStateStr === lastSavedState) return;
@@ -215,6 +222,8 @@ export const SendEmail = () => {
     if (isDiscardedRef.current) return;
     const { to, cc, bcc, subject, body, resolvedConn, lastSavedState, draftItemId } = latestDataRef.current;
     if (!resolvedConn) return;
+    // Rời trang: chỉ lưu khi nháp ĐÃ tồn tại — không tự tạo nháp mới (user chưa chắc muốn lưu).
+    if (!draftItemId) return;
 
     const currentStateStr = JSON.stringify({ to, cc, bcc, subject, body, resolvedConn });
     if (currentStateStr === lastSavedState) return;
@@ -232,11 +241,8 @@ export const SendEmail = () => {
       inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
     };
 
-    if (draftItemId) {
-      sendEmailApi.updateDraft(draftItemId, payload).catch(err => console.error(err));
-    } else {
-      sendEmailApi.createDraft(payload).catch(err => console.error(err));
-    }
+    // draftItemId chắc chắn tồn tại (đã guard ở trên) → chỉ update, KHÔNG tạo nháp mới.
+    sendEmailApi.updateDraft(draftItemId, payload).catch(err => console.error(err));
   }, []);
 
   // Debounce effect for auto-saving drafts (2.0 seconds)
@@ -271,9 +277,9 @@ export const SendEmail = () => {
           bodyHtml: composedHtml,
           threadId: threadLinkRef.current.threadId,
           inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
-          // Phải kèm attachment vào lần lưu nháp CUỐI trước khi gửi: nhánh này chạy mỗi khi
-          // đã auto-save nháp, mà trước đây bỏ qua attachments của payload → gửi đi mất sạch
-          // tệp đính kèm dù UI vẫn hiện đã chọn.
+          // Đính kèm file vào draft TRƯỚC khi sendDraft — SendDraftAsync gửi draft as-is (không nhận
+          // attachments), nên nếu không đưa vào updateDraft thì file user chọn bị DROP âm thầm khi gửi
+          // qua đường nháp. UpdateDraftAsync (BE) rebuild MIME kèm attachments.
           attachments: payload.attachments,
         };
         await sendEmailApi.updateDraft(draftItemId, draftPayload);
@@ -310,6 +316,25 @@ export const SendEmail = () => {
     discardMutation.mutate(undefined, { onSettled: () => setDiscardConfirmOpen(false) });
   };
 
+  // Lưu nháp CHỦ ĐỘNG (nút) — lần đầu tạo nháp; sau đó auto-save (update) tiếp quản.
+  const handleSaveDraft = () => {
+    if (!resolvedConn) return toast.error(t('sendEmail.needConn'));
+    if (to.length === 0 && !subject.trim() && !body.trim()) return toast.error(t('sendEmail.draftEmpty'));
+    // Ghim account đang dùng vào state (nháp sẽ gắn cứng account này) — tránh resolvedConn trôi về
+    // activeGmail[0] nếu danh sách connection đổi thứ tự sau đó, gây "Draft connection mismatch".
+    setConn(resolvedConn);
+    setLastSavedState(JSON.stringify({ to, cc, bcc, subject, body, resolvedConn }));
+    mutateSaveDraft({
+      id: draftItemId,
+      data: {
+        connectionId: resolvedConn,
+        to, cc, bcc, subject, bodyHtml: body,
+        threadId: threadLinkRef.current.threadId,
+        inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
+      },
+    });
+  };
+
   const handleSend = async () => {
     if (to.length === 0) return toast.error(t('sendEmail.needTo'));
     if (!subject.trim()) return toast.error(t('sendEmail.needSubject'));
@@ -333,7 +358,7 @@ export const SendEmail = () => {
   const labelClass = 'block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5';
   const inputClass = 'w-full h-9 px-3 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors';
 
-  if (isLoadingDraft || (!!draftItemId && isLoadingThread)) {
+  if (isLoadingDraft || (!!hydrateDraftId && isLoadingThread)) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center bg-gray-50 dark:bg-slate-950">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
@@ -439,7 +464,15 @@ export const SendEmail = () => {
               options={activeGmail.map(c => ({ value: c.id, label: `Gmail · ${c.providerAccountId}` }))}
               placeholder={t('sendEmail.connectionPlaceholder')}
               className="h-9"
+              // Nháp gắn cứng 1 mailbox Gmail — không đổi account khi đã có nháp (BE chặn "Draft connection
+              // mismatch"). Muốn account khác → huỷ/gửi nháp trước.
+              disabled={!!draftItemId}
             />
+            {draftItemId && (
+              <p className="mt-1.5 text-xs text-gray-400 dark:text-slate-500 leading-relaxed">
+                {t('sendEmail.connectionLocked')}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3 mt-2 shrink-0">
@@ -450,6 +483,15 @@ export const SendEmail = () => {
             >
               <Send className="w-4 h-4" />
               <span>{sendMutation.isPending ? t('sendEmail.sending') : t('sendEmail.sendNow')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={saveDraftMutation.isPending || sendMutation.isPending}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4" />
+              {saveDraftMutation.isPending ? t('sendEmail.savingDraft') : t('sendEmail.saveDraft')}
             </button>
             {draftItemId && (
               <button

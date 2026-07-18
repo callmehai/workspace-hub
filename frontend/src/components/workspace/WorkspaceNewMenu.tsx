@@ -22,6 +22,8 @@ interface Props {
   currentDriveFolderId?: string;
   /** Tab nguồn đang xem (sidebar). null = "Tất cả mục" → full option; tab cụ thể → chỉ option hợp loại đó. */
   sourceType?: ItemType | null;
+  /** Tài khoản Drive đang được lọc (multi-account) — ưu tiên làm đích upload/tạo folder nếu hợp lệ. */
+  preferredDriveConnectionId?: string;
 }
 
 /** 1 dòng trong menu "Mới". */
@@ -45,7 +47,7 @@ function MenuItem({
  * Option hiện theo integration đang Active: Ghi chú (nội bộ, luôn có) · Sự kiện (Google
  * Calendar) · Ticket (Jira) · Thư mục mới / Tải tệp / Tải thư mục (Google Drive).
  */
-export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = null }: Props) {
+export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = null, preferredDriveConnectionId }: Props) {
   const { t } = useI18n();
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +74,11 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
     [connections],
   );
   const hasDrive = driveConnections.length > 0;
-  const driveConnectionId = driveConnections[0]?.id ?? '';
+  // Ưu tiên account Drive đang lọc (nếu còn Active); else Drive đầu tiên.
+  const driveConnectionId =
+    (preferredDriveConnectionId && driveConnections.some((c) => c.id === preferredDriveConnectionId)
+      ? preferredDriveConnectionId
+      : driveConnections[0]?.id) ?? '';
 
   // Đang drill trong 1 folder Drive → chỉ có ý nghĩa tạo/tải nội dung Drive (tạo Ticket/Note/Event
   // vào folder Drive là vô nghĩa). currentDriveFolderId set = đang trong folder Drive.

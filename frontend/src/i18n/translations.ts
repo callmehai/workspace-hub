@@ -324,6 +324,8 @@ export const vi = {
   'integrations.statusDisabledByAdmin': 'Tạm tắt',
   'integrations.disabledHint': 'Quản trị viên đã tắt dịch vụ này. Bạn không thể kết nối mới.',
   'integrations.noAccount': 'Chưa có tài khoản',
+  'integrations.addAccount': 'Thêm tài khoản',
+  'integrations.accountsCount': '{n} tài khoản',
   'integrations.syncedAgo': 'Đồng bộ {ago}',
   'integrations.neverSynced': 'Chưa đồng bộ',
   'integrations.syncNow': 'Đồng bộ',
@@ -473,6 +475,9 @@ export const vi = {
   'sendEmail.needConn': 'Vui lòng chọn kết nối Gmail',
   'sendEmail.savingDraft': 'Đang lưu nháp...',
   'sendEmail.draftSaved': 'Đã lưu nháp',
+  'sendEmail.saveDraft': 'Lưu nháp',
+  'sendEmail.draftEmpty': 'Nhập nội dung trước khi lưu nháp',
+  'sendEmail.connectionLocked': 'Nháp đã gắn với tài khoản này. Huỷ hoặc gửi nháp trước nếu muốn đổi tài khoản.',
   'sendEmail.discardDraft': 'Hủy nháp',
   'sendEmail.draftDiscarded': 'Đã hủy nháp',
   'sendEmail.discardConfirm': 'Bạn có chắc chắn muốn hủy thư nháp này không?',
@@ -766,6 +771,7 @@ export const vi = {
   'toolbar.allProjects': 'Tất cả dự án',
   'toolbar.allAssignees': 'Tất cả mọi người',
   'toolbar.unassigned': 'Chưa gán',
+  'toolbar.allAccounts': 'Tất cả tài khoản',
   'toolbar.search': 'Tìm kiếm tiêu đề, nội dung… (không cần gõ dấu)',
 
   // ── kanban ──
@@ -1213,6 +1219,8 @@ export const en: Record<TranslationKey, string> = {
   'integrations.statusDisabledByAdmin': 'Disabled',
   'integrations.disabledHint': 'An admin has disabled this service. You cannot connect.',
   'integrations.noAccount': 'No account',
+  'integrations.addAccount': 'Add account',
+  'integrations.accountsCount': '{n} account(s)',
   'integrations.syncedAgo': 'Synced {ago}',
   'integrations.neverSynced': 'Not synced yet',
   'integrations.syncNow': 'Sync',
@@ -1363,6 +1371,9 @@ export const en: Record<TranslationKey, string> = {
   'sendEmail.needConn': 'Please choose a Gmail connection',
   'sendEmail.savingDraft': 'Saving draft...',
   'sendEmail.draftSaved': 'Draft saved',
+  'sendEmail.saveDraft': 'Save draft',
+  'sendEmail.draftEmpty': 'Enter some content before saving a draft',
+  'sendEmail.connectionLocked': 'This draft is tied to this account. Discard or send it first to switch accounts.',
   'sendEmail.discardDraft': 'Discard draft',
   'sendEmail.draftDiscarded': 'Draft discarded',
   'sendEmail.discardConfirm': 'Are you sure you want to discard this draft?',
@@ -1656,6 +1667,7 @@ export const en: Record<TranslationKey, string> = {
   'toolbar.allProjects': 'All projects',
   'toolbar.allAssignees': 'All assignees',
   'toolbar.unassigned': 'Unassigned',
+  'toolbar.allAccounts': 'All accounts',
   'toolbar.search': 'Search title, content… (no diacritics needed)',
 
   // ── kanban ──

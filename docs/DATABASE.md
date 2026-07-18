@@ -93,8 +93,8 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 | CreatedAt | datetime | |
 
 **KHÔNG có:** cột Scopes (suy từ ServiceType), cột Permission (bật là full).
-**Constraint:** UNIQUE(UserId, Provider, ServiceType, ProviderAccountId).
-**Disconnect:** xoá đúng row → không ảnh hưởng service khác. Items giữ lại (ConnectionId = NULL).
+**Constraint:** UNIQUE(UserId, Provider, ServiceType, ProviderAccountId). ⭐ **Cố ý đa tài khoản:** vì khoá gồm `ProviderAccountId`, 1 user connect **nhiều account cùng service** (2 Gmail khác email, 2 Jira site khác cloudId) = nhiều row hợp lệ; chỉ chặn khi trùng ĐÚNG account. Multi-account bật bằng `prompt=select_account` ở OAuth builder — KHÔNG đổi schema (xem CHANGELOG [2026-07-18]).
+**Disconnect:** xoá đúng row → không ảnh hưởng service khác **hay account khác cùng service**. Items giữ lại (ConnectionId = NULL).
 
 > Lưu ý implement: FK `Items.ConnectionId` và `ScheduledEmails.ConnectionId` để **NoAction ở DB** (SQL Server cấm multiple cascade path User→Items và User→Connections→Items). Semantics "set NULL khi disconnect" xử lý ở **service layer** trước khi xoá Connection — xem comment trong `AppDbContext`.
 

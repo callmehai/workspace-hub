@@ -2,6 +2,8 @@
 
 > **Cập nhật 2026-07-16:** SCRUM-79 bổ sung Case 1 link-restrict (popup giống Drive). Sprint hiện hành **Sprint 4**. Nền tảng 2 chiều **đã xong** (write-back Google 37/38, scheduled email 30/31). **Phase Jira 54→60 đã code xong** (không còn "chưa code"). **Auth overhaul 62→64** (cookie/refresh/OTP) phát sinh ngoài board ban đầu, nay là ticket thật. Thêm ticket mới **67/68/69/72** (highlight unread, notifications, People API, cron sync định kỳ). Số SCRUM-39→46 KHÔNG phải Webhook/Jira (39=bỏ DB creds, 40=admin toggle, 41→50=FE, 51=deploy, 52=finalize, 53=defense). Lịch sử quyết định: CHANGELOG.md.
 >
+> **Cập nhật 2026-07-18 (ticketless):** ✅ **Multi-connection per integration** — 1 user kết nối **nhiều tài khoản Google** (Gmail/Calendar/Drive khác email). Mô hình B đã sẵn đa tài khoản → chỉ đổi OAuth `prompt=select_account` + mở UI (trang Kết nối liệt kê N account/service + "Thêm tài khoản"; bộ lọc tài khoản ở Inbox/Kanban). **Jira multi-site từng-grant-một** (callback chọn site CHƯA connect thay vì luôn `resources[0]` — mỗi site 1 grant riêng, token độc lập) + **callback UPSERT khi trùng service+account** (fix nút "Kết nối lại" xưa giờ 409). Chi tiết: CHANGELOG [2026-07-18].
+>
 > **Quy tắc:** sau khi hoàn thành task code nào, cập nhật status ticket đó trong file này (và các .md liên quan).
 
 ## Team

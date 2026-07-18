@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   Star, Search, LayoutGrid, List, RefreshCw, Tag, Settings2,
-  Briefcase, UserRound, Loader2, ChevronDown, Check,
+  Briefcase, UserRound, Loader2, ChevronDown, Check, AtSign,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
@@ -25,6 +25,14 @@ import { WorkspaceNewMenu } from './WorkspaceNewMenu';
  *   Hàng 3: search full-width.
  * Ở Bảng, chip Trạng thái = lọc CỘT hiển thị (chọn "Đang xử lý" → chỉ hiện cột đó).
  */
+
+/** Nguồn (tab) → serviceType để lọc theo tài khoản. Chỉ Google service (email đọc được làm nhãn);
+ *  Ticket bỏ vì đã có lọc project/assignee và providerAccountId của Jira là cloudId (GUID) khó đọc. */
+const SOURCE_TO_ACCOUNT_SERVICE: Partial<Record<ItemType, string>> = {
+  Email: 'gmail',
+  Event: 'gcal',
+  File: 'drive',
+};
 
 /** 3 lựa chọn lọc loại Drive (chỉ hiện ở view Drive). Đơn chọn (radio). */
 const DRIVE_KINDS: { value: 'all' | 'folder' | 'file'; labelKey: TranslationKey }[] = [
@@ -195,9 +203,14 @@ interface WorkspaceToolbarProps {
   onProjectKeyChange?: (v: string) => void;
   assigneeFilter?: string;
   onAssigneeChange?: (v: string) => void;
+  /** Lọc theo tài khoản (connectionId) — chỉ hiện khi service của nguồn đang xem có ≥2 account. */
+  accountFilter?: string;
+  onAccountChange?: (v: string) => void;
   searchInput: string;
   onSearchChange: (v: string) => void;
   currentDriveFolderId?: string;
+  /** Drive account SỞ HỮU folder đang mở — để upload/tạo folder con đúng connection (đa tài khoản Drive). */
+  currentDriveFolderConnectionId?: string;
   /** Lọc Drive theo loại (chỉ hiện ở view Drive: tab Tệp hoặc đang trong 1 folder Drive). */
   driveKind?: 'all' | 'folder' | 'file';
   onDriveKindChange?: (k: 'all' | 'folder' | 'file') => void;
@@ -212,8 +225,9 @@ export const WorkspaceToolbar = ({
   tagFilters, onToggleTagFilter, onClearTagFilters,
   projectKeyFilter, onProjectKeyChange,
   assigneeFilter, onAssigneeChange,
+  accountFilter, onAccountChange,
   searchInput, onSearchChange,
-  currentDriveFolderId,
+  currentDriveFolderId, currentDriveFolderConnectionId,
   driveKind = 'all', onDriveKindChange,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
@@ -231,6 +245,12 @@ export const WorkspaceToolbar = ({
   const jiraConns = connections.filter(
     (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
   );
+
+  // Các account (connection Active) của service ứng với nguồn đang xem — để lọc theo tài khoản khi ≥2.
+  const accountService = sourceType ? SOURCE_TO_ACCOUNT_SERVICE[sourceType] : undefined;
+  const accountConns = accountService
+    ? connections.filter((c: ConnectionDto) => c.serviceType.toLowerCase() === accountService && c.status.toLowerCase() === 'active')
+    : [];
 
   const projectQueries = useQueries({
     queries: jiraConns.map((c: ConnectionDto) => ({
@@ -433,6 +453,7 @@ export const WorkspaceToolbar = ({
               folder={folder}
               currentDriveFolderId={currentDriveFolderId}
               sourceType={sourceType}
+              preferredDriveConnectionId={currentDriveFolderConnectionId ?? (accountService === 'drive' ? (accountFilter || undefined) : undefined)}
             />
           </div>
         </div>
@@ -486,6 +507,22 @@ export const WorkspaceToolbar = ({
                 // BE hiểu "unassigned" = ticket chưa gán ai (ItemRepository lọc theo giá trị này).
                 { value: 'unassigned', label: t('toolbar.unassigned') },
                 ...assignees.map(a => ({ value: a.accountId, label: a.displayName })),
+              ]}
+            />
+          </div>
+        )}
+        {/* Lọc theo tài khoản — CHỈ hiện khi nguồn đang xem (Gmail/Calendar/Drive) có ≥2 account. */}
+        {onAccountChange && accountConns.length >= 2 && (
+          <div className="w-52 shrink-0">
+            <Select
+              value={accountFilter ?? ''}
+              onChange={onAccountChange}
+              className="h-9 text-[13px]"
+              icon={<AtSign className="w-4 h-4" />}
+              placeholder={t('toolbar.allAccounts')}
+              options={[
+                { value: '', label: t('toolbar.allAccounts') },
+                ...accountConns.map((c: ConnectionDto) => ({ value: c.id, label: c.providerAccountId || c.id })),
               ]}
             />
           </div>
