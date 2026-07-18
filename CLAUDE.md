@@ -82,6 +82,8 @@ Layered / Clean: **Controller (API) → Service (business logic) → Repository 
 - `docs/DEPLOY.md` — hạ tầng production (AWS Lightsail), CI/CD, vận hành, truy cập DB, billing
 - `docs/CHANGELOG.md` — lịch sử quyết định thiết kế
 - `docs/OPTIMIZATIONS.md` — điểm chưa tối ưu đã biết (index JSON, SSRF thumbnail, F5 folder…) + hướng fix khi scale
+- `docs/FOLDER-SHARING-HANDOVER.md` — **đọc trước khi đụng tính năng chia sẻ folder**: bug đã fix, 2 khuôn mẫu lỗi hay lặp (thiếu share-check / so sánh `conn.UserId` sai), hạn chế đã chấp nhận, checklist test tay
+- `docs/FOLDER-SHARING-REVIEW.md` — phân tích sâu mô hình "owner connection as proxy" + ưu/nhược điểm
 
 ## Nguyên tắc khi code
 

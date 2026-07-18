@@ -45,8 +45,15 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
 
         // ── Optional filters ──
 
-        // FolderId: join qua ItemFolders junction table
-        if (folderId.HasValue)
+        // FolderId: join qua ItemFolders junction table.
+        //
+        // NGOẠI LỆ: khi đang DUYỆT VÀO TRONG một thư mục Drive cụ thể (driveParentId có giá trị và
+        // khác "root"), bỏ qua filter workspace-folder. Lý do: user chỉ gán THƯ MỤC Drive vào
+        // workspace folder, các file con bên trong KHÔNG được gán → AND hai filter cho ra tập rỗng
+        // (thư mục Drive mở ra trống trơn dù All items vẫn thấy file). Ngữ cảnh lúc này là cây Drive,
+        // không phải workspace folder.
+        var browsingDriveFolder = driveParentId != null && driveParentId != "root";
+        if (folderId.HasValue && !browsingDriveFolder)
         {
             query = query.Where(i =>
                 i.ItemFolders.Any(ifj => ifj.FolderId == folderId.Value));
@@ -136,10 +143,12 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
         }
 
         // DriveParentId filter — hierarchical Google Drive view (SCRUM-79 extension)
-        if (driveParentId != null && driveParentId != "root")
+        if (browsingDriveFolder)
         {
-            // Thư mục cụ thể: CHỈ hiển thị các file/folder Drive nằm trong thư mục này
-            var parentToken = $"\"{driveParentId.Trim()}\"";
+            // Thư mục cụ thể: CHỈ hiển thị các file/folder Drive nằm trong thư mục này.
+            // `!`: browsingDriveFolder đã bao hàm driveParentId != null, nhưng flow analysis
+            // không xuyên qua được biến bool trung gian.
+            var parentToken = $"\"{driveParentId!.Trim()}\"";
             query = query.Where(i => i.Type == ItemType.File && i.MetadataJson != null && i.MetadataJson.Contains(parentToken));
         }
         else if (driveParentId == "root" || (folderId == null && driveParentId == null && string.IsNullOrEmpty(search)))
@@ -333,6 +342,21 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
                 && i.Type == ItemType.File
                 && i.ExternalId != null
                 && ids.Contains(i.ExternalId))
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<Item>> GetDriveItemsByConnectionsAsync(Guid userId, IReadOnlyList<Guid> connectionIds, CancellationToken ct = default)
+    {
+        if (connectionIds.Count == 0)
+            return [];
+
+        return await Set
+            .Where(i => i.UserId == userId
+                && i.Type == ItemType.File
+                && !i.IsArchived
+                && i.ConnectionId != null
+                && connectionIds.Contains(i.ConnectionId.Value))
             .ToListAsync(ct);
     }
 

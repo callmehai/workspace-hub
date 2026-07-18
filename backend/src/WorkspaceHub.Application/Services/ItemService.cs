@@ -247,8 +247,13 @@ public class ItemService : IItemService
     /// <inheritdoc/>
     public async Task<CalendarEventDetailResponse> GetCalendarEventDetailAsync(Guid userId, Guid itemId, CancellationToken ct = default)
     {
-        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
-            ?? throw new NotFoundException(nameof(Item), itemId);
+        // Owner HOẶC người được chia sẻ — đây là thao tác ĐỌC nên Viewer cũng được xem chi tiết.
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null && await _folderRepo.IsItemSharedWithUserAsync(itemId, userId, ct))
+            item = await _itemRepo.GetByIdAsync(itemId, ct);
+
+        if (item == null)
+            throw new NotFoundException(nameof(Item), itemId);
 
         if (item.Type != ItemType.Event)
             throw new BusinessRuleException("Item is not a calendar event.");
@@ -259,7 +264,9 @@ public class ItemService : IItemService
         var conn = await _connectionRepo.GetByIdAsync(item.ConnectionId.Value, ct)
             ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
 
-        if (conn.UserId != userId)
+        // Connection phải thuộc OWNER của item (không phải người đang gọi) — người được share
+        // mượn connection của owner, hợp lệ vì share-check ở trên đã pass.
+        if (conn.UserId != item.UserId)
             throw new ForbiddenException("Not your connection.");
 
         if (item.ExternalId == null)
@@ -333,8 +340,13 @@ public class ItemService : IItemService
     /// <inheritdoc/>
     public async Task RsvpEventAsync(Guid userId, Guid itemId, RsvpRequest request, CancellationToken ct = default)
     {
-        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
-            ?? throw new NotFoundException(nameof(Item), itemId);
+        // RSVP = GHI lên lịch của owner → chỉ owner hoặc shared-Editor. Viewer nhận 403 rõ nghĩa.
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null && await _folderRepo.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct))
+            item = await _itemRepo.GetByIdAsync(itemId, ct);
+
+        if (item == null)
+            await ThrowNoWriteAccessAsync(itemId, userId, ct);
 
         if (item.Type != ItemType.Event)
             throw new BusinessRuleException("Item is not a calendar event.");
@@ -345,7 +357,7 @@ public class ItemService : IItemService
         var conn = await _connectionRepo.GetByIdAsync(item.ConnectionId.Value, ct)
             ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
 
-        if (conn.UserId != userId)
+        if (conn.UserId != item.UserId)
             throw new ForbiddenException("Not your connection.");
 
         if (item.ExternalId == null)
@@ -446,8 +458,10 @@ public class ItemService : IItemService
         ExternalId: item.ExternalId,
         MetadataJson: item.MetadataJson,
         FolderIds: item.ItemFolders.Select(f => f.FolderId).ToList(),
+        // Tag là nhãn PRIVATE: item trong folder chia sẻ có thể mang tag của NHIỀU user khác nhau.
+        // Chỉ trả tag của chính người đang xem, nếu không A sẽ thấy tag riêng của B và ngược lại.
         Tags: item.TagAssignments
-            .Where(ta => ta.Tag != null)
+            .Where(ta => ta.Tag != null && (currentUserId == null || ta.Tag.UserId == currentUserId.Value))
             .Select(ta => new ItemTag(ta.Tag.Id, ta.Tag.Name, ta.Tag.Color))
             .ToList(),
         ConnectionId: item.ConnectionId,
