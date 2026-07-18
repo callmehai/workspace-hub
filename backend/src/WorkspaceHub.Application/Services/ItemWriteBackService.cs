@@ -702,6 +702,10 @@ public class ItemWriteBackService : IItemWriteBackService
             }
         }
 
+        // Event invitee copy có thể bị CalendarInvitation.InviteeItemId trỏ tới (FK NoAction).
+        if (item.Type == ItemType.Event && _calendarInvitations != null)
+            await _calendarInvitations.ClearInviteeItemLinksAsync(new[] { item.Id }, ct);
+
         _items.Remove(item);
         await _items.SaveChangesAsync(ct);
     }

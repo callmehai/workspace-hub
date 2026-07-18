@@ -87,9 +87,18 @@ public class CalendarSyncService : ICalendarSyncService
 
         // Incremental sync: event cancelled/xóa trên Google → xóa Item local.
         // Full sync (syncToken expired) không liệt kê mọi event cũ — không orphan-delete hàng loạt.
+        // InviteeItemId = NoAction (SQL Server cấm SET NULL khi OrganizerItem đã CASCADE) → null hoá trước Remove.
+        var cancelledItems = new List<Item>();
         foreach (var cancelledId in result.CancelledEventIds)
         {
             if (existingItems.Remove(cancelledId, out var toDelete))
+                cancelledItems.Add(toDelete);
+        }
+
+        if (cancelledItems.Count > 0)
+        {
+            await _calendarInvitations.ClearInviteeItemLinksAsync(cancelledItems.Select(i => i.Id), ct);
+            foreach (var toDelete in cancelledItems)
                 _items.Remove(toDelete);
         }
 

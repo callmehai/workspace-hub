@@ -171,6 +171,9 @@ public class CalendarInvitationService : ICalendarInvitationService
     public async Task<IReadOnlyList<CalendarInvitationResponse>> GetForUserAsync(Guid userId, DateTime? from, DateTime? to, CancellationToken ct = default)
         => (await _invitations.GetForInviteeAsync(userId, from, to, ct)).Select(Map).ToList();
 
+    public Task ClearInviteeItemLinksAsync(IEnumerable<Guid> inviteeItemIds, CancellationToken ct = default)
+        => _invitations.ClearInviteeItemLinksAsync(inviteeItemIds, ct);
+
     public async Task<CalendarInvitationResponse> GetAsync(Guid userId, Guid invitationId, CancellationToken ct = default)
         => Map(await _invitations.GetByIdForInviteeAsync(invitationId, userId, ct)
             ?? throw new NotFoundException(nameof(CalendarInvitation), invitationId));

@@ -349,7 +349,16 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             .Where(x => x.Item.ConnectionId == connectionId)
             .ExecuteDeleteAsync(ct);
 
-        // 3. Delete the Items themselves
+        // 3. Null InviteeItemId trước khi ExecuteDelete Items (FK NoAction — SQL Server không cho
+        // SET NULL khi OrganizerItemId đã CASCADE cùng trỏ Items). OrganizerItem CASCADE tự xoá invitation.
+        var now = DateTime.UtcNow;
+        await Db.CalendarInvitations
+            .Where(ci => ci.InviteeItem != null && ci.InviteeItem.ConnectionId == connectionId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(ci => ci.InviteeItemId, (Guid?)null)
+                .SetProperty(ci => ci.UpdatedAt, now), ct);
+
+        // 4. Delete the Items themselves
         await Set
             .Where(i => i.ConnectionId == connectionId)
             .ExecuteDeleteAsync(ct);

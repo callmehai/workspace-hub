@@ -97,10 +97,15 @@
 - **FE:** `DriveLinkRestrictDialog` (layout gần Drive: tiêu đề, cây quyền, Huỷ / Xoá khỏi thư mục mẹ); wire trong `DriveShareDialog` bắt 409.
 - **Docs:** `docs/API.md`, `docs/DRIVE_FOLDER_SHARING.md` §6.4 / §7.6–7.7 / QA.
 
+## [2026-07-18] CalendarInvitation InviteeItemId — NoAction + null hoá service layer
+
+- **Không dùng ON DELETE SET NULL:** SQL Server Msg 1785 (multiple cascade paths) — `OrganizerItemId` đã `CASCADE` → `Items`; thêm `InviteeItemId SET NULL` bị reject. Migration `CalendarInvitationInviteeItemSetNull` thực tế no-op (FK vẫn NoAction).
+- **Fix:** giữ `DeleteBehavior.NoAction`; trước khi xoá Item invitee → `ClearInviteeItemLinksAsync` / `ExecuteUpdate` null `InviteeItemId` (giữ row RSVP) tại `CalendarSyncService`, `ItemWriteBackService.DeleteItemAsync`, `ItemRepository.DeleteByConnectionIdAsync`.
+
 ## [2026-07-16] Calendar PR review — partial-update reminders + invitation harden
 
 - **Critical — reminders wipe:** `CalendarGateway.UpdateEventAsync` khi `Reminders == null` từng ghi `UseDefault=true` → PATCH event (đổi title/…) xóa reminder Google. **Sau:** `null` = giữ nguyên từ `Events.Get`; non-null (kể cả list rỗng) = ghi overrides. Contract test: `PatchEvent_WithoutReminders_PassesNullRemindersToGateway`.
-- **Important — InviteeItem FK:** `CalendarInvitations.InviteeItemId` đổi `NoAction` → **ON DELETE SET NULL** (migration `CalendarInvitationInviteeItemSetNull`) — xóa Item invitee không còn 500.
+- **Important — InviteeItem FK:** ban đầu định `NoAction` → SET NULL (migration `CalendarInvitationInviteeItemSetNull`) — **không khả thi trên SQL Server** (xem [2026-07-18]); giữ NoAction + null hoá ở service.
 - **Important — RSVP pending:** `ReconcileSyncedEventAsync` khi push RSVP local lên Google lỗi (`ProviderException` / `ForbiddenException`) giữ `GoogleSyncPending=true` + Status local; không ghi đè bằng Google `needsAction`.
 
 ## [2026-07-15] Calendar reminder notification — format thời gian

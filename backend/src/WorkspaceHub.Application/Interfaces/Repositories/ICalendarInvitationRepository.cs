@@ -7,6 +7,8 @@ public interface ICalendarInvitationRepository : IGenericRepository<CalendarInvi
 {
     Task<CalendarInvitation?> GetByIdForInviteeAsync(Guid id, Guid inviteeUserId, CancellationToken ct = default);
     Task<List<CalendarInvitation>> GetByOrganizerItemAsync(Guid organizerItemId, CancellationToken ct = default);
+    Task<List<CalendarInvitation>> GetByInviteeItemAsync(Guid inviteeItemId, CancellationToken ct = default);
     Task<CalendarInvitation?> GetByICalUidAndEmailAsync(string iCalUid, string email, CancellationToken ct = default);
     Task<List<CalendarInvitation>> GetForInviteeAsync(Guid inviteeUserId, DateTime? from, DateTime? to, CancellationToken ct = default);
+    Task ClearInviteeItemLinksAsync(IEnumerable<Guid> inviteeItemIds, CancellationToken ct = default);
 }

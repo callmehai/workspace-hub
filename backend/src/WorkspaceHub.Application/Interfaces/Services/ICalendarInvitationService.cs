@@ -11,4 +11,5 @@ public interface ICalendarInvitationService
     Task<IReadOnlyList<CalendarInvitationResponse>> GetForUserAsync(Guid userId, DateTime? from, DateTime? to, CancellationToken ct = default);
     Task<CalendarInvitationResponse> GetAsync(Guid userId, Guid invitationId, CancellationToken ct = default);
     Task<CalendarInvitationResponse> RespondAsync(Guid userId, Guid invitationId, RespondCalendarInvitationRequest request, CancellationToken ct = default);
+    Task ClearInviteeItemLinksAsync(IEnumerable<Guid> inviteeItemIds, CancellationToken ct = default);
 }
