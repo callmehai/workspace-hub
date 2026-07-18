@@ -10,7 +10,7 @@ namespace WorkspaceHub.Infrastructure.Services;
 /// Tránh copy-paste cùng 1 block catch ở mỗi method.
 ///
 /// Mapping:
-///   404 → NotFoundException
+///   404 / 410 → NotFoundException
 ///   403 / insufficientPermissions → ForbiddenException (gợi ý reconnect)
 ///   Còn lại → ProviderException (middleware map → 502)
 /// </summary>
@@ -31,7 +31,10 @@ internal static class GoogleApiExceptionHandler
         string resourceId,
         string forbiddenMessage = "Cần reconnect với quyền ghi.")
     {
-        if (ex.HttpStatusCode == HttpStatusCode.NotFound)
+        // 410 Gone: Google Calendar trả mã này (KHÔNG phải 404) khi event đã bị xoá/huỷ trước đó.
+        // Về mặt nghiệp vụ giống hệt 404 — resource không còn — nên map chung để caller chỉ cần
+        // bắt NotFoundException là dọn được row local, thay vì lộ ProviderError 502 ra UI.
+        if (ex.HttpStatusCode == HttpStatusCode.NotFound || ex.HttpStatusCode == HttpStatusCode.Gone)
             return new NotFoundException(resourceType, resourceId);
 
         if (IsInsufficientPermissions(ex))

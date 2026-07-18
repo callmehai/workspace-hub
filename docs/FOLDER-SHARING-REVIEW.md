@@ -140,6 +140,27 @@ Giải pháp của Huy: **Item không bao giờ đổi chủ.** `Item.Connection
 
 **Vấn đề:** chỉ dùng `GetByIdAndUserAsync(itemId, userId)` — **không có fallback share-check**. Nên B là Editor của folder chứa ticket sẽ bị **404** ở tất cả thao tác comment/attachment Jira, dù đáng lẽ có quyền. Không nhất quán với write-back item (vốn cho Editor).
 
+### ✅ G. Code Calendar mới (merge từ develop) không biết gì về folder chia sẻ — ĐÃ FIX 2026-07-19
+
+**Bối cảnh:** develop viết lại toàn bộ Google Calendar sau khi nhánh này tách ra. Các endpoint mới
+(`calendar-details`, `rsvp`) và `EventDetailPopup` được viết theo giả định **"item luôn thuộc người đang gọi"**
+— giả định này đúng trước khi có folder chia sẻ.
+
+**Triệu chứng thực tế khi test:** người B mở event trong folder được chia sẻ → *"Could not load the details"*;
+xoá event → `ProviderError` 502; gắn tag → *"Item with id '…' was not found"*.
+
+**Đã sửa:**
+1. `GetCalendarEventDetailAsync` — thêm share-check (Viewer đọc được).
+2. `conn.UserId != userId` → `conn.UserId != item.UserId` ở cả `calendar-details` và `rsvp`
+   (trong mô hình proxy, connection thuộc **owner của item**, không thuộc người gọi — so sánh cũ chặn mọi truy cập chia sẻ).
+3. `RsvpEventAsync` — là ghi → yêu cầu Editor, Viewer nhận 403 rõ nghĩa.
+4. `TagService.AssignAsync` — Viewer gắn được tag riêng (tag là nhãn private, không đụng provider của owner);
+   kèm theo đó `MapToResponse` phải **lọc tag theo `Tag.UserId`** nếu không A sẽ thấy tag riêng của B.
+5. `EventDetailPopup` — ẩn Sửa/Xoá/Email khách/"View on Google Calendar" khi `item.isOwner === false`.
+
+**Bài học cho phần còn lại của đồ án:** mỗi lần merge code mới đụng tới Item, phải rà lại xem nó có
+dùng `GetByIdAndUserAsync` mà thiếu nhánh share-check hay không. Đây là **lỗi hệ thống lặp lại**, không phải sự cố lẻ.
+
 ### 🟡 F. Constructor overload `null!` (code smell)
 
 **Vị trí:** `ItemWriteBackService` (constructor 8 tham số gọi lại constructor 9 tham số với `_folders = null!`).

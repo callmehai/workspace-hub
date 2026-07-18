@@ -282,6 +282,12 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
     return `${date}, ${startTime} - ${endTime}`;
   }, [detail, dl, t]);
 
+  // Item của người khác, đang xem qua folder được chia sẻ.
+  // Mọi hành động tác động lên tài khoản Google của owner đều phải ẩn:
+  //  - "View on Google Calendar": link trỏ vào lịch của owner, tài khoản người xem mở ra sẽ 404.
+  //  - Sửa/Xoá/Email khách: người xem không có quyền trên lịch đó (BE cũng chặn, đây là lớp UX).
+  const isSharedFromOthers = item?.isOwner === false;
+
   const currentUserEmail = detail?.owningCalendarName;
   const organizerEmail = detail?.organizerEmail;
   const isOwner = !organizerEmail || organizerEmail.toLowerCase() === currentUserEmail?.toLowerCase();
@@ -296,7 +302,9 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   const titleAccentDot = accentDotClass ?? (isOwner ? 'bg-emerald-500' : 'bg-amber-500');
 
   const handleCopyLink = () => {
-    const link = detail?.htmlLink || `${window.location.origin}/calendar?eventId=${itemId}`;
+    // Người xem qua folder chia sẻ: htmlLink trỏ vào lịch của owner nên vô dụng với họ → copy link in-app.
+    const link = (!isSharedFromOthers && detail?.htmlLink)
+      || `${window.location.origin}/calendar?eventId=${itemId}`;
     navigator.clipboard.writeText(link);
     toast.success(t('calendar.copiedShareLink'));
   };
@@ -359,19 +367,21 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   return shell(
     <>
       <div className="flex items-center justify-end gap-2.5 px-4 py-3.5">
-        {detail.canEdit && (
+        {detail.canEdit && !isSharedFromOthers && (
           <button type="button" onClick={() => onEdit(detail)} title={t('common.edit')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
             <Pencil className="h-4 w-4" />
           </button>
         )}
-        {detail.isOrganizer && (
+        {detail.isOrganizer && !isSharedFromOthers && (
           <button type="button" onClick={onDelete} title={t('common.delete')} className="rounded-full p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-300">
             <Trash2 className="h-4 w-4" />
           </button>
         )}
-        <button type="button" onClick={() => setIsEmailPopupOpen(true)} title={t('calendar.emailGuests')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
-          <Mail className="h-4 w-4" />
-        </button>
+        {!isSharedFromOthers && (
+          <button type="button" onClick={() => setIsEmailPopupOpen(true)} title={t('calendar.emailGuests')} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Mail className="h-4 w-4" />
+          </button>
+        )}
         <div className="relative">
           <button type="button" onClick={() => setShowMoreActions(current => !current)} className="rounded-full p-1.5 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
             <MoreVertical className="h-4 w-4" />
@@ -382,7 +392,7 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 <Link className="h-3.5 w-3.5 text-slate-400 dark:text-slate-300" />
                 {t('calendar.copyLink')}
               </button>
-              {detail.htmlLink && (
+              {detail.htmlLink && !isSharedFromOthers && (
                 <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" onClick={() => setShowMoreActions(false)} className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white">
                   <ExternalLink className="h-3.5 w-3.5 text-slate-400 dark:text-slate-300" />
                   {t('calendar.viewGoogle')}
