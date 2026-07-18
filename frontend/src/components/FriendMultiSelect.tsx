@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search, Star, X } from 'lucide-react';
 import { useI18n } from '../hooks/useI18n';
@@ -30,16 +30,22 @@ export function FriendMultiSelect({ friends, value, onChange, disabled, classNam
   const searchRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
+  /** Đóng menu + xoá từ khoá tìm kiếm (lần mở sau bắt đầu với danh sách đầy đủ). */
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setQuery('');
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as Node;
       // Menu render qua portal (ngoài `ref`) → phải loại trừ riêng.
       if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setOpen(false);
+      closeMenu();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') closeMenu();
     };
     document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onKey);
@@ -47,7 +53,7 @@ export function FriendMultiSelect({ friends, value, onChange, disabled, classNam
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, closeMenu]);
 
   // Portal → tự đo vị trí nút trigger (menu absolute sẽ bị dialog `overflow` cắt mất).
   useLayoutEffect(() => {
@@ -69,9 +75,9 @@ export function FriendMultiSelect({ friends, value, onChange, disabled, classNam
   }, [open, query, friends.length]);
 
   // Mở dropdown → focus ngay ô tìm kiếm để gõ luôn.
+  // (Reset query làm ngay trong `closeMenu` chứ không setState trong effect — tránh cascading render.)
   useEffect(() => {
     if (open) searchRef.current?.focus();
-    else setQuery('');
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -116,7 +122,7 @@ export function FriendMultiSelect({ friends, value, onChange, disabled, classNam
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? closeMenu() : setOpen(true))}
         className={`w-full flex items-center justify-between gap-2 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
           open
             ? 'border-brand-500 ring-2 ring-brand-500/20'

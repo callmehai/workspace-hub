@@ -26,7 +26,7 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
 }) => {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [selectedFriendIdsRaw, setSelectedFriendIds] = useState<string[]>([]);
   const [permission, setPermission] = useState<'Viewer' | 'Editor'>('Viewer');
 
   // Fetch current shares of the folder (only if owner)
@@ -47,11 +47,11 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
   const sharedUserIds = new Set(shares.map((s) => s.sharedWithUserId));
   const availableFriends = friendsOverview?.friends.filter((f) => !sharedUserIds.has(f.userId)) || [];
 
-  // Bỏ chọn những người vừa được share xong (không còn trong danh sách khả dụng).
-  React.useEffect(() => {
-    setSelectedFriendIds((prev) => prev.filter((id) => availableFriends.some((f) => f.userId === id)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shares]);
+  // Người vừa được share xong sẽ rời khỏi `availableFriends` → lọc NGAY khi render thay vì
+  // useEffect + setState (tránh cascading render). State gốc giữ nguyên, chỉ giá trị dùng là bản đã lọc.
+  const selectedFriendIds = selectedFriendIdsRaw.filter((id) =>
+    availableFriends.some((f) => f.userId === id),
+  );
 
   // Invite Mutation — mời NHIỀU người cùng lúc (gọi song song, tổng hợp kết quả).
   const inviteMutation = useMutation({

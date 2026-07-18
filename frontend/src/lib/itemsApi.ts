@@ -5,7 +5,12 @@ import type {
   PatchItemRequest, CreateEventRequest, CreateFolderRequest, UpdateFolderRequest,
   CreateTicketRequest
 } from '../types/items';
-import type { SharedFolderDto } from '../types/folders';
+import type {
+  SharedFolderDto,
+  FolderShareDto,
+  InviteFolderShareRequest,
+  UpdateFolderShareRequest,
+} from '../types/folders';
 
 export interface GetItemsParams {
   folderId?: string;
@@ -195,18 +200,18 @@ export const foldersApi = {
     await api.delete(`/folders/${folderId}/items/bulk`, { data: { itemIds } });
   },
 
-  // ── Folder Sharing Endpoints (SCRUM-37/38) ──
-  inviteShare: async (folderId: string, request: { friendUserId: string; permission: string }): Promise<any> => {
+  // ── Folder Sharing Endpoints ──
+  inviteShare: async (folderId: string, request: InviteFolderShareRequest): Promise<FolderShareDto> => {
     const response = await api.post(`/folders/${folderId}/shares`, request);
     return response.data;
   },
 
-  getShares: async (folderId: string): Promise<any[]> => {
+  getShares: async (folderId: string): Promise<FolderShareDto[]> => {
     const response = await api.get(`/folders/${folderId}/shares`);
     return response.data;
   },
 
-  updateShareRole: async (folderId: string, shareId: string, request: { permission: string }): Promise<any> => {
+  updateShareRole: async (folderId: string, shareId: string, request: UpdateFolderShareRequest): Promise<FolderShareDto> => {
     const response = await api.patch(`/folders/${folderId}/shares/${shareId}`, request);
     return response.data;
   },
@@ -220,7 +225,7 @@ export const foldersApi = {
     return response.data;
   },
 
-  acceptShare: async (shareId: string): Promise<any> => {
+  acceptShare: async (shareId: string): Promise<FolderShareDto> => {
     const response = await api.post(`/folders/shares/${shareId}/accept`);
     return response.data;
   },
