@@ -83,7 +83,8 @@ public class ItemServiceTests
 
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
+                _userId, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                1, 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((items.AsReadOnly(), 2, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest();
@@ -141,7 +142,7 @@ public class ItemServiceTests
         // Assert
         Assert.Equal(200, result.Limit);
         _repoMock.Verify(r => r.GetPagedAsync(
-            _userId, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            _userId, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
             1, 200, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -170,8 +171,9 @@ public class ItemServiceTests
         // Arrange — search = "  meeting  " phải được trim thành "meeting"
         _repoMock
             .Setup(r => r.GetPagedAsync(
-                _userId, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                "meeting", null, null, null, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()))
+                _userId, null, null, null, null,
+                "meeting", null, null, null, null, null, null, null, null, null,
+                1, 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Item>().AsReadOnly(), 0, new Dictionary<string, int>()));
 
         var request = new GetItemsRequest(Search: "  meeting  ");
@@ -181,8 +183,9 @@ public class ItemServiceTests
 
         // Assert
         _repoMock.Verify(r => r.GetPagedAsync(
-            _userId, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            "meeting", null, null, null, null, null, null, null, null, null, 1, 20, It.IsAny<CancellationToken>()), Times.Once);
+            _userId, null, null, null, null,
+            "meeting", null, null, null, null, null, null, null, null, null,
+            1, 20, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

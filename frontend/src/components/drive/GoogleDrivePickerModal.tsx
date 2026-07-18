@@ -54,6 +54,7 @@ export function GoogleDrivePickerModal({
 
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate selection khi mở modal
     setSelectedIds(initialSelectedIds);
     setUploading(false);
     setUploadedFile(null);

@@ -62,6 +62,7 @@ export function CalendarDriveAccessDialog({
   // Mở lại dialog → reset lựa chọn mặc định.
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset form khi mở dialog
     setChoice('people');
     setRole('reader');
     setRoleSelectOpen(null);
