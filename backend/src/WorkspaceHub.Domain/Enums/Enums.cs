@@ -66,10 +66,11 @@ public enum ItemStatus
     Done
 }
 
-/// <summary>Quyền chia sẻ folder. MVP chỉ Viewer (read-only metadata).</summary>
+/// <summary>Quyền chia sẻ folder. Viewer = xem, Editor = thêm/gỡ items.</summary>
 public enum SharePermission
 {
-    Viewer
+    Viewer,
+    Editor
 }
 
 /// <summary>Vòng đời email hẹn giờ.</summary>

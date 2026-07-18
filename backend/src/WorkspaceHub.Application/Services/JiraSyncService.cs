@@ -108,7 +108,10 @@ public class JiraSyncService : IJiraSyncService
 
     /// <summary>
     /// Cập nhật field do provider quyết lên item đã tồn tại (re-sync issue đổi).
-    /// GIỮ NGUYÊN field local: Id, Status (cột Kanban user kéo), IsArchived, folders/tags.
+    /// GIỮ NGUYÊN field thuần local: Id, IsImportant, IsArchived, folders/tags.
+    /// LƯU Ý: Status (cột Kanban) ĐƯỢC đồng bộ theo Jira workflow — Jira là nguồn sự thật cho
+    /// trạng thái ticket, nên kéo thả ticket trong app sẽ bị re-sync ghi đè; đổi trạng thái phải
+    /// qua Jira transition (write-back), không phải kéo Kanban.
     /// </summary>
     private static void ApplyProviderFields(Item existing, Item mapped)
     {
@@ -118,7 +121,8 @@ public class JiraSyncService : IJiraSyncService
         existing.ETag = mapped.ETag;
         existing.OccurredAt = mapped.OccurredAt;
         existing.DueAt = mapped.DueAt;
-        existing.IsImportant = mapped.IsImportant;
+        // KHÔNG đụng IsImportant: Jira không có khái niệm "quan trọng" nên mapper luôn trả false
+        // → re-sync sẽ xoá mất cờ user tự đánh dấu trong app. Đây là field thuần local.
         existing.Status = mapped.Status;
     }
 

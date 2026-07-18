@@ -24,13 +24,14 @@ public class SendEmailServiceAttachmentsTests
     private readonly Mock<IGmailGateway> _gmail = new();
     private readonly Mock<IGoogleContactRepository> _googleContacts = new();
     private readonly Mock<IItemRepository> _items = new();
+    private readonly Mock<IFolderRepository> _folders = new();
     private readonly GoogleContactMapper _mapper = new();
     private readonly Mock<ILogger<SendEmailService>> _logger = new();
     private readonly SendEmailService _service;
 
     public SendEmailServiceAttachmentsTests()
     {
-        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object, _mapper, _items.Object, _logger.Object);
+        _service = new SendEmailService(_connections.Object, _gmail.Object, _googleContacts.Object, _mapper, _items.Object, _folders.Object, _logger.Object);
     }
 
     private void SetupGmail(Guid userId, Guid connId)

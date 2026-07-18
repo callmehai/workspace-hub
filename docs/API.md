@@ -130,7 +130,38 @@ Dùng chung 2 endpoint `oauth/start` + `oauth/callback`, mô hình B. Sync issue
 - `POST /api/connections/oauth/callback` — `{code, state}` → đổi token, gọi `/oauth/token/accessible-resources`, **chọn site đầu tiên CHƯA có connection Active** (Atlassian không cho biết user chọn site nào — accessible-resources trả cộng dồn; connect lần 2 cùng account = ăn site kế tiếp, mỗi lần connect là 1 grant riêng nên refresh token độc lập), lưu `ProviderAccountId = cloudId`, tạo 1 Connection ServiceType=Jira. Mọi site đều Active rồi → upsert site đầu (làm mới token). (400 CSRF/scope thiếu)
 
 ## Folders / Folder Shares / Tags / Important Contacts / Notifications
-Không đổi (trừ Tags — xem dưới). Xem bản trước. List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (target — $filter/$orderby trên IQueryable, scope theo CurrentUserId trước).
+Xem các phần bên dưới để biết chi tiết về Folder, Folder Sharing, Tags, Important Contacts và Notifications.
+List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (scope theo CurrentUserId trước).
+
+### Folders & Folder Sharing (SCRUM-37/38)
+- `GET /api/folders?includeShared=true` — Trả danh sách folders owned by hoặc shared with user.
+- `POST /api/folders` — Tạo folder mới.
+- `PUT /api/folders/{id}` — Cập nhật folder metadata (chỉ Owner).
+- `DELETE /api/folders/{id}` — Xoá folder (chỉ Owner).
+- `POST /api/folders/{id}/items` — Gắn item vào folder (chỉ Owner).
+- `DELETE /api/folders/{id}/items/{itemId}` — Gỡ item khỏi folder (chỉ Owner).
+- `GET /api/folders/shared-with-me` — Danh sách folder được chia sẻ với user hiện tại (chỉ đã accept).
+- `POST /api/folders/shares/{shareId}/accept` — Chấp nhận lời mời chia sẻ.
+- `POST /api/folders/shares/{shareId}/decline` — Từ chối lời mời chia sẻ.
+- `POST /api/folders/{id}/shares` — Mời bạn bè vào folder (chỉ Owner). Body: `{ friendUserId, permission: "Viewer" | "Editor" }`.
+- `GET /api/folders/{id}/shares` — Xem danh sách ai được share folder này (chỉ Owner).
+- `PATCH /api/folders/{id}/shares/{shareId}` — Đổi quyền 1 share (chỉ Owner). Body: `{ permission: "Viewer" | "Editor" }`.
+- `DELETE /api/folders/{id}/shares/{shareId}` — Revoke share (chỉ Owner).
+- `DELETE /api/folders/{id}/leave` — Rời khỏi folder được chia sẻ.
+
+**Quyền của người được share trên item trong folder (Viewer/Editor):**
+- Share chỉ có hiệu lực khi **đã accept** (`AcceptedAt != null`) — lời mời pending không cấp quyền.
+- **Viewer**: đọc item (`GET /api/items/{id}`), đọc thread email + tải attachment.
+- **Editor**: thêm write-back — `PATCH/DELETE /api/items/{id}`, `PATCH /api/items/{id}/status`, `PATCH /api/items/{id}/important`, reply/forward email + nháp (`/api/emails/reply|forward|drafts/*`), và comment/attachment Jira (`/api/items/{id}/comments`, `/api/items/{id}/attachments`).
+  > ⚠️ **Editor = toàn quyền ghi trên tài khoản provider của owner** (trash thread Gmail, xoá file Drive / event Calendar / issue Jira, gửi mail từ hộp thư owner). Xem CHANGELOG [2026-07-18] §"Ý nghĩa thực sự của quyền Editor".
+- Mọi thao tác trên đều chạy qua **connection của Owner** (người được share không có token Google/Jira riêng) — xem CHANGELOG [2026-07-18] để biết mô hình + hạn chế đã biết.
+- **Mã lỗi:**
+  - Có quyền xem nhưng thao tác GHI (shared-Viewer) → **403** kèm message giải thích (*"Bạn chỉ có quyền xem mục này…"*). FE chỉ hiện toast, **không** điều hướng sang `/integrations`.
+  - Không có quyền gì → **404** (giấu sự tồn tại của item).
+- **Trường phục vụ phân quyền ở FE:**
+  - `ItemResponse.isOwner` — `false` = item của người khác, đang xem qua folder chia sẻ. FE ẩn hành động chỉ owner làm được (mở trong Gmail/Drive/Calendar/Jira, chia sẻ file Drive).
+  - `EmailThreadResponse.ownerEmail` — email hộp thư chứa thread; FE dùng làm "tôi là ai" khi dựng người nhận lúc Reply/Reply-All.
+
 
 ### Tags — ✅ SCRUM-70 (BE, CRUD + assign)
 Label private của user (không share), gắn cho Item qua junction `TagAssignment` (m-n). Tên tag **không** unique toàn hệ thống nhưng **unique trong 1 user**. Mọi endpoint owner-scoped theo `CurrentUserId`.

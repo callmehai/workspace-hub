@@ -373,7 +373,7 @@ export const Inbox = () => {
   }, []);
 
   const { data: folders = [] } = useQuery({
-    queryKey: ['folders'],
+    queryKey: ['folders', { includeShared: false }],
     queryFn: () => foldersApi.getFolders()
   });
 
@@ -939,6 +939,7 @@ export const Inbox = () => {
         selectedItemIds={selectedItemIds}
         onClearSelection={() => setSelectedItemIds(new Set())}
         mailbox={mailbox || undefined}
+        items={items}
       />
 
       {/* Xác nhận dọn sạch Thùng rác / Thư rác */}

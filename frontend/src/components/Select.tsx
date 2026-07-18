@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { useI18n } from '../hooks/useI18n';
 
@@ -41,6 +42,8 @@ export function Select({
   const ph = placeholder ?? t('common.select');
   const [internalOpen, setInternalOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const selected = options.find((o) => o.value === value);
 
   const isControlled = openProp !== undefined;
@@ -54,7 +57,10 @@ export function Select({
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      // Menu render qua portal (ngoài `ref`) → phải loại trừ riêng, nếu không bấm chọn sẽ bị coi là click-outside.
+      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
@@ -66,6 +72,33 @@ export function Select({
       document.removeEventListener('keydown', onKey);
     };
   }, [open, setOpen]);
+
+  // Menu render ra document.body (portal) nên phải tự đo vị trí nút trigger.
+  // Lý do dùng portal: trong dialog/list có `overflow-hidden|auto`, menu `absolute` bị CẮT
+  // theo hình học — z-index không cứu được.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r) return;
+      const menuH = menuRef.current?.offsetHeight ?? 240;
+      // Không đủ chỗ bên dưới → bung lên trên (hoặc khi caller ép dropUp).
+      const flipUp = dropUp || (r.bottom + menuH + 8 > window.innerHeight && r.top - menuH - 8 > 0);
+      setPos({
+        top: flipUp ? r.top - menuH - 6 : r.bottom + 6,
+        left: r.left,
+        width: r.width,
+      });
+    };
+    place();
+    // Cuộn/resize khi menu đang mở → bám theo nút (portal không tự dính).
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open, dropUp, options.length]);
 
   return (
     <div ref={ref} className="relative">
@@ -84,10 +117,18 @@ export function Select({
         <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
-        <div className={`absolute z-[70] w-full min-w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto ${
-          dropUp ? 'bottom-full mb-1.5' : 'mt-1.5'
-        }`}>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: pos?.top ?? -9999,
+            left: pos?.left ?? -9999,
+            minWidth: pos?.width,
+            visibility: pos ? 'visible' : 'hidden',
+          }}
+          className="z-[200] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 max-h-60 overflow-auto"
+        >
           {options.length === 0 ? (
             <div className="px-3 py-2 text-sm text-gray-400 dark:text-slate-500">{t('common.noOptions')}</div>
           ) : (
@@ -111,7 +152,8 @@ export function Select({
               );
             })
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

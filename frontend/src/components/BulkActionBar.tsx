@@ -4,7 +4,7 @@ import { FolderPlus, FolderMinus, Tag, X, Trash2 } from 'lucide-react';
 import { foldersApi, itemsApi } from '../lib/itemsApi';
 import { tagsApi } from '../lib/tagsApi';
 import { handleApiError } from '../lib/errorUtils';
-import { type FolderResponse, type TagResponse } from '../types/items';
+import { type FolderResponse, type TagResponse, type ItemResponse } from '../types/items';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../hooks/useI18n';
@@ -14,9 +14,10 @@ interface BulkActionBarProps {
   selectedItemIds: Set<string>;
   onClearSelection: () => void;
   mailbox?: string;
+  items?: ItemResponse[];
 }
 
-export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, onClearSelection, mailbox }) => {
+export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, onClearSelection, mailbox, items = [] }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -57,9 +58,13 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
   }, [isAdding, isRemoving, isTagging]);
 
   const { data: folders = [] } = useQuery({
-    queryKey: ['folders'],
+    queryKey: ['folders', { includeShared: false }],
     queryFn: () => foldersApi.getFolders()
   });
+
+  const selectedItems = items.filter(it => selectedItemIds.has(it.id));
+  const activeFolderIds = new Set(selectedItems.flatMap(it => it.folderIds || []));
+  const foldersToRemove = folders.filter(f => activeFolderIds.has(f.id));
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: tagsApi.getTags });
 
@@ -88,6 +93,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
     onSuccess: () => {
       toast.success(t('bulk.addedN', { n: selectedItemIds.size }));
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
       selectedItemIds.forEach(id => {
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       });
@@ -101,6 +107,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
     onSuccess: () => {
       toast.success(t('bulk.removedN', { n: selectedItemIds.size }));
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
       selectedItemIds.forEach(id => {
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       });
@@ -208,10 +215,10 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedItemIds, o
             <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-xl py-1.5 text-slate-800 dark:text-slate-200">
               <div className="px-3 py-2 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{t('bulk.removeFromFolder')}</div>
               <div className="max-h-60 overflow-y-auto">
-                {folders.length === 0 ? (
-                  <div className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">{t('bulk.noFolders')}</div>
+                {foldersToRemove.length === 0 ? (
+                  <div className="px-4 py-2 text-[12px] text-slate-500 dark:text-slate-400 leading-normal">{t('bulk.notInAnyFolder')}</div>
                 ) : (
-                  folders.map((f: FolderResponse) => (
+                  foldersToRemove.map((f: FolderResponse) => (
                     <button
                       key={f.id}
                       disabled={removeBulkMutation.isPending}

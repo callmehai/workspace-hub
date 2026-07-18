@@ -12,7 +12,8 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
-  X
+  X,
+  Share2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -20,6 +21,7 @@ import { useI18n } from '../../hooks/useI18n';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { foldersApi } from '../../lib/itemsApi';
 import { FolderModal } from '../folders/FolderModal';
+import { FolderShareDialog } from '../folders/FolderShareDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { INTEGRATION_TABS } from '../../lib/itemVisuals';
 import type { FolderResponse } from '../../types/items';
@@ -49,13 +51,48 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const [editingFolder, setEditingFolder] = useState<FolderResponse | undefined>();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [folderToDelete, setFolderToDelete] = useState<FolderResponse | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [sharingFolder, setSharingFolder] = useState<FolderResponse | undefined>();
 
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Lấy cả folder do mình sở hữu và folder được chia sẻ với mình
   const { data: folders = [] } = useQuery({
-    queryKey: ['folders'],
-    queryFn: () => foldersApi.getFolders(false),
+    queryKey: ['folders', { includeShared: true }],
+    queryFn: () => foldersApi.getFolders(true),
   });
+
+  // Lấy danh sách chia sẻ để kiểm tra lời mời chờ nhận (Pending)
+  const { data: sharedWithMe = [] } = useQuery({
+    queryKey: ['sharedWithMe'],
+    queryFn: () => foldersApi.getSharedWithMe(),
+  });
+
+  const acceptShareMutation = useMutation({
+    mutationFn: foldersApi.acceptShare,
+    onSuccess: () => {
+      toast.success(t('sidebar.shareAcceptSuccess'));
+      queryClient.invalidateQueries({ queryKey: ['sharedWithMe'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+    onError: (err) => {
+      handleApiError(err, t('sidebar.shareAcceptFail'));
+    }
+  });
+
+  const declineShareMutation = useMutation({
+    mutationFn: foldersApi.declineShare,
+    onSuccess: () => {
+      toast.success(t('sidebar.shareDeclineSuccess'));
+      queryClient.invalidateQueries({ queryKey: ['sharedWithMe'] });
+    },
+    onError: (err) => {
+      handleApiError(err, t('sidebar.shareDeclineFail'));
+    }
+  });
+
+  const pendingShares = sharedWithMe.filter(s => s.status === 'Pending');
 
   const deleteMutation = useMutation({
     mutationFn: foldersApi.deleteFolder,
@@ -67,6 +104,18 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
     },
     onError: () => {
       toast.error(t('sidebar.folderDeleteFail'));
+    }
+  });
+
+  const leaveMutation = useMutation({
+    mutationFn: foldersApi.leaveFolder,
+    onSuccess: () => {
+      toast.success(t('sidebar.folderLeft'));
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      navigate(viewPath);
+    },
+    onError: (err) => {
+      handleApiError(err, t('sidebar.folderLeaveFail'));
     }
   });
 
@@ -114,9 +163,10 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
       toast.success(t('sidebar.itemAssigned'));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item', variables.itemId] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Lỗi gán thư mục');
+      handleApiError(err, t('sidebar.itemAssignFail'));
     }
   });
 
@@ -124,12 +174,13 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
     mutationFn: ({ folderId, itemIds }: { folderId: string; itemIds: string[] }) =>
       foldersApi.addItemsToFolderBulk(folderId, itemIds),
     onSuccess: (_, variables) => {
-      toast.success(`Đã gán ${variables.itemIds.length} mục vào thư mục`);
+      toast.success(t('sidebar.itemsAssigned').replace('{count}', String(variables.itemIds.length)));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Lỗi gán thư mục');
+      handleApiError(err, t('sidebar.itemAssignFail'));
     }
   });
 
@@ -267,76 +318,195 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
         </div>
 
         <div className="flex flex-col gap-0.5 overflow-y-auto flex-1 min-h-0 hide-scrollbar">
-          {folders.length === 0 && (
+          {/* ── Owned Folders ── */}
+          {folders.filter(f => f.isOwner).length === 0 ? (
             <div className="px-[10px] py-2 text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
               {t('nav.noFolders')}
             </div>
+          ) : (
+            folders.filter(f => f.isOwner).map(folder => (
+              <div
+                key={folder.id}
+                className="relative group flex items-center rounded-lg"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, folder.id)}
+              >
+                <button
+                  onClick={() => handleFolderClick(folder.id)}
+                  className={navItemClass(isFolderActive(folder.id))}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: folder.color || '#94a3b8' }}
+                  />
+                  <span className="flex-1 text-left truncate">{folder.name}</span>
+                  <span className="text-[11px] tabular-nums text-slate-400 dark:text-slate-500 shrink-0 group-hover:opacity-0 transition-opacity">
+                    {folder.itemCount}
+                  </span>
+                </button>
+
+                <button
+                  data-folder-toggle
+                  className={`absolute right-2 p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-slate-200 transition-colors ${activeMenuId === folder.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenuId(activeMenuId === folder.id ? null : folder.id);
+                  }}
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+
+                {activeMenuId === folder.id && (
+                  <div
+                    ref={menuRef}
+                    className="absolute right-0 top-8 w-32 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-100 dark:border-slate-700 py-1 z-50 text-sm"
+                  >
+                    <button
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2"
+                      onClick={() => {
+                        setEditingFolder(folder);
+                        setIsFolderModalOpen(true);
+                        setActiveMenuId(null);
+                      }}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      {t('common.edit')}
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2"
+                      onClick={() => {
+                        setSharingFolder(folder);
+                        setIsShareDialogOpen(true);
+                        setActiveMenuId(null);
+                      }}
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      {t('common.share')}
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
+                      onClick={() => {
+                        setFolderToDelete(folder);
+                        setActiveMenuId(null);
+                      }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {t('common.delete')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
           )}
 
-          {folders.map(folder => (
-            <div
-              key={folder.id}
-              className="relative group flex items-center rounded-lg"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, folder.id)}
-            >
-              <button
-                onClick={() => handleFolderClick(folder.id)}
-                className={navItemClass(isFolderActive(folder.id))}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: folder.color || '#94a3b8' }}
-                />
-                <span className="flex-1 text-left truncate">{folder.name}</span>
-                <span className="text-[11px] tabular-nums text-slate-400 dark:text-slate-500 shrink-0 group-hover:opacity-0 transition-opacity">
-                  {folder.itemCount}
+          {/* ── Lời mời chia sẻ (Pending) ── */}
+          {pendingShares.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mx-[10px] mt-6 mb-2">
+                <span className="text-[11px] font-semibold tracking-[0.04em] uppercase text-amber-500 dark:text-amber-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                  {t('sidebar.shareInvitations')} ({pendingShares.length})
                 </span>
-              </button>
+              </div>
+              <div className="space-y-1.5 mx-[10px] p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
+                {pendingShares.map(share => (
+                  <div key={share.shareId} className="flex flex-col gap-1 text-[12px] text-slate-600 dark:text-slate-400">
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={share.folderName}>
+                      {share.folderName}
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                      {t('sidebar.from')} {share.ownerName} ({share.permission === 'Editor' ? t('sidebar.permissionEditor') : t('sidebar.permissionViewer')})
+                    </div>
+                    <div className="flex gap-1.5 mt-1">
+                      <button
+                        onClick={() => acceptShareMutation.mutate(share.shareId)}
+                        disabled={acceptShareMutation.isPending || declineShareMutation.isPending}
+                        className="flex-1 py-0.5 text-center bg-brand-600 hover:bg-brand-700 text-white rounded font-medium text-[11px] transition-colors disabled:opacity-50"
+                      >
+                        {t('sidebar.accept')}
+                      </button>
+                      <button
+                        onClick={() => declineShareMutation.mutate(share.shareId)}
+                        disabled={acceptShareMutation.isPending || declineShareMutation.isPending}
+                        className="flex-1 py-0.5 text-center bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded font-medium text-[11px] transition-colors disabled:opacity-50"
+                      >
+                        {t('sidebar.decline')}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
-              <button
-                data-folder-toggle
-                className={`absolute right-2 p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-slate-200 transition-colors ${activeMenuId === folder.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                  }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveMenuId(activeMenuId === folder.id ? null : folder.id);
-                }}
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-
-              {activeMenuId === folder.id && (
+          {/* ── Shared Folders ── */}
+          {folders.filter(f => !f.isOwner).length > 0 && (
+            <>
+              <div className="flex items-center justify-between mx-[10px] mt-6 mb-2">
+                <span className="text-[11px] font-semibold tracking-[0.04em] uppercase text-slate-400 dark:text-slate-500">
+                  {t('sidebar.sharedWithMe')}
+                </span>
+              </div>
+              {folders.filter(f => !f.isOwner).map(folder => (
                 <div
-                  ref={menuRef}
-                  className="absolute right-0 top-8 w-32 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-100 dark:border-slate-700 py-1 z-50 text-sm"
+                  key={folder.id}
+                  className="relative group flex items-center rounded-lg"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, folder.id)}
                 >
                   <button
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2"
-                    onClick={() => {
-                      setEditingFolder(folder);
-                      setIsFolderModalOpen(true);
-                      setActiveMenuId(null);
-                    }}
+                    onClick={() => handleFolderClick(folder.id)}
+                    className={navItemClass(isFolderActive(folder.id))}
+                    title={`${t('sidebar.ownerLabel').replace('{name}', folder.ownerName ?? '')} (${folder.permission})`}
                   >
-                    <Pencil className="w-3.5 h-3.5" />
-                    Sửa
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: folder.color || '#94a3b8' }}
+                    />
+                    <span className="flex-1 text-left truncate">{folder.name}</span>
+                    <span className="text-[11px] tabular-nums text-slate-400 dark:text-slate-500 shrink-0 group-hover:opacity-0 transition-opacity">
+                      {folder.itemCount}
+                    </span>
                   </button>
+
                   <button
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
-                    onClick={() => {
-                      setFolderToDelete(folder);
-                      setActiveMenuId(null);
+                    data-folder-toggle
+                    className={`absolute right-2 p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-slate-200 transition-colors ${activeMenuId === folder.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMenuId(activeMenuId === folder.id ? null : folder.id);
                     }}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Xóa
+                    <MoreHorizontal className="w-4 h-4" />
                   </button>
+
+                  {activeMenuId === folder.id && (
+                    <div
+                      ref={menuRef}
+                      className="absolute right-0 top-8 w-32 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-100 dark:border-slate-700 py-1 z-50 text-sm"
+                    >
+                      <button
+                        className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
+                        onClick={() => {
+                          if (confirm(t('sidebar.confirmLeave').replace('{name}', folder.name))) {
+                            leaveMutation.mutate(folder.id);
+                          }
+                          setActiveMenuId(null);
+                        }}
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        {t('sidebar.leaveFolder')}
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              ))}
+            </>
+          )}
         </div>
 
         {/* ── Bottom User Profile ── */}
@@ -382,6 +552,19 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
         onClose={() => setIsFolderModalOpen(false)}
         folder={editingFolder}
       />
+
+      {sharingFolder && (
+        <FolderShareDialog
+          isOpen={isShareDialogOpen}
+          onClose={() => {
+            setIsShareDialogOpen(false);
+            setSharingFolder(undefined);
+          }}
+          folderId={sharingFolder.id}
+          folderName={sharingFolder.name}
+          isOwner={sharingFolder.isOwner}
+        />
+      )}
 
       <ConfirmDialog
         open={folderToDelete !== null}
