@@ -153,6 +153,7 @@ List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (scope theo 
 - Share chỉ có hiệu lực khi **đã accept** (`AcceptedAt != null`) — lời mời pending không cấp quyền.
 - **Viewer**: đọc item (`GET /api/items/{id}`), đọc thread email + tải attachment.
 - **Editor**: thêm write-back — `PATCH/DELETE /api/items/{id}`, `PATCH /api/items/{id}/status`, `PATCH /api/items/{id}/important`, reply/forward email + nháp (`/api/emails/reply|forward|drafts/*`), và comment/attachment Jira (`/api/items/{id}/comments`, `/api/items/{id}/attachments`).
+  > ⚠️ **Editor = toàn quyền ghi trên tài khoản provider của owner** (trash thread Gmail, xoá file Drive / event Calendar / issue Jira, gửi mail từ hộp thư owner). Xem CHANGELOG [2026-07-18] §"Ý nghĩa thực sự của quyền Editor".
 - Mọi thao tác trên đều chạy qua **connection của Owner** (người được share không có token Google/Jira riêng) — xem CHANGELOG [2026-07-18] để biết mô hình + hạn chế đã biết.
 - **Mã lỗi:**
   - Có quyền xem nhưng thao tác GHI (shared-Viewer) → **403** kèm message giải thích (*"Bạn chỉ có quyền xem mục này…"*). FE chỉ hiện toast, **không** điều hướng sang `/integrations`.

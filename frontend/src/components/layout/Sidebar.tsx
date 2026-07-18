@@ -457,7 +457,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                   <button
                     onClick={() => handleFolderClick(folder.id)}
                     className={navItemClass(isFolderActive(folder.id))}
-                    title={`Chủ sở hữu: ${folder.ownerName} (${folder.permission})`}
+                    title={`${t('sidebar.ownerLabel').replace('{name}', folder.ownerName ?? '')} (${folder.permission})`}
                   >
                     <span
                       className="w-2 h-2 rounded-full shrink-0"
@@ -489,14 +489,14 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
                       <button
                         className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center gap-2"
                         onClick={() => {
-                          if (confirm(`Bạn có chắc muốn rời khỏi thư mục "${folder.name}"?`)) {
+                          if (confirm(t('sidebar.confirmLeave').replace('{name}', folder.name))) {
                             leaveMutation.mutate(folder.id);
                           }
                           setActiveMenuId(null);
                         }}
                       >
                         <LogOut className="w-3.5 h-3.5" />
-                        Rời thư mục
+                        {t('sidebar.leaveFolder')}
                       </button>
                     </div>
                   )}

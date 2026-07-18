@@ -410,8 +410,16 @@ public class SendEmailService : ISendEmailService
         }
 
         if (!isOwner && !isShared)
+        {
+            // Viewer cố gửi/trả lời trong folder chia sẻ → 403 kèm giải thích, đồng bộ với
+            // hợp đồng lỗi ở item/Jira (trước đây trả 404 lộ GUID, lệch với tài liệu).
+            if (requireEditor && await _folders.IsItemSharedWithUserAsync(itemId, userId, ct))
+                throw new ForbiddenException(
+                    "Bạn chỉ có quyền xem mục này trong thư mục được chia sẻ. Hãy yêu cầu chủ sở hữu cấp quyền chỉnh sửa.");
+
             throw new NotFoundException("Item", itemId);
-            
+        }
+
         if (item.ConnectionId == null)
             throw new BusinessRuleException("Item has no connection.");
 

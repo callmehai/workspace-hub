@@ -1,87 +1,82 @@
-using WorkspaceHub.Application.Common;
+﻿using WorkspaceHub.Application.Common;
 using WorkspaceHub.Domain.Entities;
 
 namespace WorkspaceHub.Application.Interfaces.Repositories;
 
 /// <summary>
-/// Repository riêng cho Folder — truy vấn phức tạp hơn GenericRepository
-/// (include shares, đếm items, lấy max sort order).
+/// Repository riÃªng cho Folder â€” truy váº¥n phá»©c táº¡p hÆ¡n GenericRepository
+/// (include shares, Ä‘áº¿m items, láº¥y max sort order).
 /// </summary>
 public interface IFolderRepository : IGenericRepository<Folder>
 {
-    /// <summary>Folder do user sở hữu, kèm count ItemFolders (chưa archived).</summary>
+    /// <summary>Folder do user sá»Ÿ há»¯u, kÃ¨m count ItemFolders (chÆ°a archived).</summary>
     Task<IReadOnlyList<Folder>> GetUserFoldersAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>Folder được share cho user (đã accept, chưa hết hạn), kèm count ItemFolders.</summary>
+    /// <summary>Folder Ä‘Æ°á»£c share cho user (Ä‘Ã£ accept, chÆ°a háº¿t háº¡n), kÃ¨m count ItemFolders.</summary>
     Task<IReadOnlyList<Folder>> GetSharedFoldersAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>Lấy folder kèm Owner navigation — dùng cho update/delete kiểm tra ownership.</summary>
+    /// <summary>Láº¥y folder kÃ¨m Owner navigation â€” dÃ¹ng cho update/delete kiá»ƒm tra ownership.</summary>
     Task<Folder?> GetByIdWithOwnerAsync(Guid folderId, CancellationToken ct = default);
 
-    /// <summary>Max SortOrder hiện tại của user — dùng khi tạo folder mới auto-increment.</summary>
+    /// <summary>Max SortOrder hiá»‡n táº¡i cá»§a user â€” dÃ¹ng khi táº¡o folder má»›i auto-increment.</summary>
     Task<int> GetMaxSortOrderAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>Kiểm tra xem folder có thuộc sở hữu của user không — dùng cho ItemService list endpoint (nhẹ, tránh load entity).</summary>
+    /// <summary>Kiá»ƒm tra xem folder cÃ³ thuá»™c sá»Ÿ há»¯u cá»§a user khÃ´ng â€” dÃ¹ng cho ItemService list endpoint (nháº¹, trÃ¡nh load entity).</summary>
     Task<bool> ExistsByOwnerAsync(Guid folderId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>Kiểm tra item đã tồn tại trong folder chưa.</summary>
+    /// <summary>Kiá»ƒm tra item Ä‘Ã£ tá»“n táº¡i trong folder chÆ°a.</summary>
     Task<bool> ItemFolderExistsAsync(Guid itemId, Guid folderId, CancellationToken ct = default);
 
-    /// <summary>Lấy position lớn nhất trong folder để assign cho item mới.</summary>
+    /// <summary>Láº¥y position lá»›n nháº¥t trong folder Ä‘á»ƒ assign cho item má»›i.</summary>
     Task<int> GetMaxItemPositionAsync(Guid folderId, CancellationToken ct = default);
 
-    /// <summary>Lấy ItemFolder junction để remove.</summary>
+    /// <summary>Láº¥y ItemFolder junction Ä‘á»ƒ remove.</summary>
     Task<ItemFolder?> GetItemFolderAsync(Guid itemId, Guid folderId, CancellationToken ct = default);
 
-    /// <summary>Lấy nhiều ItemFolder junction để remove.</summary>
+    /// <summary>Láº¥y nhiá»u ItemFolder junction Ä‘á»ƒ remove.</summary>
     Task<IReadOnlyList<ItemFolder>> GetItemFoldersAsync(IEnumerable<Guid> itemIds, Guid folderId, CancellationToken ct = default);
 
-    /// <summary>Thêm Item vào Folder.</summary>
+    /// <summary>ThÃªm Item vÃ o Folder.</summary>
     Task AddItemFolderAsync(ItemFolder itemFolder, CancellationToken ct = default);
 
-    /// <summary>Thêm nhiều Item vào Folder.</summary>
+    /// <summary>ThÃªm nhiá»u Item vÃ o Folder.</summary>
     Task AddItemsFolderAsync(IEnumerable<ItemFolder> itemFolders, CancellationToken ct = default);
 
-    /// <summary>Gỡ Item khỏi Folder.</summary>
+    /// <summary>Gá»¡ Item khá»i Folder.</summary>
     void RemoveItemFolder(ItemFolder itemFolder);
 
-    /// <summary>Gỡ nhiều Item khỏi Folder.</summary>
+    /// <summary>Gá»¡ nhiá»u Item khá»i Folder.</summary>
     void RemoveItemsFolder(IEnumerable<ItemFolder> itemFolders);
 
-    // ───── Share operations ─────
+    // â”€â”€â”€â”€â”€ Share operations â”€â”€â”€â”€â”€
 
-    /// <summary>Lấy 1 FolderShare theo Id, include User + Folder navigations.</summary>
+    /// <summary>Láº¥y 1 FolderShare theo Id, include User + Folder navigations.</summary>
     Task<FolderShare?> GetShareByIdAsync(Guid shareId, CancellationToken ct = default);
 
-    /// <summary>Danh sách shares của 1 folder (để owner xem), include SharedWithUser + Folder.</summary>
+    /// <summary>Danh sÃ¡ch shares cá»§a 1 folder (Ä‘á»ƒ owner xem), include SharedWithUser + Folder.</summary>
     Task<IReadOnlyList<FolderShare>> GetSharesByFolderAsync(Guid folderId, CancellationToken ct = default);
 
-    /// <summary>Danh sách shares của user hiện tại (shared-with-me), include Folder + Owner.</summary>
+    /// <summary>Danh sÃ¡ch shares cá»§a user hiá»‡n táº¡i (shared-with-me), include Folder + Owner.</summary>
     Task<IReadOnlyList<FolderShare>> GetSharesForUserAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>Kiểm tra folder đã share với user chưa (tránh duplicate).</summary>
+    /// <summary>Kiá»ƒm tra folder Ä‘Ã£ share vá»›i user chÆ°a (trÃ¡nh duplicate).</summary>
     Task<bool> ShareExistsAsync(Guid folderId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>Lấy share record cụ thể theo folderId và userId.</summary>
+    /// <summary>Láº¥y share record cá»¥ thá»ƒ theo folderId vÃ  userId.</summary>
     Task<FolderShare?> GetShareByFolderAndUserAsync(Guid folderId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>Thêm FolderShare mới vào DB.</summary>
+    /// <summary>ThÃªm FolderShare má»›i vÃ o DB.</summary>
     Task AddShareAsync(FolderShare share, CancellationToken ct = default);
 
-    /// <summary>Xóa FolderShare (revoke hoặc decline).</summary>
+    /// <summary>XÃ³a FolderShare (revoke hoáº·c decline).</summary>
     void RemoveShare(FolderShare share);
 
-    /// <summary>Kiểm tra xem một item có nằm trong thư mục được chia sẻ với user không.</summary>
+    /// <summary>Kiá»ƒm tra xem má»™t item cÃ³ náº±m trong thÆ° má»¥c Ä‘Æ°á»£c chia sáº» vá»›i user khÃ´ng.</summary>
     Task<bool> IsItemSharedWithUserAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>Kiểm tra xem một item có nằm trong thư mục được chia sẻ với user với quyền Editor không.</summary>
+    /// <summary>Kiá»ƒm tra xem má»™t item cÃ³ náº±m trong thÆ° má»¥c Ä‘Æ°á»£c chia sáº» vá»›i user vá»›i quyá»n Editor khÃ´ng.</summary>
     Task<bool> IsItemSharedWithUserAsEditorAsync(Guid itemId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>Kiểm tra xem một connection có nằm trong thư mục được chia sẻ với user với quyền Editor không.</summary>
+    /// <summary>Kiá»ƒm tra xem má»™t connection cÃ³ náº±m trong thÆ° má»¥c Ä‘Æ°á»£c chia sáº» vá»›i user vá»›i quyá»n Editor khÃ´ng.</summary>
     Task<bool> IsConnectionSharedWithUserAsEditorAsync(Guid connectionId, Guid userId, CancellationToken ct = default);
 }
-
-
-
-
-

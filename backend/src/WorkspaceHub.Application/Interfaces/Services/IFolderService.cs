@@ -59,7 +59,9 @@ public interface IFolderService
     Task RevokeShareAsync(Guid folderId, Guid shareId, Guid requestingUserId, CancellationToken ct = default);
 
     /// <summary>
-    /// Danh sách folder được share với user hiện tại (đã accept).
+    /// Danh sách folder được share với user hiện tại — gồm CẢ lời mời Pending (chưa accept),
+    /// vì Sidebar cần hiện lời mời để user bấm chấp nhận/từ chối. Phân biệt qua
+    /// <see cref="SharedFolderDto.Status"/>. Chỉ loại folder đã archive / share hết hạn.
     /// GET /api/folders/shared-with-me.
     /// </summary>
     Task<IReadOnlyList<SharedFolderDto>> GetFoldersSharedWithMeAsync(Guid userId, CancellationToken ct = default);

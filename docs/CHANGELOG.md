@@ -29,6 +29,27 @@
 - **Reply/Send email mất tệp đính kèm.** Cả `EmailThreadView` và `SendEmail` có nhánh `if (draftItemId)` gọi `updateDraft` → `sendDraft`, nhưng payload lưu nháp **không kèm `attachments`**. Vì auto-save nháp chạy nền nên gần như MỌI lần gửi đều đi nhánh này → tệp rơi mất dù UI vẫn hiện đã chọn. Fix: truyền `attachments` vào lần lưu nháp cuối. *(Đã kiểm tra: màn **Scheduled email KHÔNG dính** — gọi thẳng API, không qua draft.)*
 - **Bỏ auto-save nháp khi đang gõ ở ô reply.** Debounce 2s: hễ ngừng gõ 2 giây là tạo nháp trên Gmail → nháp nhảy vào danh sách item giữa lúc soạn, gõ xong gửi luôn vẫn để lại nháp rác. Nay chỉ lưu nháp khi **rời ô soạn mà còn nội dung** (unmount) + lần lưu cuối trước khi gửi. Lợi ích phụ: gửi đi thẳng nhánh `reply()` thay vì `updateDraft→sendDraft`, tránh hẳn class bug attachment ở luồng này. *(Màn Send email giữ nguyên auto-save — code độc lập.)*
 
+### Sau review PR #118
+- **Notification share invite dựng JSON bằng `JsonSerializer`** thay vì nội suy chuỗi — tên folder/người chứa `"` hoặc `\` làm vỡ JSON ⇒ notification hỏng im lặng (đã bọc try/catch nên không crash).
+- **Đồng bộ hợp đồng lỗi cho email:** Viewer reply/forward giờ trả **403** kèm giải thích như item/Jira, trước đây còn trả 404 (lệch với tài liệu).
+- **i18n nốt Sidebar:** `sidebar.ownerLabel` / `sidebar.leaveFolder` / `sidebar.confirmLeave` (tooltip chủ sở hữu, nút + confirm rời thư mục còn hardcode tiếng Việt).
+- **Bỏ validation kép:** `FolderService` không còn tự validate `InviteFolderShareRequest`/`UpdateFolderShareRequest` — controller đã làm, giống mọi endpoint Folder khác (bỏ luôn 2 `IValidator` khỏi constructor).
+- **Nit:** bỏ `!` vô nghĩa trên `Task` (`GetShareByIdAsync(...)!` → `?? throw`), sửa doc comment `GetFoldersSharedWithMeAsync` (trả **cả Pending** để Sidebar hiện lời mời, không phải "chỉ đã accept"), dọn dòng trắng thừa cuối `IFolderRepository.cs`.
+- **Thêm 9 unit test cho phân quyền share** (370 → **379 pass**): Editor đổi trạng thái/đánh dấu quan trọng item của người khác, Viewer bị 403, không liên quan → 404, `IsOwner` đúng cho item của mình/người khác, và **xoá thread email dùng `item.UserId` (owner) chứ không phải người thao tác** — chốt lại bug "email ma".
+
+### ⚠️ Ý nghĩa thực sự của quyền Editor — ĐỌC KỸ khi demo/defense
+
+**`Editor` KHÔNG phải "chỉnh sửa trong app" mà là TOÀN QUYỀN GHI trên tài khoản provider của owner.**
+Vì mọi write-back chạy qua token của owner, một shared-Editor có thể:
+- **Trash cả thread email trên Gmail của owner** (`DeleteItemAsync` → `TrashThreadAsync`), xoá vĩnh viễn nếu thư đã ở Trash/Spam.
+- **Xoá/đổi tên file trên Drive**, **xoá/sửa event trên Calendar**, **xoá issue Jira** của owner.
+- **Gửi email từ hộp thư của owner** (reply/forward) — người nhận thấy mail đến từ owner.
+- **Comment/đính kèm trên Jira dưới danh nghĩa owner**.
+- **Xem gợi ý danh bạ của owner** (`suggest-contacts` chạy qua connection owner).
+
+Đây là hệ quả tất yếu của mô hình proxy, không phải lỗi. Nhưng nó **vượt xa mức "chia sẻ để cùng xem"** —
+chỉ nên cấp `Editor` cho người thực sự tin tưởng. `Viewer` an toàn: chỉ đọc, mọi thao tác ghi bị chặn 403.
+
 ### Hạn chế đã biết (chấp nhận trong phạm vi đồ án — để giải thích khi defense)
 - **Logout KHÔNG thu hồi quyền của B.** Auth app (JWT cookie + refresh Redis) tách biệt hoàn toàn với OAuth connection; A logout thì token Google/Jira vẫn nằm trong DB và tự refresh → B vẫn dùng được. Đây là **đúng thiết kế** (giống Google Drive: share xong logout người kia vẫn xem được), chỉ Disconnect hoặc revoke phía Google mới thu hồi.
 - **Disconnect xoá sạch item → folder share có thể trống đột ngột.** `DisconnectAsync` hard-delete toàn bộ Item + ItemFolder của connection, không cảnh báo A cũng không notify B. Chưa chặn (bản đầy đủ cần archive + notify + confirm — ngoài phạm vi đồ án).

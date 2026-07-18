@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
@@ -21,25 +22,20 @@ public class FolderService : IFolderService
     private readonly IItemRepository _itemRepo;
     private readonly IFriendshipRepository _friendships;
     private readonly INotificationService _notifications;
-    private readonly IValidator<InviteFolderShareRequest> _inviteValidator;
-    private readonly IValidator<UpdateFolderShareRequest> _updateShareValidator;
     private readonly ILogger<FolderService> _logger;
 
+    // Validate input do CONTROLLER lo (giống mọi endpoint Folder khác) — service không validate lại.
     public FolderService(
         IFolderRepository folderRepo,
         IItemRepository itemRepo,
         IFriendshipRepository friendships,
         INotificationService notifications,
-        IValidator<InviteFolderShareRequest> inviteValidator,
-        IValidator<UpdateFolderShareRequest> updateShareValidator,
         ILogger<FolderService> logger)
     {
         _folderRepo = folderRepo;
         _itemRepo = itemRepo;
         _friendships = friendships;
         _notifications = notifications;
-        _inviteValidator = inviteValidator;
-        _updateShareValidator = updateShareValidator;
         _logger = logger;
     }
 
@@ -257,10 +253,7 @@ public class FolderService : IFolderService
     public async Task<FolderShareDto> InviteShareAsync(
         Guid folderId, Guid requestingUserId, InviteFolderShareRequest request, CancellationToken ct = default)
     {
-        // 1. Validate input format
-        await _inviteValidator.ValidateAndThrowAsync(request, ct);
-
-        // 2. Kiểm tra folder tồn tại và caller là Owner
+        // 1. Kiểm tra folder tồn tại và caller là Owner
         var folder = await _folderRepo.GetByIdWithOwnerAsync(folderId, ct)
             ?? throw new NotFoundException(nameof(Folder), folderId);
 
@@ -301,16 +294,17 @@ public class FolderService : IFolderService
         await _folderRepo.SaveChangesAsync(ct);
 
         // 8. Load lại với navigations để map DTO
-        var saved = await _folderRepo.GetShareByIdAsync(share.Id, ct)!;
+        var saved = await _folderRepo.GetShareByIdAsync(share.Id, ct)
+            ?? throw new InvalidOperationException($"FolderShare {share.Id} vừa tạo nhưng không reload được.");
 
         // 9. Gửi notification cho người được mời (best-effort)
         await SendShareNotificationSafeAsync(
-            saved!.SharedWithUserId,
+            saved.SharedWithUserId,
             folder.Owner?.FullName ?? "Someone",
             folder.Name,
             ct);
 
-        return MapShareToDto(saved!);
+        return MapShareToDto(saved);
     }
 
     /// <inheritdoc/>
@@ -330,15 +324,12 @@ public class FolderService : IFolderService
     public async Task<FolderShareDto> UpdateShareRoleAsync(
         Guid folderId, Guid shareId, Guid requestingUserId, UpdateFolderShareRequest request, CancellationToken ct = default)
     {
-        // 1. Validate input
-        await _updateShareValidator.ValidateAndThrowAsync(request, ct);
-
-        // 2. Kiểm tra caller là Owner của folder
+        // 1. Kiểm tra caller là Owner của folder
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, requestingUserId, ct);
         if (!isOwner)
             throw new ForbiddenException("Chỉ Owner mới được thay đổi quyền chia sẻ.");
 
-        // 3. Lấy share — phải thuộc folder này
+        // 2. Lấy share — phải thuộc folder này
         var share = await _folderRepo.GetShareByIdAsync(shareId, ct)
             ?? throw new NotFoundException(nameof(FolderShare), shareId);
 
@@ -495,7 +486,9 @@ public class FolderService : IFolderService
                 targetUserId,
                 NotificationType.ShareInvite,
                 $"{ownerName} đã chia sẻ folder '{folderName}' với bạn",
-                $"{{\"from\":\"{ownerName}\",\"folder\":\"{folderName}\"}}",
+                // Serialize đàng hoàng thay vì nội suy chuỗi: tên chứa " hoặc \ sẽ làm vỡ JSON
+                // → notification hỏng im lặng (đã bọc try/catch nên không crash, chỉ mất thông báo).
+                JsonSerializer.Serialize(new { from = ownerName, folder = folderName }),
                 "/",
                 ct);
         }

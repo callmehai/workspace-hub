@@ -338,4 +338,135 @@ public class ItemServiceTests
         await Assert.ThrowsAsync<WorkspaceHub.Application.Common.NotFoundException>(() =>
             _sut.GetItemByIdAsync(_userId, itemId));
     }
+
+    // ───────────── Phân quyền folder chia sẻ (shared folder) ─────────────
+    // Phần rủi ro nhất của feature: item thuộc owner A nhưng user B thao tác qua folder chia sẻ.
+
+    /// <summary>Editor của folder chia sẻ ĐƯỢC đổi trạng thái item của người khác.</summary>
+    [Fact]
+    public async Task UpdateStatusAsync_SharedEditor_UpdatesItemOfAnotherUser()
+    {
+        var ownerId = Guid.NewGuid();
+        var item = CreateItem(ownerId);
+
+        // B không sở hữu item → lookup theo user trả null.
+        _repoMock.Setup(r => r.GetByIdAndUserAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsEditorAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _repoMock.Setup(r => r.GetByIdAsync(item.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+
+        var result = await _sut.UpdateStatusAsync(_userId, item.Id, new UpdateItemStatusRequest(ItemStatus.Done));
+
+        Assert.Equal(ItemStatus.Done, result.Status);
+        // Item của người khác → IsOwner phải là false để FE ẩn hành động chỉ owner làm được.
+        Assert.False(result.IsOwner);
+        _repoMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>Viewer (chỉ xem) thao tác GHI → 403 ForbiddenException, KHÔNG phải 404 lộ GUID.</summary>
+    [Fact]
+    public async Task UpdateStatusAsync_SharedViewer_ThrowsForbidden()
+    {
+        var itemId = Guid.NewGuid();
+
+        _repoMock.Setup(r => r.GetByIdAndUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsEditorAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        // Có quyền XEM (item nằm trong folder được chia sẻ) nhưng không phải Editor.
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.ForbiddenException>(() =>
+            _sut.UpdateStatusAsync(_userId, itemId, new UpdateItemStatusRequest(ItemStatus.Done)));
+    }
+
+    /// <summary>Không liên quan gì tới item → vẫn 404 (không lộ sự tồn tại của item).</summary>
+    [Fact]
+    public async Task UpdateStatusAsync_NoAccess_ThrowsNotFound()
+    {
+        var itemId = Guid.NewGuid();
+
+        _repoMock.Setup(r => r.GetByIdAndUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsEditorAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.NotFoundException>(() =>
+            _sut.UpdateStatusAsync(_userId, itemId, new UpdateItemStatusRequest(ItemStatus.Done)));
+    }
+
+    /// <summary>Editor ĐƯỢC đánh dấu quan trọng item của người khác (trước đây trả 404).</summary>
+    [Fact]
+    public async Task ToggleImportantAsync_SharedEditor_UpdatesItemOfAnotherUser()
+    {
+        var ownerId = Guid.NewGuid();
+        var item = CreateItem(ownerId, isImportant: false);
+
+        _repoMock.Setup(r => r.GetByIdAndUserAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsEditorAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _repoMock.Setup(r => r.GetByIdAsync(item.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+
+        var result = await _sut.ToggleImportantAsync(_userId, item.Id, isImportant: true);
+
+        Assert.True(result.IsImportant);
+        Assert.False(result.IsOwner);
+    }
+
+    /// <summary>Viewer đánh dấu quan trọng → 403 (đồng bộ hợp đồng lỗi với UpdateStatus).</summary>
+    [Fact]
+    public async Task ToggleImportantAsync_SharedViewer_ThrowsForbidden()
+    {
+        var itemId = Guid.NewGuid();
+
+        _repoMock.Setup(r => r.GetByIdAndUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsEditorAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        await Assert.ThrowsAsync<WorkspaceHub.Application.Common.ForbiddenException>(() =>
+            _sut.ToggleImportantAsync(_userId, itemId, isImportant: true));
+    }
+
+    /// <summary>Item của chính mình → IsOwner = true (FE hiện nút mở trên provider).</summary>
+    [Fact]
+    public async Task GetItemByIdAsync_OwnItem_ReturnsIsOwnerTrue()
+    {
+        var item = CreateItem(_userId);
+        _repoMock.Setup(r => r.GetByIdAndUserAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+
+        var result = await _sut.GetItemByIdAsync(_userId, item.Id);
+
+        Assert.True(result.IsOwner);
+    }
+
+    /// <summary>Viewer ĐƯỢC đọc item của người khác, và IsOwner = false.</summary>
+    [Fact]
+    public async Task GetItemByIdAsync_SharedViewer_ReturnsItemWithIsOwnerFalse()
+    {
+        var ownerId = Guid.NewGuid();
+        var item = CreateItem(ownerId);
+
+        _repoMock.Setup(r => r.GetByIdAndUserAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        _folderRepoMock.Setup(f => f.IsItemSharedWithUserAsync(item.Id, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _repoMock.Setup(r => r.GetByIdAsync(item.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+
+        var result = await _sut.GetItemByIdAsync(_userId, item.Id);
+
+        Assert.Equal(item.Id, result.Id);
+        Assert.False(result.IsOwner);
+    }
 }
