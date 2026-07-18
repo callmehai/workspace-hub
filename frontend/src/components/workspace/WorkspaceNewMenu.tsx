@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ChevronDown, Plus, Loader2, StickyNote, CalendarPlus, Ticket,
+  ChevronDown, Plus, StickyNote, CalendarPlus, Ticket,
   FolderPlus, Upload, FolderUp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
-import { buildDriveFolderEntries, driveApi, validateDriveUploadFiles } from '../../lib/driveApi';
+import { buildDriveFolderEntries } from '../../lib/driveApi';
+import { enqueueFiles, enqueueFolder } from '../../lib/driveUploadStore';
 import { itemsApi } from '../../lib/itemsApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { markSeen } from '../../lib/seenStore';
@@ -58,7 +59,6 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const [open, setOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
   const [isTicketOpen, setIsTicketOpen] = useState(false);
@@ -85,12 +85,16 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
   const hasDrive = driveConnections.length > 0;
   const driveConnectionId = driveConnections[0]?.id ?? '';
 
+  // Đang drill trong 1 folder Drive → chỉ có ý nghĩa tạo/tải nội dung Drive (tạo Ticket/Note/Event
+  // vào folder Drive là vô nghĩa). currentDriveFolderId set = đang trong folder Drive.
+  const inDriveFolder = !!currentDriveFolderId;
+
   // Option hiện = (đang ở "Tất cả mục" HOẶC đúng tab của loại đó) VÀ integration tương ứng Active.
-  // Ghi chú là nội bộ (không integration) → chỉ ở "Tất cả mục".
-  const showNote = !sourceType;
-  const showEvent = (!sourceType || sourceType === 'Event') && hasGcal;
-  const showTicket = (!sourceType || sourceType === 'Ticket') && hasJira;
-  const showDrive = (!sourceType || sourceType === 'File') && hasDrive;
+  // Ghi chú là nội bộ (không integration) → chỉ ở "Tất cả mục". Trong folder Drive → ẩn hết trừ Drive.
+  const showNote = !sourceType && !inDriveFolder;
+  const showEvent = !inDriveFolder && (!sourceType || sourceType === 'Event') && hasGcal;
+  const showTicket = !inDriveFolder && (!sourceType || sourceType === 'Ticket') && hasJira;
+  const showDrive = (inDriveFolder || !sourceType || sourceType === 'File') && hasDrive;
   const hasAnyOption = showNote || showEvent || showTicket || showDrive;
 
   const createEventMutation = useMutation({
@@ -129,109 +133,38 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  /** Upload nhiều file đơn — mỗi file 1 request, gom lỗi báo "đã lên X/Y". */
-  const handleFilesSelected = async (files: FileList | null) => {
+  /** Chọn nhiều file → đẩy vào hàng đợi upload (song song + progress ở panel). File lỗi tự bị bỏ qua. */
+  const handleFilesSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     if (!driveConnectionId) {
       toast.error(t('drive.createFolder.noConnection'));
       return;
     }
-
-    const list = Array.from(files);
-    const validationError = validateDriveUploadFiles(list);
-    if (validationError) {
-      toast.error(t(validationError));
-      return;
-    }
-
-    setIsUploading(true);
-    const toastId = toast.loading(t('drive.upload.uploading'));
-    let ok = 0;
-    let lastError: unknown = null;
-    for (let i = 0; i < list.length; i++) {
-      toast.loading(t('drive.upload.progress', { current: i + 1, total: list.length }), { id: toastId });
-      try {
-        await driveApi.uploadFile({
-          connectionId: driveConnectionId,
-          file: list[i],
-          parentItemId: currentDriveFolderId || null,
-        });
-        ok += 1;
-      } catch (err) {
-        lastError = err;
-      }
-    }
-    const failedCount = list.length - ok;
-
-    if (ok > 0) queryClient.invalidateQueries({ queryKey: ['items'] });
-
-    if (failedCount === 0) {
-      toast.success(
-        list.length === 1 ? t('drive.upload.fileDone') : t('drive.upload.filesDone', { n: list.length }),
-        { id: toastId },
-      );
-    } else if (ok > 0) {
-      toast(t('drive.upload.filesPartial', { ok, total: list.length, failed: failedCount }), {
-        id: toastId,
-        icon: '⚠️',
-      });
-    } else {
-      toast.dismiss(toastId);
-      handleApiError(lastError, t('drive.upload.fail'), { navigate });
-    }
-
-    setIsUploading(false);
+    enqueueFiles(Array.from(files), {
+      connectionId: driveConnectionId,
+      parentItemId: currentDriveFolderId || null,
+      folderId: folder?.id ?? null,
+    });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  /** Upload cả folder — một request batch lên BE. */
-  const handleFolderSelected = async (files: FileList | null) => {
+  /** Chọn cả folder → 1 task upload batch trong panel (progress tổng). */
+  const handleFolderSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     if (!driveConnectionId) {
       toast.error(t('drive.createFolder.noConnection'));
       return;
     }
-
     const list = Array.from(files);
-    const validationError = validateDriveUploadFiles(list);
-    if (validationError) {
-      toast.error(t(validationError));
-      return;
-    }
-
-    setIsUploading(true);
-    const toastId = toast.loading(t('drive.upload.uploadingFolder'));
-    try {
-      const result = await driveApi.uploadFolder({
-        connectionId: driveConnectionId,
-        entries: buildDriveFolderEntries(list),
-        parentItemId: currentDriveFolderId || null,
-      });
-      const failedCount = result.failed?.length ?? 0;
-      if (failedCount > 0) {
-        toast(
-          t('drive.upload.folderPartial', {
-            ok: result.filesUploaded,
-            total: result.filesUploaded + failedCount,
-            folders: result.foldersCreated,
-            failed: failedCount,
-          }),
-          { id: toastId, icon: '⚠️' },
-        );
-      } else {
-        toast.success(
-          t('drive.upload.folderDone', { files: result.filesUploaded, folders: result.foldersCreated }),
-          { id: toastId },
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-    } catch (err) {
-      toast.dismiss(toastId);
-      handleApiError(err, t('drive.upload.fail'), { navigate });
-    } finally {
-      setIsUploading(false);
-      if (folderInputRef.current) folderInputRef.current.value = '';
-    }
+    const folderName =
+      (list[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] ||
+      t('drive.upload.uploadFolder');
+    enqueueFolder(folderName, buildDriveFolderEntries(list), {
+      connectionId: driveConnectionId,
+      parentItemId: currentDriveFolderId || null,
+      folderId: folder?.id ?? null,
+    });
+    if (folderInputRef.current) folderInputRef.current.value = '';
   };
 
   // Không có option nào hợp tab hiện tại → ẩn hẳn nút "Mới" (vd tab Gmail không có hành động tạo).
@@ -242,11 +175,10 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
       <div className="relative" ref={menuRef}>
         <button
           type="button"
-          disabled={isUploading}
           onClick={() => setOpen((o) => !o)}
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-white bg-brand-600 rounded-[9px] shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-[13px] font-semibold text-white bg-brand-600 rounded-[9px] shadow-sm hover:bg-brand-700 transition-colors"
         >
-          {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          <Plus className="w-4 h-4" />
           <span>{t('toolbar.driveNew')}</span>
           <ChevronDown className={`w-3.5 h-3.5 opacity-80 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
@@ -341,6 +273,7 @@ export function WorkspaceNewMenu({ folder, currentDriveFolderId, sourceType = nu
         onClose={() => setIsFolderModalOpen(false)}
         defaultConnectionId={driveConnectionId}
         defaultParentItemId={currentDriveFolderId}
+        folderContextId={folder?.id ?? null}
       />
     </>
   );

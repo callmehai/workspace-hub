@@ -88,6 +88,7 @@ public class ItemService : IItemService
             request.OccurredFrom,
             request.OccurredTo,
             request.DriveParentId,
+            request.DriveKind,
             page,
             limit,
             ct);

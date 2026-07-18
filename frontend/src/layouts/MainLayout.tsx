@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
+import { DriveUploadPanel } from '../components/drive/DriveUploadPanel';
 import { useNotificationHub } from '../hooks/notificationHub/useNotificationHub';
 
 export const MainLayout = () => {
@@ -64,6 +65,9 @@ export const MainLayout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Panel tiến độ upload Drive — mount 1 lần, nổi góc dưới-phải, sống xuyên trang. */}
+      <DriveUploadPanel />
     </div>
   );
 };

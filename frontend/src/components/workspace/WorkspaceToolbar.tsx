@@ -14,6 +14,7 @@ import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
 import { TYPE_FILTERS, STATUS_FILTERS, typeIcon, integrationLabelKey } from '../../lib/itemVisuals';
 import type { ItemType, ItemStatus, FolderResponse, TagResponse } from '../../types/items';
+import type { TranslationKey } from '../../i18n/translations';
 import { TagManagerModal } from '../tags/TagManagerModal';
 import { WorkspaceViewSwitcher, type WorkspaceView } from './WorkspaceViewSwitcher';
 import { WorkspaceNewMenu } from './WorkspaceNewMenu';
@@ -25,6 +26,13 @@ import { WorkspaceNewMenu } from './WorkspaceNewMenu';
  *   Hàng 3: search full-width.
  * Ở Bảng, chip Trạng thái = lọc CỘT hiển thị (chọn "Đang xử lý" → chỉ hiện cột đó).
  */
+
+/** 3 lựa chọn lọc loại Drive (chỉ hiện ở view Drive). Đơn chọn (radio). */
+const DRIVE_KINDS: { value: 'all' | 'folder' | 'file'; labelKey: TranslationKey }[] = [
+  { value: 'all', labelKey: 'toolbar.driveKindAll' },
+  { value: 'folder', labelKey: 'toolbar.driveKindFolders' },
+  { value: 'file', labelKey: 'toolbar.driveKindFiles' },
+];
 
 interface ChipProps {
   active: boolean;
@@ -191,6 +199,9 @@ interface WorkspaceToolbarProps {
   searchInput: string;
   onSearchChange: (v: string) => void;
   currentDriveFolderId?: string;
+  /** Lọc Drive theo loại (chỉ hiện ở view Drive: tab Tệp hoặc đang trong 1 folder Drive). */
+  driveKind?: 'all' | 'folder' | 'file';
+  onDriveKindChange?: (k: 'all' | 'folder' | 'file') => void;
 }
 
 export const WorkspaceToolbar = ({
@@ -204,6 +215,7 @@ export const WorkspaceToolbar = ({
   assigneeFilter, onAssigneeChange,
   searchInput, onSearchChange,
   currentDriveFolderId,
+  driveKind = 'all', onDriveKindChange,
 }: WorkspaceToolbarProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -355,6 +367,20 @@ export const WorkspaceToolbar = ({
                     <span className="inline-flex items-center gap-1.5">
                       {typeIcon(f.value, 'w-4 h-4')}{t(f.labelKey)}
                     </span>
+                  </Chip>
+                ))}
+              </FilterGroup>
+            </>
+          )}
+
+          {/* Nhóm lọc Drive — CHỈ hiện ở view Drive (tab Tệp hoặc đang trong 1 folder Drive). */}
+          {onDriveKindChange && (sourceType === 'File' || !!currentDriveFolderId) && (
+            <>
+              <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-slate-700" />
+              <FilterGroup label={t('toolbar.driveKind')}>
+                {DRIVE_KINDS.map(k => (
+                  <Chip key={k.value} active={driveKind === k.value} onClick={() => onDriveKindChange(k.value)}>
+                    {t(k.labelKey)}
                   </Chip>
                 ))}
               </FilterGroup>

@@ -1,8 +1,11 @@
+using System.Net;
+using System.Net.Http.Headers;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
 using Google.Apis.Upload;
 using WorkspaceHub.Application.Abstractions;
+using WorkspaceHub.Application.Common;
 using WorkspaceHub.Domain.Entities;
 
 namespace WorkspaceHub.Infrastructure.Services;
@@ -21,11 +24,32 @@ public class DriveGateway : IDriveGateway
     private const string ListPermissionsFields =
         "permissions(id, type, role, emailAddress, displayName, deleted)";
 
-    private readonly ITokenService _tokenService;
+    /// <summary>Named client cho proxy media (download/thumbnail) — timeout Infinite, hủy theo CancellationToken.</summary>
+    public const string MediaHttpClientName = "DriveMedia";
 
-    public DriveGateway(ITokenService tokenService)
+    /// <summary>
+    /// Base URL Google Drive REST cho media — dùng HttpClient trực tiếp (không qua SDK) để lấy
+    /// network stream, tránh buffer file lớn (100MB) vào RAM khi proxy xuống client.
+    /// </summary>
+    private const string DriveFilesBase = "https://www.googleapis.com/drive/v3/files";
+
+    /// <summary>Google-native docs không tải alt=media được → export sang định dạng tải được.</summary>
+    private static readonly IReadOnlyDictionary<string, (string ExportMime, string Extension)> GoogleExport =
+        new Dictionary<string, (string, string)>
+        {
+            ["application/vnd.google-apps.document"] = ("application/pdf", ".pdf"),
+            ["application/vnd.google-apps.spreadsheet"] = ("application/pdf", ".pdf"),
+            ["application/vnd.google-apps.presentation"] = ("application/pdf", ".pdf"),
+            ["application/vnd.google-apps.drawing"] = ("image/png", ".png"),
+        };
+
+    private readonly ITokenService _tokenService;
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    public DriveGateway(ITokenService tokenService, IHttpClientFactory httpClientFactory)
     {
         _tokenService = tokenService;
+        _httpClientFactory = httpClientFactory;
     }
 
     private async Task<DriveService> BuildDriveServiceAsync(Connection connection, CancellationToken ct)
@@ -360,7 +384,118 @@ public class DriveGateway : IDriveGateway
         }
     }
 
+    public async Task<DriveMediaResult> DownloadFileAsync(
+        Connection connection,
+        string fileId,
+        string mimeType,
+        string? downloadName,
+        CancellationToken ct = default)
+    {
+        if (DriveMimeTypes.IsFolder(mimeType))
+            throw new BusinessRuleException("Không thể tải xuống một thư mục.");
+
+        string url;
+        string? forcedContentType = null;
+        var fileName = downloadName;
+
+        // Google-native (Docs/Sheets/Slides…) không tải alt=media được → export.
+        if (mimeType.StartsWith("application/vnd.google-apps", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!GoogleExport.TryGetValue(mimeType, out var export))
+                throw new BusinessRuleException(
+                    "Loại tài liệu Google này không hỗ trợ tải xuống trực tiếp. Hãy mở trong Drive.");
+
+            url = $"{DriveFilesBase}/{Uri.EscapeDataString(fileId)}/export?mimeType={Uri.EscapeDataString(export.ExportMime)}";
+            forcedContentType = export.ExportMime;
+            fileName = EnsureExtension(fileName, export.Extension);
+        }
+        else
+        {
+            url = $"{DriveFilesBase}/{Uri.EscapeDataString(fileId)}?alt=media&supportsAllDrives=true";
+        }
+
+        var resp = await SendMediaRequestAsync(connection, url, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var status = resp.StatusCode;
+            resp.Dispose();
+            throw MapMediaError(status, fileId);
+        }
+
+        var stream = await resp.Content.ReadAsStreamAsync(ct);
+        var contentType = forcedContentType
+            ?? resp.Content.Headers.ContentType?.ToString()
+            ?? "application/octet-stream";
+        return new DriveMediaResult(resp, stream, contentType, resp.Content.Headers.ContentLength)
+        {
+            FileName = fileName,
+        };
+    }
+
+    public async Task<DriveMediaResult?> GetThumbnailAsync(
+        Connection connection,
+        string fileId,
+        CancellationToken ct = default)
+    {
+        // thumbnailLink là URL ngắn hạn cần bearer token → lấy metadata trước, rồi proxy.
+        string? thumbnailLink;
+        try
+        {
+            using var drive = await BuildDriveServiceAsync(connection, ct);
+            var metaReq = drive.Files.Get(fileId);
+            metaReq.Fields = "thumbnailLink, hasThumbnail";
+            var meta = await metaReq.ExecuteAsync(ct);
+            if (meta.HasThumbnail != true || string.IsNullOrEmpty(meta.ThumbnailLink))
+                return null;
+            // Google trả thumbnail nhỏ (=s220) → xin bản lớn hơn cho đỡ vỡ. Không khớp pattern thì giữ nguyên.
+            thumbnailLink = System.Text.RegularExpressions.Regex.Replace(meta.ThumbnailLink, @"=s\d+", "=s1024");
+        }
+        catch (Google.GoogleApiException)
+        {
+            // Thumbnail là "nice to have" — không có/không lấy được metadata → coi như không có.
+            return null;
+        }
+
+        var resp = await SendMediaRequestAsync(connection, thumbnailLink, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            resp.Dispose();
+            return null;
+        }
+
+        var stream = await resp.Content.ReadAsStreamAsync(ct);
+        var contentType = resp.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
+        return new DriveMediaResult(resp, stream, contentType, resp.Content.Headers.ContentLength);
+    }
+
     // ───────────────────────── Private helpers ─────────────────────────
+
+    /// <summary>GET có bearer token tới URL media/thumbnail — đọc headers rồi stream body (không buffer).</summary>
+    private async Task<HttpResponseMessage> SendMediaRequestAsync(
+        Connection connection,
+        string url,
+        CancellationToken ct)
+    {
+        var accessToken = await _tokenService.GetFreshAccessTokenAsync(connection, ct);
+        var http = _httpClientFactory.CreateClient(MediaHttpClientName);
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+    }
+
+    private static string? EnsureExtension(string? name, string ext)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return name;
+        return name.EndsWith(ext, StringComparison.OrdinalIgnoreCase) ? name : name + ext;
+    }
+
+    private static Exception MapMediaError(HttpStatusCode status, string fileId) => status switch
+    {
+        HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
+            new ForbiddenException("Không đủ quyền tải nội dung file này. Có thể cần reconnect Drive."),
+        HttpStatusCode.NotFound => new NotFoundException("File", fileId),
+        _ => new ProviderException($"Google Drive trả lỗi {(int)status} khi tải nội dung file.", status),
+    };
 
     private static DriveFile MapToDto(Google.Apis.Drive.v3.Data.File file)
     {

@@ -22,6 +22,7 @@ public record GetItemsRequest(
     DateTime? OccurredFrom = null, // UTC inclusive — overlap filter (Event calendar range)
     DateTime? OccurredTo = null,   // UTC exclusive
     string? DriveParentId = null, // Lọc item theo thư mục cha Drive
+    string? DriveKind = null,     // Lọc Drive theo loại: "folder" (chỉ thư mục) | "file" (chỉ tệp); null = cả hai
     int Page = 1,
     int Limit = 20);
 

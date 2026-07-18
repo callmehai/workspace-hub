@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, X, UserPlus, Link2, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { driveApi, getLinkRestrictConflictFromError } from '../../lib/driveApi';
+import { friendsApi } from '../../lib/friendsApi';
 import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
@@ -61,6 +62,7 @@ export function DriveShareDialog({
   const navigate = useNavigate();
   const { t } = useI18n();
   const [email, setEmail] = useState('');
+  const [emailFocused, setEmailFocused] = useState(false);
   const [inviteRole, setInviteRole] = useState<DrivePermissionRole>('reader');
   const [notify, setNotify] = useState(true);
   // Permission đang chờ xác nhận gỡ (null = đóng dialog).
@@ -73,6 +75,30 @@ export function DriveShareDialog({
   const [copied, setCopied] = useState(false);
 
   const shareUrl = resolveShareUrl(webViewLink, externalId, isFolder);
+
+  // Email hợp lệ mới cho mời (chặn gọi API với chuỗi rác).
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  // Gợi ý contact từ friend system: bạn bè đã kết bạn (Accepted) khớp chuỗi đang gõ.
+  const { data: friendsData } = useQuery({
+    queryKey: ['friends'],
+    queryFn: friendsApi.getOverview,
+    enabled: isOpen,
+    staleTime: 60_000,
+  });
+  const emailQ = email.trim().toLowerCase();
+  const friendSuggestions = (friendsData?.friends ?? [])
+    .filter((f) => f.status === 'Accepted' && f.email)
+    .filter((f) => f.email.toLowerCase() !== emailQ) // đã gõ trùng thì thôi gợi ý
+    .filter((f) => !emailQ || f.email.toLowerCase().includes(emailQ) || f.fullName.toLowerCase().includes(emailQ))
+    .slice(0, 6);
+  const showSuggest = emailFocused && friendSuggestions.length > 0;
+
+  const submitInvite = () => {
+    if (!emailValid || inviteMutation.isPending) return;
+    setEmailFocused(false);
+    inviteMutation.mutate();
+  };
 
   const permissionsQuery = useQuery({
     queryKey: ['drive-permissions', itemId],
@@ -322,20 +348,50 @@ export function DriveShareDialog({
           <div className="space-y-2">
             <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-200">{t('drive.share.invite')}</label>
             <div className="flex gap-2 flex-wrap">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t('drive.share.emailPlaceholder')}
-                className="flex-1 min-w-[160px] h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px]"
-              />
+              <div className="relative flex-1 min-w-[160px]">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => setEmailFocused(true)}
+                  onBlur={() => setEmailFocused(false)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitInvite(); } }}
+                  placeholder={t('drive.share.emailPlaceholder')}
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px]"
+                />
+                {/* Gợi ý bạn bè — onMouseDown (preventDefault) để chọn trước khi input blur ẩn list. */}
+                {showSuggest && (
+                  <div className="absolute z-20 top-full left-0 right-0 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg py-1">
+                    {friendSuggestions.map((f) => (
+                      <button
+                        key={f.userId}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); setEmail(f.email); setEmailFocused(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
+                      >
+                        {f.avatarUrl ? (
+                          <img src={f.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <span className="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 text-[12px] font-semibold flex items-center justify-center shrink-0">
+                            {(f.fullName || f.email).charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <span className="min-w-0">
+                          <span className="block text-[12.5px] font-medium text-slate-800 dark:text-slate-100 truncate">{f.fullName || f.email}</span>
+                          <span className="block text-[11px] text-slate-500 dark:text-slate-400 truncate">{f.email}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="w-[152px]">
                 <Select value={inviteRole} onChange={(v) => setInviteRole(v as DrivePermissionRole)} options={roleSelectOptions} className="h-9" />
               </div>
               <button
                 type="button"
-                onClick={() => inviteMutation.mutate()}
-                disabled={!email.trim() || inviteMutation.isPending}
+                onClick={submitInvite}
+                disabled={!emailValid || inviteMutation.isPending}
                 className="h-9 px-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {inviteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}

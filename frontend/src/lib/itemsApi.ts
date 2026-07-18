@@ -25,6 +25,8 @@ export interface GetItemsParams {
   /** UTC exclusive */
   occurredTo?: string;
   driveParentId?: string;
+  /** Lọc Drive theo loại: 'folder' = chỉ thư mục, 'file' = chỉ tệp. Bỏ trống = cả hai. */
+  driveKind?: 'folder' | 'file';
   page?: number;
   limit?: number;
 }

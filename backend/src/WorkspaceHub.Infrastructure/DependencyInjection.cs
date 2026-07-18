@@ -120,6 +120,10 @@ public static class DependencyInjection
         services.AddScoped<IPeopleGateway, PeopleGateway>();
         services.AddScoped<ICalendarGateway, CalendarGateway>();
         services.AddScoped<IDriveGateway, DriveGateway>();
+        // Proxy media Drive (download/thumbnail): timeout Infinite — file lớn stream lâu, hủy theo
+        // CancellationToken của request, KHÔNG để default 100s cắt ngang giữa chừng.
+        services.AddHttpClient(DriveGateway.MediaHttpClientName,
+            c => c.Timeout = Timeout.InfiniteTimeSpan);
         
         // Gateways dùng cho luồng Sync (Đọc/Đồng bộ background job)
         services.AddScoped<IGoogleDriveGateway, GoogleDriveGateway>();
