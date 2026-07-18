@@ -61,5 +61,11 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .Must(labels => labels!.All(l => !string.IsNullOrWhiteSpace(l) && !l.Any(char.IsWhiteSpace)))
             .When(x => x.Labels != null)
             .WithMessage("Labels cannot be empty or contain whitespace.");
+
+        // Event edits (SCRUM-37): giới hạn số Drive attachment như Create → tránh 502 mờ.
+        RuleFor(x => x.DriveItemIds)
+            .Must(ids => ids!.Count <= 20)
+            .When(x => x.DriveItemIds != null)
+            .WithMessage("Maximum 20 Drive files can be attached.");
     }
 }

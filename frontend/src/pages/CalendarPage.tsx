@@ -251,8 +251,10 @@ function invitationToEntry(invitation: CalendarInvitation): CalendarEntry {
     id: `invitation-${invitation.id}`,
     kind: 'event',
     title: invitation.title,
-    start: new Date(invitation.start),
-    end: new Date(invitation.end),
+    // Dùng parseCalendarDate như itemToEntry: date-only ("YYYY-MM-DD") → local-midnight,
+    // tránh new Date() cho ra midnight-UTC (lệch ngày ở tz âm).
+    start: parseCalendarDate(invitation.start, invitation.start),
+    end: parseCalendarDate(invitation.end, invitation.end),
     allDay: invitation.allDay,
     folderIds: [],
     location: invitation.location ?? undefined,

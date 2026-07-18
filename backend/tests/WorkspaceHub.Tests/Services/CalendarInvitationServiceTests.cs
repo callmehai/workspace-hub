@@ -123,12 +123,15 @@ public class CalendarInvitationServiceTests
 
         _invitations.Setup(m => m.GetByOrganizerItemAsync(organizerItem.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<CalendarInvitation> { invitation });
-        _users.Setup(m => m.GetByEmailAsync("guest@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new User
+        _users.Setup(m => m.GetByEmailsAsync(It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<User>
             {
-                Id = _inviteeUserId,
-                Email = "guest@example.com",
-                IsActive = true
+                new()
+                {
+                    Id = _inviteeUserId,
+                    Email = "guest@example.com",
+                    IsActive = true
+                }
             });
 
         var googleEvent = new CalendarEvent(

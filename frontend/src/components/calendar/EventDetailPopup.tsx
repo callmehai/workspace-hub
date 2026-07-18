@@ -268,8 +268,15 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
     if (!detail?.start) return '';
     const start = new Date(detail.start);
     const end = detail.end ? new Date(detail.end) : null;
+    // All-day lưu dạng date-only/midnight-UTC → ép timeZone:'UTC' để không lệch ngày ở tz âm.
+    if (detail.allDay) {
+      const date = start.toLocaleDateString(dl, {
+        weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
+      });
+      return `${date} (${t('calendar.allDay')})`;
+    }
     const date = start.toLocaleDateString(dl, { weekday: 'long', month: 'long', day: 'numeric' });
-    if (detail.allDay || !end) return detail.allDay ? `${date} (${t('calendar.allDay')})` : date;
+    if (!end) return date;
     const startTime = start.toLocaleTimeString(dl, { hour: 'numeric', minute: '2-digit' });
     const endTime = end.toLocaleTimeString(dl, { hour: 'numeric', minute: '2-digit' });
     return `${date}, ${startTime} - ${endTime}`;

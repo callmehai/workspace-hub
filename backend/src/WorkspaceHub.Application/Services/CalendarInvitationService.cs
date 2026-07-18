@@ -54,14 +54,22 @@ public class CalendarInvitationService : ICalendarInvitationService
         var notifications = new List<CalendarInvitation>();
         var now = DateTime.UtcNow;
 
+        // Batch load invitee user một lần (tránh N+1 GetByEmailAsync trong loop attendee).
+        var candidateEmails = attendees
+            .Select(a => a.Email.Trim().ToLowerInvariant())
+            .Where(e => e != organizerEmail)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var usersByEmail = (await _users.GetByEmailsAsync(candidateEmails, ct))
+            .ToDictionary(u => u.Email, StringComparer.OrdinalIgnoreCase);
+
         foreach (var attendee in attendees)
         {
             var email = attendee.Email.Trim().ToLowerInvariant();
             if (email == organizerEmail) continue;
             activeEmails.Add(email);
 
-            var user = await _users.GetByEmailAsync(email, ct);
-            if (user == null || !user.IsActive || user.Id == organizerItem.UserId) continue;
+            if (!usersByEmail.TryGetValue(email, out var user) || !user.IsActive || user.Id == organizerItem.UserId) continue;
 
             var invitation = existing.FirstOrDefault(x =>
                 string.Equals(x.InviteeEmail, email, StringComparison.OrdinalIgnoreCase));
@@ -102,13 +110,19 @@ public class CalendarInvitationService : ICalendarInvitationService
 
         await _invitations.SaveChangesAsync(ct);
 
+        // Title = i18n key (FE dịch theo ngôn ngữ user), body = JSON payload {itemTitle}
+        // — nhất quán với notifications.calendarReminder, thay vì chuỗi VN hardcode.
+        var inviteBody = JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["itemTitle"] = organizerItem.Title
+        });
         foreach (var invitation in notifications)
         {
             await _notifications.CreateAndSendAsync(
                 invitation.InviteeUserId,
                 NotificationType.CalendarInvite,
-                "Lời mời tham gia lịch",
-                $"Bạn được mời tham gia “{organizerItem.Title}”.",
+                "notifications.calendarInvite",
+                inviteBody,
                 $"/calendar?invitation={invitation.Id}",
                 ct);
         }

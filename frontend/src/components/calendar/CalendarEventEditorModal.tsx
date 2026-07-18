@@ -145,13 +145,16 @@ function parseCustomRecurrence(recurrence: string[] | undefined, date: string): 
   };
 }
 
-function buildCustomRecurrence(value: CustomRecurrenceValue) {
+function buildCustomRecurrence(value: CustomRecurrenceValue, allDay = false) {
   const parts = [`FREQ=${value.frequency}`, `INTERVAL=${Math.max(1, value.interval)}`];
   if (value.frequency === 'WEEKLY' && value.weekDays.length > 0) {
     parts.push(`BYDAY=${RRULE_WEEK_DAYS.filter(day => value.weekDays.includes(day)).join(',')}`);
   }
   if (value.endType === 'until' && value.until) {
-    parts.push(`UNTIL=${value.until.replaceAll('-', '')}T235959Z`);
+    const untilDate = value.until.replaceAll('-', '');
+    // All-day (RFC5545): UNTIL dạng DATE; timed: DATETIME UTC. Tránh T235959Z ở event
+    // all-day rơi sang ngày kế tại tz dương → lặp thừa.
+    parts.push(`UNTIL=${allDay ? untilDate : `${untilDate}T235959Z`}`);
   }
   if (value.endType === 'count') {
     parts.push(`COUNT=${Math.max(1, value.count)}`);
@@ -505,7 +508,7 @@ export function CalendarEventEditorModal({
       toast.error(t('calendar.repeatEndBeforeStart'));
       return;
     }
-    setForm(current => ({ ...current, recurrence: buildCustomRecurrence(customRecurrence) }));
+    setForm(current => ({ ...current, recurrence: buildCustomRecurrence(customRecurrence, current.allDay) }));
     setCustomRecurrenceOpen(false);
   };
 
