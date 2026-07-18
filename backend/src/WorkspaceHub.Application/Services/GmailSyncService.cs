@@ -266,7 +266,10 @@ public class GmailSyncService : IGmailSyncService
                             existing.MetadataJson = MergeMetadata(existing.MetadataJson, mapped.MetadataJson);
                             existing.ETag = mapped.ETag;
                             existing.OccurredAt = mapped.OccurredAt;
-                            existing.IsImportant = mapped.IsImportant;
+                            // KHÔNG đụng IsImportant: cờ "quan trọng" là thuần LOCAL của app, độc lập với
+                            // Gmail (nhãn IMPORTANT của Gmail là khái niệm riêng, không đồng bộ 2 chiều).
+                            // Chỉ set lúc TẠO item mới (theo ImportantContacts); re-sync giữ nguyên lựa
+                            // chọn của user, không nâng cũng không hạ.
                             // Keep existing.Status intact to avoid overwriting Kanban columns.
                         }
                         else

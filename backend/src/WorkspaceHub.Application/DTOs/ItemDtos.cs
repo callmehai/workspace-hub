@@ -120,7 +120,13 @@ public record ItemResponse(
     List<ItemTag> Tags,
     Guid? ConnectionId = null,
     string? ThreadId = null,
-    int ThreadCount = 1);
+    int ThreadCount = 1,
+    /// <summary>
+    /// true = item thuộc user đang gọi; false = item của người khác, xem được qua folder chia sẻ.
+    /// FE dùng để ẩn hành động chỉ owner làm được (mở trong Gmail/Drive/Calendar/Jira —
+    /// người được share không có quyền trên tài khoản provider của owner).
+    /// </summary>
+    bool IsOwner = true);
 
 /// <summary>Tag đang gắn vào item (rút gọn để nhúng trong ItemResponse — SCRUM-71).</summary>
 public record ItemTag(

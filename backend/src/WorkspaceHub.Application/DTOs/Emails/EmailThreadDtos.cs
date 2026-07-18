@@ -6,7 +6,13 @@ namespace WorkspaceHub.Application.DTOs.Emails;
 public record EmailThreadResponse(
     string ThreadId,
     string? Subject,
-    IReadOnlyList<EmailThreadMessageDto> Messages);
+    IReadOnlyList<EmailThreadMessageDto> Messages,
+    /// <summary>
+    /// Email của hộp thư chứa thread này (= chủ sở hữu item). FE dùng làm "tôi là ai" khi dựng
+    /// danh sách người nhận lúc Reply/Reply-All. Với người được chia sẻ folder, họ KHÔNG sở hữu
+    /// connection này nên không tự tra ra được — phải lấy từ đây.
+    /// </summary>
+    string? OwnerEmail = null);
 
 /// <summary>1 message trong thread — có body decoded + attachment metadata.</summary>
 public record EmailThreadMessageDto(

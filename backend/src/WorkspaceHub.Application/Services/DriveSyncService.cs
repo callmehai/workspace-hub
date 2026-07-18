@@ -67,7 +67,8 @@ public class DriveSyncService : IDriveSyncService
                     existing.MetadataJson = mapped.MetadataJson;
                     existing.ETag = mapped.ETag;
                     existing.OccurredAt = mapped.OccurredAt;
-                    existing.IsImportant = mapped.IsImportant;
+                    // KHÔNG đụng IsImportant: Drive không có khái niệm "quan trọng" nên mapper luôn
+                    // trả false → re-sync sẽ xoá mất cờ user tự đánh dấu. Field thuần local.
                     // Keep Status intact to avoid resetting Kanban columns.
                 }
                 skipped++;

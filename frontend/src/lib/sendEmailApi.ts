@@ -85,6 +85,12 @@ export interface EmailThreadResponse {
   threadId: string;
   subject: string | null;
   messages: EmailThreadMessageDto[];
+  /**
+   * Email của hộp thư chứa thread (= chủ sở hữu item). Dùng làm "tôi là ai" khi dựng danh sách
+   * người nhận lúc Reply/Reply-All. Với folder được chia sẻ, người xem KHÔNG sở hữu connection
+   * này nên không tự tra ra được từ danh sách connection của mình.
+   */
+  ownerEmail?: string | null;
 }
 
 export interface ReplyEmailRequest {

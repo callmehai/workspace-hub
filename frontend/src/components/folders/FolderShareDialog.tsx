@@ -4,6 +4,9 @@ import { X, Loader2, UserPlus, Users, Trash2, Shield, User } from 'lucide-react'
 import { foldersApi } from '../../lib/itemsApi';
 import { friendsApi } from '../../lib/friendsApi';
 import { handleApiError } from '../../lib/errorUtils';
+import { useI18n } from '../../hooks/useI18n';
+import { Select } from '../Select';
+import { FriendMultiSelect } from '../FriendMultiSelect';
 import toast from 'react-hot-toast';
 
 interface FolderShareDialogProps {
@@ -21,8 +24,9 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
   folderName,
   isOwner,
 }) => {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
-  const [selectedFriendId, setSelectedFriendId] = useState('');
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [permission, setPermission] = useState<'Viewer' | 'Editor'>('Viewer');
 
   // Fetch current shares of the folder (only if owner)
@@ -40,32 +44,41 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
   });
 
   // Filter friends that are already shared with
-  const sharedUserIds = new Set(shares.map(s => s.sharedWithUserId));
-  const availableFriends = friendsOverview?.friends.filter(f => !sharedUserIds.has(f.userId)) || [];
+  const sharedUserIds = new Set(shares.map((s) => s.sharedWithUserId));
+  const availableFriends = friendsOverview?.friends.filter((f) => !sharedUserIds.has(f.userId)) || [];
 
-  // Tự động chọn người bạn đầu tiên nếu có danh sách khả dụng
+  // Bỏ chọn những người vừa được share xong (không còn trong danh sách khả dụng).
   React.useEffect(() => {
-    if (availableFriends.length > 0) {
-      if (!selectedFriendId || !availableFriends.some(f => f.userId === selectedFriendId)) {
-        setSelectedFriendId(availableFriends[0].userId);
-      }
-    } else {
-      setSelectedFriendId('');
-    }
-  }, [availableFriends, selectedFriendId]);
+    setSelectedFriendIds((prev) => prev.filter((id) => availableFriends.some((f) => f.userId === id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shares]);
 
-  // Invite Mutation
+  // Invite Mutation — mời NHIỀU người cùng lúc (gọi song song, tổng hợp kết quả).
   const inviteMutation = useMutation({
-    mutationFn: (payload: { friendUserId: string; permission: 'Viewer' | 'Editor' }) =>
-      foldersApi.inviteShare(folderId, payload),
-    onSuccess: () => {
-      toast.success('Đã gửi lời mời chia sẻ thư mục!');
-      setSelectedFriendId('');
+    mutationFn: async (payload: { friendUserIds: string[]; permission: 'Viewer' | 'Editor' }) => {
+      const results = await Promise.allSettled(
+        payload.friendUserIds.map((friendUserId) =>
+          foldersApi.inviteShare(folderId, { friendUserId, permission: payload.permission }),
+        ),
+      );
+      const failed = results.filter((r) => r.status === 'rejected');
+      return { total: payload.friendUserIds.length, failed };
+    },
+    onSuccess: ({ total, failed }) => {
+      const ok = total - failed.length;
+      if (ok > 0) toast.success(t('share.inviteSent').replace('{count}', String(ok)));
+      if (failed.length > 0) {
+        handleApiError(
+          (failed[0] as PromiseRejectedResult).reason,
+          t('share.inviteFailCount').replace('{count}', String(failed.length)),
+        );
+      }
+      setSelectedFriendIds([]);
       queryClient.invalidateQueries({ queryKey: ['folderShares', folderId] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Không thể gửi lời mời chia sẻ');
+      handleApiError(err, t('share.inviteFail'));
     },
   });
 
@@ -74,11 +87,11 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
     mutationFn: ({ shareId, permission }: { shareId: string; permission: 'Viewer' | 'Editor' }) =>
       foldersApi.updateShareRole(folderId, shareId, { permission }),
     onSuccess: () => {
-      toast.success('Đã cập nhật quyền thành công!');
+      toast.success(t('share.permissionUpdated'));
       queryClient.invalidateQueries({ queryKey: ['folderShares', folderId] });
     },
     onError: (err) => {
-      handleApiError(err, 'Không thể cập nhật quyền');
+      handleApiError(err, t('share.permissionUpdateFail'));
     },
   });
 
@@ -86,23 +99,28 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
   const revokeShareMutation = useMutation({
     mutationFn: (shareId: string) => foldersApi.revokeShare(folderId, shareId),
     onSuccess: () => {
-      toast.success('Đã thu hồi quyền truy cập!');
+      toast.success(t('share.revoked'));
       queryClient.invalidateQueries({ queryKey: ['folderShares', folderId] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Không thể thu hồi quyền truy cập');
+      handleApiError(err, t('share.revokeFail'));
     },
   });
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFriendId) {
-      toast.error('Vui lòng chọn bạn bè để chia sẻ');
+    if (selectedFriendIds.length === 0) {
+      toast.error(t('share.needFriend'));
       return;
     }
-    inviteMutation.mutate({ friendUserId: selectedFriendId, permission });
+    inviteMutation.mutate({ friendUserIds: selectedFriendIds, permission });
   };
+
+  const permissionOptions = [
+    { value: 'Viewer', label: t('share.roleViewer') },
+    { value: 'Editor', label: t('share.roleEditor') },
+  ];
 
   if (!isOpen) return null;
 
@@ -118,7 +136,7 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-brand-600 dark:text-brand-400" />
             <h2 className="text-[17px] font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[340px]">
-              Chia sẻ thư mục &ldquo;{folderName}&rdquo;
+              {t('share.title').replace('{name}', folderName)}
             </h2>
           </div>
           <button
@@ -134,78 +152,70 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
           {isOwner ? (
             <>
               {/* Form Invite */}
-              <form onSubmit={handleInvite} className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-4">
+              <form
+                onSubmit={handleInvite}
+                className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-4"
+              >
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                   <UserPlus className="w-4 h-4 text-brand-500" />
-                  Mời bạn bè truy cập
+                  {t('share.inviteHeading')}
                 </h3>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1">
-                    <select
-                      value={selectedFriendId}
-                      onChange={(e) => setSelectedFriendId(e.target.value)}
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
+                  <div className="flex-1 min-w-0">
+                    <FriendMultiSelect
+                      friends={availableFriends}
+                      value={selectedFriendIds}
+                      onChange={setSelectedFriendIds}
                       disabled={inviteMutation.isPending || isLoadingFriends}
-                      className="w-full h-[38px] px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-                    >
-                      {availableFriends.map((friend) => (
-                        <option key={friend.userId} value={friend.userId}>
-                          {friend.fullName} ({friend.email})
-                        </option>
-                      ))}
-                    </select>
+                      className="h-[38px]"
+                    />
                   </div>
-                  <div className="w-full sm:w-[120px]">
-                    <select
+                  <div className="w-full sm:w-[140px] shrink-0">
+                    <Select
                       value={permission}
-                      onChange={(e) => setPermission(e.target.value as 'Viewer' | 'Editor')}
+                      onChange={(v) => setPermission(v as 'Viewer' | 'Editor')}
+                      options={permissionOptions}
                       disabled={inviteMutation.isPending}
-                      className="w-full h-[38px] px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-                    >
-                      <option value="Viewer">Người xem</option>
-                      <option value="Editor">Người sửa</option>
-                    </select>
+                      className="h-[38px]"
+                    />
                   </div>
                   <button
                     type="submit"
-                    disabled={inviteMutation.isPending || !selectedFriendId}
-                    className="h-[38px] px-4 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                    disabled={inviteMutation.isPending || selectedFriendIds.length === 0}
+                    className="h-[38px] px-4 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shrink-0"
                   >
-                    {inviteMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      'Chia sẻ'
-                    )}
+                    {inviteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : t('share.shareAction')}
                   </button>
                 </div>
                 {availableFriends.length === 0 && !isLoadingFriends && (
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
-                    Không có bạn bè mới nào khả dụng để chia sẻ.
-                  </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">{t('share.noFriendsAvailable')}</p>
                 )}
               </form>
 
               {/* Shares List */}
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  Người có quyền truy cập
-                </h3>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t('share.peopleWithAccess')}</h3>
                 {isLoadingShares ? (
                   <div className="flex items-center justify-center py-6">
                     <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
                   </div>
                 ) : shares.length === 0 ? (
                   <div className="text-center py-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-500 text-sm">
-                    Thư mục này hiện chưa chia sẻ với ai.
+                    {t('share.notSharedYet')}
                   </div>
                 ) : (
                   <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                     {shares.map((share) => (
-                      <div key={share.shareId} className="flex items-center justify-between p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                      <div
+                        key={share.shareId}
+                        className="flex items-center justify-between p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors"
+                      >
                         <div className="flex items-center gap-3 min-w-0">
                           {share.sharedWithUserAvatar ? (
                             <img
                               src={share.sharedWithUserAvatar}
                               alt={share.sharedWithUserName}
+                              referrerPolicy="no-referrer"
                               className="w-9 h-9 rounded-full object-cover shrink-0"
                             />
                           ) : (
@@ -218,41 +228,41 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
                               <span className="truncate">{share.sharedWithUserName}</span>
                               {share.status === 'Pending' && (
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 shrink-0">
-                                  Chờ nhận
+                                  {t('share.pending')}
                                 </span>
                               )}
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500 truncate">
-                              Chia sẻ lúc {new Date(share.sharedAt).toLocaleDateString()}
+                              {t('share.sharedAt').replace('{date}', new Date(share.sharedAt).toLocaleDateString())}
                             </div>
                           </div>
                         </div>
 
                         {/* Actions (Only owner can update/revoke) */}
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={share.permission}
-                            onChange={(e) =>
-                              updatePermissionMutation.mutate({
-                                shareId: share.shareId,
-                                permission: e.target.value as 'Viewer' | 'Editor',
-                              })
-                            }
-                            disabled={updatePermissionMutation.isPending}
-                            className="h-[30px] px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
-                          >
-                            <option value="Viewer">Người xem</option>
-                            <option value="Editor">Người sửa</option>
-                          </select>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="w-[130px]">
+                            <Select
+                              value={share.permission}
+                              onChange={(v) =>
+                                updatePermissionMutation.mutate({
+                                  shareId: share.shareId,
+                                  permission: v as 'Viewer' | 'Editor',
+                                })
+                              }
+                              options={permissionOptions}
+                              disabled={updatePermissionMutation.isPending}
+                              className="h-[30px]"
+                            />
+                          </div>
                           <button
                             onClick={() => {
-                              if (confirm(`Bạn có chắc muốn thu hồi quyền chia sẻ của ${share.sharedWithUserName}?`)) {
+                              if (confirm(t('share.confirmRevoke').replace('{name}', share.sharedWithUserName))) {
                                 revokeShareMutation.mutate(share.shareId);
                               }
                             }}
                             disabled={revokeShareMutation.isPending}
                             className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
-                            title="Thu hồi quyền"
+                            title={t('share.revokeAction')}
                           >
                             {revokeShareMutation.isPending ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -273,11 +283,9 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
                 <Shield className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-50">
-                  Thư mục chia sẻ
-                </h4>
+                <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-50">{t('share.sharedFolder')}</h4>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-[280px]">
-                  Bạn được mời vào thư mục này. Chỉ chủ sở hữu thư mục mới có quyền chỉnh sửa danh sách chia sẻ.
+                  {t('share.viewerNotice')}
                 </p>
               </div>
             </div>
@@ -290,7 +298,7 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           >
-            Đóng
+            {t('common.close')}
           </button>
         </div>
       </div>

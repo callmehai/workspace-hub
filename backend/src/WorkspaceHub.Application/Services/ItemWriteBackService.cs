@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using WorkspaceHub.Application.Abstractions;
 using WorkspaceHub.Application.Common;
@@ -57,6 +58,21 @@ public class ItemWriteBackService : IItemWriteBackService
     {
     }
 
+    /// <summary>
+    /// Ném lỗi khi user KHÔNG có quyền GHI lên item. Nếu item nằm trong folder được chia sẻ nhưng
+    /// user chỉ là <b>Viewer</b> → 403 kèm giải thích, thay vì 404 "Item with id '...' was not found"
+    /// (lộ GUID, người dùng không hiểu vì sao thao tác thất bại).
+    /// </summary>
+    [DoesNotReturn]
+    private async Task ThrowNoWriteAccessAsync(Guid itemId, Guid userId, CancellationToken ct)
+    {
+        if (_folders != null && await _folders.IsItemSharedWithUserAsync(itemId, userId, ct))
+            throw new ForbiddenException(
+                "Bạn chỉ có quyền xem mục này trong thư mục được chia sẻ. Hãy yêu cầu chủ sở hữu cấp quyền chỉnh sửa.");
+
+        throw new NotFoundException("Item", itemId);
+    }
+
     private async Task<Connection> GetConnectionAsync(Guid? connectionId, CancellationToken ct)
     {
         if (connectionId == null) throw new BusinessRuleException("Item is not linked to any connection.");
@@ -76,7 +92,7 @@ public class ItemWriteBackService : IItemWriteBackService
                 item = await _items.GetByIdAsync(itemId, ct);
             }
         }
-        if (item == null) throw new NotFoundException("Item", itemId);
+        if (item == null) await ThrowNoWriteAccessAsync(itemId, userId, ct);
 
         var conn = await GetConnectionAsync(item.ConnectionId, ct);
 
@@ -410,7 +426,7 @@ public class ItemWriteBackService : IItemWriteBackService
                 item = await _items.GetByIdAsync(itemId, ct);
             }
         }
-        if (item == null) throw new NotFoundException("Item", itemId);
+        if (item == null) await ThrowNoWriteAccessAsync(itemId, userId, ct);
 
         // Email gộp thread: mỗi thư trong hội thoại là 1 Item row riêng (do sync tách theo message).
         // Xoá "1 email" ở list = xoá CẢ thread — nếu chỉ trash/remove thư đại diện thì thread hiện lại
@@ -441,7 +457,10 @@ public class ItemWriteBackService : IItemWriteBackService
                 }
             }
 
-            await _items.DeleteThreadAsync(userId, item.ThreadId, ct);
+            // Xoá local theo OWNER của item (item.UserId), không theo userId người thao tác:
+            // shared-Editor xoá hộ thì userId là của người được share → filter không khớp row nào
+            // → Gmail đã trash nhưng item local còn lại thành "email ma" (desync).
+            await _items.DeleteThreadAsync(item.UserId, item.ThreadId, ct);
             return;
         }
 

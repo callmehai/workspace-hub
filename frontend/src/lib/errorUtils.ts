@@ -49,7 +49,10 @@ export const handleApiError = (
       if (!options?.silent) {
         // Ưu tiên message BE (vd. không đủ quyền gỡ share) — tránh luôn bảo "thiếu scope".
         toast.error(data?.message || translate('errors.forbiddenScope'));
-        if (options?.navigate) {
+        // CHỈ đẩy sang /integrations khi BE thật sự báo thiếu OAuth scope (cần kết nối lại dịch vụ).
+        // 403 phân quyền nghiệp vụ (vd. Viewer của folder chia sẻ cố xoá/sửa) KHÔNG được điều hướng —
+        // trước đây mọi 403 đều đá người dùng sang màn hình Kết nối dịch vụ, rất khó hiểu.
+        if (options?.navigate && data?.error === 'MissingScopeError') {
           options.navigate('/integrations');
         }
       }

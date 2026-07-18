@@ -110,12 +110,12 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
   const leaveMutation = useMutation({
     mutationFn: foldersApi.leaveFolder,
     onSuccess: () => {
-      toast.success('Đã rời khỏi thư mục thành công!');
+      toast.success(t('sidebar.folderLeft'));
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       navigate(viewPath);
     },
     onError: (err) => {
-      handleApiError(err, 'Lỗi rời khỏi thư mục');
+      handleApiError(err, t('sidebar.folderLeaveFail'));
     }
   });
 
@@ -163,7 +163,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
       queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Lỗi gán thư mục');
+      handleApiError(err, t('sidebar.itemAssignFail'));
     }
   });
 
@@ -171,13 +171,13 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
     mutationFn: ({ folderId, itemIds }: { folderId: string; itemIds: string[] }) =>
       foldersApi.addItemsToFolderBulk(folderId, itemIds),
     onSuccess: (_, variables) => {
-      toast.success(`Đã gán ${variables.itemIds.length} mục vào thư mục`);
+      toast.success(t('sidebar.itemsAssigned').replace('{count}', String(variables.itemIds.length)));
       queryClient.invalidateQueries({ queryKey: ['items'] });
       queryClient.invalidateQueries({ queryKey: ['item'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
     },
     onError: (err) => {
-      handleApiError(err, 'Lỗi gán thư mục');
+      handleApiError(err, t('sidebar.itemAssignFail'));
     }
   });
 

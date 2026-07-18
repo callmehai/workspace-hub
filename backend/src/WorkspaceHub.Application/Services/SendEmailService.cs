@@ -169,7 +169,7 @@ public class SendEmailService : ISendEmailService
             );
         }).ToList();
 
-        return new EmailThreadResponse(thread.ThreadId, thread.Subject, messageDtos);
+        return new EmailThreadResponse(thread.ThreadId, thread.Subject, messageDtos, connection.ProviderAccountId);
     }
 
     public async Task<SendInThreadResult> ReplyAsync(Guid userId, ReplyEmailRequest request, CancellationToken ct = default)
@@ -562,7 +562,7 @@ public class SendEmailService : ISendEmailService
             var item = await _items.GetByIdAsync(existingItemId.Value, ct)
                 ?? throw new NotFoundException("Item", existingItemId.Value);
 
-            if (item.UserId != userId)
+            if (!await CanAccessDraftAsync(item, userId, ct))
                 throw new NotFoundException("Item", existingItemId.Value);
 
             if (item.ConnectionId != request.ConnectionId)
@@ -614,12 +614,8 @@ public class SendEmailService : ISendEmailService
         var item = await _items.GetByIdAsync(itemId, ct)
             ?? throw new NotFoundException("Item", itemId);
 
-        if (item.UserId != userId)
-        {
-            var isEditor = await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
-            if (!isEditor)
-                throw new NotFoundException("Item", itemId);
-        }
+        if (!await CanAccessDraftAsync(item, userId, ct))
+            throw new NotFoundException("Item", itemId);
 
         if (item.ConnectionId == null)
             throw new BusinessRuleException("Item is not associated with any connection.");
@@ -674,12 +670,8 @@ public class SendEmailService : ISendEmailService
         var item = await _items.GetByIdAsync(itemId, ct)
             ?? throw new NotFoundException("Item", itemId);
 
-        if (item.UserId != userId)
-        {
-            var isEditor = await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct);
-            if (!isEditor)
-                throw new NotFoundException("Item", itemId);
-        }
+        if (!await CanAccessDraftAsync(item, userId, ct))
+            throw new NotFoundException("Item", itemId);
 
         if (item.ConnectionId == null)
             throw new BusinessRuleException("Item is not associated with any connection.");
@@ -731,6 +723,29 @@ public class SendEmailService : ISendEmailService
         return resolvedDraftId;
     }
 
+    /// <summary>
+    /// User có được thao tác trên NHÁP <paramref name="draft"/> không (lưu/gửi/huỷ)?
+    /// Nháp reply soạn trong folder chia sẻ mang UserId của OWNER (tạo bằng connection của owner),
+    /// nên không thể chặn cứng theo UserId. Quyền đến từ: chính nháp nằm trong folder chia sẻ (Editor),
+    /// HOẶC email GỐC cùng thread nằm trong folder đó — nháp vừa tạo chưa thuộc folder nào.
+    /// </summary>
+    private async Task<bool> CanAccessDraftAsync(Domain.Entities.Item draft, Guid userId, CancellationToken ct)
+    {
+        if (draft.UserId == userId) return true;
+
+        if (await _folders.IsItemSharedWithUserAsEditorAsync(draft.Id, userId, ct))
+            return true;
+
+        if (!string.IsNullOrEmpty(draft.ThreadId) && draft.ConnectionId.HasValue)
+        {
+            var origin = await _items.GetByThreadAndConnectionAsync(draft.ThreadId, draft.ConnectionId.Value, ct);
+            if (origin != null && origin.Id != draft.Id)
+                return await _folders.IsItemSharedWithUserAsEditorAsync(origin.Id, userId, ct);
+        }
+
+        return false;
+    }
+
     private async Task<bool> CheckConnectionAccessAsync(Guid connectionId, Guid userId, Guid? existingItemId, string? threadId, CancellationToken ct)
     {
         var connection = await _connections.GetByIdTrackedAsync(connectionId, ct);
@@ -738,11 +753,16 @@ public class SendEmailService : ISendEmailService
 
         if (connection.UserId == userId) return true;
 
-        if (existingItemId.HasValue)
+        // Nháp đang sửa nằm trong folder được chia sẻ (Editor) → OK.
+        if (existingItemId.HasValue
+            && await _folders.IsItemSharedWithUserAsEditorAsync(existingItemId.Value, userId, ct))
         {
-            return await _folders.IsItemSharedWithUserAsEditorAsync(existingItemId.Value, userId, ct);
+            return true;
         }
 
+        // Reply/forward trong folder chia sẻ: nháp MỚI tạo chưa thuộc folder nào nên check ở trên
+        // luôn false. Quyền thật sự đến từ EMAIL GỐC cùng thread — phải xét tiếp, không được
+        // return sớm (trước đây nhánh existingItemId chặn mất nhánh này → 404 "Connection not found").
         if (!string.IsNullOrEmpty(threadId))
         {
             var item = await _items.GetByThreadAndConnectionAsync(threadId, connectionId, ct);

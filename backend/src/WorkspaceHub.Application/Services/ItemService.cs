@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using WorkspaceHub.Application.Common;
 using WorkspaceHub.Application.DTOs;
@@ -96,7 +97,8 @@ public class ItemService : IItemService
         // Map entities → DTOs (kèm số message trong thread cho item Email đã gộp)
         var dtos = items.Select(i => MapToResponse(
             i,
-            i.ThreadId != null && threadCounts.TryGetValue(i.ThreadId, out var c) ? c : 1))
+            i.ThreadId != null && threadCounts.TryGetValue(i.ThreadId, out var c) ? c : 1,
+            currentUserId: userId))
             .ToList().AsReadOnly();
 
         return new PagedResult<ItemResponse>(dtos, totalCount, page, limit);
@@ -129,14 +131,14 @@ public class ItemService : IItemService
         }
 
         if (item == null)
-            throw new NotFoundException(nameof(Item), itemId);
+            await ThrowNoWriteAccessAsync(itemId, userId, ct);
 
         item.Status = request.Status;
 
         _itemRepo.Update(item);
         await _itemRepo.SaveChangesAsync(ct);
 
-        return MapToResponse(item);
+        return MapToResponse(item, currentUserId: userId);
     }
 
     /// <inheritdoc/>
@@ -207,26 +209,55 @@ public class ItemService : IItemService
         if (item == null)
             throw new NotFoundException(nameof(Item), itemId);
 
-        return MapToResponse(item);
+        return MapToResponse(item, currentUserId: userId);
     }
 
     /// <inheritdoc/>
     public async Task<ItemResponse> ToggleImportantAsync(Guid userId, Guid itemId, bool isImportant, CancellationToken ct = default)
     {
-        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct)
-            ?? throw new NotFoundException(nameof(Item), itemId);
+        // Owner HOẶC shared-Editor (giống UpdateStatusAsync) — trước đây chỉ check owner nên
+        // người được share quyền Editor xoá/đổi trạng thái được nhưng đánh dấu quan trọng lại 404.
+        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null && await _folderRepo.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct))
+            item = await _itemRepo.GetByIdAsync(itemId, ct);
+
+        if (item == null)
+            await ThrowNoWriteAccessAsync(itemId, userId, ct);
 
         item.IsImportant = isImportant;
         _itemRepo.Update(item);
         await _itemRepo.SaveChangesAsync(ct);
 
-        return MapToResponse(item);
+        return MapToResponse(item, currentUserId: userId);
     }
 
     // ───────────────────────── Private helpers ─────────────────────────
 
-    /// <summary>Map Item entity → ItemResponse DTO.</summary>
-    private static ItemResponse MapToResponse(Item item, int threadCount = 1) => new(
+    /// <summary>
+    /// Ném lỗi khi user KHÔNG có quyền GHI lên item. Phân biệt 2 tình huống để message dễ hiểu:
+    /// <list type="bullet">
+    /// <item>Item nằm trong folder được chia sẻ nhưng user chỉ có quyền <b>Viewer</b> → 403 kèm
+    /// lời giải thích (trước đây trả 404 "Item with id '...' was not found" — lộ GUID, khó hiểu).</item>
+    /// <item>Ngược lại (item không tồn tại / không được chia sẻ) → 404 như cũ.</item>
+    /// </list>
+    /// </summary>
+    [DoesNotReturn]
+    private async Task ThrowNoWriteAccessAsync(Guid itemId, Guid userId, CancellationToken ct)
+    {
+        var isViewer = await _folderRepo.IsItemSharedWithUserAsync(itemId, userId, ct);
+        if (isViewer)
+            throw new ForbiddenException(
+                "Bạn chỉ có quyền xem mục này trong thư mục được chia sẻ. Hãy yêu cầu chủ sở hữu cấp quyền chỉnh sửa.");
+
+        throw new NotFoundException(nameof(Item), itemId);
+    }
+
+    /// <summary>
+    /// Map Item entity → ItemResponse DTO.
+    /// <paramref name="currentUserId"/>: truyền vào để tính <c>IsOwner</c> (item của chính user hay
+    /// của người khác xem qua folder chia sẻ). Bỏ trống → coi như owner (giữ hành vi cũ).
+    /// </summary>
+    private static ItemResponse MapToResponse(Item item, int threadCount = 1, Guid? currentUserId = null) => new(
         Id: item.Id,
         Type: item.Type,
         Title: item.Title,
@@ -244,5 +275,6 @@ public class ItemService : IItemService
             .ToList(),
         ConnectionId: item.ConnectionId,
         ThreadId: item.ThreadId,
-        ThreadCount: threadCount);
+        ThreadCount: threadCount,
+        IsOwner: currentUserId == null || item.UserId == currentUserId.Value);
 }

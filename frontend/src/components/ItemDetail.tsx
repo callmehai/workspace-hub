@@ -408,7 +408,10 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
 
   const tInfo = TYPE_INFO[item.type] ?? TYPE_INFO.Note;
   const fileIsDriveFolder = item.type === 'File' && isDriveFolder(item);
-  const canDriveShare = item.type === 'File' && !!item.connectionId;
+  // Item của chính mình hay đang xem qua folder được chia sẻ. BE không trả (item cũ/cache) → coi như owner.
+  const isOwnerOfItem = item.isOwner !== false;
+  // Chia sẻ file Drive = thao tác trên Drive của owner → người được share không làm được.
+  const canDriveShare = item.type === 'File' && !!item.connectionId && isOwnerOfItem;
   // "Chưa xem": Email theo Gmail; Event/File/Note theo seenStore (chưa mở trong app). Ticket = false.
   const unread = isItemUnread(item, seenSet);
   // Nhãn: Ticket = status thô từ Jira; còn lại Inbox = Chưa xem/Đã xem theo unread.
@@ -987,28 +990,30 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                     </button>
                   )}
 
-                  {/* Mở ngoài — theo loại */}
-                  {item.type === 'Email' && metadata.threadId && (
+                  {/* Mở ngoài — theo loại.
+                      Chỉ hiện với CHỦ SỞ HỮU item: người được share xem qua folder chia sẻ không có
+                      quyền trên tài khoản Gmail/Drive/Calendar/Jira của owner → bấm vào chỉ báo lỗi. */}
+                  {isOwnerOfItem && item.type === 'Email' && metadata.threadId && (
                     <button className={moreItem} onClick={() => { openExternal(`https://mail.google.com/mail/u/0/#all/${metadata.threadId}`); setIsMoreOpen(false); }}>
                       <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInGmail')}</span>
                     </button>
                   )}
-                  {item.type === 'Event' && metadata.htmlLink && (
+                  {isOwnerOfItem && item.type === 'Event' && metadata.htmlLink && (
                     <button className={moreItem} onClick={() => { openExternal(metadata.htmlLink); setIsMoreOpen(false); }}>
                       <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInCalendar')}</span>
                     </button>
                   )}
-                  {item.type === 'Event' && metadata.meetUrl && (
+                  {isOwnerOfItem && item.type === 'Event' && metadata.meetUrl && (
                     <button className={moreItem} onClick={() => { openExternal(metadata.meetUrl); setIsMoreOpen(false); }}>
                       <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>Google Meet</span>
                     </button>
                   )}
-                  {item.type === 'File' && metadata.webViewLink && (
+                  {isOwnerOfItem && item.type === 'File' && metadata.webViewLink && (
                     <button className={moreItem} onClick={() => { openExternal(metadata.webViewLink); setIsMoreOpen(false); }}>
                       <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInDrive')}</span>
                     </button>
                   )}
-                  {item.type === 'Ticket' && metadata.issueUrl && (
+                  {isOwnerOfItem && item.type === 'Ticket' && metadata.issueUrl && (
                     <button className={moreItem} onClick={() => { openExternal(metadata.issueUrl); setIsMoreOpen(false); }}>
                       <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('ticket.openInJira')}</span>
                     </button>

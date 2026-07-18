@@ -149,6 +149,18 @@ List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (scope theo 
 - `DELETE /api/folders/{id}/shares/{shareId}` — Revoke share (chỉ Owner).
 - `DELETE /api/folders/{id}/leave` — Rời khỏi folder được chia sẻ.
 
+**Quyền của người được share trên item trong folder (Viewer/Editor):**
+- Share chỉ có hiệu lực khi **đã accept** (`AcceptedAt != null`) — lời mời pending không cấp quyền.
+- **Viewer**: đọc item (`GET /api/items/{id}`), đọc thread email + tải attachment.
+- **Editor**: thêm write-back — `PATCH/DELETE /api/items/{id}`, `PATCH /api/items/{id}/status`, `PATCH /api/items/{id}/important`, reply/forward email + nháp (`/api/emails/reply|forward|drafts/*`), và comment/attachment Jira (`/api/items/{id}/comments`, `/api/items/{id}/attachments`).
+- Mọi thao tác trên đều chạy qua **connection của Owner** (người được share không có token Google/Jira riêng) — xem CHANGELOG [2026-07-18] để biết mô hình + hạn chế đã biết.
+- **Mã lỗi:**
+  - Có quyền xem nhưng thao tác GHI (shared-Viewer) → **403** kèm message giải thích (*"Bạn chỉ có quyền xem mục này…"*). FE chỉ hiện toast, **không** điều hướng sang `/integrations`.
+  - Không có quyền gì → **404** (giấu sự tồn tại của item).
+- **Trường phục vụ phân quyền ở FE:**
+  - `ItemResponse.isOwner` — `false` = item của người khác, đang xem qua folder chia sẻ. FE ẩn hành động chỉ owner làm được (mở trong Gmail/Drive/Calendar/Jira, chia sẻ file Drive).
+  - `EmailThreadResponse.ownerEmail` — email hộp thư chứa thread; FE dùng làm "tôi là ai" khi dựng người nhận lúc Reply/Reply-All.
+
 
 ### Tags — ✅ SCRUM-70 (BE, CRUD + assign)
 Label private của user (không share), gắn cho Item qua junction `TagAssignment` (m-n). Tên tag **không** unique toàn hệ thống nhưng **unique trong 1 user**. Mọi endpoint owner-scoped theo `CurrentUserId`.

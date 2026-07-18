@@ -71,7 +71,6 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
 
   // States for drafts
   const [draftItemId, setDraftItemId] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [lastSavedState, setLastSavedState] = useState<string>('');
   const [isDraftClosed, setIsDraftClosed] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
@@ -91,7 +90,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
   });
 
   const currentConnection = connections.find(c => c.id === connectionId);
-  const me = currentConnection?.providerAccountId || '';
+  // Ưu tiên ownerEmail do BE trả: người được chia sẻ folder KHÔNG sở hữu connection của owner
+  // nên `connections` của họ không có nó → trước đây `me` rỗng, làm hỏng việc lọc người nhận
+  // khi Reply (không loại được chính hộp thư owner ra khỏi danh sách To/Cc).
+  const me = thread?.ownerEmail || currentConnection?.providerAccountId || '';
 
   const getReplyRecipients = (mode: 'reply' | 'replyAll' | 'forward', msg: EmailThreadMessageDto, myEmailAddr: string) => {
     const toSet = new Set<string>();
@@ -170,68 +172,11 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
     latestDataRef.current = { to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState };
   }, [to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState]);
 
-  const triggerAutoSave = React.useCallback(async () => {
-    if (isDiscardedRef.current) return;
-    const { to, cc, bcc, bodyHtml, replyMode, draftItemId, lastSavedState } = latestDataRef.current;
-    if (!replyMode || !thread) return;
-
-    // Check if anything has changed
-    const currentStateStr = JSON.stringify({ to, cc, bcc, bodyHtml });
-    if (currentStateStr === lastSavedState) return;
-
-    // Check if discarded in the meantime
-    if (latestDataRef.current.replyMode === null) return;
-
-    setIsSaving(true);
-    try {
-      const baseSubject = thread.subject || 'No Subject';
-      const draftSubject = replyMode === 'forward'
-        ? (baseSubject.toLowerCase().startsWith('fwd:') ? baseSubject : `Fwd: ${baseSubject}`)
-        : (baseSubject.toLowerCase().startsWith('re:') ? baseSubject : `Re: ${baseSubject}`);
-
-      const latestMsg = lastNonDraftMessage(thread.messages);
-
-      const payload = {
-        connectionId,
-        to,
-        cc,
-        bcc,
-        subject: draftSubject,
-        bodyHtml,
-        threadId: thread.threadId,
-        inReplyToMessageId: latestMsg?.messageId || undefined,
-      };
-
-      if (draftItemId) {
-        await sendEmailApi.updateDraft(draftItemId, payload);
-        if (latestDataRef.current.replyMode === null || isDiscardedRef.current) return;
-        setLastSavedState(currentStateStr);
-      } else {
-        const savedDraft = await sendEmailApi.createDraft(payload);
-        if (latestDataRef.current.replyMode === null || isDiscardedRef.current) {
-          await sendEmailApi.discardDraft(savedDraft.id);
-          return;
-        }
-        setDraftItemId(savedDraft.id);
-        setLastSavedState(currentStateStr);
-      }
-    } catch (err) {
-      console.error('Error auto-saving reply draft:', err);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [thread, connectionId]);
-
-  // Debounced auto-save effect (2s) — reset timer khi nội dung/replyMode/triggerAutoSave đổi.
-  useEffect(() => {
-    if (!replyMode) return;
-
-    const timer = setTimeout(() => {
-      triggerAutoSave();
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [to, cc, bcc, bodyHtml, replyMode, triggerAutoSave]);
+  // KHÔNG auto-save trong lúc gõ.
+  // Trước đây debounce 2s: hễ ngừng gõ 2 giây là tạo nháp trên Gmail → nháp nhảy vào danh sách
+  // item ngay giữa lúc soạn, và gõ xong gửi luôn vẫn để lại nháp rác. Nháp chỉ cần khi người dùng
+  // RỜI ô soạn mà còn nội dung — việc đó đã do `triggerAutoSaveImmediate` lúc unmount lo (xem dưới),
+  // cộng thêm lần lưu cuối ngay trước khi gửi trong `replyMutation`.
 
   const triggerAutoSaveImmediate = React.useCallback(() => {
     if (isDiscardedRef.current) return;
@@ -343,6 +288,10 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
           bodyHtml,
           threadId: thread?.threadId,
           inReplyToMessageId: latestMsg?.messageId || undefined,
+          // Phải kèm attachment vào lần lưu nháp CUỐI trước khi gửi: nhánh này chạy mỗi khi
+          // đã auto-save nháp (gần như mọi lần reply), mà trước đây không truyền attachments
+          // → gửi đi mất sạch tệp đính kèm dù UI vẫn hiện đã chọn.
+          attachments,
         });
 
         // Send draft
@@ -674,15 +623,8 @@ export const EmailThreadView: React.FC<EmailThreadViewProps> = ({ itemId, connec
                     {t('sendEmail.discardDraft')}
                   </button>
                 )}
-                {isSaving ? (
-                  <span className="text-[11.5px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" /> {t('sendEmail.savingDraft')}
-                  </span>
-                ) : lastSavedState ? (
-                  <span className="text-[11.5px] text-slate-400 dark:text-slate-500">
-                    {t('sendEmail.draftSaved')}
-                  </span>
-                ) : null}
+                {/* Không còn chỉ báo "Đang lưu…/Đã lưu nháp": nháp chỉ được tạo khi rời ô soạn
+                    mà còn nội dung, nên trong lúc gõ không có gì để báo. */}
               </div>
               <button
                 onClick={sendAction}

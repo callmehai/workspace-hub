@@ -101,7 +101,24 @@ Mỗi service = 1 row độc lập, token riêng. Bật service = tạo 1 row, f
 ---
 
 ## Folders / FolderShares / ItemFolders
-Không đổi so với bản trước. Folders (OwnerId, Name, Color, Icon, SortOrder, IsArchived). FolderShares (Viewer-only, metadata, không thấy body). ItemFolders (composite PK, Position).
+Folders (OwnerId, Name, Color, Icon, SortOrder, IsArchived). ItemFolders (composite PK, Position).
+
+**FolderShares** — chia sẻ folder cho **bạn bè đã Accepted** (xem §Friendships). Chỉ Owner mới invite/đổi quyền/revoke.
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| Id | uuid PK | |
+| FolderId | uuid FK→Folders | CASCADE |
+| SharedWithUserId | uuid FK→Users | người được share |
+| CreatedByUserId | uuid FK→Users | người mời (= Owner) |
+| Permission | enum string | **`Viewer` \| `Editor`** (trước 2026-07-17 chỉ có Viewer) |
+| CreatedAt | datetime2 | migration `AddFolderShareCreatedAt` (2026-07-17). ⚠️ default `0001-01-01` cho row cũ |
+| AcceptedAt | datetime2 **null** | null = pending (chưa chấp nhận); not null = đã accept |
+| ExpiresAt | datetime2 **null** | null = không hết hạn |
+
+- **Viewer** = xem item trong folder. **Editor** = thêm write-back (sửa/xoá item, comment/attachment Jira) — thao tác đi qua **connection của Owner** ("owner connection as proxy", xem CHANGELOG [2026-07-18]).
+- Mọi share-check đều đòi `AcceptedAt != null` → lời mời pending KHÔNG cấp quyền.
+- Enum lưu string nên thêm giá trị `Editor` **không cần migration**.
 
 ---
 

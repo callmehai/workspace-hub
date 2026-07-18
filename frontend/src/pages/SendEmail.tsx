@@ -271,6 +271,10 @@ export const SendEmail = () => {
           bodyHtml: composedHtml,
           threadId: threadLinkRef.current.threadId,
           inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
+          // Phải kèm attachment vào lần lưu nháp CUỐI trước khi gửi: nhánh này chạy mỗi khi
+          // đã auto-save nháp, mà trước đây bỏ qua attachments của payload → gửi đi mất sạch
+          // tệp đính kèm dù UI vẫn hiện đã chọn.
+          attachments: payload.attachments,
         };
         await sendEmailApi.updateDraft(draftItemId, draftPayload);
         return sendEmailApi.sendDraft(draftItemId);
