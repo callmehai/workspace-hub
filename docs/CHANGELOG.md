@@ -54,7 +54,9 @@ Popup chi tiết event chưa gate theo `item.isOwner`. Với item của người
 
 > **Dọn dữ liệu dev:** DB nào đã nhét folder Drive dưới bản `579a3b2` sẽ còn junction con "mồ côi" (folder vẫn "bung"). Chưa lên develop/prod nên chỉ cần xoá các junction đó trong DB dev, hoặc remove rồi add lại folder. (Không cần migration — dữ liệu chỉ ở dev.)
 
-> **Hạn chế còn lại (chấp nhận cho đồ án):** khi Viewer duyệt bằng `driveParentId`, filter `folderId` bị bypass nên về lý thuyết Viewer có thể truyền `driveParentId` của folder khác (không thuộc app-Folder được share) để xem con của owner. IDOR nhẹ, có sẵn từ trước, chưa vá.
+**Hệ quả & fix per-item cho Viewer.** Vì con folder Drive KHÔNG có junction, share-check theo junction (`IsItemSharedWithUserAsync`) trả false → Viewer mở chi tiết/tải nội dung file con bị **404** (`GET /api/items/{id}` và `/api/drive/items/{id}/content`; riêng content vốn CHƯA từng hỗ trợ Viewer — chỉ check owner). Fix: thêm `IFolderRepository.IsConnectionSharedWithUserAsync` (Viewer trở lên) và cấp quyền ĐỌC item Drive con nếu **connection của item được share** với user (nhất quán với cơ chế list duyệt theo `driveParentId`). `DriveContentService` bổ sung nhánh shared, dùng connection của OWNER làm proxy (`conn.UserId == item.UserId`).
+
+> **Hạn chế còn lại (chấp nhận cho đồ án):** quyền đọc con xét theo **connection** (không leo cây `parents` để giới hạn đúng subtree được share) → Viewer có thể đọc item Drive khác cùng connection của owner. Nhất quán với IDOR sẵn có ở list (duyệt `driveParentId` bypass filter `folderId`). Chưa vá — READ-only, chỉ giữa bạn bè.
 
 ## [2026-07-18] Folder Sharing — fix desync xoá thread + Editor thao tác Jira + hạn chế đã biết
 

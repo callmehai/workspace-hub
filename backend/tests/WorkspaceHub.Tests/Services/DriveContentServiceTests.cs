@@ -22,6 +22,7 @@ public class DriveContentServiceTests
     private readonly Mock<IDriveGateway> _gateway = new();
     private readonly Mock<IItemRepository> _items = new();
     private readonly Mock<IConnectionRepository> _connections = new();
+    private readonly Mock<IFolderRepository> _folders = new();
     private readonly DriveContentService _service;
 
     private readonly Guid _userId = Guid.NewGuid();
@@ -30,7 +31,7 @@ public class DriveContentServiceTests
 
     public DriveContentServiceTests()
     {
-        _service = new DriveContentService(_gateway.Object, _items.Object, _connections.Object);
+        _service = new DriveContentService(_gateway.Object, _items.Object, _connections.Object, _folders.Object);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
