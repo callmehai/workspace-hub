@@ -90,12 +90,12 @@ public class SendEmailService : ISendEmailService
         var connection = await _connections.GetByIdAsync(connectionId, ct)
             ?? throw new NotFoundException("Connection", connectionId);
 
+        // Chỉ OWNER được gợi ý danh bạ. Nếu cho Editor (share-check mức-connection) thì chỉ cần
+        // 1 item của connection nằm trong 1 folder share là B đọc được TOÀN BỘ Google Contacts đã
+        // sync của owner — rộng hơn nhiều phạm vi item được share (privacy leak). Editor vẫn gõ tay
+        // địa chỉ người nhận; mất autocomplete là đánh đổi chấp nhận được.
         if (connection.UserId != userId)
-        {
-            var hasAccess = await _folders.IsConnectionSharedWithUserAsEditorAsync(connectionId, userId, ct);
-            if (!hasAccess)
-                throw new NotFoundException("Connection", connectionId);
-        }
+            throw new NotFoundException("Connection", connectionId);
 
         if (connection.ServiceType != ServiceType.Gmail)
             throw new BusinessRuleException("Only Gmail connections can be used for contact suggestions.");
@@ -301,12 +301,19 @@ public class SendEmailService : ISendEmailService
         Guid userId, Guid itemId, string messageId, string attachmentId,
         string? filename = null, string? mimeType = null, CancellationToken ct = default)
     {
-        var (connection, _) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct, requireEditor: false);
+        var (connection, item) = await GetAndValidateConnectionAndItemAsync(userId, null, itemId, ct, requireEditor: false);
 
-        // Gmail cấp attachmentId MỚI mỗi lần đọc message/thread, nhưng id cũ vẫn hợp lệ với
-        // attachments.get. Vì vậy KHÔNG re-fetch thread để so khớp id (id sẽ lệch → 404 giả);
-        // dùng thẳng messageId + attachmentId client gửi lên (id nó đã lấy khi mở thread).
-        // Quyền đọc bị giới hạn ở mailbox của chính user (connection "me") nên an toàn.
+        // Xác thực messageId THUỘC thread của item được truy cập — chặn IDOR: người được share
+        // (kể cả Viewer) có thể truyền messageId của message KHÁC trong mailbox của owner để tải
+        // trộm attachment (connection dùng là của owner). Verify giống GetAttachmentsZipAsync.
+        var threadId = GetMetadataString(item.MetadataJson, "threadId");
+        if (string.IsNullOrEmpty(threadId)) throw new BusinessRuleException("Item has no threadId in metadata.");
+        var thread = await _gmail.GetThreadAsync(connection, threadId, ct);
+        if (thread.Messages.All(m => m.MessageId != messageId))
+            throw new NotFoundException("Message", messageId);
+
+        // attachmentId dùng thẳng của client: Gmail cấp id MỚI mỗi lần đọc thread nhưng id cũ vẫn
+        // hợp lệ với attachments.get; re-fetch để so khớp id sẽ lệch → 404 giả. Chỉ cần verify messageId.
         return await _gmail.GetAttachmentAsync(
             connection, messageId, attachmentId,
             string.IsNullOrWhiteSpace(filename) ? "attachment" : filename,
@@ -544,7 +551,12 @@ public class SendEmailService : ISendEmailService
 
             var item = new Item
             {
-                UserId = userId,
+                // Draft luôn "thuộc" owner của connection (nhất quán mọi item shared) — nếu để UserId
+                // = caller (Editor B), draft trỏ connection owner A sẽ thành cửa hậu: các path ownership
+                // (Patch/Delete/SendDraft) pass mà bỏ qua share-check và sống sót qua revoke; đồng thời
+                // guard `connection.UserId != item.UserId` ở SendDraft/DiscardDraft sẽ 404. Editor vẫn
+                // truy cập được draft qua CanAccessDraftAsync (email gốc cùng thread trong folder share).
+                UserId = connection.UserId,
                 ConnectionId = request.ConnectionId,
                 Type = ItemType.Email,
                 ExternalId = draftResult.MessageId,
