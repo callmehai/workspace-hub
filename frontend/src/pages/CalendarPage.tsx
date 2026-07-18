@@ -138,8 +138,11 @@ function entryChipClasses(entry: CalendarEntry, connections: ConnectionDto[]): s
   return entry.allDay ? ALL_DAY_ENTRY_CLASSES[entry.kind] : TIMED_ENTRY_CLASSES[entry.kind];
 }
 
+// Backstop nhận diện all-day khi metadata thiếu cờ: xét midnight theo UTC (all-day
+// lưu midnight-UTC), không theo local — tránh event timed lúc 00:00 local bị nhận nhầm
+// all-day, và bắt được all-day lưu ISO midnight-UTC. Nhánh date-only đã có cờ riêng.
 function isMidnight(date: Date) {
-  return date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0;
+  return date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0;
 }
 
 function asString(value: unknown): string | undefined {
