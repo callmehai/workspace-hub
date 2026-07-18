@@ -16,7 +16,15 @@ public class GoogleCalendarReminderMapperTests
     [InlineData(ReminderUnit.Hours, 2, "09:00", 120)]
     public void ToGoogleMinutes_MapsAllDayTimeOfDay(ReminderUnit unit, int offset, string? timeOfDay, int expected)
     {
-        GoogleCalendarReminderMapper.ToGoogleMinutes(unit, offset, timeOfDay).Should().Be(expected);
+        GoogleCalendarReminderMapper.ToGoogleMinutes(unit, offset, timeOfDay, allDayStyle: true).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(ReminderUnit.Days, 1, "09:00", 1440)]
+    [InlineData(ReminderUnit.Weeks, 1, "14:00", 10080)]
+    public void ToGoogleMinutes_WhenTimed_IgnoresTimeOfDay(ReminderUnit unit, int offset, string? timeOfDay, int expected)
+    {
+        GoogleCalendarReminderMapper.ToGoogleMinutes(unit, offset, timeOfDay, allDayStyle: false).Should().Be(expected);
     }
 
     [Theory]
@@ -37,7 +45,7 @@ public class GoogleCalendarReminderMapperTests
     [Fact]
     public void RoundTrip_OneWeekAt1400()
     {
-        var minutes = GoogleCalendarReminderMapper.ToGoogleMinutes(ReminderUnit.Weeks, 1, "14:00");
+        var minutes = GoogleCalendarReminderMapper.ToGoogleMinutes(ReminderUnit.Weeks, 1, "14:00", allDayStyle: true);
         var decoded = GoogleCalendarReminderMapper.FromGoogleMinutes(minutes, allDayStyle: true);
         decoded.Should().Be((1, ReminderUnit.Weeks, "14:00"));
     }

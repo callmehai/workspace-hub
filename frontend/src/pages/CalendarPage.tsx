@@ -372,7 +372,9 @@ export function CalendarPage() {
     canManageGuestPermissions?: boolean;
   } | null>(null);
   const [pendingGuestSubmit, setPendingGuestSubmit] = useState<PendingGuestSubmit | null>(null);
+  // Lưu form đang chờ user chọn cách cấp quyền Drive trước khi thật sự save event.
   const [pendingDriveAccessSubmit, setPendingDriveAccessSubmit] = useState<PendingDriveAccessSubmit | null>(null);
+  // File upload trong lần mở modal này: mặc định coi mọi guest chưa có quyền.
   const [uploadedDriveItemIds, setUploadedDriveItemIds] = useState<string[]>([]);
   const [driveAccessResolving, setDriveAccessResolving] = useState(false);
   const [driveAccessSaving, setDriveAccessSaving] = useState(false);
@@ -784,6 +786,7 @@ export function CalendarPage() {
     });
   };
 
+  // Kiểm tra các file đính kèm có guest nào chưa được quyền Drive không.
   const resolveDriveAccessNeeds = async (form: CalendarEventFormValue): Promise<DriveAccessFileNeed[]> => {
     const guestEmails = Array.from(new Set(form.attendees.map(normalizeAccessEmail).filter(Boolean)));
     const itemIds = Array.from(new Set(form.driveItemIds));
@@ -794,6 +797,7 @@ export function CalendarPage() {
       const item = await itemsApi.getItemById(itemId).catch(() => null);
       const title = item?.title || itemId;
 
+      // File vừa upload từ máy chưa có share rõ ràng, nên hỏi quyền cho toàn bộ guest.
       if (uploadedSet.has(itemId)) {
         return {
           itemId,
@@ -804,6 +808,7 @@ export function CalendarPage() {
       }
 
       const permissions = await driveApi.listPermissions(itemId);
+      // Đã bật "ai có link" thì guest mở được file, không cần mời từng email.
       const hasLinkAccess = permissions.items.some(permission =>
         permission.isLink || permission.type.toLocaleLowerCase() === 'anyone',
       );
@@ -828,6 +833,7 @@ export function CalendarPage() {
     return needs.filter((need): need is DriveAccessFileNeed => need !== null);
   };
 
+  // Sau dialog gửi email khách, chèn thêm bước hỏi quyền Drive nếu cần.
   const continueEditorSubmitAfterGuestChoice = async (form: CalendarEventFormValue, sendUpdates: boolean) => {
     setDriveAccessResolving(true);
     try {
@@ -847,6 +853,7 @@ export function CalendarPage() {
   const submitEditor = (form: CalendarEventFormValue) => {
     if (!editor) return;
 
+    // Nếu thay đổi guest, hỏi trước có gửi email Calendar hay không.
     const previousGuests = new Set(editor.value.attendees.map(email => email.trim().toLocaleLowerCase()));
     const nextGuests = new Set(form.attendees.map(email => email.trim().toLocaleLowerCase()));
     const addedCount = [...nextGuests].filter(email => !previousGuests.has(email)).length;
@@ -876,6 +883,7 @@ export function CalendarPage() {
     setDriveAccessSaving(true);
     try {
       if (choice === 'people') {
+        // Chia sẻ trực tiếp từng file cho từng guest còn thiếu quyền.
         for (const file of pendingDriveAccessSubmit.needsAccess) {
           for (const email of file.missingEmails) {
             try {
@@ -886,11 +894,13 @@ export function CalendarPage() {
           }
         }
       } else if (choice === 'link') {
+        // Bật "ai có link" cho từng file với role user chọn.
         for (const file of pendingDriveAccessSubmit.needsAccess) {
           await driveApi.setLinkSharing(file.itemId, { enabled: true, role });
         }
       }
 
+      // Quyền Drive xử lý xong mới tạo/cập nhật event Calendar.
       const { form, sendUpdates } = pendingDriveAccessSubmit;
       setPendingDriveAccessSubmit(null);
       executeEditorSubmit(form, sendUpdates);
@@ -934,7 +944,7 @@ export function CalendarPage() {
       start,
       end,
       allDay,
-      patch: { start: times.start, end: times.end, allDay },
+      patch: { start: times.start, end: times.end, allDay, sendUpdates: false },
     });
     setDragOver(null);
   };
@@ -1453,6 +1463,7 @@ export function CalendarPage() {
           }}
           onDrivePickerSelectMeta={meta => {
             if (meta.uploadedThisSessionIds.length === 0) return;
+            // Picker báo file mới upload để bước save biết cần hỏi quyền Drive.
             setUploadedDriveItemIds(current => (
               Array.from(new Set([...current, ...meta.uploadedThisSessionIds]))
             ));

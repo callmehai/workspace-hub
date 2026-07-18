@@ -16,7 +16,6 @@ import {
   Plus,
   Trash2,
   Users,
-  Video,
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -316,7 +315,6 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
           eventDescription={detail.description || ''}
           eventLocation={detail.location || ''}
           eventTime={dateString}
-          eventMeetUrl={detail.meetUrl || ''}
           guests={guests}
           onClose={() => setIsEmailPopupOpen(false)}
         />
@@ -506,14 +504,6 @@ export const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                   </a>
                 ))}
               </div>
-            </PopupRow>
-          )}
-
-          {detail.meetUrl && (
-            <PopupRow icon={<Video className="h-4 w-4" />}>
-              <a href={detail.meetUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">
-                {t('calendar.joinMeet')}
-              </a>
             </PopupRow>
           )}
 

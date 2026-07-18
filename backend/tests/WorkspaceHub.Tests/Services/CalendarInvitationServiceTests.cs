@@ -95,4 +95,59 @@ public class CalendarInvitationServiceTests
         // Must not fall through to overwrite Status from Google needsAction
         invitation.Status.Should().NotBe(CalendarInvitationStatus.NeedsAction);
     }
+
+    [Fact]
+    public async Task ReconcileOrganizerEvent_WhenGoogleStillReturnsNeedsActionAfterLocalRsvp_KeepsLocalResponse()
+    {
+        var organizerItem = new Item
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            Type = ItemType.Event,
+            ExternalId = "org-event-1",
+            Title = "Meeting"
+        };
+        var invitation = new CalendarInvitation
+        {
+            Id = _invitationId,
+            OrganizerItemId = organizerItem.Id,
+            OrganizerUserId = organizerItem.UserId,
+            InviteeUserId = _inviteeUserId,
+            InviteeEmail = "guest@example.com",
+            GoogleEventId = "org-event-1",
+            Status = CalendarInvitationStatus.Accepted,
+            GoogleSyncPending = false,
+            RespondedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _invitations.Setup(m => m.GetByOrganizerItemAsync(organizerItem.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CalendarInvitation> { invitation });
+        _users.Setup(m => m.GetByEmailAsync("guest@example.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User
+            {
+                Id = _inviteeUserId,
+                Email = "guest@example.com",
+                IsActive = true
+            });
+
+        var googleEvent = new CalendarEvent(
+            Id: "org-event-1",
+            ETag: null,
+            Summary: "Meeting",
+            Description: null,
+            Start: DateTimeOffset.UtcNow,
+            End: DateTimeOffset.UtcNow.AddHours(1),
+            Attendees: null,
+            FullAttendees:
+            [
+                new CalendarEventAttendee("guest@example.com", null, "needsAction", null, false)
+            ]);
+
+        await _sut.ReconcileOrganizerEventAsync(organizerItem, googleEvent);
+
+        invitation.Status.Should().Be(CalendarInvitationStatus.Accepted);
+        invitation.GoogleSyncPending.Should().BeFalse();
+        invitation.RespondedAt.Should().NotBeNull();
+    }
 }

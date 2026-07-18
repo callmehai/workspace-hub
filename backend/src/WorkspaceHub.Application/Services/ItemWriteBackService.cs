@@ -82,14 +82,15 @@ public class ItemWriteBackService : IItemWriteBackService
         }
 
         string? providerEtag = null;
+        CalendarEvent? liveCalendarEvent = null;
         switch (item.Type)
         {
             case ItemType.Email:
                 providerEtag = await _gmailGateway.GetMessageETagAsync(conn, item.ExternalId, ct);
                 break;
             case ItemType.Event:
-                var ev = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
-                providerEtag = ev.ETag;
+                liveCalendarEvent = await _calendarGateway.GetEventAsync(conn, "primary", item.ExternalId, ct);
+                providerEtag = liveCalendarEvent.ETag;
                 break;
             case ItemType.File:
                 var file = await _driveGateway.GetFileAsync(conn, item.ExternalId, ct);
@@ -176,12 +177,12 @@ public class ItemWriteBackService : IItemWriteBackService
                     throw new BusinessRuleException("Invalid fields for Event writeback.");
 
                 var currentMeta = ParseMetadataDict(item.MetadataJson);
-                var organizerEmail = ReadMetaString(currentMeta, "organizerEmail") ?? conn.ProviderAccountId;
+                var organizerEmail = liveCalendarEvent?.OrganizerEmail ?? ReadMetaString(currentMeta, "organizerEmail") ?? conn.ProviderAccountId;
                 var isOrganizer = string.Equals(organizerEmail, conn.ProviderAccountId, StringComparison.OrdinalIgnoreCase);
                 if (!isOrganizer)
                 {
-                    var guestsCanModify = ReadMetaBool(currentMeta, "guestsCanModify");
-                    var guestsCanInviteOthers = ReadMetaBool(currentMeta, "guestsCanInviteOthers", true);
+                    var guestsCanModify = liveCalendarEvent?.GuestsCanModify ?? ReadMetaBool(currentMeta, "guestsCanModify");
+                    var guestsCanInviteOthers = liveCalendarEvent?.GuestsCanInviteOthers ?? ReadMetaBool(currentMeta, "guestsCanInviteOthers", true);
                     if (!guestsCanModify)
                         throw new ForbiddenException("Organizer does not allow guests to modify this event.");
                     if (payload.Attendees != null && !guestsCanInviteOthers)
@@ -233,7 +234,7 @@ public class ItemWriteBackService : IItemWriteBackService
                     null, // fullAttendees (only used for read)
                     null, // meetUrl (only used for read)
                     null, // htmlLink (only used for read)
-                    MapToGoogleReminders(payload.Reminders),
+                    MapToGoogleReminders(payload.Reminders, timeChanged ? effectiveAllDay : existingAllDay),
                     payload.Recurrence,
                     OrganizerEmail: null,
                     SelfResponseStatus: null,
@@ -385,7 +386,7 @@ public class ItemWriteBackService : IItemWriteBackService
         var effectiveEnd = payload.End;
         var effectiveAllDay = payload.AllDay;
 
-        // Resolve Drive item IDs → CalendarDriveAttachment[]
+        // Đổi itemId nội bộ của Drive thành fileId/link để Google Calendar gắn attachment.
         IReadOnlyList<CalendarDriveAttachment>? driveAttachments = null;
         if (payload.DriveItemIds != null && payload.DriveItemIds.Count > 0)
         {
@@ -428,7 +429,7 @@ public class ItemWriteBackService : IItemWriteBackService
             null, // fullAttendees
             null, // meetUrl
             null, // htmlLink
-            MapToGoogleReminders(payload.Reminders),
+            MapToGoogleReminders(payload.Reminders, effectiveAllDay),
             payload.Recurrence,
             OrganizerEmail: null,
             SelfResponseStatus: null,
@@ -439,6 +440,7 @@ public class ItemWriteBackService : IItemWriteBackService
             SendUpdates: payload.SendUpdates
         );
 
+        // Event được tạo sau khi FE đã xử lý quyền Drive nếu có guest + attachment.
         var created = await _calendarGateway.InsertEventAsync(conn, "primary", evDto, ct);
 
         var metaDict = new Dictionary<string, object>();
@@ -766,13 +768,13 @@ public class ItemWriteBackService : IItemWriteBackService
     private static DateTimeOffset? ReadEventEnd(Dictionary<string, object> meta, Item item)
         => ReadMetaDateTime(meta, "end", item.DueAt) ?? (item.DueAt.HasValue ? new DateTimeOffset(item.DueAt.Value, TimeSpan.Zero) : null);
 
-    private static List<CalendarEventReminder>? MapToGoogleReminders(IReadOnlyList<EventReminderDto>? localReminders)
+    private static List<CalendarEventReminder>? MapToGoogleReminders(IReadOnlyList<EventReminderDto>? localReminders, bool allDayStyle)
     {
         if (localReminders == null) return null;
         var list = new List<CalendarEventReminder>();
         foreach (var r in localReminders)
         {
-            var minutes = GoogleCalendarReminderMapper.ToGoogleMinutes(r.OffsetUnit, r.OffsetValue, r.TimeOfDay);
+            var minutes = GoogleCalendarReminderMapper.ToGoogleMinutes(r.OffsetUnit, r.OffsetValue, r.TimeOfDay, allDayStyle);
 
             var reminderType = NormalizeReminderType(r.ReminderType);
             if (reminderType == ReminderType.GooglePopup)

@@ -90,8 +90,8 @@ public class CalendarInvitationService : ICalendarInvitationService
             {
                 invitation.GoogleEventId = calendarEvent.Id;
                 invitation.ICalUid = calendarEvent.ICalUid ?? invitation.ICalUid;
-                // A local RSVP without a Google connection must not be overwritten by needsAction.
-                if (!invitation.GoogleSyncPending || googleStatus != CalendarInvitationStatus.NeedsAction)
+                // A local RSVP must not be overwritten by Google's stale needsAction during propagation.
+                if (ShouldApplyGoogleStatus(invitation, googleStatus))
                     invitation.Status = googleStatus;
                 invitation.UpdatedAt = now;
             }
@@ -230,6 +230,13 @@ public class CalendarInvitationService : ICalendarInvitationService
         CalendarInvitationStatus.Declined => "declined",
         _ => "needsAction"
     };
+
+    private static bool ShouldApplyGoogleStatus(CalendarInvitation invitation, CalendarInvitationStatus googleStatus)
+    {
+        if (googleStatus != CalendarInvitationStatus.NeedsAction) return true;
+        if (invitation.GoogleSyncPending) return false;
+        return invitation.Status == CalendarInvitationStatus.NeedsAction || invitation.RespondedAt == null;
+    }
 
     private static CalendarInvitationResponse Map(CalendarInvitation invitation)
     {

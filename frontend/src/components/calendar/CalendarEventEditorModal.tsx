@@ -403,39 +403,44 @@ export function CalendarEventEditorModal({
     }));
   };
 
+  const showValidationError = (message: string) => {
+    setError(message);
+    toast.error(message, { id: 'calendar-editor-validation' });
+  };
+
   const submit = () => {
     const title = form.title.trim();
     const endDate = form.endDate || form.date;
     
     if (!form.connectionId) {
-      setError(t('calendar.errSelectAccount'));
+      showValidationError(t('calendar.errSelectAccount'));
       return;
     }
     if (!title) {
-      setError(t('calendar.errTitle'));
+      showValidationError(t('calendar.errTitle'));
       return;
     }
     if (!form.date) {
-      setError(t('calendar.errStartDate'));
+      showValidationError(t('calendar.errStartDate'));
       return;
     }
     if (!endDate) {
-      setError(t('calendar.errEndDate'));
+      showValidationError(t('calendar.errEndDate'));
       return;
     }
     if (!form.allDay) {
       if (!form.startTime) {
-        setError(t('calendar.errStartTime'));
+        showValidationError(t('calendar.errStartTime'));
         return;
       }
       if (!form.endTime) {
-        setError(t('calendar.errEndTime'));
+        showValidationError(t('calendar.errEndTime'));
         return;
       }
     }
     
     if (endDate < form.date || (!form.allDay && endDate === form.date && form.endTime <= form.startTime)) {
-      setError(t('calendar.timeOrder'));
+      showValidationError(t('calendar.timeOrder'));
       return;
     }
 
@@ -713,7 +718,7 @@ export function CalendarEventEditorModal({
                                 options={[
                                   { value: 'InApp', label: t('calendar.reminderInApp') },
                                   { value: 'GooglePopup', label: t('calendar.reminderGoogle') },
-                                  { value: 'GoogleEmail', label: 'Email' },
+                                  { value: 'GoogleEmail', label: t('calendar.googleEmailReminder') },
                                 ]}
                                 className="!h-9 !rounded-md !border-0 !bg-[#e8eaed] !px-2.5 text-[12.5px] !shadow-none hover:!bg-[#dde1e6] dark:!bg-slate-700 dark:hover:!bg-slate-600"
                                 {...bindOverlay(`reminder-type-${index}`)}

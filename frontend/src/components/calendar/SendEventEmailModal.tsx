@@ -12,7 +12,6 @@ interface SendEventEmailModalProps {
   eventDescription: string;
   eventLocation: string;
   eventTime: string;
-  eventMeetUrl: string;
   guests: { email: string; displayName?: string | null }[];
   onClose: () => void;
 }
@@ -23,7 +22,6 @@ export const SendEventEmailModal: React.FC<SendEventEmailModalProps> = ({
   eventDescription,
   eventLocation,
   eventTime,
-  eventMeetUrl,
   guests,
   onClose
 }) => {
@@ -35,7 +33,7 @@ export const SendEventEmailModal: React.FC<SendEventEmailModalProps> = ({
   const [recipientInput, setRecipientInput] = useState('');
   const [subject, setSubject] = useState(`Thư mời tham dự: ${eventTitle}`);
   const [bodyText, setBodyText] = useState(() => {
-    return `Xin chào,\n\nBạn được mời tham dự sự kiện "${eventTitle}".\n\nThông tin chi tiết sự kiện:\n- Thời gian: ${eventTime}\n${eventLocation ? `- Địa điểm: ${eventLocation}\n` : ''}${eventMeetUrl ? `- Google Meet: ${eventMeetUrl}\n` : ''}\n${eventDescription ? `Nội dung mô tả:\n${eventDescription}\n\n` : ''}Trân trọng,\nWorkspace Hub`;
+    return `Xin chào,\n\nBạn được mời tham dự sự kiện "${eventTitle}".\n\nThông tin chi tiết sự kiện:\n- Thời gian: ${eventTime}\n${eventLocation ? `- Địa điểm: ${eventLocation}\n` : ''}${eventDescription ? `Nội dung mô tả:\n${eventDescription}\n\n` : ''}Trân trọng,\nWorkspace Hub`;
   });
   const [sendCopyToMe, setSendCopyToMe] = useState(true);
 
@@ -52,7 +50,6 @@ export const SendEventEmailModal: React.FC<SendEventEmailModalProps> = ({
           <h3 style="margin-top: 0; color: #0f172a; font-size: 16px;">${eventTitle}</h3>
           <p style="margin: 4px 0; font-size: 13px;"><strong>Thời gian:</strong> ${eventTime}</p>
           ${eventLocation ? `<p style="margin: 4px 0; font-size: 13px;"><strong>Địa điểm:</strong> ${eventLocation}</p>` : ''}
-          ${eventMeetUrl ? `<p style="margin: 4px 0; font-size: 13px;"><strong>Google Meet:</strong> <a href="${eventMeetUrl}" style="color: #4f46e5; text-decoration: underline;">Tham gia cuộc họp</a></p>` : ''}
         </div>
         <div style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #334155;">
           ${bodyText.replace(/\n/g, '<br/>')}

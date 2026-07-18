@@ -324,4 +324,31 @@ public class ItemWriteBackServicePatchEventTests
         captured.Should().NotBeNull();
         captured!.SendUpdates.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task PatchEvent_WhenMetadataMissingOrganizer_UsesLiveOrganizerForPermissionCheck()
+    {
+        var item = EventItem("""{"allDay":true,"start":"2026-07-06","end":"2026-07-07","guestsCanModify":false}""");
+        SetupItemAndConn(item);
+        _calendar.Setup(m => m.GetEventAsync(It.IsAny<Connection>(), "primary", "google-ev-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CalendarEvent(
+                "google-ev-1",
+                _etag,
+                "Meeting",
+                "notes",
+                AllDayStart,
+                AllDayEnd,
+                AllDay: true,
+                OrganizerEmail: "organizer@example.com",
+                GuestsCanModify: false,
+                GuestsCanInviteOthers: true,
+                GuestsCanSeeOtherGuests: true));
+
+        var act = () => _service.PatchItemAsync(item.Id, _userId, new PatchItemRequest(Title: "New title"));
+
+        await act.Should().ThrowAsync<WorkspaceHub.Application.Common.ForbiddenException>()
+            .WithMessage("Organizer does not allow guests to modify this event.");
+        _calendar.Verify(m => m.UpdateEventAsync(
+            It.IsAny<Connection>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CalendarEvent>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

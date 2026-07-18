@@ -12,7 +12,7 @@ public static class GoogleCalendarReminderMapper
     private const int MinutesPerDay = 1440;
     private const int MinutesPerWeek = 10080;
 
-    public static int ToGoogleMinutes(ReminderUnit unit, int offsetValue, string? timeOfDay)
+    public static int ToGoogleMinutes(ReminderUnit unit, int offsetValue, string? timeOfDay, bool allDayStyle = false)
     {
         var value = Math.Max(0, offsetValue);
         var baseMinutes = unit switch
@@ -24,8 +24,8 @@ public static class GoogleCalendarReminderMapper
             _ => value
         };
 
-        // Timed offset (minutes/hours): timeOfDay không áp dụng.
-        if (unit is ReminderUnit.Minutes or ReminderUnit.Hours)
+        // Timed events always use a plain minute offset; timeOfDay only belongs to all-day UI.
+        if (!allDayStyle || unit is ReminderUnit.Minutes or ReminderUnit.Hours)
             return baseMinutes;
 
         var tod = ParseTimeOfDayMinutes(timeOfDay);

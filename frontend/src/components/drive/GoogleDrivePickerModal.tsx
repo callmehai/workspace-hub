@@ -23,6 +23,12 @@ interface GoogleDrivePickerModalProps {
 
 type TabType = 'drive' | 'computer';
 
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
 export function GoogleDrivePickerModal({
   open,
   connectionId,
@@ -38,8 +44,6 @@ export function GoogleDrivePickerModal({
 
   const [uploading, setUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{ name: string; size: number } | null>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<ItemResponse[]>([]);
-  const [uploadedThisSessionIds, setUploadedThisSessionIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: driveFilesData, isLoading, isError } = useQuery({
@@ -51,8 +55,6 @@ export function GoogleDrivePickerModal({
   useEffect(() => {
     if (!open) return;
     setSelectedIds(initialSelectedIds);
-    setUploadedFiles([]);
-    setUploadedThisSessionIds([]);
     setUploading(false);
     setUploadedFile(null);
     setActiveTab('drive');
@@ -60,15 +62,14 @@ export function GoogleDrivePickerModal({
   }, [open, initialSelectedIds]);
 
   const driveFiles = useMemo(() => {
-    const apiFiles = driveFilesData?.items || [];
-    const merged = [...uploadedFiles, ...apiFiles];
+    const merged = driveFilesData?.items || [];
     const seen = new Set<string>();
     return merged.filter(file => {
       if (seen.has(file.id)) return false;
       seen.add(file.id);
       return true;
     });
-  }, [driveFilesData, uploadedFiles]);
+  }, [driveFilesData]);
 
   const handleToggleSelect = (fileId: string) => {
     setSelectedIds(current => {
@@ -81,7 +82,7 @@ export function GoogleDrivePickerModal({
   };
 
   const handleInsert = () => {
-    onSelect(selectedIds, { uploadedThisSessionIds });
+    onSelect(selectedIds, { uploadedThisSessionIds: [] });
     onClose();
   };
 
@@ -134,12 +135,15 @@ export function GoogleDrivePickerModal({
     setUploading(true);
     setUploadedFile({ name: file.name, size: file.size });
     try {
+      // Upload file lên Drive trước, rồi trả itemId mới về Calendar modal.
       const uploaded = await driveApi.uploadFile({ connectionId, file });
-      setUploadedFiles(prev => [uploaded, ...prev]);
-      setUploadedThisSessionIds(prev => Array.from(new Set([...prev, uploaded.id])));
-      setSelectedIds(prev => Array.from(new Set([...prev, uploaded.id])));
-      setActiveTab('drive');
       toast.success(lang === 'vi' ? 'Đã tải tệp lên Drive.' : 'File uploaded to Drive.');
+      onSelect(
+        Array.from(new Set([...selectedIds, uploaded.id])),
+        // Đánh dấu file mới upload để khi lưu event sẽ hỏi quyền cho guest.
+        { uploadedThisSessionIds: [uploaded.id] },
+      );
+      onClose();
     } catch (error) {
       handleApiError(error, lang === 'vi' ? 'Không tải được tệp lên Drive.' : 'Could not upload the file to Drive.');
     } finally {
@@ -181,57 +185,57 @@ export function GoogleDrivePickerModal({
 
   return (
     <div 
-      className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/45 p-3 backdrop-blur-sm"
       onMouseDown={e => {
         e.stopPropagation();
         onClose();
       }}
     >
       <div 
-        className="w-full max-w-4.5xl h-[85vh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        className="flex h-[78vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 dark:border-slate-800 dark:bg-slate-900"
         onMouseDown={e => e.stopPropagation()}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex flex-col border-b border-slate-100 dark:border-slate-800 px-5 pt-4 pb-0 shrink-0">
-          <div className="flex items-center justify-between gap-4 mb-3.5">
-            <div className="flex items-center gap-3">
-              <DriveIcon className="w-6 h-6 shrink-0" />
-              <h2 className="text-[17px] font-medium text-slate-800 dark:text-slate-100">
+        <div className="flex shrink-0 flex-col border-b border-slate-200 dark:border-slate-800">
+          <div className="flex h-14 items-center justify-between gap-4 px-5">
+            <div className="flex min-w-[190px] items-center gap-2.5">
+              <DriveIcon className="h-5 w-5 shrink-0" />
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-slate-100">
                 {lang === 'vi' ? 'Chọn từ Google Drive' : 'Pick from Google Drive'}
               </h2>
             </div>
             
             {/* Search Bar */}
-            <div className="flex-1 max-w-xl relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className={`relative flex-1 ${activeTab === 'computer' ? 'invisible' : ''}`}>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder={lang === 'vi' ? 'Tìm kiếm trong Drive hoặc dán URL' : 'Search in Drive or paste URL'}
-                className="w-full h-10 pl-10 pr-4 rounded-full border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800 text-[13px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-brand-500/15"
+                placeholder={lang === 'vi' ? 'Tìm tệp gần đây theo tên' : 'Search recent files by name'}
+                className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/15 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-950"
               />
             </div>
 
             <button 
               type="button" 
               onClick={onClose} 
-              className="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 hover:text-slate-700 dark:hover:text-slate-200"
+              className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
-              <X className="w-5 h-5" />
+              <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex items-end justify-between">
-            <div className="flex gap-6 overflow-x-auto">
+          <div className="flex h-11 items-end justify-between px-5">
+            <div className="flex gap-7 overflow-x-auto">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`pb-3 text-[13.5px] font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  className={`h-11 border-b-2 text-[13px] font-semibold transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'border-brand-600 text-brand-600 dark:border-brand-400 dark:text-brand-400'
                       : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -243,7 +247,7 @@ export function GoogleDrivePickerModal({
             </div>
 
             {/* Layout switchers */}
-            <div className="flex items-center gap-1 pb-3 text-slate-400 dark:text-slate-500">
+            <div className={`flex items-center gap-1 pb-2 text-slate-400 dark:text-slate-500 ${activeTab === 'computer' ? 'invisible' : ''}`}>
               <button 
                 type="button"
                 onClick={() => setViewMode('grid')}
@@ -263,20 +267,22 @@ export function GoogleDrivePickerModal({
         </div>
 
         {/* Content Panel */}
-        <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/20">
+        <div className="flex-1 overflow-y-auto bg-slate-50 p-4 dark:bg-slate-950/20">
           {activeTab === 'computer' ? (
             /* UPLOAD VIEW */
-            <div className="h-full flex flex-col items-center justify-center p-6">
+            <div
+              className="flex min-h-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white p-8 text-center transition-colors dark:border-slate-800 dark:bg-slate-900"
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const file = e.dataTransfer.files?.[0];
+                if (file) {
+                  handleUpload({ target: { files: [file], value: '' } } as unknown as ChangeEvent<HTMLInputElement>);
+                }
+              }}
+            >
               <div 
-                className="w-full max-w-lg border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-10 flex flex-col items-center justify-center text-center bg-white dark:bg-slate-900 shadow-sm"
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => {
-                  e.preventDefault();
-                  const file = e.dataTransfer.files?.[0];
-                  if (file) {
-                    handleUpload({ target: { files: [file], value: '' } } as unknown as ChangeEvent<HTMLInputElement>);
-                  }
-                }}
+                className="flex w-full max-w-md flex-col items-center justify-center"
               >
                 <input
                   type="file"
@@ -303,17 +309,17 @@ export function GoogleDrivePickerModal({
                   </div>
                 ) : (
                   <>
-                    <CloudUpload className="w-14 h-14 stroke-[1.25] text-slate-300 dark:text-slate-700 mb-4" />
-                    <h3 className="text-[14.5px] font-semibold text-slate-800 dark:text-slate-200 mb-1">
+                    <CloudUpload className="mb-4 h-16 w-16 stroke-[1.1] text-slate-300 dark:text-slate-700" />
+                    <h3 className="mb-1 text-[14.5px] font-semibold text-slate-800 dark:text-slate-200">
                       {lang === 'vi' ? 'Kéo tệp vào đây' : 'Drag files here'}
                     </h3>
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-5">
+                    <p className="mb-5 text-[12.5px] text-slate-400 dark:text-slate-500">
                       {lang === 'vi' ? 'Hoặc chọn tệp trực tiếp từ thiết bị của bạn' : 'Or select files from your computer'}
                     </p>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-5 h-9 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-semibold transition-all hover:shadow-md"
+                      className="h-9 rounded-full bg-brand-600 px-5 text-[13px] font-semibold text-white transition-all hover:bg-brand-700 hover:shadow-md"
                     >
                       {lang === 'vi' ? 'Chọn tệp thiết bị' : 'Select files from device'}
                     </button>
@@ -342,10 +348,10 @@ export function GoogleDrivePickerModal({
             /* GRID VIEW */
             <div className="space-y-6">
               <div>
-                <h3 className="text-[12px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-                  {searchQuery ? (lang === 'vi' ? 'Kết quả tìm kiếm' : 'Search results') : (lang === 'vi' ? 'Tệp của bạn' : 'Your Files')}
+                <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  {searchQuery ? (lang === 'vi' ? 'Kết quả tìm kiếm' : 'Search results') : (lang === 'vi' ? 'Tệp gần đây' : 'Recent files')}
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                   {filteredFiles.map(file => {
                     const isSelected = selectedIds.includes(file.id);
                     const meta = getFileMetadata(file);
@@ -355,14 +361,14 @@ export function GoogleDrivePickerModal({
                       <div
                         key={file.id}
                         onClick={() => handleToggleSelect(file.id)}
-                        className={`group relative flex flex-col rounded-xl bg-white dark:bg-slate-900 border cursor-pointer overflow-hidden transition-all shadow-sm ${
+                        className={`group relative flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all cursor-pointer dark:bg-slate-900 ${
                           isSelected
                             ? 'border-brand-500 ring-2 ring-brand-500/10 bg-brand-50/5'
                             : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                       >
                         {/* Thumbnail area */}
-                        <div className="aspect-[4/3] flex items-center justify-center bg-slate-50 dark:bg-slate-800/40 relative border-b border-slate-100 dark:border-slate-800">
+                        <div className="relative flex aspect-[5/3] items-center justify-center border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40">
                           {isSelected && (
                             <div className="absolute top-2.5 right-2.5 z-10 w-5 h-5 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-md animate-in zoom-in duration-100">
                               <Check className="w-3 h-3 stroke-[3]" />
@@ -370,9 +376,9 @@ export function GoogleDrivePickerModal({
                           )}
                           
                           {/* File Preview Mockup */}
-                          <div className={`w-12 h-16 rounded shadow-sm flex flex-col justify-between p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900`}>
+                          <div className="flex h-12 w-9 flex-col justify-between rounded border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                             <div className="flex items-center justify-between">
-                              <div className="w-5 h-1 rounded bg-slate-200 dark:bg-slate-700" />
+                              <div className="h-1 w-4 rounded bg-slate-200 dark:bg-slate-700" />
                               {iconInfo.icon}
                             </div>
                             <div className="space-y-1">
@@ -384,13 +390,16 @@ export function GoogleDrivePickerModal({
                         </div>
 
                         {/* Card Footer Info */}
-                        <div className="p-3 flex items-center gap-2.5">
-                          <span className={`p-1.5 rounded-lg ${iconInfo.color}`}>
+                        <div className="flex items-center gap-2 px-2.5 py-2">
+                          <span className={`rounded-md p-1 ${iconInfo.color}`}>
                             {iconInfo.icon}
                           </span>
-                          <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate flex-1" title={file.title}>
+                          <span className="flex-1 truncate text-[12.5px] font-medium text-slate-700 dark:text-slate-200" title={file.title}>
                             {file.title}
                           </span>
+                          {formatFileSize(Number(meta.size)) && (
+                            <span className="shrink-0 text-[11px] text-slate-400">{formatFileSize(Number(meta.size))}</span>
+                          )}
                         </div>
                       </div>
                     );
@@ -400,13 +409,13 @@ export function GoogleDrivePickerModal({
             </div>
           ) : (
             /* LIST VIEW */
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-100 dark:border-slate-800 text-[12px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900/60">
-                    <th className="py-2.5 px-4 w-12 text-center"></th>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-[12px] font-semibold text-slate-400 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-500">
+                    <th className="w-10 px-3 py-2 text-center"></th>
                     <th className="py-2.5 px-2">{lang === 'vi' ? 'Tên' : 'Name'}</th>
-                    <th className="py-2.5 px-4 w-40">{lang === 'vi' ? 'Ngày sửa đổi' : 'Last modified'}</th>
+                    <th className="w-36 px-3 py-2.5">{lang === 'vi' ? 'Ngày sửa đổi' : 'Last modified'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -425,7 +434,7 @@ export function GoogleDrivePickerModal({
                             : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
                         }`}
                       >
-                        <td className="py-3 px-4 text-center">
+                        <td className="px-3 py-2.5 text-center">
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -433,13 +442,13 @@ export function GoogleDrivePickerModal({
                             className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800"
                           />
                         </td>
-                        <td className="py-3 px-2 flex items-center gap-2.5 font-medium text-slate-700 dark:text-slate-200">
+                        <td className="flex items-center gap-2.5 px-2 py-2.5 font-medium text-slate-700 dark:text-slate-200">
                           <span className={`p-1 rounded ${iconInfo.color}`}>
                             {iconInfo.icon}
                           </span>
                           <span className="truncate max-w-[450px]" title={file.title}>{file.title}</span>
                         </td>
-                        <td className="py-3 px-4 text-slate-400 dark:text-slate-500">
+                        <td className="px-3 py-2.5 text-slate-400 dark:text-slate-500">
                           {new Date(file.occurredAt).toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US')}
                         </td>
                       </tr>
@@ -452,23 +461,25 @@ export function GoogleDrivePickerModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-2.5 shrink-0">
-          <button 
-            type="button" 
-            onClick={onClose} 
-            className="h-9 px-4 rounded-full border border-slate-200 dark:border-slate-700 text-[13px] font-semibold text-slate-600 dark:text-slate-450 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={handleInsert}
-            disabled={selectedIds.length === 0}
-            className="h-9 px-6 rounded-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 text-white text-[13px] font-semibold transition-all hover:shadow-md active:shadow-none"
-          >
-            {lang === 'vi' ? `Chèn (${selectedIds.length})` : `Insert (${selectedIds.length})`}
-          </button>
-        </div>
+        {activeTab === 'drive' && (
+          <div className="flex shrink-0 justify-end gap-2.5 border-t border-slate-100 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="h-9 px-4 rounded-full border border-slate-200 dark:border-slate-700 text-[13px] font-semibold text-slate-600 dark:text-slate-450 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleInsert}
+              disabled={selectedIds.length === 0}
+              className="h-9 px-6 rounded-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 text-white text-[13px] font-semibold transition-all hover:shadow-md active:shadow-none"
+            >
+              {lang === 'vi' ? `Chèn (${selectedIds.length})` : `Insert (${selectedIds.length})`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

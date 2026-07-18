@@ -56,11 +56,11 @@ public class EventReminderProcessorService : BackgroundService
 
             var reminders = await db.EventReminders
                 .Include(r => r.EventItem)
-                .Where(r => !r.IsSent && !r.EventItem.IsArchived)
+                .Where(r => r.ReminderType == ReminderType.InApp && !r.IsSent && !r.EventItem.IsArchived)
                 .ToListAsync(ct);
 
             var dueReminders = reminders
-                .Where(r => r.ReminderType == ReminderType.InApp && CalculateTriggerTime(r) <= now)
+                .Where(r => CalculateTriggerTime(r) <= now)
                 .ToList();
 
             if (dueReminders.Count > 0)

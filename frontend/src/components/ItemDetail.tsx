@@ -863,16 +863,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
                   <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>{t('item.openInCalendar')}</span>
                 </a>
               )}
-              {metadata.meetUrl && (
-                <a
-                  href={metadata.meetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-[36px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 text-slate-500 dark:text-slate-400" /><span>Google Meet</span>
-                </a>
-              )}
               <button
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
