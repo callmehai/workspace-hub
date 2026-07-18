@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, type ChangeEvent } from 'react';
+import { useState, useMemo, useRef, type ChangeEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Search, Grid, List, FileText, Check, AlertCircle, Loader2, CloudUpload } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -29,8 +29,13 @@ function formatFileSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
-export function GoogleDrivePickerModal({
-  open,
+export function GoogleDrivePickerModal(props: GoogleDrivePickerModalProps) {
+  // Chỉ mount khi open → state (selection/tab/upload) khởi tạo lại mỗi lần mở.
+  if (!props.open) return null;
+  return <GoogleDrivePickerModalContent {...props} />;
+}
+
+function GoogleDrivePickerModalContent({
   connectionId,
   initialSelectedIds,
   onClose,
@@ -49,18 +54,8 @@ export function GoogleDrivePickerModal({
   const { data: driveFilesData, isLoading, isError } = useQuery({
     queryKey: ['items', 'drive-files', connectionId],
     queryFn: () => itemsApi.getItems({ types: ['File'], connectionId, limit: 100 }),
-    enabled: open && !!connectionId,
+    enabled: !!connectionId,
   });
-
-  useEffect(() => {
-    if (!open) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate selection khi mở modal
-    setSelectedIds(initialSelectedIds);
-    setUploading(false);
-    setUploadedFile(null);
-    setActiveTab('drive');
-    setSearchQuery('');
-  }, [open, initialSelectedIds]);
 
   const driveFiles = useMemo(() => {
     const merged = driveFilesData?.items || [];
@@ -153,8 +148,6 @@ export function GoogleDrivePickerModal({
       e.target.value = '';
     }
   };
-
-  if (!open) return null;
 
   // Helper to determine file icon and color
   const getFileIconInfo = (mimeType?: string) => {

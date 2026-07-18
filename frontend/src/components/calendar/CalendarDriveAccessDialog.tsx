@@ -37,11 +37,17 @@ function roleLabelKey(role: DrivePermissionRole) {
 }
 
 /**
- * Dialog hỏi quyền Drive khi lưu event có đính kèm — bố cục gần DriveLinkRestrictDialog
- * (title 22px, body 14px, nút pill xanh Google) + Select role như DriveShareDialog.
+ * Dialog hỏi quyền Drive khi lưu event có đính kèm.
+ * Des đồng bộ ConfirmDialog / CalendarGuestNotificationDialog (brand, nút rounded-lg, light/dark).
+ *
+ * Wrapper chỉ mount content khi open → state form tự reset mỗi lần mở (không cần effect sync).
  */
-export function CalendarDriveAccessDialog({
-  open,
+export function CalendarDriveAccessDialog(props: CalendarDriveAccessDialogProps) {
+  if (!props.open) return null;
+  return <CalendarDriveAccessDialogContent {...props} />;
+}
+
+function CalendarDriveAccessDialogContent({
   files,
   guests,
   saving = false,
@@ -54,30 +60,14 @@ export function CalendarDriveAccessDialog({
   const [roleSelectOpen, setRoleSelectOpen] = useState<'people' | 'link' | null>(null);
 
   const people = useMemo(() => uniqueEmails(guests), [guests]);
-  const missingCount = useMemo(
-    () => files.reduce((count, file) => count + file.missingEmails.length, 0),
-    [files],
-  );
-
-  // Mở lại dialog → reset lựa chọn mặc định.
-  useEffect(() => {
-    if (!open) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset form khi mở dialog
-    setChoice('people');
-    setRole('reader');
-    setRoleSelectOpen(null);
-  }, [open]);
 
   useEffect(() => {
-    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !saving) onCancel();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, saving, onCancel]);
-
-  if (!open) return null;
+  }, [saving, onCancel]);
 
   const title = files.length === 1
     ? (lang === 'vi'
@@ -93,11 +83,14 @@ export function CalendarDriveAccessDialog({
   }));
 
   const radioClass =
-    'mt-0.5 h-4 w-4 shrink-0 border-slate-400 text-[#1a73e8] focus:ring-[#1a73e8]/accent-[#1a73e8]';
+    'mt-0.5 h-4 w-4 shrink-0 border-slate-400 text-brand-600 focus:ring-brand-500 accent-brand-600 dark:border-slate-500';
+
+  const optionLabelClass =
+    'block w-full text-left text-[14px] font-medium text-slate-900 dark:text-slate-100';
 
   const body = (
     <div
-      className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[11000] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm animate-[wh-fade_120ms_ease-out]"
       onClick={() => {
         if (!saving) onCancel();
       }}
@@ -106,19 +99,19 @@ export function CalendarDriveAccessDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-drive-access-title"
-        className="w-full max-w-[480px] overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-slate-900"
+        className="w-full max-w-[480px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10 dark:bg-slate-800 dark:ring-white/10 animate-[wh-pop_140ms_cubic-bezier(0.16,1,0.3,1)]"
         onClick={event => event.stopPropagation()}
         onMouseDown={event => event.stopPropagation()}
       >
-        <div className="px-6 pb-2 pt-6">
+        <div className="px-5 pb-2 pt-5">
           <div className="mb-5 flex items-start justify-between gap-3">
             <h2
               id="calendar-drive-access-title"
-              className="max-w-[400px] text-[22px] font-normal leading-snug text-[#202124] dark:text-slate-100"
+              className="max-w-[400px] text-[15px] font-semibold leading-snug text-slate-900 dark:text-slate-100"
             >
               {title}
             </h2>
-            <HelpCircle className="mt-1 h-5 w-5 shrink-0 text-[#5f6368] dark:text-slate-400" />
+            <HelpCircle className="mt-0.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
           </div>
 
           <div className="space-y-5">
@@ -136,7 +129,7 @@ export function CalendarDriveAccessDialog({
               <div className="min-w-0 flex-1">
                 <button
                   type="button"
-                  className="block w-full text-left text-[14px] font-medium text-[#202124] dark:text-slate-100"
+                  className={optionLabelClass}
                   onClick={() => !saving && setChoice('people')}
                   disabled={saving}
                 >
@@ -148,7 +141,7 @@ export function CalendarDriveAccessDialog({
                       {people.map(email => (
                         <span
                           key={email}
-                          className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[#e8f0fe] px-2.5 py-1 text-[12px] text-[#174ea6] dark:bg-blue-500/15 dark:text-blue-200"
+                          className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-brand-100 px-2.5 py-1 text-[12px] text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
                         >
                           <UserCircle className="h-4 w-4 shrink-0" />
                           <span className="truncate">{email}</span>
@@ -185,7 +178,7 @@ export function CalendarDriveAccessDialog({
               <div className="min-w-0 flex-1">
                 <button
                   type="button"
-                  className="block w-full text-left text-[14px] font-medium text-[#202124] dark:text-slate-100"
+                  className={optionLabelClass}
                   onClick={() => !saving && setChoice('link')}
                   disabled={saving}
                 >
@@ -220,7 +213,7 @@ export function CalendarDriveAccessDialog({
               />
               <button
                 type="button"
-                className="block w-full text-left text-[14px] font-medium text-[#202124] dark:text-slate-100"
+                className={optionLabelClass}
                 onClick={() => !saving && setChoice('none')}
                 disabled={saving}
               >
@@ -228,22 +221,14 @@ export function CalendarDriveAccessDialog({
               </button>
             </div>
           </div>
-
-          {missingCount > 0 && (
-            <p className="mt-5 text-[12px] leading-relaxed text-[#5f6368] dark:text-slate-400">
-              {lang === 'vi'
-                ? `${missingCount} lượt khách hiện chưa có quyền rõ ràng trên các tệp đính kèm.`
-                : `${missingCount} guest access entries are missing across the attached files.`}
-            </p>
-          )}
         </div>
 
-        <div className="flex justify-end gap-2 px-4 py-4">
+        <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3.5 dark:border-slate-700/60 dark:bg-slate-800/60">
           <button
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="h-10 rounded-full px-4 text-[14px] font-medium text-[#1a73e8] hover:bg-[#f6fafe] disabled:opacity-50 dark:hover:bg-slate-800"
+            className="h-9 rounded-lg px-4 text-[13px] font-semibold text-slate-600 transition-colors hover:bg-slate-200/70 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             {t('common.cancel')}
           </button>
@@ -251,13 +236,18 @@ export function CalendarDriveAccessDialog({
             type="button"
             onClick={() => onSave(choice, role)}
             disabled={saving}
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-[#1a73e8] px-6 text-[14px] font-medium text-white hover:bg-[#1765cc] disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:opacity-60"
           >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {lang === 'vi' ? 'Lưu sự kiện' : 'Save event'}
           </button>
         </div>
       </div>
+
+      <style>{`
+        @keyframes wh-fade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes wh-pop { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+      `}</style>
     </div>
   );
 
