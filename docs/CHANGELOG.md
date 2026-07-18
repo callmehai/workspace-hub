@@ -2,6 +2,14 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-18] Bỏ dropdown "Dự án" (site) của Jira — giữ lọc "Người phụ trách" (auto chọn project duy nhất)
+
+> Thực tế đồ án chỉ có **1 Jira site / 1 project** → dropdown chọn dự án trong toolbar chỉ có đúng 1 lựa chọn ⟹ thừa, gây rối. Gỡ nó nhưng **giữ bộ lọc theo người phụ trách**.
+
+- **Gỡ dropdown "Dự án"** (`toolbar.allProjects`) khỏi `WorkspaceToolbar` + state/param/debounce `projectKey` ở `Inbox.tsx`/`KanbanBoard.tsx` + props `projectKeyFilter`/`onProjectKeyChange` + badge "Project:" ở Inbox. FE không còn gửi `projectKey` (BE vẫn nhận, vô hại).
+- **Giữ lọc "Người phụ trách" — bỏ phụ thuộc chọn project:** trước đây assignee chỉ hiện khi user chọn 1 project (assignable-users theo project). Giờ toolbar **tự lấy project đầu tiên** (`availableProjects[0]` — thực tế là project duy nhất) để nạp danh sách người → dropdown "Người phụ trách" hiện thẳng ở tab Jira, không cần chọn dự án. Filter value = `accountId` (hoặc `unassigned`) → `GET /api/items?assignee=`. Nếu sau này có nhiều project, danh sách người lấy theo project đầu (đủ dùng cho phạm vi đồ án).
+- **Giữ nguyên:** form **Tạo ticket** (`CreateTicketModal`) vẫn chọn project + assignee như cũ; cache `['jira']` giữ + invalidate sau sync.
+
 ## [2026-07-18] Jira multi-site từng-grant-một + callback UPSERT (fix nút "Kết nối lại")
 
 > QA multi-account phát hiện 2 vấn đề ở luồng connect: (1) cùng account Atlassian không thêm được site thứ 2 — `JiraStrategy` luôn lấy `resources[0]` → 409 trùng cloudId; (2) trùng đúng service+account → 409 "Hãy ngắt kết nối trước" — tức nút **"Kết nối lại"** (connection Error) xưa giờ luôn 409, phải disconnect mới reconnect được.
