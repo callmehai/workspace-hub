@@ -3,6 +3,9 @@
 > Tài liệu review tính năng **System Folder Sharing** (nhánh `feat/System-Folder-Sharing`) do Huy code phần nền tảng.
 > Mục đích: để nhóm cùng verify hiện trạng, thống nhất ưu/nhược điểm và chốt kế hoạch hoàn thiện.
 > Người review: Lộc · Ngày: 2026-07-18
+>
+> 👉 **Người mới tiếp quản:** đọc `docs/FOLDER-SHARING-HANDOVER.md` trước — bản tóm tắt bug đã fix,
+> khuôn mẫu lỗi hay lặp, hạn chế đã chấp nhận và checklist test tay. File này là phần phân tích sâu.
 
 ---
 
