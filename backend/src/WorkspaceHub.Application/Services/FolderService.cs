@@ -168,13 +168,11 @@ public class FolderService : IFolderService
 
         await _folderRepo.AddItemFolderAsync(itemFolder, ct);
 
-        // Nếu item là folder Drive → kéo theo toàn bộ item con (đệ quy) vào folder.
-        // Lý do: quan hệ cha-con Drive chỉ nằm trong metadata.parents, không có junction ItemFolder.
-        // Account được share (Viewer) list item theo folderId → nếu con không có junction sẽ chỉ thấy
-        // đúng cái folder rỗng. Nhét folder = nhét tất cả nội dung bên trong.
-        if (IsDriveFolder(item))
-            await AddDriveDescendantsAsync(userId, folderId, new List<Item> { item }, maxPos + 1, new HashSet<Guid> { item.Id }, ct);
-
+        // Chỉ gán junction cho ĐÚNG item được add (kể cả khi là folder Drive) — KHÔNG kéo theo con.
+        // Quan hệ cha-con Drive nằm trong metadata.parents; người xem (owner hoặc Viewer được share)
+        // duyệt vào trong folder qua driveParentId → GetPagedAsync bỏ qua filter junction và list con
+        // theo parent (xem ItemRepository.GetPagedAsync). Nhờ vậy con vẫn xem được mà app-Folder không
+        // bị "bung phẳng" toàn bộ nội dung folder.
         await _folderRepo.SaveChangesAsync(ct);
 
         return new ItemFolderResponse(
@@ -224,13 +222,7 @@ public class FolderService : IFolderService
             maxPos += itemIdsToAdd.Count;
         }
 
-        // Nhét folder Drive = kéo theo toàn bộ con đệ quy (xem AddItemToFolderAsync).
-        // skip = mọi item được request (đã/đang có junction) để tránh trùng PK khi user chọn cả
-        // folder lẫn file bên trong trong cùng một lần bulk.
-        var driveFolderSeeds = ownedItems.Where(IsDriveFolder).ToList();
-        if (driveFolderSeeds.Count > 0)
-            await AddDriveDescendantsAsync(userId, folderId, driveFolderSeeds, maxPos + 1, uniqueRequestIds.ToHashSet(), ct);
-
+        // Chỉ gán junction cho các item được chọn — folder Drive KHÔNG kéo theo con (xem AddItemToFolderAsync).
         await _folderRepo.SaveChangesAsync(ct);
     }
 
@@ -245,21 +237,9 @@ public class FolderService : IFolderService
         var itemFolder = await _folderRepo.GetItemFolderAsync(itemId, folderId, ct)
             ?? throw new NotFoundException($"Item {itemId} is not in folder {folderId}.");
 
+        // Chỉ gỡ đúng junction của item này. Folder Drive không kéo con vào lúc Add nên khi Remove
+        // cũng không cần gỡ con (con không có junction).
         _folderRepo.RemoveItemFolder(itemFolder);
-
-        // Đối xứng với Add: gỡ folder Drive → gỡ luôn junction của toàn bộ con đệ quy,
-        // tránh để lại nội dung "mồ côi" mà account được share vẫn thấy dù folder đã rời khỏi app-Folder.
-        var item = await _itemRepo.GetByIdAndUserAsync(itemId, userId, ct);
-        if (item != null && IsDriveFolder(item))
-        {
-            var descendantIds = await GetDriveDescendantItemIdsAsync(userId, new List<Item> { item }, ct);
-            if (descendantIds.Count > 0)
-            {
-                var descJunctions = await _folderRepo.GetItemFoldersAsync(descendantIds, folderId, ct);
-                if (descJunctions.Any())
-                    _folderRepo.RemoveItemsFolder(descJunctions);
-            }
-        }
 
         await _folderRepo.SaveChangesAsync(ct);
     }
@@ -278,136 +258,6 @@ public class FolderService : IFolderService
             _folderRepo.RemoveItemsFolder(itemFolders);
             await _folderRepo.SaveChangesAsync(ct);
         }
-    }
-
-    // ───────────────── Drive folder → kéo con vào app-Folder ─────────────────
-
-    /// <summary>Item là folder Google Drive? (metadata.isFolder == true, do DriveItemMapper ghi).</summary>
-    private static bool IsDriveFolder(Item item)
-        => item.Type == ItemType.File
-           && item.MetadataJson != null
-           && item.MetadataJson.Contains("\"isFolder\":true");
-
-    /// <summary>
-    /// Trích danh sách parent externalId từ metadata.parents mà không cần deserialize full JSON
-    /// (cùng cách DriveSyncService tính isTopLevel). Metadata dạng ...,"parents":["id1","id2"],...
-    /// </summary>
-    private static List<string> ExtractParents(string? metadataJson)
-    {
-        var result = new List<string>();
-        if (string.IsNullOrEmpty(metadataJson))
-            return result;
-
-        int idx = metadataJson.IndexOf("\"parents\":[", StringComparison.Ordinal);
-        if (idx == -1)
-            return result;
-
-        int end = metadataJson.IndexOf(']', idx);
-        if (end == -1)
-            return result;
-
-        // 11 = độ dài của chuỗi literal "parents":[
-        string inner = metadataJson.Substring(idx + 11, end - idx - 11);
-        var parts = inner.Split('"');
-        for (int i = 1; i < parts.Length; i += 2)
-        {
-            if (!string.IsNullOrEmpty(parts[i]))
-                result.Add(parts[i]);
-        }
-        return result;
-    }
-
-    /// <summary>
-    /// Tìm toàn bộ Item con (đệ quy, mọi cấp) của các folder Drive seed, dựa trên metadata.parents.
-    /// Dựng cây cha-con trong memory rồi BFS từ ExternalId của mỗi folder seed. KHÔNG gồm chính seed.
-    /// </summary>
-    private async Task<List<Guid>> GetDriveDescendantItemIdsAsync(
-        Guid userId, List<Item> folderSeeds, CancellationToken ct)
-    {
-        var connectionIds = folderSeeds
-            .Where(i => i.ConnectionId.HasValue)
-            .Select(i => i.ConnectionId!.Value)
-            .Distinct()
-            .ToList();
-        if (connectionIds.Count == 0)
-            return new List<Guid>();
-
-        var all = await _itemRepo.GetDriveItemsByConnectionsAsync(userId, connectionIds, ct);
-
-        // Map: parentExternalId -> danh sách item con trực tiếp.
-        var childrenByParent = new Dictionary<string, List<Item>>();
-        foreach (var it in all)
-        {
-            foreach (var parent in ExtractParents(it.MetadataJson))
-            {
-                if (!childrenByParent.TryGetValue(parent, out var list))
-                {
-                    list = new List<Item>();
-                    childrenByParent[parent] = list;
-                }
-                list.Add(it);
-            }
-        }
-
-        var resultIds = new HashSet<Guid>();
-        var visited = new HashSet<string>();
-        var queue = new Queue<string>();
-        foreach (var seed in folderSeeds)
-        {
-            if (!string.IsNullOrEmpty(seed.ExternalId))
-                queue.Enqueue(seed.ExternalId!);
-        }
-
-        while (queue.Count > 0)
-        {
-            var ext = queue.Dequeue();
-            if (!visited.Add(ext))
-                continue; // chống vòng lặp / DAG
-            if (!childrenByParent.TryGetValue(ext, out var children))
-                continue;
-
-            foreach (var child in children)
-            {
-                resultIds.Add(child.Id);
-                if (!string.IsNullOrEmpty(child.ExternalId))
-                    queue.Enqueue(child.ExternalId!); // folder con → duyệt tiếp; file thì không có con
-            }
-        }
-
-        return resultIds.ToList();
-    }
-
-    /// <summary>
-    /// Tạo junction ItemFolder cho toàn bộ con đệ quy của các folder Drive seed, bỏ qua item đã có
-    /// junction hoặc nằm trong skipItemIds (tránh trùng PK khi con được add trực tiếp cùng lượt).
-    /// </summary>
-    private async Task AddDriveDescendantsAsync(
-        Guid userId, Guid folderId, List<Item> folderSeeds, int startPosition,
-        HashSet<Guid>? skipItemIds, CancellationToken ct)
-    {
-        var descendantIds = await GetDriveDescendantItemIdsAsync(userId, folderSeeds, ct);
-        if (descendantIds.Count == 0)
-            return;
-
-        var existing = await _folderRepo.GetItemFoldersAsync(descendantIds, folderId, ct);
-        var skip = existing.Select(x => x.ItemId).ToHashSet();
-        if (skipItemIds != null)
-            skip.UnionWith(skipItemIds);
-
-        var toAdd = descendantIds.Where(id => !skip.Contains(id)).ToList();
-        if (toAdd.Count == 0)
-            return;
-
-        var pos = startPosition;
-        var newFolders = toAdd.Select(id => new ItemFolder
-        {
-            ItemId = id,
-            FolderId = folderId,
-            Position = pos++,
-            AddedAt = DateTime.UtcNow
-        }).ToList();
-
-        await _folderRepo.AddItemsFolderAsync(newFolders, ct);
     }
 
     // ─────────────────────────── Sharing methods ───────────────────────────
