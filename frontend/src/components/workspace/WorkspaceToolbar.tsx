@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   Star, Search, LayoutGrid, List, RefreshCw, Tag, Settings2,
-  Briefcase, UserRound, Loader2, ChevronDown, Check, AtSign,
+  UserRound, Loader2, ChevronDown, Check, AtSign,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
@@ -199,8 +199,7 @@ interface WorkspaceToolbarProps {
   tagFilters: string[];
   onToggleTagFilter: (id: string) => void;
   onClearTagFilters: () => void;
-  projectKeyFilter?: string;
-  onProjectKeyChange?: (v: string) => void;
+  /** Lọc ticket Jira theo người phụ trách (accountId, hoặc 'unassigned'). Chỉ hiện ở tab Jira. */
   assigneeFilter?: string;
   onAssigneeChange?: (v: string) => void;
   /** Lọc theo tài khoản (connectionId) — chỉ hiện khi service của nguồn đang xem có ≥2 account. */
@@ -223,7 +222,6 @@ export const WorkspaceToolbar = ({
   sourceType = null,
   importantOnly, onImportantToggle,
   tagFilters, onToggleTagFilter, onClearTagFilters,
-  projectKeyFilter, onProjectKeyChange,
   assigneeFilter, onAssigneeChange,
   accountFilter, onAccountChange,
   searchInput, onSearchChange,
@@ -242,25 +240,26 @@ export const WorkspaceToolbar = ({
     queryFn: connectionsApi.getConnections,
   });
 
-  const jiraConns = connections.filter(
-    (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
-  );
-
   // Các account (connection Active) của service ứng với nguồn đang xem — để lọc theo tài khoản khi ≥2.
   const accountService = sourceType ? SOURCE_TO_ACCOUNT_SERVICE[sourceType] : undefined;
   const accountConns = accountService
     ? connections.filter((c: ConnectionDto) => c.serviceType.toLowerCase() === accountService && c.status.toLowerCase() === 'active')
     : [];
 
+  // ── Lọc ticket theo người phụ trách (Jira) ──────────────────────────────────
+  // Đồ án chỉ có 1 site/1 project → KHÔNG cần dropdown chọn dự án nữa; tự lấy project
+  // duy nhất để hỏi danh sách người (assignable-users theo project). assignee gắn theo
+  // project nên cần biết project + connection nào để hỏi.
+  const jiraConns = connections.filter(
+    (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
+  );
   const projectQueries = useQueries({
-    queries: jiraConns.map((c: ConnectionDto) => ({
+    queries: (sourceType === 'Ticket' ? jiraConns : []).map((c: ConnectionDto) => ({
       queryKey: ['jira', 'projects', c.id],
       queryFn: () => jiraApi.getProjects(c.id),
       staleTime: 5 * 60_000,
     }))
   });
-
-  // Giữ luôn connectionId của từng project: assignee lấy từ Jira nên phải biết hỏi connection nào.
   const jiraConnIds = jiraConns.map((c: ConnectionDto) => c.id).join(',');
   const availableProjects = useMemo(() => {
     const connIds = jiraConnIds ? jiraConnIds.split(',') : [];
@@ -275,15 +274,12 @@ export const WorkspaceToolbar = ({
       .map(([key, v]) => ({ key, name: v.name, connectionId: v.connectionId }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [projectQueries, jiraConnIds]);
-
-  // Assignee trong Jira thuộc phạm vi TỪNG PROJECT → chỉ lọc được khi đã chọn 1 project cụ thể.
-  // Hỏi thẳng Jira (assignable-users) thay vì suy từ ticket đã sync: có người ngay sau khi
-  // connect, không phải chờ sync. Cùng dạng queryKey với CreateTicketModal → dùng chung cache.
-  const selectedProject = availableProjects.find(p => p.key === projectKeyFilter);
+  // 1 project (thực tế đồ án) → dùng luôn; nhiều project → lấy project đầu để lấy danh sách người.
+  const assigneeProject = availableProjects[0];
   const { data: assignees = [] } = useQuery({
-    queryKey: ['jira', 'assignableUsers', selectedProject?.connectionId, projectKeyFilter, ''],
-    queryFn: () => jiraApi.getAssignableUsers(selectedProject!.connectionId, projectKeyFilter!),
-    enabled: sourceType === 'Ticket' && !!selectedProject && !!projectKeyFilter,
+    queryKey: ['jira', 'assignableUsers', assigneeProject?.connectionId, assigneeProject?.key, ''],
+    queryFn: () => jiraApi.getAssignableUsers(assigneeProject!.connectionId, assigneeProject!.key),
+    enabled: sourceType === 'Ticket' && !!assigneeProject,
     staleTime: 5 * 60_000,
   });
 
@@ -311,7 +307,7 @@ export const WorkspaceToolbar = ({
         toast.success(t('toolbar.syncDone'), { id: toastId });
         queryClient.invalidateQueries({ queryKey: ['items'] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
-        // Metadata Jira (project + assignee) suy từ ticket vừa sync → phải refetch cùng.
+        // Cache Jira (project cho form tạo ticket) làm mới sau sync.
         queryClient.invalidateQueries({ queryKey: ['jira'] });
       } catch (err) {
         toast.error(t('integrations.syncErrorToast'), { id: toastId });
@@ -471,30 +467,8 @@ export const WorkspaceToolbar = ({
             className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
-        {/* Lọc theo space (project) Jira — CHỈ hiện khi đang ở tab Jira. */}
-        {onProjectKeyChange && sourceType === 'Ticket' && jiraConns.length > 0 && (
-          <div className="w-56 shrink-0">
-            <Select
-              value={projectKeyFilter ?? ''}
-              onChange={(v) => {
-                onProjectKeyChange(v);
-                // Assignee thuộc project cũ → đổi project phải bỏ chọn, không thì filter
-                // vẫn áp dụng trong khi dropdown biến mất (lọc vô hình, list trống khó hiểu).
-                if (assigneeFilter) onAssigneeChange?.('');
-              }}
-              className="h-9 text-[13px]"
-              icon={<Briefcase className="w-4 h-4" />}
-              placeholder={`${t('createTicket.selectProject')}...`}
-              options={[
-                { value: '', label: t('toolbar.allProjects') },
-                ...availableProjects.map(p => ({ value: p.key, label: `${p.name} (${p.key})` })),
-              ]}
-            />
-          </div>
-        )}
-        {/* Lọc người phụ trách — CHỈ hiện khi đã chọn 1 project cụ thể, vì assignee của Jira
-            gắn theo project (chọn "Tất cả dự án" thì danh sách người không có nghĩa gì). */}
-        {onAssigneeChange && sourceType === 'Ticket' && selectedProject && (
+        {/* Lọc người phụ trách (Jira) — CHỈ ở tab Jira, khi đã lấy được project (để có danh sách người). */}
+        {onAssigneeChange && sourceType === 'Ticket' && assigneeProject && (
           <div className="w-52 shrink-0">
             <Select
               value={assigneeFilter ?? ''}
