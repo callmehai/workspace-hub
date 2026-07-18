@@ -149,9 +149,11 @@ public class CalendarSyncService : ICalendarSyncService
             return new Dictionary<string, Guid>();
 
         var driveItems = await _items.GetFilesByExternalIdsAsync(userId, fileIds, ct);
+        // Cùng 1 file Drive có thể tồn tại ở nhiều Item (nhiều folder/connection) → group tránh trùng key.
         return driveItems
             .Where(i => i.ExternalId != null)
-            .ToDictionary(i => i.ExternalId!, i => i.Id, StringComparer.Ordinal);
+            .GroupBy(i => i.ExternalId!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.OrderBy(i => i.Id).First().Id, StringComparer.Ordinal);
     }
 
     /// <summary>
