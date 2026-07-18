@@ -145,6 +145,17 @@ function parseCustomRecurrence(recurrence: string[] | undefined, date: string): 
   };
 }
 
+// Lead reminder tối đa 4 tuần (khớp validator BE + giới hạn thật của Google Calendar).
+function maxOffsetForUnit(unit: EventReminderFormValue['offsetUnit']): number {
+  switch (unit) {
+    case 'Minutes': return 40320;
+    case 'Hours': return 672;
+    case 'Days': return 28;
+    case 'Weeks': return 4;
+    default: return 40320;
+  }
+}
+
 function buildCustomRecurrence(value: CustomRecurrenceValue, allDay = false) {
   const parts = [`FREQ=${value.frequency}`, `INTERVAL=${Math.max(1, value.interval)}`];
   if (value.frequency === 'WEEKLY' && value.weekDays.length > 0) {
@@ -730,9 +741,13 @@ export function CalendarEventEditorModal({
                             <input
                               type="number"
                               min="1"
-                              max="999"
+                              max={maxOffsetForUnit(reminder.offsetUnit)}
                               value={reminder.offsetValue}
-                              onChange={event => updateReminder(index, { offsetValue: Number.parseInt(event.target.value, 10) || 1 })}
+                              onChange={event => {
+                                const parsed = Number.parseInt(event.target.value, 10) || 1;
+                                const clamped = Math.min(Math.max(1, parsed), maxOffsetForUnit(reminder.offsetUnit));
+                                updateReminder(index, { offsetValue: clamped });
+                              }}
                               aria-label={t('calendar.reminderLeadTime')}
                               className="h-9 w-[56px] shrink-0 rounded-md border-0 bg-[#e8eaed] px-2 text-center text-[13px] font-medium text-slate-800 outline-none transition hover:bg-[#dde1e6] focus:ring-2 focus:ring-brand-500/25 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
                             />
@@ -743,6 +758,8 @@ export function CalendarEventEditorModal({
                                   const offsetUnit = value as EventReminderFormValue['offsetUnit'];
                                   updateReminder(index, {
                                     offsetUnit,
+                                    // Kẹp lại lead khi đổi đơn vị (vd 40320 phút → tối đa 4 tuần).
+                                    offsetValue: Math.min(reminder.offsetValue, maxOffsetForUnit(offsetUnit)),
                                     timeOfDay: form.allDay ? (reminder.timeOfDay || '09:00') : undefined,
                                   });
                                 }}

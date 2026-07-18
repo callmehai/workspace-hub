@@ -27,5 +27,9 @@ public class CreateEventRequestValidator : AbstractValidator<CreateEventRequest>
         RuleFor(x => x.DriveItemIds)
             .Must(ids => ids == null || ids.Count <= 20)
             .WithMessage("Maximum 20 Drive files can be attached.");
+
+        RuleForEach(x => x.Reminders)
+            .SetValidator(new EventReminderDtoValidator())
+            .When(x => x.Reminders != null);
     }
 }

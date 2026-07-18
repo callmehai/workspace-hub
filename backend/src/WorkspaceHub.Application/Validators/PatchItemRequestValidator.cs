@@ -67,5 +67,9 @@ public class PatchItemRequestValidator : AbstractValidator<PatchItemRequest>
             .Must(ids => ids!.Count <= 20)
             .When(x => x.DriveItemIds != null)
             .WithMessage("Maximum 20 Drive files can be attached.");
+
+        RuleForEach(x => x.Reminders)
+            .SetValidator(new EventReminderDtoValidator())
+            .When(x => x.Reminders != null);
     }
 }

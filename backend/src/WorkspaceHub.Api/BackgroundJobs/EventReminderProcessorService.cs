@@ -59,9 +59,14 @@ public class EventReminderProcessorService : BackgroundService
 
             var now = DateTime.UtcNow;
 
+            // Lead tối đa 4 tuần (validator EventReminderDto) → event xa hơn 28 ngày + 1 buffer
+            // chưa thể tới hạn; loại ở SQL để không nạp reminder tương lai xa mỗi 60s.
+            var horizon = now.AddDays(29);
+
             var reminders = await db.EventReminders
                 .Include(r => r.EventItem)
-                .Where(r => r.ReminderType == ReminderType.InApp && !r.IsSent && !r.EventItem.IsArchived)
+                .Where(r => r.ReminderType == ReminderType.InApp && !r.IsSent && !r.EventItem.IsArchived
+                            && r.EventItem.OccurredAt <= horizon)
                 .ToListAsync(ct);
 
             var dueReminders = reminders
