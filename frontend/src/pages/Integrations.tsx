@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { connectionsApi } from '../lib/connectionsApi';
+import { connectionsApi, type ConnectionDto } from '../lib/connectionsApi';
 import { integrationsApi } from '../lib/integrationsApi';
 import { isAxiosError } from 'axios';
 import { handleApiError } from '../lib/errorUtils';
@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi, enUS } from 'date-fns/locale';
+import type { Locale } from 'date-fns';
 import { usePollingInterval } from '../hooks/usePollingInterval';
 import { useMemo } from 'react';
 
@@ -69,6 +70,89 @@ function integrationApiMessage(
     return t(msg as TranslationKey, vars);
   }
   return null;
+}
+
+type StatusMeta = { bg: string; fg: string; dot: string; label: string };
+
+/** Màu + nhãn cho status của MỘT connection (account). Connection luôn đã kết nối nên chỉ
+ *  Active / Error / (Disconnected...) — trạng thái "admin tắt" là mức service, xử lý riêng. */
+function statusMeta(status: string, t: (k: TranslationKey) => string): StatusMeta {
+  const s = status.toLowerCase();
+  if (s === 'active') {
+    return { bg: 'bg-green-100 dark:bg-green-500/15', fg: 'text-green-700 dark:text-green-300', dot: 'bg-green-500', label: t('integrations.statusActive') };
+  }
+  if (s === 'error') {
+    return { bg: 'bg-red-100 dark:bg-red-500/15', fg: 'text-red-700 dark:text-red-300', dot: 'bg-red-500', label: t('integrations.statusError') };
+  }
+  return { bg: 'bg-yellow-100 dark:bg-yellow-500/15', fg: 'text-yellow-700 dark:text-yellow-300', dot: 'bg-yellow-500', label: status };
+}
+
+/** 1 dòng account (connection) trong 1 card service: nhãn account + trạng thái + Sync/Ngắt/Kết nối lại. */
+function AccountRow({
+  conn, dfLocale, busy,
+  onSync, onDisconnect, onReconnect, isSyncing,
+}: {
+  conn: ConnectionDto;
+  dfLocale: Locale;
+  busy: boolean;
+  isSyncing: boolean;
+  onSync: (id: string) => void;
+  onDisconnect: (id: string) => void;
+  onReconnect: () => void;
+}) {
+  const { t } = useI18n();
+  const status = conn.status || 'Disconnected';
+  const isActive = status.toLowerCase() === 'active';
+  const isError = status.toLowerCase() === 'error';
+  const meta = statusMeta(status, t);
+  const lastSyncedText = conn.lastSyncedAt
+    ? t('integrations.syncedAgo', { ago: formatDistanceToNow(new Date(conn.lastSyncedAt), { addSuffix: true, locale: dfLocale }) })
+    : t('integrations.neverSynced');
+
+  return (
+    <div className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 ${isError ? 'border-red-200 dark:border-red-900/50 bg-red-50/40 dark:bg-red-500/5' : 'border-gray-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40'}`}>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-medium text-gray-800 dark:text-slate-200 truncate">
+          {conn.providerAccountId || conn.id}
+        </div>
+        <div className="text-[11px] text-gray-400 dark:text-slate-500 truncate">{lastSyncedText}</div>
+      </div>
+
+      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${meta.bg} ${meta.fg} flex-shrink-0`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`}></span>
+        {meta.label}
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {isActive && (
+          <button
+            onClick={() => onSync(conn.id)}
+            disabled={busy}
+            title={t('toolbar.sync')}
+            className="inline-flex items-center justify-center h-7 w-7 border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+          </button>
+        )}
+        {isError && (
+          <button
+            onClick={onReconnect}
+            disabled={busy}
+            className="inline-flex items-center gap-1 h-7 px-2.5 border border-transparent rounded-lg bg-brand-600 text-white text-[12px] font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
+          >
+            {t('integrations.reconnect')}
+          </button>
+        )}
+        <button
+          onClick={() => onDisconnect(conn.id)}
+          disabled={busy}
+          className="inline-flex items-center h-7 px-2.5 border border-gray-200 rounded-lg bg-white text-gray-600 text-[12px] font-medium hover:border-red-500 hover:text-red-600 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/50 transition-colors disabled:opacity-50"
+        >
+          {t('integrations.disconnect')}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export const Integrations = () => {
@@ -185,58 +269,25 @@ export const Integrations = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {SERVICES.map((service) => {
-            const connection = connections.find(
+            // Mô hình B đa tài khoản: 1 service có thể có NHIỀU connection (account) — lấy tất cả.
+            const serviceConnections = connections.filter(
               (c) => c.provider.toLowerCase() === service.provider.toLowerCase() &&
                 c.serviceType.toLowerCase() === service.serviceType.toLowerCase()
             );
-
-            const isConnected = !!connection;
-            const status = connection?.status || 'Disconnected';
-            const isActive = status.toLowerCase() === 'active';
-            const isConnectionError = status.toLowerCase() === 'error';
+            const hasAny = serviceConnections.length > 0;
+            // Chỉ Google cho phép nhiều tài khoản/service. Jira (atlassian) KHÔNG multi-connection (chốt scope)
+            // → không hiện nút "Thêm tài khoản".
+            const allowMultiAccount = service.integrationKey.toLowerCase() === 'google';
             const integrationEnabled = integrationEnabledByKey.get(service.integrationKey.toLowerCase()) ?? true;
-            const connectBlocked = !integrationEnabled && !isConnected;
+            // Admin tắt integration: chỉ chặn khi CHƯA có account nào (đã có thì vẫn cho quản lý/thêm).
+            const connectBlocked = !integrationEnabled && !hasAny;
+            const hasConnError = serviceConnections.some((c) => c.status.toLowerCase() === 'error');
 
-            let statusBg = 'bg-gray-100 dark:bg-slate-700';
-            let statusFg = 'text-gray-600 dark:text-slate-300';
-            let statusDot = 'bg-gray-400';
-            let statusLabel = t('integrations.statusDisconnected');
-
-            if (connectBlocked) {
-              statusBg = 'bg-amber-100 dark:bg-amber-500/15';
-              statusFg = 'text-amber-800 dark:text-amber-300';
-              statusDot = 'bg-amber-500';
-              statusLabel = t('integrations.statusDisabledByAdmin');
-            } else if (isConnected) {
-              if (isActive) {
-                statusBg = 'bg-green-100 dark:bg-green-500/15';
-                statusFg = 'text-green-700 dark:text-green-300';
-                statusDot = 'bg-green-500';
-                statusLabel = t('integrations.statusActive');
-              } else if (isConnectionError) {
-                statusBg = 'bg-red-100 dark:bg-red-500/15';
-                statusFg = 'text-red-700 dark:text-red-300';
-                statusDot = 'bg-red-500';
-                statusLabel = t('integrations.statusError');
-              } else {
-                statusBg = 'bg-yellow-100 dark:bg-yellow-500/15';
-                statusFg = 'text-yellow-700 dark:text-yellow-300';
-                statusDot = 'bg-yellow-500';
-                statusLabel = status;
-              }
-            }
-
-            const lastSyncedText = connection?.lastSyncedAt
-              ? t('integrations.syncedAgo', { ago: formatDistanceToNow(new Date(connection.lastSyncedAt), { addSuffix: true, locale: dfLocale }) })
-              : t('integrations.neverSynced');
-
-            const isLoadingAction =
-              (disconnectMutation.isPending && disconnectMutation.variables === connection?.id) ||
-              (syncMutation.isPending && syncMutation.variables === connection?.id) ||
-              (connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType);
+            const connectPending =
+              connectMutation.isPending && connectMutation.variables?.serviceType === service.serviceType;
 
             return (
-              <div key={`${service.integrationKey}-${service.serviceType}`} className={`bg-white dark:bg-slate-900 rounded-xl border flex flex-col p-5 shadow-sm transition-shadow hover:shadow-md ${isConnectionError ? 'border-red-200 dark:border-red-900/50' : 'border-gray-200 dark:border-slate-800'}`}>
+              <div key={`${service.integrationKey}-${service.serviceType}`} className={`bg-white dark:bg-slate-900 rounded-xl border flex flex-col p-5 shadow-sm transition-shadow hover:shadow-md ${hasConnError ? 'border-red-200 dark:border-red-900/50' : 'border-gray-200 dark:border-slate-800'}`}>
 
                 <div className="flex items-start gap-3.5 mb-3.5">
                   <div className={`w-11 h-11 rounded-xl ${service.bgColor} dark:bg-slate-800 flex items-center justify-center border border-gray-100 dark:border-slate-700 flex-shrink-0`}>
@@ -246,13 +297,8 @@ export const Integrations = () => {
                   <div className="flex-1 min-w-0">
                     <div className="text-[15px] font-semibold text-gray-900 dark:text-slate-100">{service.name}</div>
                     <div className="text-[12.5px] text-gray-500 dark:text-slate-400 truncate">
-                      {isConnected && connection.providerAccountId ? connection.providerAccountId : t('integrations.noAccount')}
+                      {hasAny ? t('integrations.accountsCount', { n: serviceConnections.length }) : t('integrations.noAccount')}
                     </div>
-                  </div>
-
-                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusBg} ${statusFg} flex-shrink-0`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`}></span>
-                    {statusLabel}
                   </div>
                 </div>
 
@@ -264,60 +310,51 @@ export const Integrations = () => {
                   )}
                 </div>
 
-                <div className="mt-auto pt-2 flex items-center justify-between gap-3">
-                  <span className="text-xs text-gray-400 dark:text-slate-500 truncate min-w-0">
-                    {isConnected ? lastSyncedText : ''}
-                  </span>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {isConnected ? (
-                      <>
-                        {isActive && (
-                          <>
-                            <button
-                              onClick={() => syncMutation.mutate(connection.id)}
-                              disabled={isLoadingAction}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:bg-gray-50 hover:border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                            >
-                              <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending && syncMutation.variables === connection.id ? 'animate-spin' : ''}`} />
-                              <span>{t('toolbar.sync')}</span>
-                            </button>
-                          </>
-                        )}
-                        {(isActive || isConnectionError) && (
-                          <button
-                            onClick={() => disconnectMutation.mutate(connection.id)}
-                            disabled={isLoadingAction}
-                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 rounded-lg bg-white text-gray-600 text-xs font-medium hover:border-red-500 hover:text-red-600 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/50 transition-colors disabled:opacity-50"
-                          >
-                            {t('integrations.disconnect')}
-                          </button>
-                        )}
-                        {isConnectionError && !connectBlocked && (
-                          <button
-                            onClick={() => handleConnect(service.integrationKey, service.serviceType, service.name)}
-                            disabled={isLoadingAction}
-                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-transparent rounded-lg bg-brand-600 text-white text-xs font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
-                          >
-                            {t('integrations.reconnect')}
-                          </button>
-                        )}
-                      </>
-                    ) : connectBlocked ? (
-                      <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-                        {t('integrations.statusDisabledByAdmin')}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleConnect(service.integrationKey, service.serviceType, service.name)}
-                        disabled={isLoadingAction}
-                        className="inline-flex items-center gap-1.5 h-8 px-3 border border-transparent rounded-lg bg-brand-600 text-white text-xs font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{t('integrations.connect')}</span>
-                      </button>
-                    )}
+                {/* Danh sách account đã kết nối — mỗi account 1 dòng, Sync/Ngắt/Kết nối lại riêng. */}
+                {hasAny && (
+                  <div className="space-y-2 mb-4">
+                    {serviceConnections.map((conn) => {
+                      const rowBusy =
+                        (disconnectMutation.isPending && disconnectMutation.variables === conn.id) ||
+                        (syncMutation.isPending && syncMutation.variables === conn.id);
+                      const rowSyncing = syncMutation.isPending && syncMutation.variables === conn.id;
+                      return (
+                        <AccountRow
+                          key={conn.id}
+                          conn={conn}
+                          dfLocale={dfLocale}
+                          busy={rowBusy}
+                          isSyncing={rowSyncing}
+                          onSync={(id) => syncMutation.mutate(id)}
+                          onDisconnect={(id) => disconnectMutation.mutate(id)}
+                          onReconnect={() => handleConnect(service.integrationKey, service.serviceType, service.name)}
+                        />
+                      );
+                    })}
                   </div>
+                )}
+
+                {/* Footer — Kết nối (chưa có account) / Thêm tài khoản (đã có) / Admin tắt. */}
+                <div className="mt-auto pt-1 flex items-center justify-end">
+                  {connectBlocked ? (
+                    <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                      {t('integrations.statusDisabledByAdmin')}
+                    </span>
+                  ) : !integrationEnabled ? (
+                    // Đã có account nhưng admin tắt → không cho thêm mới (account cũ vẫn quản lý ở trên).
+                    <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                      {t('integrations.statusDisabledByAdmin')}
+                    </span>
+                  ) : (!hasAny || allowMultiAccount) ? (
+                    <button
+                      onClick={() => handleConnect(service.integrationKey, service.serviceType, service.name)}
+                      disabled={connectPending}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 border border-transparent rounded-lg bg-brand-600 text-white text-xs font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
+                    >
+                      {connectPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                      <span>{hasAny ? t('integrations.addAccount') : t('integrations.connect')}</span>
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -328,4 +365,3 @@ export const Integrations = () => {
     </div>
   );
 };
-

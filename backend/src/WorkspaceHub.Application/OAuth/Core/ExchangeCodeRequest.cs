@@ -9,6 +9,12 @@ public class ExchangeCodeRequest
     public Domain.Entities.Integration Integration { get; init; } = null!;
     public string ServiceType { get; init; } = string.Empty;
 
+    /// <summary>
+    /// ProviderAccountId của các connection ĐANG Active (cùng provider) của user — để strategy
+    /// đa site (Jira) chọn site CHƯA kết nối thay vì luôn lấy site đầu. Google bỏ qua field này.
+    /// </summary>
+    public IReadOnlyCollection<string> ExistingActiveProviderAccountIds { get; init; } = Array.Empty<string>();
+
     public ExchangeCodeRequest() { }
 
     public ExchangeCodeRequest(string code, string clientId, string clientSecret, string redirectUri, Domain.Entities.Integration integration, string serviceType)
