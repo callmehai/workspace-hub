@@ -275,6 +275,9 @@ export const Integrations = () => {
                 c.serviceType.toLowerCase() === service.serviceType.toLowerCase()
             );
             const hasAny = serviceConnections.length > 0;
+            // Chỉ Google cho phép nhiều tài khoản/service. Jira (atlassian) KHÔNG multi-connection (chốt scope)
+            // → không hiện nút "Thêm tài khoản".
+            const allowMultiAccount = service.integrationKey.toLowerCase() === 'google';
             const integrationEnabled = integrationEnabledByKey.get(service.integrationKey.toLowerCase()) ?? true;
             // Admin tắt integration: chỉ chặn khi CHƯA có account nào (đã có thì vẫn cho quản lý/thêm).
             const connectBlocked = !integrationEnabled && !hasAny;
@@ -342,7 +345,7 @@ export const Integrations = () => {
                     <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
                       {t('integrations.statusDisabledByAdmin')}
                     </span>
-                  ) : (
+                  ) : (!hasAny || allowMultiAccount) ? (
                     <button
                       onClick={() => handleConnect(service.integrationKey, service.serviceType, service.name)}
                       disabled={connectPending}
@@ -351,7 +354,7 @@ export const Integrations = () => {
                       {connectPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                       <span>{hasAny ? t('integrations.addAccount') : t('integrations.connect')}</span>
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             );

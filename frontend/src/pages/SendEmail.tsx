@@ -277,6 +277,10 @@ export const SendEmail = () => {
           bodyHtml: composedHtml,
           threadId: threadLinkRef.current.threadId,
           inReplyToMessageId: threadLinkRef.current.inReplyToMessageId,
+          // Đính kèm file vào draft TRƯỚC khi sendDraft — SendDraftAsync gửi draft as-is (không nhận
+          // attachments), nên nếu không đưa vào updateDraft thì file user chọn bị DROP âm thầm khi gửi
+          // qua đường nháp. UpdateDraftAsync (BE) rebuild MIME kèm attachments.
+          attachments: payload.attachments,
         };
         await sendEmailApi.updateDraft(draftItemId, draftPayload);
         return sendEmailApi.sendDraft(draftItemId);

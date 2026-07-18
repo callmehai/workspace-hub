@@ -37,8 +37,8 @@ public class JiraStrategy(
         query["scope"]         = string.Join(' ', JiraScopes.All);
         query["state"]         = request.State;
         query["audience"]      = AtlassianAudience;
-        // "select_account" cho phép chọn tài khoản Atlassian khác (multi-account); "consent" cấp lại refresh token.
-        query["prompt"]        = "select_account consent";
+        // Jira KHÔNG làm multi-connection (chốt scope) → giữ "consent", không thêm "select_account".
+        query["prompt"]        = "consent";
 
         var url = $"{request.Integration.AuthorizationEndpoint}?{query}";
 
@@ -92,9 +92,24 @@ public class JiraStrategy(
         if (resources.ValueKind != JsonValueKind.Array || resources.GetArrayLength() == 0)
             throw new BusinessRuleException("Tài khoản Atlassian chưa có quyền truy cập Jira site nào");
 
-        // MVP: lấy site đầu tiên. (Multi-site có thể cho user chọn ở phase sau.)
-        var firstSite = resources[0];
-        if (!firstSite.TryGetProperty("id", out var cloudIdEl) || cloudIdEl.GetString() is not { Length: > 0 } cloudId)
+        // Atlassian KHÔNG cho biết user chọn site nào ở màn consent (accessible-resources trả
+        // CỘNG DỒN mọi site đã cấp quyền). Heuristic: chọn site đầu tiên CHƯA có connection Active
+        // — connect lần 2 cùng account sẽ ăn site kế tiếp (multi-site từng-grant-một). Mỗi lần
+        // connect = 1 grant riêng → refresh token độc lập, không dính vụ "chung token xoay vòng".
+        // Tất cả site đều Active rồi → rơi về site đầu (ConnectionsService sẽ upsert = làm mới token).
+        string? cloudId = null;
+        foreach (var site in resources.EnumerateArray())
+        {
+            if (!site.TryGetProperty("id", out var idEl) || idEl.GetString() is not { Length: > 0 } id)
+                continue;
+            cloudId ??= id; // fallback: site hợp lệ đầu tiên
+            if (!request.ExistingActiveProviderAccountIds.Contains(id))
+            {
+                cloudId = id;
+                break;
+            }
+        }
+        if (cloudId is null)
             throw new BusinessRuleException("Không lấy được cloudId từ Atlassian");
 
         // Step 3: validate scopes — Jira all-or-nothing, không phụ thuộc ServiceType được request.

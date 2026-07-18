@@ -2,6 +2,14 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-18] Jira multi-site từng-grant-một + callback UPSERT (fix nút "Kết nối lại")
+
+> QA multi-account phát hiện 2 vấn đề ở luồng connect: (1) cùng account Atlassian không thêm được site thứ 2 — `JiraStrategy` luôn lấy `resources[0]` → 409 trùng cloudId; (2) trùng đúng service+account → 409 "Hãy ngắt kết nối trước" — tức nút **"Kết nối lại"** (connection Error) xưa giờ luôn 409, phải disconnect mới reconnect được.
+
+- **Jira chọn site chưa connect:** Atlassian KHÔNG cho biết user chọn site nào ở màn consent (`accessible-resources` trả **cộng dồn** mọi site đã cấp quyền) → heuristic: lấy site đầu tiên **chưa có connection Active** của user. Connect lần 2 cùng account = ăn site kế tiếp. Khác quyết định "bỏ Jira multi-site" trước đó: mỗi site giờ đến từ **1 grant riêng** (authorize riêng) → refresh token **độc lập**, KHÔNG dính vụ "nhiều site chung 1 refresh token xoay vòng" (vụ đó chỉ xảy ra khi tách N site từ CÙNG 1 grant). `ExchangeCodeRequest.ExistingActiveProviderAccountIds` mang danh sách account Active cùng provider vào strategy (Google bỏ qua).
+- **Callback UPSERT thay 409:** trùng đúng `(UserId,Provider,ServiceType,ProviderAccountId)` → cập nhật AccessToken/RefreshToken (giữ cái cũ nếu provider không trả mới) + `Status=Active`, giữ `CursorValue` (cursor delta-sync vẫn hợp lệ cùng account). Nút "Kết nối lại" hoạt động thật; connect lại account đã Active = làm mới token, vô hại. Jira mọi site đều Active → rơi về site đầu → upsert.
+- **Lưu ý QA:** cần verify bằng account Atlassian thật có ≥2 site: connect 2 lần → 2 connection 2 cloudId; sync/refresh site này không làm site kia rớt token (giả định grant mới không revoke grant cũ — hành vi chuẩn multi-device của OAuth).
+
 ## [2026-07-18] Gửi mail — bỏ auto-tạo nháp (giật màn) → nút "Lưu nháp" chủ động
 
 > Bug UX ở trang Gửi mail: điền người nhận + chọn template → sau ~2s tự tạo nháp → **màn giật/load lại toàn trang** + lưu nháp ngoài ý muốn.
@@ -16,10 +24,10 @@
 > Cho phép 1 user kết nối **nhiều tài khoản Google** (nhiều Gmail/Calendar/Drive khác email). Hoá ra **mô hình B đã thiết kế sẵn** cho đa tài khoản → chủ yếu là mở UI + 1 chỉnh nhỏ OAuth.
 
 - **Vì sao gần như không đụng backend:** unique index `(UserId,Provider,ServiceType,ProviderAccountId)` đã gồm `ProviderAccountId` (2 Gmail khác email = 2 row hợp lệ); connect flow đã chặn trùng theo *account* (không theo service); sync/write-back/send/scheduled đều theo `connectionId` tường minh. Không đổi schema, không đổi dedup.
-- **BE — điểm THEN CHỐT (`prompt=select_account`):** `GoogleAuthUrlBuilder.BuildForService` đổi `prompt=consent` → `prompt=select_account consent`; `JiraStrategy` tương tự. Không có `select_account`, Google/Atlassian tự dùng account đang đăng nhập → **không thêm được account thứ 2**. Giữ `consent` (đi cùng `access_type=offline`) để luôn được cấp lại refresh token. `BuildForLogin` KHÔNG đổi (Google Sign-In giữ nguyên).
+- **BE — điểm THEN CHỐT (`prompt=select_account`):** CHỈ `GoogleAuthUrlBuilder.BuildForService` đổi `prompt=consent` → `prompt=select_account consent`. Không có `select_account`, Google tự dùng account đang đăng nhập → **không thêm được account thứ 2**. Giữ `consent` (đi cùng `access_type=offline`) để luôn được cấp lại refresh token. `BuildForLogin` KHÔNG đổi (Google Sign-In giữ nguyên). **`JiraStrategy` giữ `consent`** — Jira không multi-connection (xem dưới).
 - **FE — trang Kết nối (Integrations):** mỗi service render **N account** (thay `connections.find` → `.filter`), mỗi account có Sync/Ngắt/Kết nối lại riêng (mutations vốn đã theo `connectionId`) + nút **"Thêm tài khoản"**. i18n `integrations.addAccount`/`accountsCount`, `toolbar.allAccounts`.
 - **FE — bộ lọc tài khoản (Inbox/Kanban):** dropdown "Tài khoản" ở `WorkspaceToolbar` (chỉ hiện khi nguồn đang xem có ≥2 account; Gmail/Calendar/Drive — bỏ Jira vì đã có lọc project/assignee + cloudId GUID khó đọc) → truyền `connectionId` vào `GET /api/items` (param sẵn có). Reset khi đổi tab (tránh lọc vô hình). Drive upload/kéo-thả ưu tiên account đang lọc làm đích.
-- **BỎ Jira multi-site (quyết định scope):** 1 lần cấp quyền Atlassian có thể có nhiều site, nhưng chúng **chia sẻ 1 refresh token xoay vòng** (`AtlassianTokenService` rotate mỗi lần refresh) → site này refresh làm site kia chết token (→ Error, buộc reconnect). Làm đúng cần propagate token sang sibling + khoá theo grant — không đáng cho đồ án. Giữ `resources[0]` (mỗi grant lấy site đầu). User vẫn connect nhiều Atlassian **account** (mỗi account = grant riêng, token riêng).
+- **Jira: chỉ Google mở UI multi-account (chốt scope):** `select_account` + nút "Thêm tài khoản" + bộ lọc "Tài khoản" (Inbox/Kanban) **chỉ áp cho Google**. Card Jira **không** có nút "Thêm tài khoản" và `JiraStrategy` giữ `prompt=consent`. Hành vi connect/reconnect Jira (chọn site chưa connect + callback UPSERT) xem entry **"Jira multi-site từng-grant-một"** phía trên — đó là track riêng, không phải Google-style multi-account.
 - **Giữ nguyên (đủ dùng):** Friends contact-suggest + gửi invite dùng Gmail-đầu (`FirstOrDefault`) — rất hiếm khi nhiều Gmail; không phá vỡ gì.
 - **Lưu ý QA:** multi-account Google phải test bằng OAuth **thật** — dev thiếu `id_token` rơi về `dev-placeholder@gmail.com` → 2 account "dev" đụng unique index.
 
