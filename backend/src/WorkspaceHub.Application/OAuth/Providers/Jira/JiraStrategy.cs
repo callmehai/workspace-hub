@@ -37,7 +37,8 @@ public class JiraStrategy(
         query["scope"]         = string.Join(' ', JiraScopes.All);
         query["state"]         = request.State;
         query["audience"]      = AtlassianAudience;
-        query["prompt"]        = "consent";
+        // "select_account" cho phép chọn tài khoản Atlassian khác (multi-account); "consent" cấp lại refresh token.
+        query["prompt"]        = "select_account consent";
 
         var url = $"{request.Integration.AuthorizationEndpoint}?{query}";
 

@@ -73,6 +73,7 @@ export const KanbanBoard = () => {
   const [projectKeyFilter, setProjectKeyFilter] = useState<string>('');
   const [debouncedProjectKey, setDebouncedProjectKey] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
+  const [accountFilter, setAccountFilter] = useState<string>(''); // lọc theo tài khoản (connectionId); '' = tất cả
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -95,6 +96,12 @@ export const KanbanBoard = () => {
 
   const [dragOverCol, setDragOverCol] = useState<ItemStatus | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  // Đổi nguồn (tab) → bỏ lọc theo tài khoản (account thuộc service của nguồn cũ, không hợp nguồn mới).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAccountFilter('');
+  }, [sourceType]);
 
   const toggleStatusFilter = (s: ItemStatus) => {
     setStatusFilter(prev => prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]);
@@ -138,7 +145,7 @@ export const KanbanBoard = () => {
   const effectiveDriveKind = sourceType === 'File' && driveKind !== 'all' ? driveKind : undefined;
 
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, search, driveKind: effectiveDriveKind }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, projectKey: effectiveProjectKey, assignee: effectiveAssignee, connectionId: accountFilter || undefined, search, driveKind: effectiveDriveKind }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -150,6 +157,7 @@ export const KanbanBoard = () => {
       tagIds: tagFilters.length > 0 ? tagFilters : undefined,
       projectKey: effectiveProjectKey,
       assignee: effectiveAssignee,
+      connectionId: accountFilter || undefined,
       search: search || undefined,
       driveKind: effectiveDriveKind,
       page: pageParam,
@@ -189,6 +197,16 @@ export const KanbanBoard = () => {
     queryFn: connectionsApi.getConnections,
     staleTime: 60_000,
   });
+
+  // Account đang lọc bị disconnect/Error (rớt khỏi tập Active) → bỏ lọc: dropdown ẩn khi <2 account
+  // nhưng connectionId cũ vẫn áp → board lọc ngầm vô hình (Kanban không có nút clear filters).
+  useEffect(() => {
+    if (accountFilter && !connectionsList.some(c => c.id === accountFilter && c.status.toLowerCase() === 'active')) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAccountFilter('');
+    }
+  }, [accountFilter, connectionsList]);
+
   const activeServices = new Set(
     connectionsList.filter(c => c.status.toLowerCase() === 'active').map(c => c.serviceType.toLowerCase()),
   );
@@ -375,6 +393,8 @@ export const KanbanBoard = () => {
           onProjectKeyChange={handleProjectKeyChange}
           assigneeFilter={assigneeFilter}
           onAssigneeChange={setAssigneeFilter}
+          accountFilter={accountFilter}
+          onAccountChange={setAccountFilter}
           searchInput={searchInput}
           onSearchChange={handleSearchChange}
           driveKind={driveKind}
