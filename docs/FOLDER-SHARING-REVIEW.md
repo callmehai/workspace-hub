@@ -281,7 +281,85 @@ Giải pháp của Huy: **Item không bao giờ đổi chủ.** `Item.Connection
 
 ## 6. Câu hỏi cần nhóm chốt
 
+> Đáp án đề xuất bên dưới đã theo **scope đồ án** (mục 5.0) — mặc định "đơn giản, đủ demo". Nhóm chỉ cần xác nhận.
+
 1. **Disconnect:** cho phép hard-delete item đang share (chỉ cảnh báo) hay chuyển sang archive để giữ cho B?
+   → **Chốt đề xuất: KHÔNG code, ghi known-limitation.** Xác suất A ngắt kết nối giữa demo ~0. Không xây archive+notify.
 2. **Reply/Forward nhân danh A:** giữ (Editor đại diện A) hay chặn?
+   → **Chốt đề xuất: GIỮ** (đúng mục đích Editor), chỉ ghi 1 câu vào CHANGELOG để defense giải thích. Không thêm UI.
 3. **Siết share-check theo folder (P1-2):** làm ngay hay để sau nghiệm thu (vì đụng FE truyền `folderId`)?
+   → **Chốt đề xuất: BỎ/để sau.** Không lộ khi dùng bình thường; siết vào đụng FE = phức tạp thừa.
 4. **Phạm vi refactor `IItemAccessResolver` (P1-1):** làm trọn trước nghiệm thu hay chỉ vá 3 bug P0 trước, refactor sau?
+   → **Chốt đề xuất: chỉ vá bug, BỎ refactor.** Logic lặp 4 nơi chấp nhận được ở đồ án.
+
+---
+
+## 7. Hướng dẫn code cho người làm (copy-paste) — CHỈ 2 việc
+
+> Toàn bộ scope thực tế = **1 dòng (A)** + **tuỳ chọn ~10 dòng (E)**. Đã verify với code nhánh, chép vào là chạy.
+> Sau khi sửa: `cd backend && dotnet build && dotnet test` phải xanh.
+
+### 7.1. ✅ BẮT BUỘC — Fix email "ma" (điểm A) · 1 dòng
+
+**File:** `backend/src/WorkspaceHub.Application/Services/ItemWriteBackService.cs`
+Trong `DeleteItemAsync`, nhánh xoá thread email (khoảng dòng 444). Đổi `userId` → `item.UserId`:
+
+```csharp
+// TRƯỚC (sai — userId là của B, không khớp item của owner A → không xoá local):
+await _items.DeleteThreadAsync(userId, item.ThreadId, ct);
+
+// SAU (đúng — xoá local theo owner của item):
+await _items.DeleteThreadAsync(item.UserId, item.ThreadId, ct);
+```
+
+**Chỉ đúng 1 dòng đó.** Đừng đụng các nhánh khác (Event/File/Ticket dùng `_items.Remove(item)` đã đúng).
+**Test tay:** B (Editor) xoá 1 email trong folder share → mail mất trên Gmail của A **và** item biến mất khỏi list (không còn "ma"). Thử cả xoá hàng loạt ở BulkActionBar.
+
+### 7.2. ⚙️ TUỲ CHỌN — Cho Editor thao tác Jira (điểm E) · ~10 dòng · CHỈ làm nếu demo có share ticket Jira
+
+**File:** `backend/src/WorkspaceHub.Application/Services/JiraTicketService.cs`
+DI **không cần đổi** (`IFolderRepository` đã đăng ký, constructor tự inject). `using` đã sẵn có.
+
+**Bước 1** — thêm field + tham số constructor:
+
+```csharp
+    private readonly IItemRepository _items;
+    private readonly IConnectionRepository _connections;
+    private readonly IJiraGateway _gateway;
+    private readonly IFolderRepository _folders;                 // ⬅ THÊM
+
+    public JiraTicketService(IItemRepository items, IConnectionRepository connections,
+        IJiraGateway gateway, IFolderRepository folders)         // ⬅ THÊM tham số folders
+    {
+        _items = items;
+        _connections = connections;
+        _gateway = gateway;
+        _folders = folders;                                      // ⬅ THÊM
+    }
+```
+
+**Bước 2** — trong `ResolveAsync`, đổi dòng lấy item đầu tiên thành có fallback share-check (Editor):
+
+```csharp
+        // TRƯỚC:
+        var item = await _items.GetByIdAndUserAsync(itemId, userId, ct)
+            ?? throw new NotFoundException("Item", itemId);
+
+        // SAU (owner OR shared-Editor — mirror ItemWriteBackService):
+        var item = await _items.GetByIdAndUserAsync(itemId, userId, ct);
+        if (item == null && await _folders.IsItemSharedWithUserAsEditorAsync(itemId, userId, ct))
+            item = await _items.GetByIdAsync(itemId, ct);
+        if (item == null) throw new NotFoundException("Item", itemId);
+```
+
+Giữ nguyên các check còn lại (Type/ExternalId/ConnectionId/ServiceType/Status).
+**Test tay:** B (Editor) của folder chứa ticket → comment / đính kèm file được (trước đây 404).
+**Lưu ý:** nếu có test khởi tạo `new JiraTicketService(...)` trực tiếp thì thêm mock `IFolderRepository` (trả `false`). Hiện chưa có `JiraTicketServiceTests` nên nhiều khả năng không cần đụng test.
+
+### 7.3. 📝 Còn lại — KHÔNG code, chỉ ghi vào CHANGELOG (để bảo vệ)
+
+Thêm 1 đoạn ngắn "Folder Sharing — hạn chế đã biết" vào `docs/CHANGELOG.md`:
+- Logout KHÔNG thu hồi quyền của B (đúng thiết kế, giống Google Drive).
+- Disconnect xoá item → folder share có thể trống (chưa chặn — hạn chế đã biết).
+- Reply/Forward: Editor gửi mail từ hộp thư của owner A (có chủ đích).
+- Share-check ở mức "folder bất kỳ có chứa item", chưa siết theo folder cụ thể (đủ dùng phạm vi đồ án).
