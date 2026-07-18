@@ -2,13 +2,13 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
-## [2026-07-18] Bỏ bộ lọc "Dự án" (site) + "Người phụ trách" của Jira ở toolbar
+## [2026-07-18] Bỏ dropdown "Dự án" (site) của Jira — giữ lọc "Người phụ trách" (auto chọn project duy nhất)
 
-> Thực tế đồ án chỉ có **1 Jira site / 1 project** → dropdown chọn dự án trong toolbar chỉ có đúng 1 lựa chọn ⟹ thừa, gây rối. Gỡ cho gọn.
+> Thực tế đồ án chỉ có **1 Jira site / 1 project** → dropdown chọn dự án trong toolbar chỉ có đúng 1 lựa chọn ⟹ thừa, gây rối. Gỡ nó nhưng **giữ bộ lọc theo người phụ trách**.
 
-- **Gỡ khỏi `WorkspaceToolbar`:** dropdown "Dự án" (`toolbar.allProjects`) + dropdown "Người phụ trách" (`toolbar.allAssignees`). Assignee của Jira **gắn theo từng project** (phải chọn 1 project mới hiện danh sách người) → bỏ project thì assignee không đứng độc lập được, gỡ luôn cả cụm. Toolbar tab Jira giờ chỉ còn search (+ các facet chung: trạng thái, quan trọng, tag).
-- **Dây nối gỡ theo:** state `projectKeyFilter`/`assigneeFilter` + debounce + param `projectKey`/`assignee` ở `Inbox.tsx` và `KanbanBoard.tsx`; props `projectKeyFilter`/`onProjectKeyChange`/`assigneeFilter`/`onAssigneeChange` ở toolbar; badge "Project:" ở Inbox. Query `jira/projects` + `jira/assignableUsers` trong toolbar cũng bỏ.
-- **Giữ nguyên:** BE `GET /api/items` vẫn nhận `projectKey`/`assignee` (không dùng từ FE nữa, vô hại); form **Tạo ticket** (`CreateTicketModal`) vẫn chọn project + assignee như cũ (cache `['jira']` giữ, vẫn invalidate sau sync). Muốn lọc theo người sau này (nếu có nhiều project) thì khôi phục lại cụm này.
+- **Gỡ dropdown "Dự án"** (`toolbar.allProjects`) khỏi `WorkspaceToolbar` + state/param/debounce `projectKey` ở `Inbox.tsx`/`KanbanBoard.tsx` + props `projectKeyFilter`/`onProjectKeyChange` + badge "Project:" ở Inbox. FE không còn gửi `projectKey` (BE vẫn nhận, vô hại).
+- **Giữ lọc "Người phụ trách" — bỏ phụ thuộc chọn project:** trước đây assignee chỉ hiện khi user chọn 1 project (assignable-users theo project). Giờ toolbar **tự lấy project đầu tiên** (`availableProjects[0]` — thực tế là project duy nhất) để nạp danh sách người → dropdown "Người phụ trách" hiện thẳng ở tab Jira, không cần chọn dự án. Filter value = `accountId` (hoặc `unassigned`) → `GET /api/items?assignee=`. Nếu sau này có nhiều project, danh sách người lấy theo project đầu (đủ dùng cho phạm vi đồ án).
+- **Giữ nguyên:** form **Tạo ticket** (`CreateTicketModal`) vẫn chọn project + assignee như cũ; cache `['jira']` giữ + invalidate sau sync.
 
 ## [2026-07-18] Jira multi-site từng-grant-một + callback UPSERT (fix nút "Kết nối lại")
 

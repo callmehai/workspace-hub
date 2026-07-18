@@ -70,6 +70,7 @@ export const KanbanBoard = () => {
   const [importantOnly, setImportantOnly] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [driveKind, setDriveKind] = useState<'all' | 'folder' | 'file'>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>(''); // lọc ticket Jira theo người phụ trách
   const [accountFilter, setAccountFilter] = useState<string>(''); // lọc theo tài khoản (connectionId); '' = tất cả
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -127,11 +128,12 @@ export const KanbanBoard = () => {
    */
   // Scope theo nguồn: có tab ⟹ khoá 1 loại (bỏ qua chip loại).
   const effectiveTypes = sourceType ? [sourceType] : (typeFilter.length > 0 ? typeFilter : undefined);
+  const effectiveAssignee = sourceType === 'Ticket' ? (assigneeFilter || undefined) : undefined;
   // Lọc folder/file chỉ áp ở tab Drive (Bảng không có drill-down folder nên chỉ cần sourceType File).
   const effectiveDriveKind = sourceType === 'File' && driveKind !== 'all' ? driveKind : undefined;
 
   const boardKey = (status: ItemStatus) =>
-    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, connectionId: accountFilter || undefined, search, driveKind: effectiveDriveKind }];
+    ['items', 'board', { status, folderId: selectedFolderId, source: sourceType, type: typeFilter, isImportant: importantOnly, tagIds: tagFilters, assignee: effectiveAssignee, connectionId: accountFilter || undefined, search, driveKind: effectiveDriveKind }];
 
   const makeColQuery = (status: ItemStatus) => ({
     queryKey: boardKey(status),
@@ -141,6 +143,7 @@ export const KanbanBoard = () => {
       types: effectiveTypes,
       isImportant: importantOnly || undefined,
       tagIds: tagFilters.length > 0 ? tagFilters : undefined,
+      assignee: effectiveAssignee,
       connectionId: accountFilter || undefined,
       search: search || undefined,
       driveKind: effectiveDriveKind,
@@ -373,6 +376,8 @@ export const KanbanBoard = () => {
           onToggleTagFilter={(id) =>
             setTagFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
           onClearTagFilters={() => setTagFilters([])}
+          assigneeFilter={assigneeFilter}
+          onAssigneeChange={setAssigneeFilter}
           accountFilter={accountFilter}
           onAccountChange={setAccountFilter}
           searchInput={searchInput}

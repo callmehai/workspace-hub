@@ -1,13 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   Star, Search, LayoutGrid, List, RefreshCw, Tag, Settings2,
-  Loader2, ChevronDown, Check, AtSign,
+  UserRound, Loader2, ChevronDown, Check, AtSign,
 } from 'lucide-react';
 import { Select } from '../Select';
 import toast from 'react-hot-toast';
 import { connectionsApi, type ConnectionDto } from '../../lib/connectionsApi';
+import { jiraApi, type JiraProject } from '../../lib/jiraApi';
 import { tagsApi } from '../../lib/tagsApi';
 import { useI18n } from '../../hooks/useI18n';
 import { handleApiError } from '../../lib/errorUtils';
@@ -198,6 +199,9 @@ interface WorkspaceToolbarProps {
   tagFilters: string[];
   onToggleTagFilter: (id: string) => void;
   onClearTagFilters: () => void;
+  /** Lọc ticket Jira theo người phụ trách (accountId, hoặc 'unassigned'). Chỉ hiện ở tab Jira. */
+  assigneeFilter?: string;
+  onAssigneeChange?: (v: string) => void;
   /** Lọc theo tài khoản (connectionId) — chỉ hiện khi service của nguồn đang xem có ≥2 account. */
   accountFilter?: string;
   onAccountChange?: (v: string) => void;
@@ -218,6 +222,7 @@ export const WorkspaceToolbar = ({
   sourceType = null,
   importantOnly, onImportantToggle,
   tagFilters, onToggleTagFilter, onClearTagFilters,
+  assigneeFilter, onAssigneeChange,
   accountFilter, onAccountChange,
   searchInput, onSearchChange,
   currentDriveFolderId, currentDriveFolderConnectionId,
@@ -240,6 +245,43 @@ export const WorkspaceToolbar = ({
   const accountConns = accountService
     ? connections.filter((c: ConnectionDto) => c.serviceType.toLowerCase() === accountService && c.status.toLowerCase() === 'active')
     : [];
+
+  // ── Lọc ticket theo người phụ trách (Jira) ──────────────────────────────────
+  // Đồ án chỉ có 1 site/1 project → KHÔNG cần dropdown chọn dự án nữa; tự lấy project
+  // duy nhất để hỏi danh sách người (assignable-users theo project). assignee gắn theo
+  // project nên cần biết project + connection nào để hỏi.
+  const jiraConns = connections.filter(
+    (c: ConnectionDto) => c.serviceType.toLowerCase() === 'jira' && c.status.toLowerCase() === 'active'
+  );
+  const projectQueries = useQueries({
+    queries: (sourceType === 'Ticket' ? jiraConns : []).map((c: ConnectionDto) => ({
+      queryKey: ['jira', 'projects', c.id],
+      queryFn: () => jiraApi.getProjects(c.id),
+      staleTime: 5 * 60_000,
+    }))
+  });
+  const jiraConnIds = jiraConns.map((c: ConnectionDto) => c.id).join(',');
+  const availableProjects = useMemo(() => {
+    const connIds = jiraConnIds ? jiraConnIds.split(',') : [];
+    const map = new Map<string, { name: string; connectionId: string }>();
+    projectQueries.forEach((q, i) => {
+      const connId = connIds[i];
+      if (q.data && connId) {
+        q.data.forEach((p: JiraProject) => map.set(p.key, { name: p.name, connectionId: connId }));
+      }
+    });
+    return Array.from(map.entries())
+      .map(([key, v]) => ({ key, name: v.name, connectionId: v.connectionId }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projectQueries, jiraConnIds]);
+  // 1 project (thực tế đồ án) → dùng luôn; nhiều project → lấy project đầu để lấy danh sách người.
+  const assigneeProject = availableProjects[0];
+  const { data: assignees = [] } = useQuery({
+    queryKey: ['jira', 'assignableUsers', assigneeProject?.connectionId, assigneeProject?.key, ''],
+    queryFn: () => jiraApi.getAssignableUsers(assigneeProject!.connectionId, assigneeProject!.key),
+    enabled: sourceType === 'Ticket' && !!assigneeProject,
+    staleTime: 5 * 60_000,
+  });
 
   // Giữ NGUYÊN context khi đổi view (Danh sách ↔ Bảng): cả folder LẪN nguồn (tab Email/Jira/…).
   const q = (() => {
@@ -425,6 +467,24 @@ export const WorkspaceToolbar = ({
             className="w-full h-9 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
+        {/* Lọc người phụ trách (Jira) — CHỈ ở tab Jira, khi đã lấy được project (để có danh sách người). */}
+        {onAssigneeChange && sourceType === 'Ticket' && assigneeProject && (
+          <div className="w-52 shrink-0">
+            <Select
+              value={assigneeFilter ?? ''}
+              onChange={onAssigneeChange}
+              className="h-9 text-[13px]"
+              icon={<UserRound className="w-4 h-4" />}
+              placeholder={t('toolbar.allAssignees')}
+              options={[
+                { value: '', label: t('toolbar.allAssignees') },
+                // BE hiểu "unassigned" = ticket chưa gán ai (ItemRepository lọc theo giá trị này).
+                { value: 'unassigned', label: t('toolbar.unassigned') },
+                ...assignees.map(a => ({ value: a.accountId, label: a.displayName })),
+              ]}
+            />
+          </div>
+        )}
         {/* Lọc theo tài khoản — CHỈ hiện khi nguồn đang xem (Gmail/Calendar/Drive) có ≥2 account. */}
         {onAccountChange && accountConns.length >= 2 && (
           <div className="w-52 shrink-0">
