@@ -70,13 +70,6 @@ public interface IItemRepository : IGenericRepository<Item>
     Task<List<Item>> GetFilesByExternalIdsAsync(Guid userId, IEnumerable<string> externalIds, CancellationToken ct = default);
 
     /// <summary>
-    /// Lấy toàn bộ Item Drive (Type=File, chưa archive) của user thuộc các connection cho trước — để
-    /// dựng cây cha-con Drive trong memory (metadata.parents). Dùng khi nhét 1 folder Drive vào app-Folder
-    /// thì kéo theo tất cả item con đệ quy (để account được share thấy nội dung bên trong).
-    /// </summary>
-    Task<List<Item>> GetDriveItemsByConnectionsAsync(Guid userId, IReadOnlyList<Guid> connectionIds, CancellationToken ct = default);
-
-    /// <summary>
     /// Xóa toàn bộ Items và các liên kết (ItemFolders, TagAssignments) thuộc connectionId.
     /// Dùng khi disconnect connection để tránh vi phạm Unique Index (ConnectionId, ExternalId) do ConnectionId=NULL trùng lặp.
     /// </summary>
