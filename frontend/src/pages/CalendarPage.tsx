@@ -59,6 +59,15 @@ import {
   LAYER_TOGGLE_ACTIVE,
   LAYER_TOGGLE_INACTIVE,
 } from '../lib/calendarEntryVisuals';
+import {
+  DAY_TIME_GRID,
+  HALF_HOUR_HEIGHT,
+  WEEK_TIME_GRID,
+  buildTimeSlots,
+  entryTop,
+  gridHeight,
+  slotMinutes,
+} from '../lib/calendarTimeGrid';
 
 type CalendarRange = 'month' | 'week' | 'day' | 'year';
 type CalendarEntryKind = 'event' | 'scheduled' | 'jira';
@@ -92,10 +101,6 @@ interface UpdateEventVariables {
 
 const DRAG_TYPE = 'application/x-workspace-calendar-event';
 const CONFLICT_RECOVERY_DELAY_MS = 2_000;
-
-const WEEK_START_HOUR = 7;
-const WEEK_END_HOUR = 21;
-const HALF_HOUR_HEIGHT = 28;
 
 const TIMED_ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
   event: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200',
@@ -1088,8 +1093,8 @@ export function CalendarPage() {
   const renderWeek = () => {
     const weekStart = startOfWeek(cursor);
     const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
-    const slots = Array.from({ length: (WEEK_END_HOUR - WEEK_START_HOUR) * 2 }, (_, index) => index);
-    const height = slots.length * HALF_HOUR_HEIGHT;
+    const slots = buildTimeSlots(WEEK_TIME_GRID);
+    const height = gridHeight(WEEK_TIME_GRID);
 
     return (
       <div className="min-w-[960px] flex-1">
@@ -1130,7 +1135,7 @@ export function CalendarPage() {
           <div style={{ height }}>
             {slots.map(slot => (
               <div key={slot} style={{ height: HALF_HOUR_HEIGHT }} className="pr-2 text-right text-[10px] tabular-nums text-slate-400">
-                {slot % 2 === 0 ? `${pad(WEEK_START_HOUR + slot / 2)}:00` : ''}
+                {slot % 2 === 0 ? `${pad(WEEK_TIME_GRID.startHour + slot / 2)}:00` : ''}
               </div>
             ))}
           </div>
@@ -1140,7 +1145,7 @@ export function CalendarPage() {
             return (
               <div key={key} className="relative border-l border-slate-100 dark:border-slate-800" style={{ height }}>
                 {slots.map(slot => {
-                  const minutes = WEEK_START_HOUR * 60 + slot * 30;
+                  const minutes = slotMinutes(WEEK_TIME_GRID, slot);
                   const slotTime = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
                   const slotKey = `slot-${key}-${slotTime}`;
                   return (
@@ -1161,7 +1166,7 @@ export function CalendarPage() {
                 {timedEntries.map(entry => {
                   const startMinutes = entry.start.getHours() * 60 + entry.start.getMinutes();
                   const endMinutes = entry.end.getHours() * 60 + entry.end.getMinutes();
-                  const top = ((startMinutes - WEEK_START_HOUR * 60) / 30) * HALF_HOUR_HEIGHT;
+                  const top = entryTop(WEEK_TIME_GRID, startMinutes);
                   const entryHeight = Math.max(24, ((Math.max(endMinutes, startMinutes + 30) - startMinutes) / 30) * HALF_HOUR_HEIGHT - 2);
                   if (top < -entryHeight || top >= height) return null;
                   const Icon = entry.kind === 'scheduled' ? Mail : entry.kind === 'jira' ? Flag : CalendarDays;
@@ -1190,8 +1195,8 @@ export function CalendarPage() {
   };
 
   const renderDay = () => {
-    const slots = Array.from({ length: (WEEK_END_HOUR - WEEK_START_HOUR) * 2 }, (_, index) => index);
-    const height = slots.length * HALF_HOUR_HEIGHT;
+    const slots = buildTimeSlots(DAY_TIME_GRID);
+    const height = gridHeight(DAY_TIME_GRID);
     const todayKey = dateKey(cursor);
     const allDayEntries = entriesForDay(cursor).filter(entry => entry.allDay);
     const timedEntries = entriesForDay(cursor).filter(entry => !entry.allDay);
@@ -1219,13 +1224,13 @@ export function CalendarPage() {
           <div style={{ height }}>
             {slots.map(slot => (
               <div key={slot} style={{ height: HALF_HOUR_HEIGHT }} className="pr-2 text-right text-[10px] tabular-nums text-slate-400">
-                {slot % 2 === 0 ? `${pad(WEEK_START_HOUR + slot / 2)}:00` : ''}
+                {slot % 2 === 0 ? `${pad(DAY_TIME_GRID.startHour + slot / 2)}:00` : ''}
               </div>
             ))}
           </div>
           <div className="relative border-l border-slate-100 dark:border-slate-800" style={{ height }}>
             {slots.map(slot => {
-              const minutes = WEEK_START_HOUR * 60 + slot * 30;
+              const minutes = slotMinutes(DAY_TIME_GRID, slot);
               const slotTime = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
               const slotKey = `slot-${todayKey}-${slotTime}`;
               return (
@@ -1246,7 +1251,7 @@ export function CalendarPage() {
             {timedEntries.map(entry => {
               const startMinutes = entry.start.getHours() * 60 + entry.start.getMinutes();
               const endMinutes = entry.end.getHours() * 60 + entry.end.getMinutes();
-              const top = ((startMinutes - WEEK_START_HOUR * 60) / 30) * HALF_HOUR_HEIGHT;
+              const top = entryTop(DAY_TIME_GRID, startMinutes);
               const entryHeight = Math.max(24, ((Math.max(endMinutes, startMinutes + 30) - startMinutes) / 30) * HALF_HOUR_HEIGHT - 2);
               if (top < -entryHeight || top >= height) return null;
               const Icon = entry.kind === 'scheduled' ? Mail : entry.kind === 'jira' ? Flag : CalendarDays;
