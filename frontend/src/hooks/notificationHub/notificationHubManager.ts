@@ -27,8 +27,37 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-function wait(delayMs: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+/**
+ * Chờ backoff trước khi retry start hub.
+ * Cắt ngang sớm khi: mạng online lại, tab visible lại, hoặc AbortSignal (logout/đổi user).
+ * Không chỉ setTimeout — nếu không wake sớm thì online/visibility ở hook gọi connect()
+ * cũng không giúp vì connect() trả về cùng startPromise đang ngủ.
+ */
+function waitBeforeRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (delayMs <= 0 || signal?.aborted) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      window.removeEventListener('online', finish);
+      document.removeEventListener('visibilitychange', onVisibility);
+      signal?.removeEventListener('abort', finish);
+      resolve();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') finish();
+    };
+
+    const timer = window.setTimeout(finish, delayMs);
+    window.addEventListener('online', finish);
+    document.addEventListener('visibilitychange', onVisibility);
+    signal?.addEventListener('abort', finish);
+  });
 }
 
 class NotificationHubManager {
@@ -36,6 +65,8 @@ class NotificationHubManager {
   private currentUserId: string | null = null;
   private startPromise: Promise<void> | null = null;
   private lifecycleVersion = 0;
+  /** Abort waitBeforeRetry khi disconnect / đổi lifecycle. */
+  private retryAbort: AbortController | null = null;
   private readonly subscribers = new Set<NotificationHandler>();
 
   subscribe(handler: NotificationHandler): () => void {
@@ -78,6 +109,8 @@ class NotificationHubManager {
 
   async disconnect(): Promise<void> {
     ++this.lifecycleVersion;
+    this.retryAbort?.abort();
+    this.retryAbort = null;
 
     const oldConnection = this.connection;
     this.connection = null;
@@ -95,6 +128,11 @@ class NotificationHubManager {
 
   private async startWithRetry(userId: string, lifecycleVersion: number): Promise<void> {
     let attempt = 0;
+    // Một AbortController cho cả vòng retry của lifecycle này.
+    if (!this.retryAbort || this.retryAbort.signal.aborted) {
+      this.retryAbort = new AbortController();
+    }
+    const signal = this.retryAbort.signal;
 
     while (this.isCurrentLifecycle(userId, lifecycleVersion)) {
       const connection = this.buildConnection(userId, lifecycleVersion);
@@ -131,7 +169,7 @@ class NotificationHubManager {
           console.warn(`[NotificationHub] Start failed. Retry in ${delayMs}ms`, error);
         }
 
-        await wait(delayMs);
+        await waitBeforeRetry(delayMs, signal);
       }
     }
   }
