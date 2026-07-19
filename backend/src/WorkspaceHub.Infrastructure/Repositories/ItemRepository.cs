@@ -157,6 +157,29 @@ public class ItemRepository : GenericRepository<Item>, IItemRepository
             // Bỏ qua filter này nếu đang browse Workspace Folder (folderId != null) hoặc đang Search.
             query = query.Where(i => i.Type != ItemType.File || (i.MetadataJson != null && i.MetadataJson.Contains("\"isTopLevel\":true")));
         }
+        else if (folderId.HasValue && string.IsNullOrEmpty(search))
+        {
+            // Workspace folder (cấp trên cùng, chưa duyệt vào thư mục Drive nào).
+            //
+            // Ẩn item Drive mà CHA của nó cũng nằm trong chính folder này — nếu không, upload
+            // "abc.txt" vào thư mục Drive "Test folder" (đã gán vào workspace folder) sẽ khiến
+            // abc.txt hiện NGANG HÀNG với Test folder, đồng thời vẫn hiện khi mở Test folder ra
+            // → cùng một file xuất hiện ở hai nơi. Chỉ giữ item "gốc" theo góc nhìn của folder này.
+            //
+            // KHÔNG dùng isTopLevel (cờ đó tính theo My Drive root, không theo workspace folder):
+            // một thư mục Drive cấp sâu vẫn phải hiện khi user chủ động gán nó vào workspace folder.
+            var fid = folderId.Value;
+            query = query.Where(i =>
+                i.Type != ItemType.File
+                || i.MetadataJson == null
+                || !Set.Any(p =>
+                        p.Type == ItemType.File
+                        && p.UserId == i.UserId
+                        && !p.IsArchived
+                        && p.ExternalId != null
+                        && p.ItemFolders.Any(pf => pf.FolderId == fid)
+                        && i.MetadataJson.Contains("\"" + p.ExternalId + "\"")));
+        }
 
         // DriveKind filter — chỉ Thư mục / chỉ Tệp trong view Drive. FE chỉ gửi param này ở ngữ cảnh Drive.
         // "folder" = metadata có "isFolder":true. "file" = MỌI thứ còn lại (NOT folder) — định nghĩa theo

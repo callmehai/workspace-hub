@@ -38,7 +38,7 @@ public class JiraTicketService : IJiraTicketService
             // 404 "Item with id '...' was not found" (lộ GUID, người dùng không hiểu vì sao).
             if (await _folders.IsItemSharedWithUserAsync(itemId, userId, ct))
                 throw new ForbiddenException(
-                    "Bạn chỉ có quyền xem mục này trong thư mục được chia sẻ. Hãy yêu cầu chủ sở hữu cấp quyền chỉnh sửa.");
+                    "You only have view access to this item in a shared folder.", ErrorCodes.SharedViewerReadOnly);
 
             throw new NotFoundException("Item", itemId);
         }

@@ -146,15 +146,15 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can add items to this folder.");
+            throw new ForbiddenException("Only the folder owner can add items to this folder.", ErrorCodes.FolderOwnerOnly);
 
         var item = await _itemRepo.GetByIdAndUserAsync(request.ItemId, userId, ct);
         if (item == null)
-            throw new ForbiddenException("The item does not belong to the current user or does not exist.");
+            throw new ForbiddenException("The item does not belong to the current user or does not exist.", ErrorCodes.ItemNotOwned);
 
         var exists = await _folderRepo.ItemFolderExistsAsync(request.ItemId, folderId, ct);
         if (exists)
-            throw new ConflictException("Item is already in this folder.");
+            throw new ConflictException("Item is already in this folder.", ErrorCodes.ItemAlreadyInFolder);
 
         var maxPos = await _folderRepo.GetMaxItemPositionAsync(folderId, ct);
 
@@ -189,7 +189,7 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can add items to this folder.");
+            throw new ForbiddenException("Only the folder owner can add items to this folder.", ErrorCodes.FolderOwnerOnly);
 
         var uniqueRequestIds = request.ItemIds.Distinct().ToList();
         var ownedItems = await _itemRepo.GetByIdsAndUserAsync(uniqueRequestIds, userId, ct);
@@ -197,7 +197,7 @@ public class FolderService : IFolderService
 
         if (uniqueRequestIds.Any(id => !ownedItemIds.Contains(id)))
         {
-            throw new ForbiddenException("One or more items do not belong to the current user or do not exist.");
+            throw new ForbiddenException("One or more items do not belong to the current user or do not exist.", ErrorCodes.ItemsNotOwned);
         }
 
         // Get existing items in folder
@@ -232,7 +232,7 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can remove items from this folder.");
+            throw new ForbiddenException("Only the folder owner can remove items from this folder.", ErrorCodes.FolderOwnerOnly);
 
         var itemFolder = await _folderRepo.GetItemFolderAsync(itemId, folderId, ct)
             ?? throw new NotFoundException($"Item {itemId} is not in folder {folderId}.");
@@ -250,7 +250,7 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can remove items from this folder.");
+            throw new ForbiddenException("Only the folder owner can remove items from this folder.", ErrorCodes.FolderOwnerOnly);
 
         var itemFolders = await _folderRepo.GetItemFoldersAsync(request.ItemIds, folderId, ct);
         if (itemFolders.Any())

@@ -36,9 +36,12 @@ Bật **OData query options** cho các endpoint **GET đọc collection trên `I
 ## Error format chuẩn (SCRUM-24 ✅)
 Mọi lỗi (4xx/5xx) đi qua `ExceptionMiddleware` → trả body thống nhất:
 ```json
-{ "error": "NotFoundError", "message": "...", "details": [], "traceId": "..." }
+{ "error": "NotFoundError", "code": "ITEM_NOT_OWNED", "message": "...", "details": [], "traceId": "..." }
 ```
 - `error`: loại lỗi (`ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `BusinessRuleError`, `CsrfError`, `InternalError`).
+- `code` ⭐ **(tuỳ chọn)**: mã nghiệp vụ **ổn định** để FE dịch sang ngôn ngữ đang chọn (i18n). **API không dịch** — `message` luôn tiếng Anh, dành cho log/Swagger/debug; FE map `code` → key i18n. Chỉ xuất hiện khi exception có gắn mã (bỏ hẳn khỏi JSON nếu null → lỗi cũ giữ nguyên contract).
+  - Mã hiện có (nguồn: `ErrorCodes` trong `WorkspaceHub.Application.Common`): `FOLDER_OWNER_ONLY` · `ITEM_NOT_OWNED` · `ITEMS_NOT_OWNED` · `ITEM_ALREADY_IN_FOLDER` · `SHARED_VIEWER_READ_ONLY` · `NOT_YOUR_CONNECTION` · `ITEM_NOT_CALENDAR_EVENT` · `ITEM_NOT_LINKED_TO_CONNECTION`.
+  - Thêm mã mới → thêm hằng số ở `ErrorCodes` **và** key i18n ở cả `vi` lẫn `en` (`frontend/src/i18n/translations.ts`). Mã đã dùng = contract, đổi tên là breaking change.
 - `details[]`: với 400 validation = `"field: message"` mỗi lỗi; với lỗi khác = `[]`.
 - `traceId`: đối chiếu log.
 - **Mapping exception → status:** ValidationException→400 · UnauthorizedException→401 · ForbiddenException→403 · NotFoundException→404 · ConflictException→409 · BusinessRuleException→422 · CsrfException→400 · còn lại→500.

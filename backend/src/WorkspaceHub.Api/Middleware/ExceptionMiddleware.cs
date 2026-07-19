@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FluentValidation;
 using WorkspaceHub.Application.Common;
 
@@ -29,7 +30,13 @@ public class ExceptionMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionMiddleware> _logger;
     private readonly IHostEnvironment _env;
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    // WhenWritingNull: `code` (mã lỗi cho FE i18n) chỉ xuất hiện khi exception có gắn mã →
+    // giữ nguyên contract cũ { error, message, details, traceId } cho các lỗi chưa gắn.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger, IHostEnvironment env)
     {
@@ -127,7 +134,18 @@ public class ExceptionMiddleware
             return;
         }
 
-        await WriteResponseAsync(context, statusCode, errorType, ex.Message, Array.Empty<string>(), traceId);
+        // `code` = mã nghiệp vụ ổn định để FE dịch sang ngôn ngữ đang chọn (xem ErrorCodes).
+        // Exception không gắn code → null, FE fallback về message chung theo status code.
+        var code = ex switch
+        {
+            ForbiddenException f    => f.Code,
+            NotFoundException n     => n.Code,
+            ConflictException c     => c.Code,
+            BusinessRuleException b => b.Code,
+            _                       => null
+        };
+
+        await WriteResponseAsync(context, statusCode, errorType, ex.Message, Array.Empty<string>(), traceId, code);
     }
 
     /// <summary>Ghi object tuỳ ý làm JSON body (camelCase) — dùng cho 409 Case 1 Drive.</summary>
@@ -143,7 +161,8 @@ public class ExceptionMiddleware
     }
 
     private async Task WriteResponseAsync(
-        HttpContext context, HttpStatusCode statusCode, string error, string message, string[] details, string traceId)
+        HttpContext context, HttpStatusCode statusCode, string error, string message, string[] details, string traceId,
+        string? code = null)
     {
         // Nếu response đã bắt đầu gửi (đã ghi header/body) thì không thể ghi đè → chỉ log, không nuốt lỗi âm thầm.
         if (context.Response.HasStarted)
@@ -157,6 +176,7 @@ public class ExceptionMiddleware
         var body = new
         {
             error,
+            code,
             message,
             details,
             traceId

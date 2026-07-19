@@ -2,6 +2,50 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-19] i18n message lỗi qua `code` + Drive: hết lặp file con trong system folder, breadcrumb đúng ngữ cảnh
+
+### ⭐ Quyết định: BE trả **mã lỗi**, FE dịch — không phải BE trả tiếng Việt
+
+**Vấn đề.** Toast lỗi hiện tiếng Anh giữa giao diện tiếng Việt (vd *"The item does not belong to the
+current user or does not exist."*), vì `handleApiError` hiển thị thẳng `data.message` mà BE hardcode
+tiếng Anh. Một số service trước đây "chữa" bằng cách viết message tiếng Việt trong BE — cách này làm
+app **không thật sự song ngữ** (chọn EN vẫn ra tiếng Việt) và đặt trách nhiệm hiển thị nhầm chỗ.
+
+**Chốt.** API không biết ngôn ngữ hiển thị. Response lỗi thêm field **`code`** — mã nghiệp vụ ổn định:
+
+```json
+{ "error": "ForbiddenError", "code": "ITEM_NOT_OWNED", "message": "...", "traceId": "..." }
+```
+
+- BE: hằng số trong `ErrorCodes` (`WorkspaceHub.Application.Common`); các exception nhận thêm tham số
+  `code` **tuỳ chọn**. `message` giữ **tiếng Anh** cho log/Swagger/debug.
+- FE: `ERROR_CODE_KEYS` trong `errorUtils.ts` map `code` → key i18n, dịch theo ngôn ngữ đang chọn.
+  Thứ tự ưu tiên: **mã đã dịch → `data.message` → message chung theo status**.
+- **Tương thích ngược:** `code` chỉ xuất hiện khi exception có gắn mã (`JsonIgnoreCondition.WhenWritingNull`);
+  lỗi chưa gắn mã giữ nguyên contract cũ và vẫn hiển thị bình thường.
+- 4 chỗ đang throw message tiếng Việt cho Viewer read-only → chuyển sang `SHARED_VIEWER_READ_ONLY`.
+
+> **Khi thêm mã mới:** thêm hằng số ở `ErrorCodes` **và** key i18n ở cả `vi` lẫn `en`
+> (TypeScript ép parity — thiếu một bên là fail compile). Mã đã dùng = API contract, đổi tên là breaking change.
+>
+> ⚠️ `ConflictException` có 2 ctor `(message, code)` và `(message, payload)`. Ctor payload nay **chặn
+> `string`** ở runtime — truyền mã lỗi nhầm vào nhánh payload sẽ ném `ArgumentException` thay vì âm thầm
+> sinh body 409 sai.
+
+### Đã fix — Drive
+
+- **File con hiện ở HAI nơi trong system folder.** Upload `abc.txt` vào thư mục Drive "Test folder"
+  (đã gán vào system folder) → `abc.txt` hiện **ngang hàng** với "Test folder", đồng thời vẫn hiện khi
+  mở "Test folder" ra. Nguyên nhân: nhánh lọc phân cấp cũ (`isTopLevel`) bị loại trừ khi `folderId != null`,
+  nên ở view system folder **không có filter nào** ẩn con đi. Nay ẩn item Drive mà **cha của nó cũng nằm
+  trong chính folder đó**. Không dùng `isTopLevel` vì cờ đó tính theo My Drive root — một thư mục Drive
+  cấp sâu vẫn phải hiện khi user chủ động gán vào system folder. *(Chỉ ảnh hưởng view system folder;
+  All items và tab Drive không có bug này.)*
+- **Breadcrumb "Mở thư mục" mất ngữ cảnh.** Nút này luôn điều hướng về `/?type=File`, cho breadcrumb
+  `Drive/<tên thư mục>` bất kể đang đứng ở đâu. Nay giữ nguyên query hiện tại (`?folder=`, `?type=`) và
+  **nối tiếp** drive-stack thay vì reset về 1 cấp. Gốc breadcrumb hiển thị **tên system folder** khi có
+  `?folder=`. Mở từ Kanban/Calendar (không có drill-down) vẫn về view Drive như cũ.
+
 ## [2026-07-19] Folder Sharing — vá lỗ hổng sau khi merge Calendar rewrite + tag private + Drive filter
 
 > Vòng sửa sau khi merge `develop` (viết lại toàn bộ Google Calendar). Code Calendar mới **chưa biết
