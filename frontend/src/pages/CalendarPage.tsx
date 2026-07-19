@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
-  AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink,
+  AlertCircle, AtSign, CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink,
   Flag, Loader2, Mail, MapPin, Plus, Users, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -26,6 +26,7 @@ import {
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ItemDetail } from '../components/ItemDetail';
 import { EventDetailPopup } from '../components/calendar/EventDetailPopup';
+import { Select } from '../components/Select';
 import { CalendarInvitationDialog } from '../components/calendar/CalendarInvitationDialog';
 import { CalendarGuestNotificationDialog } from '../components/calendar/CalendarGuestNotificationDialog';
 import {
@@ -59,6 +60,15 @@ import {
   LAYER_TOGGLE_ACTIVE,
   LAYER_TOGGLE_INACTIVE,
 } from '../lib/calendarEntryVisuals';
+import {
+  DAY_TIME_GRID,
+  HALF_HOUR_HEIGHT,
+  WEEK_TIME_GRID,
+  buildTimeSlots,
+  entryTop,
+  gridHeight,
+  slotMinutes,
+} from '../lib/calendarTimeGrid';
 
 type CalendarRange = 'month' | 'week' | 'day' | 'year';
 type CalendarEntryKind = 'event' | 'scheduled' | 'jira';
@@ -92,10 +102,6 @@ interface UpdateEventVariables {
 
 const DRAG_TYPE = 'application/x-workspace-calendar-event';
 const CONFLICT_RECOVERY_DELAY_MS = 2_000;
-
-const WEEK_START_HOUR = 7;
-const WEEK_END_HOUR = 21;
-const HALF_HOUR_HEIGHT = 28;
 
 const TIMED_ENTRY_CLASSES: Record<CalendarEntryKind, string> = {
   event: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200',
@@ -274,6 +280,67 @@ function entryOccursOn(entry: CalendarEntry, day: Date) {
     && day < new Date(endExclusive.getFullYear(), endExclusive.getMonth(), endExclusive.getDate());
 }
 
+function invitationBelongsToAccount(invitation: CalendarInvitation, accountEmail?: string) {
+  if (!accountEmail) return true;
+  return invitation.inviteeEmail.trim().toLowerCase() === accountEmail;
+}
+
+/** Ghép invitation theo iCalUid + email connection — tránh map global ghi đè giữa 2 account. */
+function findInvitationForConnection(
+  invitations: CalendarInvitation[],
+  iCalUid: string | undefined,
+  connectionEmail: string | undefined,
+): CalendarInvitation | undefined {
+  if (!iCalUid || !connectionEmail) return undefined;
+  const email = connectionEmail.toLowerCase();
+  return invitations.find(invitation =>
+    invitation.iCalUid === iCalUid
+    && invitation.inviteeEmail.trim().toLowerCase() === email);
+}
+
+function getEventGroupKey(entry: CalendarEntry): string {
+  if (entry.kind !== 'event' || !entry.item) return `${entry.kind}:${entry.id}`;
+  const metadata = parseMetadata(entry.item);
+  const iCalUid = asString(metadata.iCalUid);
+  // All-day: dùng dateKey local — tránh toISOString lệch ngày theo TZ.
+  const startKey = entry.allDay ? dateKey(entry.start) : entry.start.toISOString();
+  const endKey = entry.allDay ? dateKey(entry.end) : entry.end.toISOString();
+  if (iCalUid) return `ical:${iCalUid}:${startKey}:${endKey}`;
+  if (entry.item.externalId) return `external:${entry.item.externalId}:${startKey}:${endKey}`;
+  return `event:${entry.id}`;
+}
+
+function getEventDisplayPriority(entry: CalendarEntry, connections: ConnectionDto[]): number {
+  if (entry.kind !== 'event' || !entry.item) return 0;
+  const metadata = parseMetadata(entry.item);
+  const organizerEmail = asString(metadata.organizerEmail)?.toLowerCase();
+  const connection = connections.find(candidate => candidate.id === entry.item?.connectionId);
+  const connectionEmail = connection?.providerAccountId?.toLowerCase();
+  // Chỉ rank owner khi khớp organizer — thiếu organizerEmail không coi mọi bản là owner.
+  if (organizerEmail && connectionEmail && organizerEmail === connectionEmail) return 3;
+  if (metadata.guestsCanModify === true) return 2;
+  return 1;
+}
+
+function pickEventForDisplay(left: CalendarEntry, right: CalendarEntry, connections: ConnectionDto[]) {
+  const leftRank = getEventDisplayPriority(left, connections);
+  const rightRank = getEventDisplayPriority(right, connections);
+  if (rightRank !== leftRank) return rightRank > leftRank ? right : left;
+  // Tie: giữ bản gặp trước (ổn định). Không dùng item.isOwner — đó là quyền folder app, không phải Google organizer.
+  return left;
+}
+
+function mergeSameEventEntries(entries: CalendarEntry[], connections: ConnectionDto[], accountFilter: string) {
+  if (accountFilter) return entries;
+  const byIdentity = new Map<string, CalendarEntry>();
+  for (const entry of entries) {
+    const identity = getEventGroupKey(entry);
+    const existing = byIdentity.get(identity);
+    byIdentity.set(identity, existing ? pickEventForDisplay(existing, entry, connections) : entry);
+  }
+  return Array.from(byIdentity.values());
+}
+
 function formatMonthTitle(
   date: Date,
   lang: 'vi' | 'en',
@@ -364,6 +431,7 @@ export function CalendarPage() {
   const [cursor, setCursor] = useState(() => new Date());
   const [search, setSearch] = useState('');
   const [layers, setLayers] = useState<Record<CalendarEntryKind, boolean>>({ event: true, scheduled: true, jira: true });
+  const [accountFilter, setAccountFilter] = useState('');
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
   const [selectedEntryAnchor, setSelectedEntryAnchor] = useState<DOMRect | null>(null);
@@ -390,12 +458,27 @@ export function CalendarPage() {
   const occurredFrom = localDayStartIso(rangeStart);
   const occurredTo = localDayStartIso(rangeEnd);
 
-  const calendarItemsKey = ['calendar-items', folderId, googleCalendarOnly ? 'event-only' : 'combined', range, occurredFrom, occurredTo] as const;
-  const { data: itemPage, isLoading: itemsLoading, isError: itemsError, isFetching } = useQuery({
-    queryKey: calendarItemsKey,
+  const calendarEventsKey = [
+    'calendar-items',
+    'events',
+    folderId,
+    accountFilter || 'all-accounts',
+    range,
+    occurredFrom,
+    occurredTo,
+  ] as const;
+
+  const {
+    data: eventPage,
+    isLoading: eventsLoading,
+    isError: eventsError,
+    isFetching: eventsFetching,
+  } = useQuery({
+    queryKey: calendarEventsKey,
     queryFn: () => itemsApi.getItems({
       folderId: folderId ?? undefined,
-      types: googleCalendarOnly ? ['Event'] : ['Event', 'Ticket'],
+      types: ['Event'],
+      connectionId: accountFilter || undefined,
       occurredFrom,
       occurredTo,
       page: 1,
@@ -405,6 +488,41 @@ export function CalendarPage() {
     refetchInterval: pollMs,
     refetchIntervalInBackground: true,
   });
+
+  const calendarTicketsKey = [
+    'calendar-items',
+    'tickets',
+    folderId,
+    range,
+    occurredFrom,
+    occurredTo,
+  ] as const;
+
+  const {
+    data: ticketPage,
+    isLoading: ticketsLoading,
+    isError: ticketsError,
+    isFetching: ticketsFetching,
+  } = useQuery({
+    queryKey: calendarTicketsKey,
+    queryFn: () => itemsApi.getItems({
+      folderId: folderId ?? undefined,
+      types: ['Ticket'],
+      occurredFrom,
+      occurredTo,
+      page: 1,
+      limit: 200,
+    }),
+    enabled: !googleCalendarOnly,
+    staleTime: 0,
+    refetchInterval: pollMs,
+    refetchIntervalInBackground: true,
+  });
+
+  const calendarItemsKey = calendarEventsKey;
+  const itemsLoading = eventsLoading || (!googleCalendarOnly && ticketsLoading);
+  const itemsError = eventsError || (!googleCalendarOnly && ticketsError);
+  const isFetching = eventsFetching || (!googleCalendarOnly && ticketsFetching);
 
   const { data: scheduledPage, isLoading: scheduledLoading } = useQuery({
     queryKey: ['calendar-scheduled-emails'],
@@ -445,9 +563,22 @@ export function CalendarPage() {
     enabled: Boolean(linkedEventId),
   });
 
-  const gcalConnections = connections.filter(connection =>
-    connection.serviceType.toLowerCase() === 'gcal' && connection.status.toLowerCase() === 'active');
+  const gcalConnections = useMemo(() => (
+    connections.filter(connection =>
+      connection.serviceType.toLowerCase() === 'gcal' && connection.status.toLowerCase() === 'active')
+  ), [connections]);
+  const selectedCalendarAccountEmail = useMemo(() => {
+    if (!accountFilter) return undefined;
+    return gcalConnections.find(connection => connection.id === accountFilter)?.providerAccountId?.trim().toLowerCase();
+  }, [accountFilter, gcalConnections]);
   const currentFolder = folderId ? folders.find(folder => folder.id === folderId) ?? null : null;
+
+  useEffect(() => {
+    if (accountFilter && !gcalConnections.some(connection => connection.id === accountFilter)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAccountFilter('');
+    }
+  }, [accountFilter, gcalConnections]);
 
   const getEventAccentDot = (entry: CalendarEntry) => {
     if (entry.kind === 'event' && entry.item) {
@@ -464,12 +595,18 @@ export function CalendarPage() {
   };
 
   const entries = useMemo(() => {
-    const invitationByICalUid = new Map(invitations.filter(x => x.iCalUid).map(x => [x.iCalUid!, x]));
-    // Google-style: NeedsAction vẫn hiện trên lịch (có noti + có thể RSVP). Chỉ ẩn Declined.
-    const rawItemEntries = (itemPage?.items ?? []).map(itemToEntry).filter((entry): entry is CalendarEntry => {
+    const itemItems = [
+      ...(eventPage?.items ?? []),
+      ...(!googleCalendarOnly ? (ticketPage?.items ?? []) : []),
+    ];
+    // Google-style: NeedsAction vẫn hiện trên lịch (có noti + có thể RSVP). Chỉ ẩn Declined
+    // theo invitation của ĐÚNG connection (inviteeEmail), không map global theo iCalUid.
+    const rawItemEntries = itemItems.map(itemToEntry).filter((entry): entry is CalendarEntry => {
       if (entry === null) return false;
-      const iCalUid = entry.item ? asString(parseMetadata(entry.item).iCalUid) : undefined;
-      const invitation = iCalUid ? invitationByICalUid.get(iCalUid) : undefined;
+      if (!entry.item || entry.kind !== 'event') return true;
+      const connection = connections.find(candidate => candidate.id === entry.item?.connectionId);
+      const iCalUid = asString(parseMetadata(entry.item).iCalUid);
+      const invitation = findInvitationForConnection(invitations, iCalUid, connection?.providerAccountId);
       return !invitation || invitation.status !== 'Declined';
     }).map(entry => {
       if (!entry.item || entry.kind !== 'event') return entry;
@@ -477,7 +614,7 @@ export function CalendarPage() {
       const connection = connections.find(candidate => candidate.id === entry.item?.connectionId);
       const organizerEmail = asString(metadata.organizerEmail);
       const iCalUid = asString(metadata.iCalUid);
-      const invitation = iCalUid ? invitationByICalUid.get(iCalUid) : undefined;
+      const invitation = findInvitationForConnection(invitations, iCalUid, connection?.providerAccountId);
       return {
         ...entry,
         // Gắn invitation khi chưa RSVP → click mở dialog Yes/Maybe/No
@@ -487,21 +624,14 @@ export function CalendarPage() {
           || metadata.guestsCanModify === true,
       };
     });
-    
-    // Deduplicate by externalId (same Google Calendar event synced via multiple connections)
-    const seenExternalIds = new Set<string>();
-    const itemEntries = rawItemEntries.filter(entry => {
-      if (entry.item?.externalId) {
-        if (seenExternalIds.has(entry.item.externalId)) return false;
-        seenExternalIds.add(entry.item.externalId);
-      }
-      return true;
-    });
+
+    const itemEntries = mergeSameEventEntries(rawItemEntries, connections, accountFilter);
 
     const seenICalUids = new Set(itemEntries
       .map(entry => entry.item ? asString(parseMetadata(entry.item).iCalUid) : undefined)
       .filter((value): value is string => Boolean(value)));
     const invitationEntries = folderId ? [] : invitations
+      .filter(invitation => invitationBelongsToAccount(invitation, selectedCalendarAccountEmail))
       .filter(invitation => invitation.status !== 'Declined')
       .filter(invitation => !invitation.iCalUid || !seenICalUids.has(invitation.iCalUid))
       .map(invitationToEntry);
@@ -512,7 +642,19 @@ export function CalendarPage() {
       .filter(entry => !queryKind || entry.kind === queryKind)
       .filter(entry => !search.trim() || entry.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
       .sort((left, right) => left.start.getTime() - right.start.getTime());
-  }, [itemPage, scheduledPage, invitations, connections, folderId, googleCalendarOnly, layers, search]);
+  }, [
+    eventPage,
+    ticketPage,
+    scheduledPage,
+    invitations,
+    connections,
+    folderId,
+    googleCalendarOnly,
+    layers,
+    search,
+    accountFilter,
+    selectedCalendarAccountEmail,
+  ]);
 
   const linkedEventEntry = useMemo(() => {
     if (!linkedEventItem || linkedEventItem.type !== 'Event') return null;
@@ -560,9 +702,11 @@ export function CalendarPage() {
     return () => window.clearTimeout(timer);
   }, [linkedEventId, linkedEventEntry, entries, range, cursor]);
 
-  const pendingInvitations = invitations.filter(invitation => invitation.status === 'NeedsAction');
+  const pendingInvitations = invitations.filter(invitation =>
+    invitation.status === 'NeedsAction'
+    && invitationBelongsToAccount(invitation, selectedCalendarAccountEmail));
 
-  const firstConnectionId = gcalConnections[0]?.id ?? '';
+  const defaultCreateConnectionId = accountFilter || gcalConnections[0]?.id || '';
 
   const refreshCalendar = (itemId?: string) => {
     queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
@@ -762,7 +906,7 @@ export function CalendarPage() {
   });
 
   const openCreate = (day: Date, startTime = '09:00', allDay = false) => {
-    const value = emptyCalendarForm(day, firstConnectionId, startTime);
+    const value = emptyCalendarForm(day, defaultCreateConnectionId, startTime);
     value.allDay = allDay;
     setUploadedDriveItemIds([]);
     setPendingDriveAccessSubmit(null);
@@ -929,7 +1073,7 @@ export function CalendarPage() {
 
   const moveEvent = (entryId: string, targetDate: Date, targetTime?: string, forceAllDay?: boolean) => {
     const entry = entries.find(candidate => candidate.id === entryId && candidate.kind === 'event');
-    if (!entry?.item) return;
+    if (!entry?.item || entry.canModify === false) return;
     const allDay = forceAllDay ?? (targetTime !== undefined ? false : entry.allDay);
     let start: Date;
     let end: Date;
@@ -1088,8 +1232,8 @@ export function CalendarPage() {
   const renderWeek = () => {
     const weekStart = startOfWeek(cursor);
     const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
-    const slots = Array.from({ length: (WEEK_END_HOUR - WEEK_START_HOUR) * 2 }, (_, index) => index);
-    const height = slots.length * HALF_HOUR_HEIGHT;
+    const slots = buildTimeSlots(WEEK_TIME_GRID);
+    const height = gridHeight(WEEK_TIME_GRID);
 
     return (
       <div className="min-w-[960px] flex-1">
@@ -1130,7 +1274,7 @@ export function CalendarPage() {
           <div style={{ height }}>
             {slots.map(slot => (
               <div key={slot} style={{ height: HALF_HOUR_HEIGHT }} className="pr-2 text-right text-[10px] tabular-nums text-slate-400">
-                {slot % 2 === 0 ? `${pad(WEEK_START_HOUR + slot / 2)}:00` : ''}
+                {slot % 2 === 0 ? `${pad(WEEK_TIME_GRID.startHour + slot / 2)}:00` : ''}
               </div>
             ))}
           </div>
@@ -1140,7 +1284,7 @@ export function CalendarPage() {
             return (
               <div key={key} className="relative border-l border-slate-100 dark:border-slate-800" style={{ height }}>
                 {slots.map(slot => {
-                  const minutes = WEEK_START_HOUR * 60 + slot * 30;
+                  const minutes = slotMinutes(WEEK_TIME_GRID, slot);
                   const slotTime = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
                   const slotKey = `slot-${key}-${slotTime}`;
                   return (
@@ -1161,7 +1305,7 @@ export function CalendarPage() {
                 {timedEntries.map(entry => {
                   const startMinutes = entry.start.getHours() * 60 + entry.start.getMinutes();
                   const endMinutes = entry.end.getHours() * 60 + entry.end.getMinutes();
-                  const top = ((startMinutes - WEEK_START_HOUR * 60) / 30) * HALF_HOUR_HEIGHT;
+                  const top = entryTop(WEEK_TIME_GRID, startMinutes);
                   const entryHeight = Math.max(24, ((Math.max(endMinutes, startMinutes + 30) - startMinutes) / 30) * HALF_HOUR_HEIGHT - 2);
                   if (top < -entryHeight || top >= height) return null;
                   const Icon = entry.kind === 'scheduled' ? Mail : entry.kind === 'jira' ? Flag : CalendarDays;
@@ -1170,11 +1314,11 @@ export function CalendarPage() {
                       type="button"
                       key={`${entry.kind}-${entry.id}`}
                       data-calendar-entry={`${entry.kind}-${entry.id}`}
-                      draggable={entry.kind === 'event'}
+                      draggable={entry.kind === 'event' && Boolean(entry.item) && entry.canModify !== false}
                       onDragStart={event => dragStart(event, entry)}
                       onClick={event => openEntry(entry, event)}
                       style={{ top: Math.max(0, top), height: entryHeight }}
-                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left text-[11px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' && entry.item && entry.canModify !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                     >
                       <span className="flex items-center gap-1 truncate"><Icon className="h-3 w-3 shrink-0" />{entry.title}</span>
                       <span className="mt-0.5 block text-[10px] font-medium tabular-nums opacity-70">{timeValue(entry.start)}{entry.kind === 'event' ? ` – ${timeValue(entry.end)}` : ''}</span>
@@ -1190,8 +1334,8 @@ export function CalendarPage() {
   };
 
   const renderDay = () => {
-    const slots = Array.from({ length: (WEEK_END_HOUR - WEEK_START_HOUR) * 2 }, (_, index) => index);
-    const height = slots.length * HALF_HOUR_HEIGHT;
+    const slots = buildTimeSlots(DAY_TIME_GRID);
+    const height = gridHeight(DAY_TIME_GRID);
     const todayKey = dateKey(cursor);
     const allDayEntries = entriesForDay(cursor).filter(entry => entry.allDay);
     const timedEntries = entriesForDay(cursor).filter(entry => !entry.allDay);
@@ -1219,13 +1363,13 @@ export function CalendarPage() {
           <div style={{ height }}>
             {slots.map(slot => (
               <div key={slot} style={{ height: HALF_HOUR_HEIGHT }} className="pr-2 text-right text-[10px] tabular-nums text-slate-400">
-                {slot % 2 === 0 ? `${pad(WEEK_START_HOUR + slot / 2)}:00` : ''}
+                {slot % 2 === 0 ? `${pad(DAY_TIME_GRID.startHour + slot / 2)}:00` : ''}
               </div>
             ))}
           </div>
           <div className="relative border-l border-slate-100 dark:border-slate-800" style={{ height }}>
             {slots.map(slot => {
-              const minutes = WEEK_START_HOUR * 60 + slot * 30;
+              const minutes = slotMinutes(DAY_TIME_GRID, slot);
               const slotTime = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
               const slotKey = `slot-${todayKey}-${slotTime}`;
               return (
@@ -1246,7 +1390,7 @@ export function CalendarPage() {
             {timedEntries.map(entry => {
               const startMinutes = entry.start.getHours() * 60 + entry.start.getMinutes();
               const endMinutes = entry.end.getHours() * 60 + entry.end.getMinutes();
-              const top = ((startMinutes - WEEK_START_HOUR * 60) / 30) * HALF_HOUR_HEIGHT;
+              const top = entryTop(DAY_TIME_GRID, startMinutes);
               const entryHeight = Math.max(24, ((Math.max(endMinutes, startMinutes + 30) - startMinutes) / 30) * HALF_HOUR_HEIGHT - 2);
               if (top < -entryHeight || top >= height) return null;
               const Icon = entry.kind === 'scheduled' ? Mail : entry.kind === 'jira' ? Flag : CalendarDays;
@@ -1255,11 +1399,11 @@ export function CalendarPage() {
                   type="button"
                   key={`${entry.kind}-${entry.id}`}
                   data-calendar-entry={`${entry.kind}-${entry.id}`}
-                  draggable={entry.kind === 'event'}
+                  draggable={entry.kind === 'event' && Boolean(entry.item) && entry.canModify !== false}
                   onDragStart={event => dragStart(event, entry)}
                   onClick={event => openEntry(entry, event)}
                   style={{ top: Math.max(0, top), height: entryHeight }}
-                  className={`absolute left-2 right-2 z-10 overflow-hidden rounded-lg border px-3 py-1.5 text-left text-[11.5px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                  className={`absolute left-2 right-2 z-10 overflow-hidden rounded-lg border px-3 py-1.5 text-left text-[11.5px] font-semibold shadow-sm ${entryChipClasses(entry, connections)} ${entry.kind === 'event' && entry.item && entry.canModify !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                 >
                   <span className="flex items-center gap-1 truncate"><Icon className="h-3 w-3 shrink-0" />{entry.title}</span>
                   <span className="mt-0.5 block text-[10.5px] font-medium tabular-nums opacity-70">{timeValue(entry.start)} – {timeValue(entry.end)}</span>
@@ -1409,6 +1553,24 @@ export function CalendarPage() {
                   {kind === 'event' ? t('calendar.events') : kind === 'scheduled' ? t('calendar.scheduledEmails') : t('calendar.jiraDeadlines')}
                 </button>
               ))}
+            {gcalConnections.length >= 2 && (
+              <div className="w-56 shrink-0">
+                <Select
+                  value={accountFilter}
+                  onChange={setAccountFilter}
+                  className="h-8 text-[12.5px]"
+                  icon={<AtSign className="h-3.5 w-3.5" />}
+                  placeholder={t('toolbar.allAccounts')}
+                  options={[
+                    { value: '', label: t('toolbar.allAccounts') },
+                    ...gcalConnections.map(connection => ({
+                      value: connection.id,
+                      label: connection.providerAccountId || connection.id,
+                    })),
+                  ]}
+                />
+              </div>
+            )}
           </div>
           <button type="button" onClick={() => openCreate(new Date())} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-brand-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-700">
             <Plus className="h-4 w-4" />{t('calendar.createEvent')}
