@@ -138,8 +138,8 @@ List endpoint `GET /api/folders`, `GET /api/tags` → **OData ⊕** (scope theo 
 - `POST /api/folders` — Tạo folder mới.
 - `PUT /api/folders/{id}` — Cập nhật folder metadata (chỉ Owner).
 - `DELETE /api/folders/{id}` — Xoá folder (chỉ Owner).
-- `POST /api/folders/{id}/items` — Gắn item vào folder (chỉ Owner).
-- `DELETE /api/folders/{id}/items/{itemId}` — Gỡ item khỏi folder (chỉ Owner).
+- `POST /api/folders/{id}/items` — Gắn item vào folder (chỉ Owner). Tạo **một** junction cho đúng item được chọn — **folder Google Drive KHÔNG kéo theo con**. Con vẫn xem được: người xem (owner hoặc Viewer được share) double-click vào folder → FE gửi `driveParentId` → item list bỏ qua filter folder và trả con theo `metadata.parents` (xem CHANGELOG [2026-07-19]). Bulk `.../items/bulk` cũng chỉ gán item được chọn.
+- `DELETE /api/folders/{id}/items/{itemId}` — Gỡ item khỏi folder (chỉ Owner). Chỉ gỡ đúng junction của item đó (con không có junction nên không cần gỡ).
 - `GET /api/folders/shared-with-me` — Danh sách folder được chia sẻ với user hiện tại (chỉ đã accept).
 - `POST /api/folders/shares/{shareId}/accept` — Chấp nhận lời mời chia sẻ.
 - `POST /api/folders/shares/{shareId}/decline` — Từ chối lời mời chia sẻ.
@@ -169,7 +169,8 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
 - `POST /api/tags` — `{name, color}` → 201. `color` = hex (`#RGB`/`#RRGGBB`). (400 validation, 409 trùng tên trong user)
 - `PUT /api/tags/{id}` — `{name, color}` → 200. (400 validation, 404 không phải của mình, 409 trùng tên)
 - `DELETE /api/tags/{id}` — 204. Hard delete; DB cascade gỡ mọi `TagAssignment`, **Item giữ nguyên**. (404 không phải của mình)
-- `POST /api/tags/{id}/items` — `{itemId}` → 201 `{tagId, itemId, assignedAt}`. Gắn tag vào item. (404 tag/item không thuộc user, 409 đã gắn)
+- `POST /api/tags/{id}/items` — `{itemId}` → 201 `{tagId, itemId, assignedAt}`. Gắn tag vào item. (404 tag không thuộc user / item không thuộc user **và không được chia sẻ**, 409 đã gắn)
+  - Tag là nhãn **private per-user**: item trong folder được chia sẻ thì **Viewer cũng gắn được** tag riêng (không đụng dữ liệu provider của owner). Mỗi user chỉ thấy tag của chính mình trên item đó.
 - `DELETE /api/tags/{id}/items/{itemId}` — 204. Gỡ tag khỏi item. (404 tag không thuộc user / chưa gắn)
 
 ### Important Contacts — ✅ SCRUM-60 (CRUD)
@@ -182,6 +183,8 @@ Label private của user (không share), gắn cho Item qua junction `TagAssignm
 ## Items (thêm write-back ⭐)
 - `GET /api/items?folderId&statuses&types&isImportant&tagIds&projectKey&assignee&gmailLabel&connectionId&occurredFrom&occurredTo&search&page&limit` — envelope. Trả kèm ETag. `statuses`/`types`/`tagIds` **đa chọn** (query lặp key, vd `?statuses=Inbox&statuses=Doing&types=Email`) — không truyền = không lọc field đó (FE: chip toggle kiểu tag, bấm lại để bỏ). `tagIds` ✅ **SCRUM-71** = lọc item gắn **bất kỳ tag nào** trong danh sách (OR; join `TagAssignment`; lặp key `?tagIds={g1}&tagIds={g2}`). `projectKey` = lọc theo dự án (Jira Ticket). `assignee` = lọc Ticket theo **người phụ trách** (accountId; `"unassigned"` = chưa gán) — match `metadata.assigneeAccountId`. `connectionId` = lọc item thuộc **một connection** (Drive modal chọn folder cha; **bộ lọc tài khoản** ở Inbox/Kanban khi 1 service có nhiều account, v.v.). `gmailLabel` = lọc email theo **Gmail label** (`INBOX`/`SENT`/`DRAFT`/`STARRED`/`IMPORTANT`/`CATEGORY_PROMOTIONS`/`CATEGORY_SOCIAL`/`CATEGORY_UPDATES`/...) — match token trong `metadata.labels`; chỉ Email có labels nên loại khác tự loại. **SPAM/TRASH chưa lọc được** (sync bỏ qua, `includeSpamTrash=false`); Purchases/Bills của Gmail là view ML nội bộ, **không** expose qua API. Mỗi item trong response trả kèm `tags: [{id, name, color}]` (tag đang gắn). **OData ⊕** (target — $filter/$orderby/$select/$top/$skip/$count thay query param thủ công; vẫn scope theo CurrentUserId trước).
 - `GET /api/items/{id}/detail` — metadata + body live. (403 Viewer, 502 provider)
+- `GET /api/items/{id}/calendar-details` — chi tiết event live từ Google Calendar (attendees, reminders, recurrence, quyền khách, `htmlLink`, `canEdit`/`isOrganizer`…). Là thao tác **ĐỌC** → owner **hoặc người được chia sẻ (kể cả Viewer)**; connection dùng để gọi Google là của **owner item** (mô hình proxy). (404 item không tồn tại/không được chia sẻ, 422 item không phải Event / chưa gắn connection, 502 provider)
+- `PATCH /api/items/{id}/rsvp` — trả lời lời mời (`accepted`/`declined`/`tentative` + comment). Là thao tác **GHI** lên lịch owner → owner hoặc **Editor**; Viewer → **403** kèm message rõ nghĩa. (404 không tồn tại/không được chia sẻ, 502 provider)
 - `GET /api/items/assignees` — danh sách người phụ trách (`{accountId, displayName}[]`) suy từ Ticket Jira đã sync của user (cho filter tab Jira). Gồm `{accountId:"unassigned"}` nếu có ticket chưa gán.
 - `POST /api/items/note` — tạo Note.
 - `POST /api/items/event` ⭐ — tạo Event mới → đẩy lên Calendar. Body: `{connectionId, title, start, end, allDay?, location?, attendees?[], description?, driveItemIds?[], reminders?[], recurrence?[], guestsCanModify?, guestsCanInviteOthers?, guestsCanSeeOtherGuests?, sendUpdates?}` — `end` **bắt buộc** (all-day: gửi ngày kế tiếp). `sendUpdates` mặc định `true`: có khách mời thì Google Calendar dùng `all` để gửi email chuẩn của Calendar; `false` map sang `none`. App **không gửi trùng qua Gmail** nhưng vẫn tạo invitation/notification in-app cho user nội bộ. Chỉ Google Calendar Event (không có khái niệm "task"). `reminders[]`: `{id?, reminderType:"GooglePopup"|"GoogleEmail"|"InApp", offsetValue, offsetUnit:"Minutes|Hours|Days|Weeks", timeOfDay?}` — mỗi phần tử = 1 row DB (`EventReminders.ReminderType`). `GooglePopup/GoogleEmail` map sang Google Calendar overrides `popup/email`; all-day + Days/Weeks dùng `timeOfDay` (HH:mm) theo contract Google `minutes = unitMinutes − timeOfDayMinutes` (vd 1 tuần @ 14:00 → 9240); `InApp` chỉ lưu để Workspace Hub bắn notification nội bộ.

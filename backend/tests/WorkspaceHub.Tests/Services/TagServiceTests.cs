@@ -18,12 +18,13 @@ public class TagServiceTests
 {
     private readonly Mock<ITagRepository> _tagRepo = new();
     private readonly Mock<IItemRepository> _itemRepo = new();
+    private readonly Mock<IFolderRepository> _folderRepo = new();
     private readonly TagService _service;
     private readonly Guid _userId = Guid.NewGuid();
 
     public TagServiceTests()
     {
-        _service = new TagService(_tagRepo.Object, _itemRepo.Object);
+        _service = new TagService(_tagRepo.Object, _itemRepo.Object, _folderRepo.Object);
     }
 
     [Fact]
@@ -175,6 +176,36 @@ public class TagServiceTests
 
         await act.Should().ThrowAsync<NotFoundException>();
         _tagRepo.Verify(m => m.AddAssignmentAsync(It.IsAny<TagAssignment>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Tag là nhãn PRIVATE, gắn tag không đụng dữ liệu provider của owner → người được chia sẻ
+    /// (kể cả chỉ Viewer) vẫn phải gắn được tag riêng lên item của người khác.
+    /// </summary>
+    [Fact]
+    public async Task Assign_ItemSharedWithUser_Creates()
+    {
+        var tagId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        _tagRepo.Setup(m => m.GetByIdAndUserAsync(tagId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Tag { Id = tagId, UserId = _userId, Name = "X", Color = "#000" });
+        // Item KHÔNG thuộc user…
+        _itemRepo.Setup(m => m.GetByIdAndUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Item?)null);
+        // …nhưng nằm trong folder được chia sẻ với user.
+        _folderRepo.Setup(m => m.IsItemSharedWithUserAsync(itemId, _userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _tagRepo.Setup(m => m.AssignmentExistsAsync(tagId, itemId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        TagAssignment? added = null;
+        _tagRepo.Setup(m => m.AddAssignmentAsync(It.IsAny<TagAssignment>(), It.IsAny<CancellationToken>()))
+            .Callback((TagAssignment a, CancellationToken _) => added = a)
+            .Returns(Task.CompletedTask);
+
+        var result = await _service.AssignAsync(_userId, tagId, new AssignTagRequest(itemId));
+
+        result.ItemId.Should().Be(itemId);
+        added.Should().NotBeNull();
+        _tagRepo.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

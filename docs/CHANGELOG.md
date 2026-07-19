@@ -2,6 +2,62 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-19] Folder Sharing — vá lỗ hổng sau khi merge Calendar rewrite + tag private + Drive filter
+
+> Vòng sửa sau khi merge `develop` (viết lại toàn bộ Google Calendar). Code Calendar mới **chưa biết
+> gì về folder chia sẻ** nên mọi endpoint của nó vỡ với người được share.
+
+### Đã fix — chia sẻ folder
+
+- **`GET /api/items/{id}/calendar-details` cho người được share (404).** Endpoint mới từ Calendar rewrite
+  chỉ check `GetByIdAndUserAsync` → người B mở lịch trong folder chia sẻ nhận "Could not load the details".
+  Thêm share-check: **Viewer cũng xem được** (đây là thao tác ĐỌC).
+- **`conn.UserId != userId` → `conn.UserId != item.UserId`.** Trong mô hình proxy, connection thuộc
+  **owner của item**, không thuộc người đang gọi. So sánh cũ khiến mọi truy cập chia sẻ bị 403.
+  An toàn vì share-check đã chạy trước đó.
+- **RSVP (`PATCH /api/items/{id}/rsvp`).** Là thao tác GHI lên lịch của owner → yêu cầu **Editor**;
+  Viewer nhận 403 rõ nghĩa qua `ThrowNoWriteAccessAsync` thay vì 404 lộ GUID.
+- **Gắn tag lên item được chia sẻ (404 khó hiểu).** Tag là nhãn **private per-user**, gắn tag KHÔNG đụng
+  dữ liệu provider của owner → **Viewer cũng được gắn tag riêng**. `TagService` nhận thêm `IFolderRepository`.
+- **Rò rỉ tag giữa các user (phát sinh từ fix trên).** `MapToResponse` trả **mọi** `TagAssignment` của item —
+  item trong folder chia sẻ mang tag của nhiều user → A nhìn thấy tag riêng của B. Nay lọc theo `Tag.UserId == currentUserId`.
+
+### Đã fix — không liên quan chia sẻ
+
+- **Xoá event trả `ProviderError` 502.** Google Calendar trả **410 Gone** (KHÔNG phải 404) khi event đã bị
+  xoá trước đó. `GoogleApiExceptionHandler` nay map **404 và 410** → `NotFoundException`; `DeleteItemAsync`
+  bắt nó cho Event/File giống Email (đã có sẵn) → dọn row local thay vì để item "ma" kẹt lại.
+- **Thư mục Drive mở ra trống trong workspace folder.** Filter `folderId` và `driveParentId` **AND** với nhau,
+  nhưng user chỉ gán *thư mục* Drive vào workspace folder — file con bên trong không được gán → giao rỗng.
+  Khi đang duyệt vào trong một thư mục Drive cụ thể, bỏ qua filter workspace-folder (ngữ cảnh lúc đó là cây Drive).
+
+### Ẩn ở FE — `EventDetailPopup` (màn Calendar mới)
+
+Popup chi tiết event chưa gate theo `item.isOwner`. Với item của người khác nay ẩn: **Sửa**, **Xoá**,
+**Email khách mời**, **"View on Google Calendar"** (link trỏ vào lịch của owner — tài khoản người xem mở ra 404).
+"Copy link" chuyển sang link in-app thay vì `htmlLink`.
+
+> **Hạn chế còn lại (ghi để giải thích khi bảo vệ):** Editor vẫn có toàn quyền ghi lên tài khoản provider
+> của owner — xem `docs/FOLDER-SHARING-REVIEW.md` §4.
+
+## [2026-07-19] Folder Sharing — nhét folder Drive CHỈ gán folder cha (revert "kéo theo toàn bộ con")
+
+**Bối cảnh.** Bản trước (commit `579a3b2`) khi nhét 1 folder Drive vào app-Folder thì BFS đệ quy tạo `ItemFolder` cho **tất cả con mọi cấp**. Hệ quả: nhét 1 folder có ~2400 file → app-Folder **"bung phẳng" toàn bộ nội dung** ra ngoài cùng (sai UX) + tạo hàng nghìn junction mỗi lần (chậm).
+
+**Quyết định đúng.** Chỉ tạo **một** junction cho đúng cái folder được add — con KHÔNG gán junction nhưng **vẫn xem được** vì:
+- app-Folder (kể cả khi share) list phẳng theo `folderId` → chỉ hiện folder cha (đúng dạng cây, không bung).
+- Owner **và** Viewer double-click vào folder → FE gửi kèm `driveParentId` → `ItemRepository.GetPagedAsync` **bỏ qua filter junction** (`browsingDriveFolder`) và list con theo `metadata.parents` scope theo owner. Xem `ItemRepository.GetPagedAsync` (comment "user chỉ gán THƯ MỤC Drive… con KHÔNG được gán").
+
+**Đính chính premise cũ.** CHANGELOG bản `579a3b2` nói "Viewer bị lọc cứng theo junction nên không thấy con" — **sai**: nhánh `browsingDriveFolder` bypass filter cho **mọi** người (cả Viewer), và route mặc định `/` là Inbox (có drill-in). Viewer thấy folder ở cấp ngoài rồi double-click vào là thấy nội dung. Vì vậy việc BFS-gán-con là thừa và gây "bung phẳng".
+
+**Thay đổi (BE, `FolderService`).** Bỏ toàn bộ logic BFS: `AddItemToFolderAsync` / `AddItemsToFolderAsync` chỉ tạo junction cho item được chọn; `RemoveItemFromFolderAsync` chỉ gỡ đúng junction đó. Xoá các helper `IsDriveFolder`/`ExtractParents`/`GetDriveDescendantItemIdsAsync`/`AddDriveDescendantsAsync` và repo method `IItemRepository.GetDriveItemsByConnectionsAsync` (không còn dùng).
+
+> **Dọn dữ liệu dev:** DB nào đã nhét folder Drive dưới bản `579a3b2` sẽ còn junction con "mồ côi" (folder vẫn "bung"). Chưa lên develop/prod nên chỉ cần xoá các junction đó trong DB dev, hoặc remove rồi add lại folder. (Không cần migration — dữ liệu chỉ ở dev.)
+
+**Hệ quả & fix per-item cho Viewer.** Vì con folder Drive KHÔNG có junction, share-check theo junction (`IsItemSharedWithUserAsync`) trả false → Viewer mở chi tiết/tải nội dung file con bị **404** (`GET /api/items/{id}` và `/api/drive/items/{id}/content`; riêng content vốn CHƯA từng hỗ trợ Viewer — chỉ check owner). Fix: thêm `IFolderRepository.IsConnectionSharedWithUserAsync` (Viewer trở lên) và cấp quyền ĐỌC item Drive con nếu **connection của item được share** với user (nhất quán với cơ chế list duyệt theo `driveParentId`). `DriveContentService` bổ sung nhánh shared, dùng connection của OWNER làm proxy (`conn.UserId == item.UserId`).
+
+> **Hạn chế còn lại (chấp nhận cho đồ án):** quyền đọc con xét theo **connection** (không leo cây `parents` để giới hạn đúng subtree được share) → Viewer có thể đọc item Drive khác cùng connection của owner. Nhất quán với IDOR sẵn có ở list (duyệt `driveParentId` bypass filter `folderId`). Chưa vá — READ-only, chỉ giữa bạn bè.
+
 ## [2026-07-18] Folder Sharing — fix desync xoá thread + Editor thao tác Jira + hạn chế đã biết
 
 > Review tính năng System Folder Sharing (nhánh `feat/System-Folder-Sharing`). Phân tích đầy đủ: `docs/FOLDER-SHARING-REVIEW.md`.

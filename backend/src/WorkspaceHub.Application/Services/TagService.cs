@@ -15,11 +15,13 @@ public class TagService : ITagService
 {
     private readonly ITagRepository _tagRepo;
     private readonly IItemRepository _itemRepo;
+    private readonly IFolderRepository _folderRepo;
 
-    public TagService(ITagRepository tagRepo, IItemRepository itemRepo)
+    public TagService(ITagRepository tagRepo, IItemRepository itemRepo, IFolderRepository folderRepo)
     {
         _tagRepo = tagRepo;
         _itemRepo = itemRepo;
+        _folderRepo = folderRepo;
     }
 
     public async Task<IReadOnlyList<TagResponse>> GetAsync(Guid userId, CancellationToken ct = default)
@@ -85,9 +87,14 @@ public class TagService : ITagService
         _ = await _tagRepo.GetByIdAndUserAsync(tagId, userId, ct)
             ?? throw new NotFoundException(nameof(Tag), tagId);
 
-        // Item phải thuộc user.
-        _ = await _itemRepo.GetByIdAndUserAsync(request.ItemId, userId, ct)
-            ?? throw new NotFoundException(nameof(Item), request.ItemId);
+        // Item phải thuộc user HOẶC nằm trong folder được chia sẻ với user.
+        // Tag là nhãn PRIVATE (mỗi user một bộ tag riêng, không share) nên gắn tag lên item của
+        // người khác KHÔNG đụng gì tới dữ liệu provider của họ — Viewer cũng được phép, không cần Editor.
+        if (await _itemRepo.GetByIdAndUserAsync(request.ItemId, userId, ct) == null
+            && !await _folderRepo.IsItemSharedWithUserAsync(request.ItemId, userId, ct))
+        {
+            throw new NotFoundException(nameof(Item), request.ItemId);
+        }
 
         if (await _tagRepo.AssignmentExistsAsync(tagId, request.ItemId, ct))
             throw new ConflictException("Tag đã được gắn vào item này.");

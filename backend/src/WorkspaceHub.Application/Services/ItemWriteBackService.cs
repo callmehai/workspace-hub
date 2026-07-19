@@ -741,10 +741,15 @@ public class ItemWriteBackService : IItemWriteBackService
                         catch (ForbiddenException) { /* Không đủ quyền xoá vĩnh viễn trên Gmail, chỉ xoá local */ }
                         break;
                     case ItemType.Event:
-                        await _calendarGateway.DeleteEventAsync(conn, "primary", item.ExternalId, ct);
+                        // Event đã bị xoá thẳng trên Google Calendar (hoặc nằm trên lịch mà connection
+                        // này không sở hữu) → Google trả 404/410. Coi như đã xoá, dọn nốt row local
+                        // thay vì ném ProviderError khiến item "ma" kẹt lại trong app.
+                        try { await _calendarGateway.DeleteEventAsync(conn, "primary", item.ExternalId, ct); }
+                        catch (NotFoundException) { /* Đã xoá trên Calendar, tiếp tục xoá local */ }
                         break;
                     case ItemType.File:
-                        await _driveGateway.TrashFileAsync(conn, item.ExternalId, ct);
+                        try { await _driveGateway.TrashFileAsync(conn, item.ExternalId, ct); }
+                        catch (NotFoundException) { /* Đã xoá trên Drive, tiếp tục xoá local */ }
                         break;
                     case ItemType.Ticket:
                         // SCRUM-58: xoá issue trên Jira. Provider lỗi (403/502) bay lên trước khi Remove

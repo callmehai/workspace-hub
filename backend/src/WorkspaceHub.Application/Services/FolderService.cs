@@ -167,6 +167,12 @@ public class FolderService : IFolderService
         };
 
         await _folderRepo.AddItemFolderAsync(itemFolder, ct);
+
+        // Chỉ gán junction cho ĐÚNG item được add (kể cả khi là folder Drive) — KHÔNG kéo theo con.
+        // Quan hệ cha-con Drive nằm trong metadata.parents; người xem (owner hoặc Viewer được share)
+        // duyệt vào trong folder qua driveParentId → GetPagedAsync bỏ qua filter junction và list con
+        // theo parent (xem ItemRepository.GetPagedAsync). Nhờ vậy con vẫn xem được mà app-Folder không
+        // bị "bung phẳng" toàn bộ nội dung folder.
         await _folderRepo.SaveChangesAsync(ct);
 
         return new ItemFolderResponse(
@@ -199,20 +205,24 @@ public class FolderService : IFolderService
         var existingItemIds = existingItemFolders.Select(i => i.ItemId).ToHashSet();
 
         var itemIdsToAdd = request.ItemIds.Where(id => !existingItemIds.Contains(id)).Distinct().ToList();
-        if (!itemIdsToAdd.Any())
-            return; // Nothing to add
 
         var maxPos = await _folderRepo.GetMaxItemPositionAsync(folderId, ct);
-        
-        var newFolders = itemIdsToAdd.Select((itemId, index) => new ItemFolder
-        {
-            ItemId = itemId,
-            FolderId = folderId,
-            Position = maxPos + 1 + index,
-            AddedAt = DateTime.UtcNow
-        }).ToList();
 
-        await _folderRepo.AddItemsFolderAsync(newFolders, ct);
+        if (itemIdsToAdd.Any())
+        {
+            var newFolders = itemIdsToAdd.Select((itemId, index) => new ItemFolder
+            {
+                ItemId = itemId,
+                FolderId = folderId,
+                Position = maxPos + 1 + index,
+                AddedAt = DateTime.UtcNow
+            }).ToList();
+
+            await _folderRepo.AddItemsFolderAsync(newFolders, ct);
+            maxPos += itemIdsToAdd.Count;
+        }
+
+        // Chỉ gán junction cho các item được chọn — folder Drive KHÔNG kéo theo con (xem AddItemToFolderAsync).
         await _folderRepo.SaveChangesAsync(ct);
     }
 
@@ -227,7 +237,10 @@ public class FolderService : IFolderService
         var itemFolder = await _folderRepo.GetItemFolderAsync(itemId, folderId, ct)
             ?? throw new NotFoundException($"Item {itemId} is not in folder {folderId}.");
 
+        // Chỉ gỡ đúng junction của item này. Folder Drive không kéo con vào lúc Add nên khi Remove
+        // cũng không cần gỡ con (con không có junction).
         _folderRepo.RemoveItemFolder(itemFolder);
+
         await _folderRepo.SaveChangesAsync(ct);
     }
 
