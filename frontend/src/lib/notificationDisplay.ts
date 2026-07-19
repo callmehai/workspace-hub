@@ -70,10 +70,14 @@ export function formatNotificationDisplay(
   }
 
   // Legacy rows (plain English/Vietnamese title + text body)
+  //
+  // `payload && !preview` → body là JSON hợp lệ nhưng không có field nào để hiện: KHÔNG fallback
+  // về `notification.body`, nếu không người dùng nhìn thấy nguyên chuỗi JSON kèm escape unicode
+  // (vd `{"from":"Hoàng...","folder":"..."}`). Đã xảy ra với share-invite cũ trong DB.
+  const legacySubtitle = payload ? (payload.preview ?? null) : (notification.body || null);
+
   return {
     title: notification.title,
-    subtitle: isCalendarReminder
-      ? calendarReminderSubtitle(payload, t)
-      : (payload?.preview ?? (notification.body || null)),
+    subtitle: isCalendarReminder ? calendarReminderSubtitle(payload, t) : legacySubtitle,
   };
 }

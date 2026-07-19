@@ -32,6 +32,25 @@ app **không thật sự song ngữ** (chọn EN vẫn ra tiếng Việt) và đ
 > `string`** ở runtime — truyền mã lỗi nhầm vào nhánh payload sẽ ném `ArgumentException` thay vì âm thầm
 > sinh body 409 sai.
 
+### Đã fix — Notification mời chia sẻ folder hiện JSON thô
+
+Dropdown thông báo hiện nguyên payload `{"from":"Hoàng Đức Lộc","folder":"..."}`
+thay vì câu thông báo.
+
+**Nguyên nhân — sai hợp đồng ở cả hai đầu:**
+- `title` ghi thẳng câu tiếng Việt thay vì **key** `notifications.*`. FE (`notificationDisplay.ts`)
+  chỉ dịch + interpolate khi title bắt đầu bằng `notifications.`; câu hoàn chỉnh rơi vào nhánh "legacy".
+- `body` dùng field `folder` — FE chỉ đọc `from` / `itemTitle` / `preview`. Không có `preview` nên
+  nhánh legacy fallback về `notification.body`, tức **chính chuỗi JSON**.
+
+**Fix:** title → `notifications.shareInvite` (thêm key i18n vi + en), body → `{ from, itemTitle }`.
+FE: khi body parse được thành JSON nhưng không có `preview` thì **không** fallback về `body` nữa —
+chặn rò rỉ JSON cho mọi loại notification, kể cả các row cũ đã nằm trong DB.
+
+> **Khi thêm notification mới:** `title` phải là key `notifications.*` (khai báo ở `translations.ts`,
+> cả vi lẫn en) và `body` chỉ dùng field FE biết. Test `FolderServiceShareNotificationTests` khoá
+> hợp đồng này.
+
 ### Đã fix — Drive
 
 - **File con hiện ở HAI nơi trong system folder.** Upload `abc.txt` vào thư mục Drive "Test folder"
