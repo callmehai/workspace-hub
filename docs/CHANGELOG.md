@@ -2,6 +2,46 @@
 
 > Ghi lại các quyết định thiết kế lớn để cả nhóm và Claude Code nắm bối cảnh "tại sao".
 
+## [2026-07-20] Postman collection sinh lại phủ 123/123 endpoint · hoàn thành SCRUM-29 (962 unit test)
+
+### Postman (SCRUM-27) — chuyển từ viết tay sang **sinh từ spec**
+
+Collection cũ (~55 request, 11 nhóm) đã lệch xa code: chỉ phủ khoảng nửa API, thiếu hẳn Drive,
+Friends, Tags, Users, Calendar Invitations, Jira ticket comment/attachment, Internal cron.
+
+**Quyết định:** không sửa tay JSON nữa. Thêm `backend/postman/generate_collection.py` — spec compact
+trong Python sinh ra cả collection lẫn environment. Đổi API thì sửa spec + chạy lại script, thay vì
+edit JSON 1400 dòng (dễ sót, dễ vỡ cấu trúc).
+
+Kết quả: **169 request / 23 nhóm (00–21 + 99), phủ đủ 123/123 endpoint của 22 controller**, kèm case
+lỗi 400/401/403/404/409/422/429/502. Environment lên 46 biến.
+
+Ba quy ước giữ collection không "đỏ giả":
+- Request thiếu biến phụ thuộc (connection Google/Jira, item id) tự `pm.test.skip` thay vì fail.
+- Request chạm provider thật chấp nhận **502** (`ProviderError`), không coi là lỗi test.
+- Cookie jar của Postman vẫn gửi `wh_access` kể cả request đặt `noauth`, nên: case "401" gửi **Bearer
+  rác** (Bearer được ưu tiên hơn cookie) thay vì bỏ trống header; `POST /api/auth/logout` không nằm
+  trong CSRF-exempt list nên phải kèm `X-CSRF-Token` = `{{csrfToken}}` (Login capture từ cookie `wh_csrf`).
+
+### SCRUM-29 — unit test: 446 → **962 test pass**
+
+Bổ sung 22 file test cho các class trước đó không có test nào: `FolderService` (16/17 method chưa
+cover), `AuthService` (Register/Login/SendOtp/VerifyOtp/GetMe), `ConnectionsService` (OAuth
+start/callback, toggle integration, manual sync), `JiraTicketService`, `ConnectionSyncDispatcher`,
+`CalendarSyncService`, `UserProfileService`, `ScheduledEmailsService`, `HealthService`,
+`CsrfMiddleware`, `IdTokenParser`, 3 mapper còn thiếu, và **30 validator FluentValidation** (thư mục
+mới `tests/WorkspaceHub.Tests/Validators/`).
+
+**Nguyên tắc khi viết:** test bám **hành vi thật của source**, không bám mô tả kỳ vọng. Vài chỗ lệch
+đã ghi nhận bằng test + comment thay vì sửa source (ngoài phạm vi ticket):
+- `ScheduledEmailsService.CreateAsync` **không** chặn `sendAt` quá khứ — rule đó thuộc
+  `CreateScheduledEmailRequestValidator` (chặn ở 400 trước khi vào service).
+- `ScheduledEmailMapper.DeserializeList` chỉ guard null/rỗng; JSON hỏng vẫn ném `JsonException`.
+- `IdTokenParser` ưu tiên claim `email` rồi mới fallback `sub`.
+- `ConnectionsService.TriggerManualSyncAsync` là fire-and-forget (trả 202 + jobId, throttle 60s → 429),
+  không cập nhật `LastSyncedAt` — việc đó do từng sync service con làm.
+- `ToggleIntegrationValidator` hiện không có rule nào (chỉ 1 field bool).
+
 ## [2026-07-19] i18n message lỗi qua `code` + Drive: hết lặp file con trong system folder, breadcrumb đúng ngữ cảnh
 
 ### ⭐ Quyết định: BE trả **mã lỗi**, FE dịch — không phải BE trả tiếng Việt
