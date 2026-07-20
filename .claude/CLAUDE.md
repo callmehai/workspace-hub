@@ -67,7 +67,8 @@ Tech stack:
 - ✅ **Done (Jira phase 55→60):** client + sync issue→Item(Ticket), tạo/update/xoá issue, metadata helpers, ImportantContacts JiraAccount. Migration `EnableJiraIntegration` bật `atlassian`. *(Board đánh 54 vẫn "To Do" nhưng code JiraStrategy/OAuth đã có — status board lag.)*
 - ✅ **Done (auth overhaul):** 62 HttpOnly cookie + CSRF, 63 refresh token + Redis rotation, **64 OTP đăng ký qua Email/Resend** (đổi hướng từ SMS/Firebase — nhánh `fix/login-ux`, xem CHANGELOG [2026-07-16]). *(Board Jira còn "In Progress" — status lag.)*
 - ✅ **Done (FE Sprint 4):** 41 API layer, 42 wire login/register, 43 Connections, 44 Inbox, 45 Kanban, 46 write-back UI, 47 scheduled UI, 48 loading/toast, 65 Folder CRUD FE. + 70 Tag BE.
-- 🔄 **Đang làm:** 29 unit test (Hải), 49 FE admin dashboard (Huy), 61 FE admin toggle (Khánh), 68 notifications (Khánh).
+- 🔄 **Đang làm:** 49 FE admin dashboard (Huy), 61 FE admin toggle (Khánh), 68 notifications (Khánh).
+- ✅ **29 unit test service (Hải) — Done 2026-07-20:** 962 test pass / 80 file (xUnit + Moq + FluentAssertions). 27 Postman: collection sinh lại phủ 123/123 endpoint (`backend/postman/generate_collection.py`).
 - ⏳ **To Do:** 50 responsive/dark (Dũng), 51 deploy config (đã deploy thực tế lên Lightsail rồi), 52 finalize (Hải), 53 defense (Lộc), 67 highlight unread (Vũ), 69 People API (Khánh), 71 Tag UI (Lộc), 72 cron sync định kỳ + FE poll (Dũng).
 - ✅ **Friend system nội bộ app (2026-07-10, chưa có ticket Jira):** kết bạn theo email + invite link `/register?inviteToken=` + tier Friend/CloseFriend + trang `/friends`. ĐỔI HƯỚNG từ Google Contacts (PR #100 bị bỏ) — KHÔNG dùng provider ngoài. Xem CHANGELOG [2026-07-10].
 
