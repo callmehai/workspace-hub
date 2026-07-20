@@ -101,6 +101,40 @@ public class SyncItemNotificationServiceTests
         capturedTitle.Should().Be("notifications.newEvent");
     }
 
+    [Theory]
+    [InlineData("TRASH")]
+    [InlineData("SPAM")]
+    public async Task NotifyNewItemsAsync_EmailInTrashOrSpam_DoesNotNotify(string gmailLabel)
+    {
+        var userId = Guid.NewGuid();
+        var connId = Guid.NewGuid();
+        var item = new Item
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            ConnectionId = connId,
+            Type = ItemType.Email,
+            Title = "Old message",
+            Snippet = "Moved mailbox",
+            ExternalId = "msg-trash",
+            MetadataJson = $$"""{"from":"Bob <bob@example.com>","labels":["{{gmailLabel}}"]}""",
+        };
+
+        _items.Setup(r => r.GetTrackedByConnectionIdAsync(connId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Item> { [item.ExternalId!] = item });
+
+        await _service.NotifyNewItemsAsync(connId, userId, new HashSet<string>());
+
+        _notifications.Verify(n => n.CreateAndSendAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task NotifyNewItemsAsync_WhenMoreThan10NewItems_CapsImportantAt10()
     {

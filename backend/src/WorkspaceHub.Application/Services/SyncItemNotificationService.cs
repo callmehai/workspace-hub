@@ -27,6 +27,7 @@ public class SyncItemNotificationService : ISyncItemNotificationService
         var after = await _items.GetTrackedByConnectionIdAsync(connectionId, ct);
         var newItems = after.Values
             .Where(i => i.ExternalId is not null && !beforeExternalIds.Contains(i.ExternalId))
+            .Where(ShouldNotifyForSyncedItem)
             .ToList();
 
         if (newItems.Count == 0)
@@ -73,6 +74,36 @@ public class SyncItemNotificationService : ISyncItemNotificationService
             payload["from"] = FormatEmailSender(TryGetMetadataString(item.MetadataJson, "from")) ?? item.Title;
 
         return (titleKey, JsonSerializer.Serialize(payload));
+    }
+
+    private static bool ShouldNotifyForSyncedItem(Item item)
+    {
+        if (item.Type != ItemType.Email)
+            return true;
+
+        return !HasAnyGmailLabel(item.MetadataJson, "TRASH", "SPAM");
+    }
+
+    private static bool HasAnyGmailLabel(string metadataJson, params string[] labels)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            if (!doc.RootElement.TryGetProperty("labels", out var labelsElement) ||
+                labelsElement.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            var blockedLabels = labels.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return labelsElement.EnumerateArray()
+                .Any(label => label.ValueKind == JsonValueKind.String &&
+                              blockedLabels.Contains(label.GetString() ?? string.Empty));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static string? TryGetMetadataString(string metadataJson, string property)

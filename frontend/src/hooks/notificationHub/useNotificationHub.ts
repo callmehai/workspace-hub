@@ -13,16 +13,10 @@ export {
 
 export { getNotificationHubState } from './notificationHubManager';
 
-/**
- * Hook này nên được mount một lần trong MainLayout/authenticated app shell.
- */
 export function useNotificationHub(): void {
   const userId = useAuth().user?.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-
-  // Handler SignalR luôn dùng instance mới nhất mà không reconnect hub
-  // chỉ vì navigate/queryClient đổi reference.
   const queryClientRef = useRef(queryClient);
   const navigateRef = useRef(navigate);
 
@@ -38,46 +32,45 @@ export function useNotificationHub(): void {
     }
 
     let disposed = false;
-
     const unsubscribe = notificationHubManager.subscribe((notification) => {
-      applyIncomingNotification(
-        queryClientRef.current,
-        navigateRef.current,
-        notification,
-      );
+      applyIncomingNotification(queryClientRef.current, navigateRef.current, notification);
     });
+
+    let connectTimer: number | undefined;
 
     const connectIfNeeded = () => {
       if (disposed) return;
 
       void notificationHubManager.connect(userId).catch((error: unknown) => {
-        if (disposed || !import.meta.env.DEV) return;
-
-        console.warn('[NotificationHub] Connect ended:', error);
+        if (!disposed && import.meta.env.DEV) {
+          console.warn('[NotificationHub] Connect failed:', error);
+        }
       });
     };
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+    const scheduleConnect = () => {
+      if (connectTimer !== undefined) window.clearTimeout(connectTimer);
+      connectTimer = window.setTimeout(() => {
+        connectTimer = undefined;
         connectIfNeeded();
-      }
+      }, 0);
     };
 
-    connectIfNeeded();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') scheduleConnect();
+    };
 
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('online', connectIfNeeded);
+    scheduleConnect();
+    window.addEventListener('online', scheduleConnect);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       disposed = true;
+      if (connectTimer !== undefined) window.clearTimeout(connectTimer);
       unsubscribe();
+      window.removeEventListener('online', scheduleConnect);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
 
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('online', connectIfNeeded);
-
-      // ProtectedRoute có thể unmount MainLayout ngay khi logout, trước khi
-      // effect kịp chạy lại với userId = undefined. Stop ở cleanup để tránh
-      // connection zombie và tránh reuse auth/cookie cũ ở lần login sau.
       if (!notificationHubManager.hasSubscribers()) {
         void notificationHubManager.disconnect();
       }
