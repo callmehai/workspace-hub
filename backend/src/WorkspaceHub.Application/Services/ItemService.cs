@@ -187,7 +187,7 @@ public class ItemService : IItemService
             var folderId = request.FolderId.Value;
             var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
             if (!isOwner)
-                throw new ForbiddenException("Only the folder owner can add items to this folder.");
+                throw new ForbiddenException("Only the folder owner can add items to this folder.", ErrorCodes.FolderOwnerOnly);
 
             var maxPos = await _folderRepo.GetMaxItemPositionAsync(folderId, ct);
             var itemFolder = new ItemFolder
@@ -254,10 +254,10 @@ public class ItemService : IItemService
             throw new NotFoundException(nameof(Item), itemId);
 
         if (item.Type != ItemType.Event)
-            throw new BusinessRuleException("Item is not a calendar event.");
+            throw new BusinessRuleException("Item is not a calendar event.", ErrorCodes.ItemNotCalendarEvent);
 
         if (item.ConnectionId == null)
-            throw new BusinessRuleException("Event is not linked to any connection.");
+            throw new BusinessRuleException("Event is not linked to any connection.", ErrorCodes.ItemNotLinkedToConnection);
 
         var conn = await _connectionRepo.GetByIdAsync(item.ConnectionId.Value, ct)
             ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
@@ -265,7 +265,7 @@ public class ItemService : IItemService
         // Connection phải thuộc OWNER của item (không phải người đang gọi) — người được share
         // mượn connection của owner, hợp lệ vì share-check ở trên đã pass.
         if (conn.UserId != item.UserId)
-            throw new ForbiddenException("Not your connection.");
+            throw new ForbiddenException("Not your connection.", ErrorCodes.NotYourConnection);
 
         if (item.ExternalId == null)
             throw new BusinessRuleException("Event has no external ID.");
@@ -347,16 +347,16 @@ public class ItemService : IItemService
             await ThrowNoWriteAccessAsync(itemId, userId, ct);
 
         if (item.Type != ItemType.Event)
-            throw new BusinessRuleException("Item is not a calendar event.");
+            throw new BusinessRuleException("Item is not a calendar event.", ErrorCodes.ItemNotCalendarEvent);
 
         if (item.ConnectionId == null)
-            throw new BusinessRuleException("Event is not linked to any connection.");
+            throw new BusinessRuleException("Event is not linked to any connection.", ErrorCodes.ItemNotLinkedToConnection);
 
         var conn = await _connectionRepo.GetByIdAsync(item.ConnectionId.Value, ct)
             ?? throw new NotFoundException("Connection", item.ConnectionId.Value);
 
         if (conn.UserId != item.UserId)
-            throw new ForbiddenException("Not your connection.");
+            throw new ForbiddenException("Not your connection.", ErrorCodes.NotYourConnection);
 
         if (item.ExternalId == null)
             throw new BusinessRuleException("Event has no external ID.");
@@ -391,7 +391,7 @@ public class ItemService : IItemService
             ?? throw new NotFoundException(nameof(Item), itemId);
 
         if (item.Type != ItemType.Event)
-            throw new BusinessRuleException("Item is not a calendar event.");
+            throw new BusinessRuleException("Item is not a calendar event.", ErrorCodes.ItemNotCalendarEvent);
 
         var connections = await _connectionRepo.GetByUserIdAsync(userId, ct);
         var gmailConn = connections.FirstOrDefault(c => c.ServiceType == ServiceType.Gmail && c.Status == ConnectionStatus.Active);
@@ -449,7 +449,7 @@ public class ItemService : IItemService
         var isViewer = await _folderRepo.IsItemSharedWithUserAsync(itemId, userId, ct);
         if (isViewer)
             throw new ForbiddenException(
-                "Bạn chỉ có quyền xem mục này trong thư mục được chia sẻ. Hãy yêu cầu chủ sở hữu cấp quyền chỉnh sửa.");
+                "You only have view access to this item in a shared folder.", ErrorCodes.SharedViewerReadOnly);
 
         throw new NotFoundException(nameof(Item), itemId);
     }

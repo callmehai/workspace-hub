@@ -655,12 +655,15 @@ export const Inbox = () => {
         {/* ── Drive Folder Breadcrumb ── */}
         {driveFolderStack.length > 0 && (
           <div className="flex items-center gap-1.5 mb-3 text-[13px] font-medium overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* Gốc breadcrumb = ngữ cảnh ĐANG đứng. Khi duyệt thư mục Drive từ trong một system
+                folder thì phải hiện tên folder đó, không phải "Drive"/"Tất cả mục" — nếu không
+                người dùng mất dấu chỗ mình đang ở (URL vẫn giữ ?folder=). */}
             <button
               onClick={() => navigateDriveStack([])}
-              className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+              className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
             >
               <Home className="w-4 h-4" />
-              {sourceType ? t(integrationLabelKey(sourceType)) : t('nav.allItems')}
+              {currentFolder?.name ?? (sourceType ? t(integrationLabelKey(sourceType)) : t('nav.allItems'))}
             </button>
             {driveFolderStack.map((folder, index) => {
               const isLast = index === driveFolderStack.length - 1;

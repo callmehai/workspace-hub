@@ -88,6 +88,44 @@ public class ItemListQuerySqlTests
         sql.Should().Contain("FETCH NEXT");
     }
 
+    /// <summary>
+    /// Filter ẩn item Drive con khi CHA của nó cũng nằm trong cùng workspace folder (bug "file con
+    /// hiện 2 nơi"). Kiểm tra nó dịch được xuống SQL Server — LINQ hợp lệ trên EF InMemory vẫn có
+    /// thể ném "could not be translated" trên provider thật.
+    /// </summary>
+    [Fact]
+    public void ItemsPagedQuery_WorkspaceFolderHidesDriveChildren_TranslatesToSql()
+    {
+        using var db = OfflineSqlServerContext();
+        var userId = Guid.NewGuid();
+        var folderId = Guid.NewGuid();
+
+        // Mirror nhánh "workspace folder, chưa duyệt vào thư mục Drive" của GetPagedAsync.
+        var sql = db.Set<Item>()
+            .AsNoTracking()
+            .Where(i => i.UserId == userId && !i.IsArchived)
+            .Where(i => i.ItemFolders.Any(ifj => ifj.FolderId == folderId))
+            .Where(i =>
+                i.Type != ItemType.File
+                || i.MetadataJson == null
+                || !db.Set<Item>().Any(p =>
+                        p.Type == ItemType.File
+                        && p.UserId == i.UserId
+                        && !p.IsArchived
+                        && p.ExternalId != null
+                        && p.ItemFolders.Any(pf => pf.FolderId == folderId)
+                        && i.MetadataJson.Contains("\"" + p.ExternalId + "\"")))
+            .OrderByDescending(i => i.OccurredAt)
+            .Take(20)
+            .ToQueryString();
+
+        _output.WriteLine(sql);
+
+        // Dịch được xuống DB (không rơi về client-eval) — EXISTS lồng cho quan hệ cha-con Drive.
+        sql.Should().Contain("EXISTS");
+        sql.Should().NotContain("could not be translated");
+    }
+
     private static int CountOccurrences(string haystack, string needle)
     {
         int count = 0, index = 0;

@@ -146,15 +146,15 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can add items to this folder.");
+            throw new ForbiddenException("Only the folder owner can add items to this folder.", ErrorCodes.FolderOwnerOnly);
 
         var item = await _itemRepo.GetByIdAndUserAsync(request.ItemId, userId, ct);
         if (item == null)
-            throw new ForbiddenException("The item does not belong to the current user or does not exist.");
+            throw new ForbiddenException("The item does not belong to the current user or does not exist.", ErrorCodes.ItemNotOwned);
 
         var exists = await _folderRepo.ItemFolderExistsAsync(request.ItemId, folderId, ct);
         if (exists)
-            throw new ConflictException("Item is already in this folder.");
+            throw new ConflictException("Item is already in this folder.", ErrorCodes.ItemAlreadyInFolder);
 
         var maxPos = await _folderRepo.GetMaxItemPositionAsync(folderId, ct);
 
@@ -189,7 +189,7 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can add items to this folder.");
+            throw new ForbiddenException("Only the folder owner can add items to this folder.", ErrorCodes.FolderOwnerOnly);
 
         var uniqueRequestIds = request.ItemIds.Distinct().ToList();
         var ownedItems = await _itemRepo.GetByIdsAndUserAsync(uniqueRequestIds, userId, ct);
@@ -197,7 +197,7 @@ public class FolderService : IFolderService
 
         if (uniqueRequestIds.Any(id => !ownedItemIds.Contains(id)))
         {
-            throw new ForbiddenException("One or more items do not belong to the current user or do not exist.");
+            throw new ForbiddenException("One or more items do not belong to the current user or do not exist.", ErrorCodes.ItemsNotOwned);
         }
 
         // Get existing items in folder
@@ -232,7 +232,7 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can remove items from this folder.");
+            throw new ForbiddenException("Only the folder owner can remove items from this folder.", ErrorCodes.FolderOwnerOnly);
 
         var itemFolder = await _folderRepo.GetItemFolderAsync(itemId, folderId, ct)
             ?? throw new NotFoundException($"Item {itemId} is not in folder {folderId}.");
@@ -250,7 +250,7 @@ public class FolderService : IFolderService
     {
         var isOwner = await _folderRepo.ExistsByOwnerAsync(folderId, userId, ct);
         if (!isOwner)
-            throw new ForbiddenException("Only the folder owner can remove items from this folder.");
+            throw new ForbiddenException("Only the folder owner can remove items from this folder.", ErrorCodes.FolderOwnerOnly);
 
         var itemFolders = await _folderRepo.GetItemFoldersAsync(request.ItemIds, folderId, ct);
         if (itemFolders.Any())
@@ -498,10 +498,15 @@ public class FolderService : IFolderService
             await _notifications.CreateAndSendAsync(
                 targetUserId,
                 NotificationType.ShareInvite,
-                $"{ownerName} đã chia sẻ folder '{folderName}' với bạn",
+                // Title = KEY i18n, không phải câu hoàn chỉnh — FE dịch theo ngôn ngữ đang chọn và
+                // interpolate {from}/{itemTitle} từ body (xem notificationDisplay.ts). Trước đây ghi
+                // thẳng câu tiếng Việt nên rơi vào nhánh "legacy": title không dịch được, và vì body
+                // thiếu `preview` nên subtitle fallback thành CHÍNH JSON thô hiện ra cho người dùng.
+                "notifications.shareInvite",
                 // Serialize đàng hoàng thay vì nội suy chuỗi: tên chứa " hoặc \ sẽ làm vỡ JSON
                 // → notification hỏng im lặng (đã bọc try/catch nên không crash, chỉ mất thông báo).
-                JsonSerializer.Serialize(new { from = ownerName, folder = folderName }),
+                // Dùng đúng tên field FE biết: `from` + `itemTitle` (KHÔNG phải `folder`).
+                JsonSerializer.Serialize(new { from = ownerName, itemTitle = folderName }),
                 "/",
                 ct);
         }

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   X, Mail, Calendar, FileText, StickyNote, Briefcase,
   Trash2, Edit3, ExternalLink, Loader2, Tag,
@@ -77,6 +77,8 @@ const TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; bg: stri
 export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDeleted }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { t, lang } = useI18n();
   const dl = lang === 'vi' ? 'vi-VN' : 'en-US';
   const seenSet = useSeenSet();
@@ -592,13 +594,34 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ itemId, onClose, onDelet
   // Mở link ngoài (Gmail/Calendar/Drive/Jira) từ menu "...".
   const openExternal = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
 
-  // Mở folder Drive: điều hướng sang view Danh sách + seed drill-down 1 cấp qua history state
-  // (Inbox đọc location.state.driveStack). ?df để URL có nhận diện + Back hoạt động.
+  // Mở folder Drive: drill-down 1 cấp qua history state (Inbox đọc location.state.driveStack),
+  // ?df để URL có nhận diện + Back hoạt động.
+  //
+  // GIỮ NGUYÊN ngữ cảnh đang đứng (?folder=..., ?type=...) thay vì ép về "/?type=File":
+  // mở một thư mục Drive từ trong system folder trước đây luôn cho breadcrumb "Drive/<tên>",
+  // đánh mất chỗ người dùng đang ở. Nay nối tiếp stack hiện có → breadcrumb phản ánh đúng
+  // đường đi (vd "All items/<system folder>/<thư mục Drive>").
   const openDriveFolder = () => {
     if (!item?.externalId) return;
+
+    // Drill-down chỉ tồn tại ở trang danh sách (Inbox render tại "/" và "/inbox"). Mở từ Kanban
+    // hay Calendar thì không có ngữ cảnh Drive để giữ → về view Drive như trước.
+    const onListPage = location.pathname === '/' || location.pathname === '/inbox';
+
+    const params = onListPage ? new URLSearchParams(searchParams) : new URLSearchParams({ type: 'File' });
+    params.set('df', item.id);
+    params.delete('item'); // đóng panel chi tiết, tránh mở lại chính item vừa duyệt vào
+
+    // Nối tiếp stack đang có (nếu đang đứng sẵn trong một thư mục Drive) thay vì reset về 1 cấp —
+    // breadcrumb nhờ vậy phản ánh đúng đường đi, kể cả khi mở từ trong một system folder.
+    const currentStack = onListPage
+      ? (location.state as { driveStack?: Array<{ id: string; name: string; internalId: string }> } | null)
+          ?.driveStack ?? []
+      : [];
+
     navigate(
-      { pathname: '/', search: `?type=File&df=${encodeURIComponent(item.id)}` },
-      { state: { driveStack: [{ id: item.externalId, name: item.title, internalId: item.id }] } },
+      { pathname: onListPage ? location.pathname : '/', search: `?${params.toString()}` },
+      { state: { driveStack: [...currentStack, { id: item.externalId, name: item.title, internalId: item.id }] } },
     );
     onClose?.();
   };

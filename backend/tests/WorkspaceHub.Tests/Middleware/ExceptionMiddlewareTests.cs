@@ -76,7 +76,21 @@ public class ExceptionMiddlewareTests
     [InlineData(typeof(CsrfException), HttpStatusCode.BadRequest, "CsrfError")]
     public async Task DomainException_MapsToExpectedStatusAndErrorType(Type exceptionType, HttpStatusCode expectedStatus, string expectedError)
     {
-        var ex = (Exception)Activator.CreateInstance(exceptionType, "boom")!;
+        // Một số exception nay có ctor (string message, string? code = null) — Activator KHÔNG tự
+        // điền optional param nên gọi kiểu cũ với 1 đối số ném MissingMethodException. Lấy thẳng
+        // ctor nhận string đầu tiên rồi tự bù default cho các tham số còn lại, đúng cho cả hai dạng.
+        var ctor = exceptionType.GetConstructors()
+            .First(c =>
+            {
+                var ps = c.GetParameters();
+                return ps.Length >= 1
+                    && ps[0].ParameterType == typeof(string)
+                    && ps.Skip(1).All(p => p.IsOptional);
+            });
+        var args = ctor.GetParameters()
+            .Select((p, idx) => idx == 0 ? "boom" : p.DefaultValue)
+            .ToArray();
+        var ex = (Exception)ctor.Invoke(args);
 
         var (status, body) = await RunAsync(ex);
 
