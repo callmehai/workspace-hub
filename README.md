@@ -60,8 +60,8 @@ Sơ đồ kiến trúc / ERD / class & sequence theo use case: **[`docs/diagrams
 ### 1. Clone + hạ tầng
 
 ```bash
-git clone https://github.com/callmehai/workspace-hub-plan.git
-cd workspace-hub-plan
+git clone https://github.com/callmehai/workspace-hub.git
+cd workspace-hub
 
 cp .env.example .env                 # MSSQL_SA_PASSWORD cho SQL Server dev
 docker compose up -d                 # SQL Server (1433) + Redis (6379)
@@ -133,7 +133,7 @@ Danh sách đầy đủ config + biến môi trường prod: [`docs/SETUP.md`](d
 ## Cấu trúc repo
 
 ```
-workspace-hub-plan/
+workspace-hub/
 ├── README.md · LICENSE · CLAUDE.md         # tài liệu gốc + context
 ├── docker-compose.yml                      # hạ tầng dev: SQL Server + Redis
 ├── docker-compose.prod.yml · deploy/       # production (Docker + Caddy)
