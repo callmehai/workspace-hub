@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useState } from 'react';
 import ReactDatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import './DateTimePicker.css';
@@ -8,6 +7,7 @@ import { enUS } from 'date-fns/locale/en-US';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, X } from 'lucide-react';
 import { useI18n } from '../hooks/useI18n';
+import { useFloatingMenu } from '../hooks/useFloatingMenu';
 import { dateKey, parseDateKey } from '../lib/calendarFormUtils';
 
 registerLocale('vi', vi);
@@ -26,8 +26,6 @@ export interface DatePickerProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-const POP_H = 320;
-
 /** 7 cột × (2rem + 4px margin) + padding tháng 20px */
 const CALENDAR_POP_W = 7 * 36 + 20;
 
@@ -43,9 +41,6 @@ export function DatePicker({
   const isChip = variant === 'chip';
   const { t, lang } = useI18n();
   const [internalOpen, setInternalOpen] = useState(false);
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
 
   const isControlled = openProp !== undefined;
   const open = isControlled ? openProp : internalOpen;
@@ -55,50 +50,20 @@ export function DatePicker({
     else setInternalOpen(next);
   }, [isControlled, onOpenChange]);
 
+  const { refs, floatingStyles, getReferenceProps, getFloatingProps, FloatingPortal } = useFloatingMenu({
+    open,
+    onOpenChange: setOpen,
+    matchWidth: false,
+    width: CALENDAR_POP_W,
+    role: 'dialog',
+  });
+
   const selected = value ? parseDateKey(value) : null;
-
-  const computePos = useCallback(() => {
-    const el = triggerRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - r.bottom;
-    const openUp = spaceBelow < POP_H && r.top > spaceBelow;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - CALENDAR_POP_W - 8));
-    setPos(openUp
-      ? { left, bottom: window.innerHeight - r.top + 6 }
-      : { left, top: r.bottom + 6 });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (triggerRef.current?.contains(target) || popRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    const onReflow = () => computePos();
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('resize', onReflow);
-    window.addEventListener('scroll', onReflow, true);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', onReflow);
-      window.removeEventListener('scroll', onReflow, true);
-    };
-  }, [open, setOpen, computePos]);
-
-  useEffect(() => {
-    if (open) computePos();
-  }, [open, computePos]);
-
   const displayText = selected ? format(selected, 'dd/MM/yyyy') : '';
 
   const toggleOpen = () => {
-    if (open) { setOpen(false); return; }
-    setOpen(true);
+    if (open) setOpen(false);
+    else setOpen(true);
   };
 
   const handleSelect = (picked: Date | null) => {
@@ -114,9 +79,9 @@ export function DatePicker({
   return (
     <div className={isChip ? 'relative inline-block' : 'relative'}>
       <button
-        ref={triggerRef}
+        ref={refs.setReference}
         type="button"
-        onClick={toggleOpen}
+        {...getReferenceProps({ onClick: toggleOpen })}
         className={`${baseTrigger} ${open ? (isChip ? 'ring-2 ring-brand-500/25' : '!border-brand-500 ring-2 ring-brand-500/20') : ''}`}
       >
         {!isChip && <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />}
@@ -136,30 +101,32 @@ export function DatePicker({
         )}
       </button>
 
-      {open && pos && createPortal(
-        <div
-          ref={popRef}
-          style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, width: CALENDAR_POP_W }}
-          className="z-[9999] wh-dtp w-fit overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
-        >
-          <ReactDatePicker
-            inline
-            fixedHeight={false}
-            selected={selected}
-            onChange={handleSelect}
-            locale={lang === 'en' ? 'en' : 'vi'}
-          />
-          <div className="flex justify-end border-t border-gray-100 px-3 py-2 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              {t('dtp.done')}
-            </button>
+      {open && (
+        <FloatingPortal>
+          <div
+            ref={refs.setFloating}
+            style={floatingStyles}
+            {...getFloatingProps()}
+            className="wh-dtp w-fit overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+          >
+            <ReactDatePicker
+              inline
+              fixedHeight={false}
+              selected={selected}
+              onChange={handleSelect}
+              locale={lang === 'en' ? 'en' : 'vi'}
+            />
+            <div className="flex justify-end border-t border-gray-100 px-3 py-2 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
+              >
+                {t('dtp.done')}
+              </button>
+            </div>
           </div>
-        </div>,
-        document.body,
+        </FloatingPortal>
       )}
     </div>
   );

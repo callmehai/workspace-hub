@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useState } from 'react';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import './DateTimePicker.css';
@@ -12,6 +11,7 @@ import {
 } from 'date-fns';
 import { Calendar as CalendarIcon, Clock, ChevronUp, ChevronDown, X, Zap } from 'lucide-react';
 import { useI18n } from '../hooks/useI18n';
+import { useFloatingMenu } from '../hooks/useFloatingMenu';
 import type { TranslationKey } from '../i18n/translations';
 
 registerLocale('vi', vi);
@@ -85,60 +85,32 @@ function TimePart({ value, placeholder, ariaLabel, onChange, onBlur, onStep }: T
 
 // ─── Picker chính ────────────────────────────────────────────────────────────
 const POP_W = 440;
-const POP_H = 420;
 
 export function DateTimePicker({ value, onChange, className, placeholder }: DateTimePickerProps) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
   const [hourDraft, setHourDraft] = useState('');
   const [minuteDraft, setMinuteDraft] = useState('');
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
   const now = new Date();
 
-  // Định vị popover (fixed) — tự lật LÊN TRÊN khi dưới không đủ chỗ, clamp trong viewport.
-  const computePos = () => {
-    const el = triggerRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - r.bottom;
-    const openUp = spaceBelow < POP_H && r.top > spaceBelow;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - POP_W - 8));
-    setPos(openUp
-      ? { left, bottom: window.innerHeight - r.top + 6 }
-      : { left, top: r.bottom + 6 });
-  };
+  const { refs, floatingStyles, getReferenceProps, getFloatingProps, FloatingPortal } = useFloatingMenu({
+    open,
+    onOpenChange: setOpen,
+    matchWidth: false,
+    width: POP_W,
+    role: 'dialog',
+  });
 
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (triggerRef.current?.contains(t) || popRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    const onReflow = () => computePos();
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('resize', onReflow);
-    window.addEventListener('scroll', onReflow, true);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', onReflow);
-      window.removeEventListener('scroll', onReflow, true);
-    };
-  }, [open]);
-
-  const syncDrafts = (d: Date | null) => {
+  const syncDrafts = useCallback((d: Date | null) => {
     setHourDraft(d ? format(d, 'HH') : '');
     setMinuteDraft(d ? format(d, 'mm') : '');
-  };
+  }, []);
 
   const toggleOpen = () => {
-    if (open) { setOpen(false); return; }
-    computePos();
+    if (open) {
+      setOpen(false);
+      return;
+    }
     syncDrafts(value);
     setOpen(true);
   };
@@ -196,11 +168,10 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
 
   return (
     <div className="relative">
-      {/* Trigger */}
       <button
-        ref={triggerRef}
+        ref={refs.setReference}
         type="button"
-        onClick={toggleOpen}
+        {...getReferenceProps({ onClick: toggleOpen })}
         className={`flex items-center gap-2 text-left ${className ?? ''} ${open ? '!border-brand-500 ring-2 ring-brand-500/20' : ''}`}
       >
         <CalendarIcon className="w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0" />
@@ -220,88 +191,89 @@ export function DateTimePicker({ value, onChange, className, placeholder }: Date
         )}
       </button>
 
-      {/* Popover (portal — thoát overflow-hidden, tự lật lên/xuống) */}
-      {open && pos && createPortal(
-        <div
-          ref={popRef}
-          style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom }}
-          className="z-[9999] wh-dtp"
-        >
-          <div className="flex items-stretch rounded-xl overflow-hidden shadow-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-            {/* Preset column */}
-            <div className="w-44 shrink-0 border-r border-gray-100 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-900/40 py-3 px-2.5 flex flex-col">
-              <p className="flex items-center gap-1.5 px-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
-                <Zap className="w-3.5 h-3.5" /> {t('dtp.quickPick')}
-              </p>
-              <div className="flex flex-col gap-1">
-                {PRESETS.filter((p) => !isBefore(p.get(), now)).map((p) => {
-                  const active = value != null && Math.abs(tidy(p.get()).getTime() - value.getTime()) < 60_000;
-                  return (
-                    <button
-                      key={p.labelKey}
-                      type="button"
-                      onClick={() => { commit(tidy(p.get())); setOpen(false); }}
-                      className={`text-left whitespace-nowrap px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                        active ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-brand-500/10 hover:text-brand-700 dark:hover:text-brand-400'
-                      }`}
-                    >
-                      {t(p.labelKey)}
-                    </button>
-                  );
-                })}
+      {open && (
+        <FloatingPortal>
+          <div
+            ref={refs.setFloating}
+            style={floatingStyles}
+            {...getFloatingProps()}
+            className="wh-dtp"
+          >
+            <div className="flex items-stretch rounded-xl overflow-hidden shadow-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+              {/* Preset column */}
+              <div className="w-44 shrink-0 border-r border-gray-100 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-900/40 py-3 px-2.5 flex flex-col">
+                <p className="flex items-center gap-1.5 px-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
+                  <Zap className="w-3.5 h-3.5" /> {t('dtp.quickPick')}
+                </p>
+                <div className="flex flex-col gap-1">
+                  {PRESETS.filter((p) => !isBefore(p.get(), now)).map((p) => {
+                    const active = value != null && Math.abs(tidy(p.get()).getTime() - value.getTime()) < 60_000;
+                    return (
+                      <button
+                        key={p.labelKey}
+                        type="button"
+                        onClick={() => { commit(tidy(p.get())); setOpen(false); }}
+                        className={`text-left whitespace-nowrap px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                          active ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-brand-500/10 hover:text-brand-700 dark:hover:text-brand-400'
+                        }`}
+                      >
+                        {t(p.labelKey)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            {/* Calendar + time + footer */}
-            <div className="flex flex-col">
-              <DatePicker
-                inline
-                selected={value}
-                onChange={handleDateSelect}
-                minDate={startOfDay(now)}
-                locale={lang === 'en' ? 'en' : 'vi'}
-              />
-              <div className="flex items-center justify-center gap-2 px-3 py-2.5 border-t border-gray-100 dark:border-slate-700">
-                <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                <TimePart
-                  value={hourDraft}
-                  placeholder="HH"
-                  ariaLabel={t('dtp.hour')}
-                  onChange={(r) => commitTimePart(r, 23, 'hour')}
-                  onBlur={() => padOnBlur(hourDraft, 23, 'hour')}
-                  onStep={(d) => stepPart(d, 'hour')}
+              {/* Calendar + time + footer */}
+              <div className="flex flex-col">
+                <DatePicker
+                  inline
+                  selected={value}
+                  onChange={handleDateSelect}
+                  minDate={startOfDay(now)}
+                  locale={lang === 'en' ? 'en' : 'vi'}
                 />
-                <span className="font-semibold text-gray-400 dark:text-slate-500">:</span>
-                <TimePart
-                  value={minuteDraft}
-                  placeholder="mm"
-                  ariaLabel={t('dtp.minute')}
-                  onChange={(r) => commitTimePart(r, 59, 'minute')}
-                  onBlur={() => padOnBlur(minuteDraft, 59, 'minute')}
-                  onStep={(d) => stepPart(d, 'minute')}
-                />
-              </div>
-              <div className="flex items-center justify-between px-3 py-2.5 border-t border-gray-100 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => commit(null)}
-                  disabled={!value}
-                  className="px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-slate-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                >
-                  {t('dtp.clearBtn')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="px-4 py-1.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors"
-                >
-                  {t('dtp.done')}
-                </button>
+                <div className="flex items-center justify-center gap-2 px-3 py-2.5 border-t border-gray-100 dark:border-slate-700">
+                  <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <TimePart
+                    value={hourDraft}
+                    placeholder="HH"
+                    ariaLabel={t('dtp.hour')}
+                    onChange={(r) => commitTimePart(r, 23, 'hour')}
+                    onBlur={() => padOnBlur(hourDraft, 23, 'hour')}
+                    onStep={(d) => stepPart(d, 'hour')}
+                  />
+                  <span className="font-semibold text-gray-400 dark:text-slate-500">:</span>
+                  <TimePart
+                    value={minuteDraft}
+                    placeholder="mm"
+                    ariaLabel={t('dtp.minute')}
+                    onChange={(r) => commitTimePart(r, 59, 'minute')}
+                    onBlur={() => padOnBlur(minuteDraft, 59, 'minute')}
+                    onStep={(d) => stepPart(d, 'minute')}
+                  />
+                </div>
+                <div className="flex items-center justify-between px-3 py-2.5 border-t border-gray-100 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => commit(null)}
+                    disabled={!value}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-slate-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    {t('dtp.clearBtn')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="px-4 py-1.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors"
+                  >
+                    {t('dtp.done')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>,
-        document.body
+        </FloatingPortal>
       )}
     </div>
   );

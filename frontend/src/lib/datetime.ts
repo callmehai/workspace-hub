@@ -11,6 +11,20 @@ export function localeTag(lang: Lang): string {
   return lang === 'en' ? 'en-US' : 'vi-VN';
 }
 
+/** Ngày + giờ ngắn (dd/MM/yyyy HH:mm, 24h) theo locale UI. */
+export function formatDateTimeShort(iso: string | Date, lang: Lang): string {
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString(localeTag(lang), {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 /**
  * Lang hiện tại ngoài React (toast/util) — cùng nguồn với `translate()`.
  */

@@ -7,6 +7,7 @@ import { handleApiError } from '../../lib/errorUtils';
 import { useI18n } from '../../hooks/useI18n';
 import { Select } from '../Select';
 import { FriendMultiSelect } from '../FriendMultiSelect';
+import { formatDateTimeShort } from '../../lib/datetime';
 import toast from 'react-hot-toast';
 
 interface FolderShareDialogProps {
@@ -24,7 +25,7 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
   folderName,
   isOwner,
 }) => {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const [selectedFriendIdsRaw, setSelectedFriendIds] = useState<string[]>([]);
   const [permission, setPermission] = useState<'Viewer' | 'Editor'>('Viewer');
@@ -36,16 +37,18 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
     enabled: isOpen && isOwner,
   });
 
-  // Fetch friends overview to pick friends to invite
+  // Cùng queryKey ['friends'] với Friends.tsx / DriveShareDialog — invalidate sau accept mới cập nhật picker.
   const { data: friendsOverview, isLoading: isLoadingFriends } = useQuery({
-    queryKey: ['friendsOverview'],
+    queryKey: ['friends'],
     queryFn: () => friendsApi.getOverview(),
     enabled: isOpen && isOwner,
   });
 
-  // Filter friends that are already shared with
-  const sharedUserIds = new Set(shares.map((s) => s.sharedWithUserId));
-  const availableFriends = friendsOverview?.friends.filter((f) => !sharedUserIds.has(f.userId)) || [];
+  // Chỉ loại Pending/Accepted khỏi picker — Declined có thể mời lại ngay
+  const activeShareUserIds = new Set(
+    shares.filter((s) => s.status !== 'Declined').map((s) => s.sharedWithUserId),
+  );
+  const availableFriends = friendsOverview?.friends.filter((f) => !activeShareUserIds.has(f.userId)) || [];
 
   // Người vừa được share xong sẽ rời khỏi `availableFriends` → lọc NGAY khi render thay vì
   // useEffect + setState (tránh cascading render). State gốc giữ nguyên, chỉ giá trị dùng là bản đã lọc.
@@ -231,9 +234,14 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
                                   {t('share.pending')}
                                 </span>
                               )}
+                              {share.status === 'Declined' && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 shrink-0">
+                                  {t('share.declined')}
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500 truncate">
-                              {t('share.sharedAt').replace('{date}', new Date(share.sharedAt).toLocaleDateString())}
+                              {t('share.sharedAt').replace('{date}', formatDateTimeShort(share.sharedAt, lang))}
                             </div>
                           </div>
                         </div>
@@ -250,7 +258,7 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
                                 })
                               }
                               options={permissionOptions}
-                              disabled={updatePermissionMutation.isPending}
+                              disabled={updatePermissionMutation.isPending || share.status === 'Declined'}
                               className="h-[30px]"
                             />
                           </div>

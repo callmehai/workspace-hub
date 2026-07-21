@@ -4,6 +4,7 @@ import { formatEventWhen, looksLikeIsoDateTime, resolveUiLang } from './datetime
 
 export interface NotificationPayload {
   from?: string;
+  folder?: string;
   itemTitle?: string;
   preview?: string;
   /** ISO start — calendar reminder; FE format theo locale. */
@@ -59,6 +60,7 @@ export function formatNotificationDisplay(
     const key = notification.title as TranslationKey;
     const vars: Record<string, string> = {};
     if (payload?.from) vars.from = payload.from;
+    if (payload?.folder) vars.folder = payload.folder;
     if (payload?.itemTitle) vars.itemTitle = payload.itemTitle;
 
     return {

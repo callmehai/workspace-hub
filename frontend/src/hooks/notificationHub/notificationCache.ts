@@ -10,6 +10,7 @@ import type {
   NotificationDto,
   NotificationType,
 } from '../../types/notifications';
+import { applyFolderShareNotificationEffects } from './shareNotificationEffects';
 
 export const UNREAD_COUNT_KEY = [
   'notifications',
@@ -97,6 +98,8 @@ export function applyIncomingNotification(
   if (INBOX_REFRESH_NOTIFICATION_TYPES.has(notification.type)) {
     void queryClient.invalidateQueries({ queryKey: ITEMS_QUERY_KEY });
   }
+
+  applyFolderShareNotificationEffects(queryClient, notification);
 
   const { title, subtitle } = formatNotificationDisplay(notification);
 

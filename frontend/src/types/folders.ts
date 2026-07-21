@@ -8,7 +8,7 @@ export interface FolderShareDto {
   sharedWithUserName: string;
   sharedWithUserAvatar: string | null;
   permission: FolderSharePermission;
-  status: 'Pending' | 'Accepted';
+  status: 'Pending' | 'Accepted' | 'Declined';
   sharedAt: string;
 }
 
@@ -19,7 +19,7 @@ export interface SharedFolderDto {
   ownerUserId: string;
   ownerName: string;
   permission: FolderSharePermission;
-  status: 'Pending' | 'Accepted';
+  status: 'Pending' | 'Accepted' | 'Declined';
   sharedAt: string;
 }
 

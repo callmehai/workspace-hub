@@ -70,11 +70,15 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
 
   const acceptShareMutation = useMutation({
     mutationFn: foldersApi.acceptShare,
-    onSuccess: () => {
+    onSuccess: (accepted) => {
       toast.success(t('sidebar.shareAcceptSuccess'));
       queryClient.invalidateQueries({ queryKey: ['sharedWithMe'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      if (accepted.folderId) {
+        navigate(`${viewPath}?folder=${accepted.folderId}`);
+      }
+      onMobileClose?.();
     },
     onError: (err) => {
       handleApiError(err, t('sidebar.shareAcceptFail'));

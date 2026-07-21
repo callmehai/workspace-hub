@@ -100,6 +100,8 @@ public enum GoogleContactSource
 public enum NotificationType
 {
     ShareInvite,
+    ShareAccepted,  // người được mời đã chấp nhận chia sẻ folder
+    ShareDeclined,   // người được mời đã từ chối lời mời chia sẻ
     ImportantEmail,
     SyncError,
     ScheduleSent,

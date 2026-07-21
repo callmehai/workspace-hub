@@ -1,11 +1,15 @@
 export type NotificationType =
   | 'ShareInvite'
+  | 'ShareAccepted'
+  | 'ShareDeclined'
   | 'ImportantEmail'
   | 'SyncError'
   | 'ScheduleSent'
   | 'ItemSynced'
   | 'CalendarReminder'
-  | 'CalendarInvite';
+  | 'CalendarInvite'
+  | 'FriendRequest'
+  | 'FriendAccepted';
 
 export interface NotificationDto {
   id: string;

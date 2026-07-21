@@ -282,16 +282,41 @@ public class FolderService : IFolderService
         if (friendship is null || friendship.Status != FriendshipStatus.Accepted)
             throw new BusinessRuleException("Chỉ có thể chia sẻ folder với bạn bè đã kết bạn.");
 
-        // 5. Kiểm tra chưa share (kể cả pending)
-        var alreadyShared = await _folderRepo.ShareExistsAsync(folderId, request.FriendUserId, ct);
-        if (alreadyShared)
-            throw new ConflictException("Folder đã được chia sẻ với người dùng này.");
+        // 5. Chưa share active (Pending/Accepted); Declined → mời lại trên cùng row
+        var existingShare = await _folderRepo.GetShareByFolderAndUserAsync(folderId, request.FriendUserId, ct);
 
         // 6. Parse permission
         if (!Enum.TryParse<SharePermission>(request.Permission, ignoreCase: true, out var permission))
             throw new BusinessRuleException($"Permission không hợp lệ: {request.Permission}");
 
-        // 7. Tạo FolderShare (pending: AcceptedAt = null)
+        if (existingShare is not null)
+        {
+            if (existingShare.DeclinedAt is null)
+                throw new ConflictException("Folder đã được chia sẻ với người dùng này.");
+
+            // Mời lại sau decline — reset Pending, giữ shareId
+            existingShare.DeclinedAt = null;
+            existingShare.AcceptedAt = null;
+            existingShare.Permission = permission;
+            existingShare.CreatedAt = DateTime.UtcNow;
+            await _folderRepo.SaveChangesAsync(ct);
+
+            var reinvited = await _folderRepo.GetShareByIdAsync(existingShare.Id, ct)
+                ?? throw new InvalidOperationException($"FolderShare {existingShare.Id} không reload được.");
+
+            await SendShareInviteNotificationSafeAsync(
+                reinvited.SharedWithUserId,
+                reinvited.Id,
+                folderId,
+                folder.Owner?.FullName ?? "Someone",
+                folder.Name,
+                permission.ToString(),
+                ct);
+
+            return MapShareToDto(reinvited);
+        }
+
+        // 7. Tạo FolderShare mới (pending)
         var share = new FolderShare
         {
             Id = Guid.NewGuid(),
@@ -300,7 +325,8 @@ public class FolderService : IFolderService
             CreatedByUserId = requestingUserId,
             Permission = permission,
             CreatedAt = DateTime.UtcNow,
-            AcceptedAt = null  // pending
+            AcceptedAt = null,
+            DeclinedAt = null,
         };
 
         await _folderRepo.AddShareAsync(share, ct);
@@ -311,10 +337,13 @@ public class FolderService : IFolderService
             ?? throw new InvalidOperationException($"FolderShare {share.Id} vừa tạo nhưng không reload được.");
 
         // 9. Gửi notification cho người được mời (best-effort)
-        await SendShareNotificationSafeAsync(
+        await SendShareInviteNotificationSafeAsync(
             saved.SharedWithUserId,
+            saved.Id,
+            folderId,
             folder.Owner?.FullName ?? "Someone",
             folder.Name,
+            permission.ToString(),
             ct);
 
         return MapShareToDto(saved);
@@ -348,6 +377,9 @@ public class FolderService : IFolderService
 
         if (share.FolderId != folderId)
             throw new NotFoundException(nameof(FolderShare), shareId);
+
+        if (share.DeclinedAt.HasValue)
+            throw new BusinessRuleException("Không thể đổi quyền lời mời đã bị từ chối — hãy mời lại.");
 
         // 4. Parse permission
         if (!Enum.TryParse<SharePermission>(request.Permission, ignoreCase: true, out var permission))
@@ -384,14 +416,16 @@ public class FolderService : IFolderService
         Guid userId, CancellationToken ct = default)
     {
         var shares = await _folderRepo.GetSharesForUserAsync(userId, ct);
-        return shares.Select(fs => new SharedFolderDto(
+        return shares
+            .Where(fs => !fs.DeclinedAt.HasValue)
+            .Select(fs => new SharedFolderDto(
             ShareId: fs.Id,
             FolderId: fs.FolderId,
             FolderName: fs.Folder.Name,
             OwnerUserId: fs.Folder.OwnerId,
             OwnerName: fs.Folder.Owner?.FullName ?? "Unknown",
             Permission: fs.Permission.ToString(),
-            Status: fs.AcceptedAt.HasValue ? "Accepted" : "Pending",
+            Status: MapShareStatus(fs),
             SharedAt: fs.CreatedAt
         )).ToList().AsReadOnly();
     }
@@ -411,8 +445,21 @@ public class FolderService : IFolderService
         if (share.AcceptedAt.HasValue)
             throw new ConflictException("Lời mời chia sẻ này đã được chấp nhận trước đó.");
 
+        if (share.DeclinedAt.HasValue)
+            throw new ConflictException("Lời mời chia sẻ này đã bị từ chối.");
+
         share.AcceptedAt = DateTime.UtcNow;
+        share.DeclinedAt = null;
         await _folderRepo.SaveChangesAsync(ct);
+
+        // Thông báo owner để dialog chia sẻ cập nhật Pending → Accepted realtime
+        await SendShareAcceptedNotificationSafeAsync(
+            share.CreatedByUserId,
+            share.Id,
+            share.FolderId,
+            share.SharedWithUser?.FullName ?? "Someone",
+            share.Folder?.Name ?? string.Empty,
+            ct);
 
         return MapShareToDto(share);
     }
@@ -428,9 +475,24 @@ public class FolderService : IFolderService
         if (share.SharedWithUserId != userId)
             throw new ForbiddenException("Chỉ người được mời mới có thể từ chối lời mời chia sẻ.");
 
-        // Decline = xoá row (không giữ trạng thái)
-        _folderRepo.RemoveShare(share);
+        if (share.AcceptedAt.HasValue)
+            throw new ConflictException("Lời mời chia sẻ này đã được chấp nhận trước đó.");
+
+        if (share.DeclinedAt.HasValue)
+            throw new ConflictException("Lời mời chia sẻ này đã bị từ chối trước đó.");
+
+        share.DeclinedAt = DateTime.UtcNow;
+
         await _folderRepo.SaveChangesAsync(ct);
+
+        // Thông báo owner — modal hiện Declined realtime
+        await SendShareDeclinedNotificationSafeAsync(
+            share.CreatedByUserId,
+            share.Id,
+            share.FolderId,
+            share.SharedWithUser?.FullName ?? "Someone",
+            share.Folder?.Name ?? string.Empty,
+            ct);
     }
 
     /// <inheritdoc/>
@@ -486,28 +548,108 @@ public class FolderService : IFolderService
         SharedWithUserName: fs.SharedWithUser?.FullName ?? string.Empty,
         SharedWithUserAvatar: fs.SharedWithUser?.AvatarUrl,
         Permission: fs.Permission.ToString(),
-        Status: fs.AcceptedAt.HasValue ? "Accepted" : "Pending",
+        Status: MapShareStatus(fs),
         SharedAt: fs.CreatedAt);
 
+    private static string MapShareStatus(FolderShare fs)
+    {
+        if (fs.DeclinedAt.HasValue) return "Declined";
+        if (fs.AcceptedAt.HasValue) return "Accepted";
+        return "Pending";
+    }
+
     /// <summary>Gửi notification khi share invite — best-effort, không throw nếu lỗi.</summary>
-    private async Task SendShareNotificationSafeAsync(
-        Guid targetUserId, string ownerName, string folderName, CancellationToken ct)
+    private async Task SendShareInviteNotificationSafeAsync(
+        Guid targetUserId,
+        Guid shareId,
+        Guid folderId,
+        string ownerName,
+        string folderName,
+        string permission,
+        CancellationToken ct)
     {
         try
         {
             await _notifications.CreateAndSendAsync(
                 targetUserId,
                 NotificationType.ShareInvite,
-                $"{ownerName} đã chia sẻ folder '{folderName}' với bạn",
-                // Serialize đàng hoàng thay vì nội suy chuỗi: tên chứa " hoặc \ sẽ làm vỡ JSON
-                // → notification hỏng im lặng (đã bọc try/catch nên không crash, chỉ mất thông báo).
-                JsonSerializer.Serialize(new { from = ownerName, folder = folderName }),
+                "notifications.shareInvite",
+                JsonSerializer.Serialize(new
+                {
+                    from = ownerName,
+                    folder = folderName,
+                    shareId,
+                    folderId,
+                    permission,
+                }),
                 "/",
                 ct);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Gửi notification ShareInvite tới {UserId} thất bại", targetUserId);
+        }
+    }
+
+    /// <summary>Thông báo owner khi invitee accept — cập nhật modal chia sẻ realtime.</summary>
+    private async Task SendShareAcceptedNotificationSafeAsync(
+        Guid ownerUserId,
+        Guid shareId,
+        Guid folderId,
+        string inviteeName,
+        string folderName,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _notifications.CreateAndSendAsync(
+                ownerUserId,
+                NotificationType.ShareAccepted,
+                "notifications.shareAccepted",
+                JsonSerializer.Serialize(new
+                {
+                    from = inviteeName,
+                    folder = folderName,
+                    shareId,
+                    folderId,
+                }),
+                "/",
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Gửi notification ShareAccepted tới {UserId} thất bại", ownerUserId);
+        }
+    }
+
+    /// <summary>Thông báo owner khi invitee decline — xoá Pending khỏi modal realtime.</summary>
+    private async Task SendShareDeclinedNotificationSafeAsync(
+        Guid ownerUserId,
+        Guid shareId,
+        Guid folderId,
+        string inviteeName,
+        string folderName,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _notifications.CreateAndSendAsync(
+                ownerUserId,
+                NotificationType.ShareDeclined,
+                "notifications.shareDeclined",
+                JsonSerializer.Serialize(new
+                {
+                    from = inviteeName,
+                    folder = folderName,
+                    shareId,
+                    folderId,
+                }),
+                "/",
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Gửi notification ShareDeclined tới {UserId} thất bại", ownerUserId);
         }
     }
 }

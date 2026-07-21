@@ -700,13 +700,13 @@ export function CalendarEventEditorModal({
                   <Bell className={rowIconClass} />
                   <div className="min-w-0 flex-1">
                     <label className="mb-2 block text-[12px] font-semibold text-slate-500 dark:text-slate-400">
-                      {t('calendar.notifications')}
+                      {t('calendar.reminders')}
                     </label>
 
                     <div className="space-y-2">
                       {(!form.reminders || form.reminders.length === 0) && (
                         <p className="py-1 text-[12.5px] text-slate-400 dark:text-slate-500">
-                          {t('calendar.noNotifications')}
+                          {t('calendar.noReminders')}
                         </p>
                       )}
                       {(form.reminders || []).map((reminder, index) => {
@@ -784,7 +784,7 @@ export function CalendarEventEditorModal({
                             <button
                               type="button"
                               onClick={() => removeReminder(index)}
-                              aria-label={t('calendar.removeNotification')}
+                              aria-label={t('calendar.removeReminder')}
                               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                             >
                               <X className="h-4 w-4" />
@@ -800,7 +800,7 @@ export function CalendarEventEditorModal({
                       className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-brand-600 transition hover:text-brand-700 dark:text-brand-400"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      {t('calendar.addNotification')}
+                      {t('calendar.addReminder')}
                     </button>
                   </div>
                 </div>

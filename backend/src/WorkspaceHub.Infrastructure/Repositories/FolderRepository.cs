@@ -162,7 +162,11 @@ public class FolderRepository : GenericRepository<Folder>, IFolderRepository
 
     /// <inheritdoc/>
     public async Task<bool> ShareExistsAsync(Guid folderId, Guid userId, CancellationToken ct = default)
-        => await Db.FolderShares.AnyAsync(fs => fs.FolderId == folderId && fs.SharedWithUserId == userId, ct);
+        => await Db.FolderShares.AnyAsync(
+            fs => fs.FolderId == folderId
+                  && fs.SharedWithUserId == userId
+                  && fs.DeclinedAt == null,
+            ct);
 
     /// <inheritdoc/>
     public async Task<FolderShare?> GetShareByFolderAndUserAsync(Guid folderId, Guid userId, CancellationToken ct = default)
