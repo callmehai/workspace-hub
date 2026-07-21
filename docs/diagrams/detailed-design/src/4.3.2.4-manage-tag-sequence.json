@@ -1,0 +1,128 @@
+{
+ "title": "UC 4.3.4 — Quản lý Tag (tạo & gán)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "tc",
+   "label": "TagsController"
+  },
+  {
+   "id": "ts",
+   "label": "TagService"
+  },
+  {
+   "id": "repo",
+   "label": "Tag / Item Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "note": "Tạo tag",
+   "over": "tc"
+  },
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "tạo tag mới"
+  },
+  {
+   "from": "fe",
+   "to": "tc",
+   "label": "POST /api/tags { name, color }"
+  },
+  {
+   "from": "tc",
+   "to": "ts",
+   "label": "CreateAsync(userId, request)"
+  },
+  {
+   "from": "ts",
+   "to": "repo",
+   "label": "NameExistsAsync(userId, name) → 409 nếu trùng (UNIQUE UserId,Name)"
+  },
+  {
+   "from": "ts",
+   "to": "repo",
+   "label": "AddAsync(Tag) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Tags"
+  },
+  {
+   "from": "tc",
+   "to": "fe",
+   "label": "201 TagResponse",
+   "return": true
+  },
+  {
+   "note": "Gán tag cho item",
+   "over": "tc"
+  },
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "chọn tag cho 1 item"
+  },
+  {
+   "from": "fe",
+   "to": "tc",
+   "label": "POST /api/tags/{id}/items { itemId }"
+  },
+  {
+   "from": "tc",
+   "to": "ts",
+   "label": "AssignAsync(userId, tagId, request)"
+  },
+  {
+   "from": "ts",
+   "to": "repo",
+   "label": "GetByIdAndUserAsync(tagId, userId) → 404 nếu không phải tag của mình"
+  },
+  {
+   "from": "ts",
+   "to": "repo",
+   "label": "item của user HOẶC IsItemSharedWithUserAsync (Viewer cũng được)"
+  },
+  {
+   "from": "ts",
+   "to": "repo",
+   "label": "AssignmentExistsAsync(tagId, itemId) → 409 nếu đã gắn"
+  },
+  {
+   "from": "ts",
+   "to": "repo",
+   "label": "AddAssignmentAsync(TagAssignment) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT TagAssignments"
+  },
+  {
+   "from": "tc",
+   "to": "fe",
+   "label": "201 TagAssignmentResponse",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "tag hiển thị trên item",
+   "return": true
+  }
+ ]
+}

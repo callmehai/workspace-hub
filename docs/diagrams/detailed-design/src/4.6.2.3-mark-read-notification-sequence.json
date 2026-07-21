@@ -1,0 +1,94 @@
+{
+ "title": "UC 4.6.3 — Đánh dấu thông báo đã đọc",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ncc",
+   "label": "Notification\nCommandsController"
+  },
+  {
+   "id": "ns",
+   "label": "NotificationService"
+  },
+  {
+   "id": "repo",
+   "label": "NotificationRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "mở dropdown / bấm 1 thông báo"
+  },
+  {
+   "from": "fe",
+   "to": "ncc",
+   "label": "PATCH /api/notifications/{id}/read"
+  },
+  {
+   "from": "ncc",
+   "to": "ns",
+   "label": "MarkAsReadAsync(userId, notificationId)"
+  },
+  {
+   "from": "ns",
+   "to": "repo",
+   "label": "GetByIdForUserAsync(userId, id)"
+  },
+  {
+   "note": "null → NotFoundException 404 (scope theo user) · đã IsRead → không save lại",
+   "over": "ns"
+  },
+  {
+   "from": "ns",
+   "to": "repo",
+   "label": "IsRead = true + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE Notifications"
+  },
+  {
+   "from": "ncc",
+   "to": "fe",
+   "label": "204 No Content",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "ncc",
+   "label": "POST /api/notifications/read-all"
+  },
+  {
+   "from": "ncc",
+   "to": "ns",
+   "label": "MarkAllAsReadAsync(userId) → bulk update (không publish)"
+  },
+  {
+   "from": "ncc",
+   "to": "fe",
+   "label": "204 No Content",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "badge unread về 0 (không có push ngược từ server)",
+   "return": true
+  }
+ ]
+}

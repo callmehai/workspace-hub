@@ -1,0 +1,140 @@
+{
+ "title": "UC 4.2.1 — Xem danh sách item (lazy / on-demand sync)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ic",
+   "label": "ItemsController"
+  },
+  {
+   "id": "is",
+   "label": "ItemService"
+  },
+  {
+   "id": "hc",
+   "label": "ConnectionHealthChecker"
+  },
+  {
+   "id": "disp",
+   "label": "SyncDispatcher\n+ Sync services"
+  },
+  {
+   "id": "prov",
+   "label": "Google / Jira"
+  },
+  {
+   "id": "repo",
+   "label": "ItemRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "mở Inbox / Kanban"
+  },
+  {
+   "from": "fe",
+   "to": "ic",
+   "label": "GET /api/items?folderId&statuses&page&limit"
+  },
+  {
+   "from": "ic",
+   "to": "is",
+   "label": "GetItemsAsync(userId, request)"
+  },
+  {
+   "from": "is",
+   "to": "hc",
+   "label": "EnsureAllSyncedAsync(userId)  (try/catch — lỗi không chặn list)"
+  },
+  {
+   "note": "debounce 30s theo LastSyncedAt · timeout 15s/connection\ntoken sắp hết hạn → RefreshConnectionAsync",
+   "over": "hc"
+  },
+  {
+   "from": "hc",
+   "to": "disp",
+   "label": "SyncAsync(connectionId, userId)"
+  },
+  {
+   "from": "disp",
+   "to": "prov",
+   "label": "SyncConnectionAsync → list dữ liệu mới"
+  },
+  {
+   "from": "prov",
+   "to": "disp",
+   "label": "messages / events / files / issues",
+   "return": true
+  },
+  {
+   "from": "disp",
+   "to": "repo",
+   "label": "AddRangeAsync(items mới) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Items"
+  },
+  {
+   "from": "hc",
+   "to": "is",
+   "label": "done",
+   "return": true
+  },
+  {
+   "from": "is",
+   "to": "repo",
+   "label": "GetPagedAsync(targetOwnerId, filter, page, limit)"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "SELECT Items + ItemFolders + Tags"
+  },
+  {
+   "from": "db",
+   "to": "repo",
+   "label": "rows",
+   "return": true
+  },
+  {
+   "from": "repo",
+   "to": "is",
+   "label": "(items, totalCount, threadCounts)",
+   "return": true
+  },
+  {
+   "from": "is",
+   "to": "ic",
+   "label": "PagedResult<ItemResponse>",
+   "return": true
+  },
+  {
+   "from": "ic",
+   "to": "fe",
+   "label": "200 OK",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "hiển thị danh sách / bảng Kanban",
+   "return": true
+  }
+ ]
+}

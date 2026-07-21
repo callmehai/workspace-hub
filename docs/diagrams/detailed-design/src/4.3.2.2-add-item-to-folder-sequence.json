@@ -1,0 +1,107 @@
+{
+ "title": "UC 4.3.2 — Kéo item vào Folder",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "fc",
+   "label": "FoldersController"
+  },
+  {
+   "id": "fs",
+   "label": "FolderService"
+  },
+  {
+   "id": "repo",
+   "label": "Folder / Item Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "kéo-thả item vào folder"
+  },
+  {
+   "from": "fe",
+   "to": "fc",
+   "label": "POST /api/folders/{id}/items { itemId }"
+  },
+  {
+   "from": "fc",
+   "to": "fs",
+   "label": "AddItemToFolderAsync(userId, folderId, request)"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "ExistsByOwnerAsync(folderId, userId)"
+  },
+  {
+   "note": "false → ForbiddenException(FolderOwnerOnly) 403",
+   "over": "fs"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "GetByIdAndUserAsync(itemId, userId)"
+  },
+  {
+   "note": "null → ForbiddenException(ItemNotOwned) 403",
+   "over": "fs"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "ItemFolderExistsAsync(itemId, folderId)"
+  },
+  {
+   "note": "true → ConflictException(ItemAlreadyInFolder) 409",
+   "over": "fs"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "GetMaxItemPositionAsync(folderId)"
+  },
+  {
+   "from": "repo",
+   "to": "fs",
+   "label": "maxPos",
+   "return": true
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "AddItemFolderAsync(ItemFolder{ Position = maxPos + 1 }) + Save"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT ItemFolders"
+  },
+  {
+   "from": "fc",
+   "to": "fe",
+   "label": "201 ItemFolderResponse(ItemId, FolderId, Position, AddedAt)",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "item nằm trong folder",
+   "return": true
+  }
+ ]
+}

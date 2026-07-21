@@ -1,0 +1,99 @@
+{
+ "title": "UC 4.1.4 — Disconnect service",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "cc",
+   "label": "ConnectionsController"
+  },
+  {
+   "id": "cs",
+   "label": "ConnectionsService"
+  },
+  {
+   "id": "repo",
+   "label": "Connection / Item /\nScheduledEmail Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "Ngắt kết nối service"
+  },
+  {
+   "from": "fe",
+   "to": "cc",
+   "label": "DELETE /api/connections/{id}"
+  },
+  {
+   "from": "cc",
+   "to": "cs",
+   "label": "DisconnectAsync(connectionId, CurrentUserId)"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "GetByIdTrackedAsync(id)"
+  },
+  {
+   "from": "repo",
+   "to": "cs",
+   "label": "connection",
+   "return": true
+  },
+  {
+   "note": "null → NotFoundException 404 · connection.UserId != userId → ForbiddenException 403",
+   "over": "cs"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "ExecuteInTransactionAsync:"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "DeleteByConnectionIdAsync(Items)"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "DeleteByConnectionIdAsync(ScheduledEmails)"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "Remove(connection) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "DELETE Items, ScheduledEmails, Connection"
+  },
+  {
+   "from": "cc",
+   "to": "fe",
+   "label": "204 No Content",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "cập nhật trang Integrations",
+   "return": true
+  }
+ ]
+}

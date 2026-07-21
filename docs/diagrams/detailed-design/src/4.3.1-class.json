@@ -1,0 +1,434 @@
+{
+ "title": "4.3.1 Class Diagram — Folder, Kanban & Tag",
+ "colWidth": 350,
+ "colGap": 70,
+ "rowGap": 75,
+ "startX": 40,
+ "startY": 60,
+ "classes": [
+  {
+   "id": "fc",
+   "name": "FoldersController",
+   "stereotype": "controller",
+   "col": 0,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/folders",
+    "- _folderService: IFolderService",
+    "- IValidator<CreateFolderRequest> …"
+   ],
+   "methods": [
+    "+ GET / → GetFolders(includeShared)",
+    "+ POST / → CreateFolder",
+    "+ PUT {id} → UpdateFolder",
+    "+ DELETE {id} → DeleteFolder",
+    "+ POST {id}/items → AddItemToFolder",
+    "+ DELETE {id}/items/{itemId} → RemoveItemFromFolder",
+    "+ POST|DELETE {id}/items/bulk → thao tác nhiều item"
+   ]
+  },
+  {
+   "id": "tc",
+   "name": "TagsController",
+   "stereotype": "controller",
+   "col": 1,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/tags",
+    "- _tagService: ITagService"
+   ],
+   "methods": [
+    "+ GET / → GetTags",
+    "+ POST / → CreateTag",
+    "+ PUT {id} → UpdateTag",
+    "+ DELETE {id} → DeleteTag",
+    "+ POST {id}/items → AssignTag",
+    "+ DELETE {id}/items/{itemId} → UnassignTag"
+   ]
+  },
+  {
+   "id": "ic",
+   "name": "ItemsController",
+   "stereotype": "controller",
+   "col": 2,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "(phần Kanban)"
+   ],
+   "methods": [
+    "+ PATCH {id}/status → UpdateStatus",
+    "    body: UpdateItemStatusRequest(ItemStatus Status)",
+    "+ GET / → GetItems(folderId, statuses, tagIds, …)"
+   ]
+  },
+  {
+   "id": "dto",
+   "name": "DTOs",
+   "stereotype": "record",
+   "col": 3,
+   "row": 0,
+   "color": "grey",
+   "attrs": [
+    "CreateFolderRequest(Name, Color, Icon)",
+    "UpdateFolderRequest(Name, Color, Icon, SortOrder)",
+    "AddItemToFolderRequest(ItemId)",
+    "AddItemsToFolderBulkRequest(ItemIds)",
+    "FolderResponse(Id, Name, Color, Icon, SortOrder,",
+    "  IsArchived, ItemCount, IsOwner, Permission, OwnerName)",
+    "ItemFolderResponse(ItemId, FolderId, Position, AddedAt)",
+    "CreateTagRequest(Name, Color) · AssignTagRequest(ItemId)",
+    "TagResponse(Id, Name, Color, ItemCount)"
+   ]
+  },
+  {
+   "id": "ifs",
+   "name": "IFolderService",
+   "stereotype": "interface",
+   "col": 0,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ GetFoldersAsync(userId, includeShared, ct)",
+    "+ CreateAsync(userId, req, ct): FolderResponse",
+    "+ UpdateAsync(userId, folderId, req, ct)",
+    "+ DeleteAsync(userId, folderId, ct)",
+    "+ AddItemToFolderAsync(userId, folderId, req, ct)",
+    "+ AddItemsToFolderAsync(...) / RemoveItemsFromFolderAsync(...)",
+    "+ … (nhóm share: xem 4.5)"
+   ]
+  },
+  {
+   "id": "its",
+   "name": "ITagService",
+   "stereotype": "interface",
+   "col": 1,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ GetAsync(userId, ct): IReadOnlyList<TagResponse>",
+    "+ CreateAsync(userId, req, ct)",
+    "+ UpdateAsync(userId, id, req, ct)",
+    "+ DeleteAsync(userId, id, ct)",
+    "+ AssignAsync(userId, tagId, req, ct)",
+    "+ UnassignAsync(userId, tagId, itemId, ct)"
+   ]
+  },
+  {
+   "id": "iis",
+   "name": "IItemService",
+   "stereotype": "interface",
+   "col": 2,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ UpdateStatusAsync(userId, itemId, req, ct): ItemResponse",
+    "+ GetItemsAsync(userId, req, ct): PagedResult<ItemResponse>"
+   ]
+  },
+  {
+   "id": "exc",
+   "name": "Exceptions → HTTP",
+   "stereotype": "cross-cutting",
+   "col": 3,
+   "row": 1,
+   "color": "red",
+   "attrs": [
+    "ForbiddenException(FolderOwnerOnly) → 403",
+    "ForbiddenException(ItemNotOwned) → 403",
+    "ConflictException(ItemAlreadyInFolder) → 409",
+    "ConflictException (Tag trùng tên / đã gắn) → 409",
+    "NotFoundException(Tag | Item) → 404"
+   ]
+  },
+  {
+   "id": "fs",
+   "name": "FolderService",
+   "stereotype": "service",
+   "col": 0,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _folderRepo: IFolderRepository",
+    "- _itemRepo: IItemRepository",
+    "- _friendships / _notifications"
+   ],
+   "methods": [
+    "+ CreateAsync: GetMaxSortOrderAsync → SortOrder + 1",
+    "+ AddItemToFolderAsync:",
+    "   ExistsByOwnerAsync → ItemFolderExistsAsync",
+    "   → GetMaxItemPositionAsync → Position + 1",
+    "- MapToDto(folder, currentUserId)"
+   ]
+  },
+  {
+   "id": "tsv",
+   "name": "TagService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _tagRepo / _itemRepo / _folderRepo"
+   ],
+   "methods": [
+    "+ AssignAsync: kiểm tag thuộc user",
+    "   → item của user HOẶC được share (Viewer cũng được",
+    "      vì tag là dữ liệu private của mỗi user)",
+    "   → AssignmentExistsAsync → 409 nếu trùng",
+    "- SaveOrThrowConflictAsync(ct)  // DbUpdateException → 409"
+   ]
+  },
+  {
+   "id": "isv",
+   "name": "ItemService",
+   "stereotype": "service",
+   "col": 2,
+   "row": 2,
+   "color": "green",
+   "methods": [
+    "+ UpdateStatusAsync:",
+    "   GetByIdAndUserAsync → nếu null:",
+    "   IsItemSharedWithUserAsEditorAsync → GetByIdAsync",
+    "   → item.Status = req.Status → SaveChangesAsync",
+    "   (KHÔNG đụng ItemFolder.Position)"
+   ]
+  },
+  {
+   "id": "val",
+   "name": "Validators",
+   "stereotype": "FluentValidation",
+   "col": 3,
+   "row": 2,
+   "color": "grey",
+   "attrs": [
+    "CreateFolderValidator · UpdateFolderValidator",
+    "AddItemToFolderValidator",
+    "CreateTagRequestValidator · AssignTagRequestValidator",
+    "UpdateItemStatusValidator"
+   ],
+   "methods": [
+    "ValidateAndThrowAsync(request, ct) trong controller"
+   ]
+  },
+  {
+   "id": "frepo",
+   "name": "IFolderRepository",
+   "stereotype": "repository",
+   "col": 0,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetUserFoldersAsync / GetSharedFoldersAsync",
+    "+ GetByIdWithOwnerAsync(folderId, ct)",
+    "+ ExistsByOwnerAsync(folderId, userId, ct)",
+    "+ GetMaxSortOrderAsync(userId, ct)",
+    "+ ItemFolderExistsAsync(itemId, folderId, ct)",
+    "+ GetMaxItemPositionAsync(folderId, ct)",
+    "+ AddItemFolderAsync / RemoveItemFolder",
+    "+ IsItemSharedWithUserAsync / …AsEditorAsync"
+   ]
+  },
+  {
+   "id": "trepo",
+   "name": "ITagRepository",
+   "stereotype": "repository",
+   "col": 1,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByUserWithCountAsync(userId, ct)",
+    "+ GetByIdAndUserAsync(id, userId, ct)",
+    "+ NameExistsAsync(userId, name, excludeId, ct)",
+    "+ AssignmentExistsAsync(tagId, itemId, ct)",
+    "+ AddAssignmentAsync / GetAssignmentAsync / RemoveAssignment"
+   ]
+  },
+  {
+   "id": "irepo",
+   "name": "IItemRepository",
+   "stereotype": "repository",
+   "col": 2,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByIdAndUserAsync(itemId, userId, ct)",
+    "+ GetByIdsAndUserAsync(itemIds, userId, ct)",
+    "+ GetPagedAsync(... folderId, statuses, tagIds ...)"
+   ]
+  },
+  {
+   "id": "enums",
+   "name": "Enums",
+   "stereotype": "enumeration",
+   "col": 3,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "ItemStatus { Inbox, Doing, Done }   ← 3 cột Kanban",
+    "SharePermission { Viewer, Editor }",
+    "ItemType { Email, Event, File, Note, Ticket }"
+   ]
+  },
+  {
+   "id": "folder",
+   "name": "Folder",
+   "stereotype": "entity",
+   "col": 0,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ OwnerId: Guid   (FK User, cascade)",
+    "+ Name / Color / Icon: string",
+    "+ SortOrder: int",
+    "+ IsArchived: bool   (không soft-delete)"
+   ]
+  },
+  {
+   "id": "itemfolder",
+   "name": "ItemFolder",
+   "stereotype": "junction",
+   "col": 1,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "PK kép (ItemId, FolderId)",
+    "+ ItemId: Guid",
+    "+ FolderId: Guid",
+    "+ Position: int   (thứ tự trong cột Kanban)",
+    "+ AddedAt: DateTime"
+   ]
+  },
+  {
+   "id": "tag",
+   "name": "Tag",
+   "stereotype": "entity",
+   "col": 2,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ UserId: Guid",
+    "+ Name: string   UNIQUE (UserId, Name)",
+    "+ Color: string"
+   ]
+  },
+  {
+   "id": "tagas",
+   "name": "TagAssignment",
+   "stereotype": "junction",
+   "col": 3,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "PK kép (TagId, ItemId)",
+    "+ TagId: Guid",
+    "+ ItemId: Guid",
+    "+ AssignedAt: DateTime"
+   ]
+  }
+ ],
+ "relations": [
+  {
+   "from": "fc",
+   "to": "ifs",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "tc",
+   "to": "its",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "ic",
+   "to": "iis",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "fs",
+   "to": "ifs",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "tsv",
+   "to": "its",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "isv",
+   "to": "iis",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "fs",
+   "to": "frepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "tsv",
+   "to": "trepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "isv",
+   "to": "irepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "frepo",
+   "to": "folder",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "folder",
+   "to": "itemfolder",
+   "type": "compose",
+   "label": "1 — n"
+  },
+  {
+   "from": "trepo",
+   "to": "tag",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "tag",
+   "to": "tagas",
+   "type": "compose",
+   "label": "1 — n"
+  },
+  {
+   "from": "fs",
+   "to": "exc",
+   "type": "dep",
+   "label": "403 / 409"
+  },
+  {
+   "from": "tsv",
+   "to": "exc",
+   "type": "dep",
+   "label": ""
+  }
+ ],
+ "notes": [
+  {
+   "text": "Kanban = cột Items.Status (Inbox / Doing / Done), đổi bằng PATCH /api/items/{id}/status — không phải endpoint của Folder.  ItemFolder.Position giữ thứ tự item trong folder (gán khi add = max + 1).  Tag là dữ liệu riêng của từng user: người được share folder vẫn gắn tag của mình lên item của người khác, và chỉ nhìn thấy tag do chính mình tạo.",
+   "x": 40,
+   "w": 1610,
+   "h": 80
+  }
+ ]
+}

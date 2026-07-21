@@ -1,0 +1,351 @@
+{
+ "title": "4.7.1 Class Diagram — Admin",
+ "colWidth": 340,
+ "colGap": 70,
+ "rowGap": 80,
+ "startX": 40,
+ "startY": 60,
+ "classes": [
+  {
+   "id": "ac",
+   "name": "AdminController",
+   "stereotype": "controller",
+   "col": 0,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "- _adminService: IAdminService",
+    "- _validator: IValidator<GetAdminUsersRequest>",
+    "[Authorize(Roles = \"Admin\")]",
+    "[Route(\"api/admin\")]"
+   ],
+   "methods": [
+    "+ GetUsers(req, ct): PagedResult<AdminUserDto>",
+    "+ GetStats(ct): AdminStatsDto",
+    "+ ToggleUserActive(id, ct): AdminUserDto"
+   ]
+  },
+  {
+   "id": "aic",
+   "name": "AdminIntegrationsController",
+   "stereotype": "controller",
+   "col": 1,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "- _connectionsService: IConnectionsService",
+    "- _validator: IValidator<ToggleIntegrationRequest>",
+    "[Authorize(Roles = \"Admin\")]",
+    "[Route(\"api/admin/integrations\")]"
+   ],
+   "methods": [
+    "+ List(ct): IReadOnlyList<IntegrationResponse>",
+    "+ Toggle(key, req, ct): IntegrationResponse"
+   ]
+  },
+  {
+   "id": "base",
+   "name": "ApiControllerBase",
+   "stereotype": "abstract",
+   "col": 2,
+   "row": 0,
+   "color": "grey",
+   "attrs": [
+    "# CurrentUserId: Guid",
+    "# CurrentUserRole: string?"
+   ],
+   "methods": [
+    "// đọc claim sub / role từ JWT"
+   ]
+  },
+  {
+   "id": "dtoReq",
+   "name": "DTOs — Request",
+   "stereotype": "record",
+   "col": 3,
+   "row": 0,
+   "color": "grey",
+   "attrs": [
+    "GetAdminUsersRequest(Search, Page, Limit)",
+    "ToggleIntegrationRequest { IsEnabled }"
+   ],
+   "methods": [
+    "GetAdminUsersRequestValidator",
+    "ToggleIntegrationValidator"
+   ]
+  },
+  {
+   "id": "ias",
+   "name": "IAdminService",
+   "stereotype": "interface",
+   "col": 0,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ GetUsersAsync(req, ct): PagedResult<AdminUserDto>",
+    "+ ToggleUserActiveAsync(id, currentAdminId, ct)",
+    "+ GetStatsAsync(ct): AdminStatsDto"
+   ]
+  },
+  {
+   "id": "ics",
+   "name": "IConnectionsService",
+   "stereotype": "interface",
+   "col": 1,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ GetIntegrationsAsync(ct)",
+    "+ ToggleIntegrationAsync(key, isEnabled, ct)",
+    "… (connect / disconnect / sync)"
+   ]
+  },
+  {
+   "id": "dtoRes",
+   "name": "DTOs — Response",
+   "stereotype": "record",
+   "col": 2,
+   "row": 1,
+   "color": "grey",
+   "attrs": [
+    "AdminStatsDto(TotalUsers, ActiveUsers,",
+    "  LockedUsers, TotalConnections,",
+    "  ConnectionsByStatus, TotalItems,",
+    "  SyncErrorsLast24h)",
+    "AdminUserDto(Id, Email, FullName, Role,",
+    "  IsActive, LastLoginAt, CreatedAt,",
+    "  ConnectionCount, ItemCount)"
+   ],
+   "methods": [
+    "PagedResult<T>(Items, Total, Page, Limit)",
+    "IntegrationResponse(Id, Key,",
+    "  DisplayName, IsEnabled)"
+   ]
+  },
+  {
+   "id": "exc",
+   "name": "Exceptions (middleware)",
+   "stereotype": "cross-cutting",
+   "col": 3,
+   "row": 1,
+   "color": "red",
+   "attrs": [
+    "BusinessRuleException → 400",
+    "NotFoundException → 404",
+    "UnauthorizedException → 401"
+   ],
+   "methods": [
+    "ExceptionMiddleware ánh xạ status code"
+   ]
+  },
+  {
+   "id": "as",
+   "name": "AdminService",
+   "stereotype": "service",
+   "col": 0,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _db: AppDbContext"
+   ],
+   "methods": [
+    "+ GetUsersAsync(...)  // projection + paging",
+    "+ ToggleUserActiveAsync(...)",
+    "   guard: không tự khoá chính mình",
+    "   guard: không khoá Admin đang active",
+    "+ GetStatsAsync(...)  // count + group by"
+   ]
+  },
+  {
+   "id": "cs",
+   "name": "ConnectionsService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _integrations: IIntegrationRepository"
+   ],
+   "methods": [
+    "+ GetIntegrationsAsync(ct)",
+    "+ ToggleIntegrationAsync(key, isEnabled, ct)",
+    "   NotFound nếu key không tồn tại"
+   ]
+  },
+  {
+   "id": "ups",
+   "name": "UserProfileService",
+   "stereotype": "service",
+   "col": 2,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "(self-service, không thuộc quyền Admin)"
+   ],
+   "methods": [
+    "+ UpdateProfileAsync(userId, fullName, ct)",
+    "+ ChangePasswordAsync(...)",
+    "+ UploadAvatarAsync(...) / DeleteAvatarAsync(...)"
+   ]
+  },
+  {
+   "id": "auth",
+   "name": "AuthService",
+   "stereotype": "service",
+   "col": 3,
+   "row": 2,
+   "color": "green",
+   "methods": [
+    "+ SignInAsync(...)",
+    "   if (!user.IsActive) → Unauthorized",
+    "   ⇒ hệ quả của lock user"
+   ]
+  },
+  {
+   "id": "db",
+   "name": "AppDbContext",
+   "stereotype": "EF Core",
+   "col": 0,
+   "row": 3,
+   "color": "orange",
+   "attrs": [
+    "DbSet<User> Users",
+    "DbSet<Connection> Connections",
+    "DbSet<Item> Items"
+   ],
+   "methods": [
+    "+ SaveChangesAsync(ct)"
+   ]
+  },
+  {
+   "id": "ir",
+   "name": "IIntegrationRepository",
+   "stereotype": "repository",
+   "col": 1,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByKeyAsync(key, ct): Integration?",
+    "+ ListAsync(ct)",
+    "+ Update(entity) / SaveChangesAsync(ct)"
+   ]
+  },
+  {
+   "id": "user",
+   "name": "User",
+   "stereotype": "entity",
+   "col": 2,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ Email: string",
+    "+ FullName: string",
+    "+ Role: UserRole (Admin | User)",
+    "+ IsActive: bool",
+    "+ LockedReason: string?",
+    "+ LastLoginAt: DateTime?",
+    "+ CreatedAt: DateTime"
+   ]
+  },
+  {
+   "id": "integ",
+   "name": "Integration",
+   "stereotype": "entity",
+   "col": 3,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ Key: string  (google | atlassian)",
+    "+ DisplayName: string",
+    "+ Provider: string",
+    "+ AuthorizationEndpoint / TokenEndpoint",
+    "+ SupportedServices: string",
+    "+ IsEnabled: bool"
+   ]
+  }
+ ],
+ "relations": [
+  {
+   "from": "ac",
+   "to": "ias",
+   "type": "dep",
+   "label": "gọi"
+  },
+  {
+   "from": "aic",
+   "to": "ics",
+   "type": "dep",
+   "label": "gọi"
+  },
+  {
+   "from": "ac",
+   "to": "base",
+   "type": "inherit",
+   "label": ""
+  },
+  {
+   "from": "aic",
+   "to": "base",
+   "type": "inherit",
+   "label": ""
+  },
+  {
+   "from": "as",
+   "to": "ias",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "cs",
+   "to": "ics",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "as",
+   "to": "db",
+   "type": "assoc",
+   "label": "_db"
+  },
+  {
+   "from": "cs",
+   "to": "ir",
+   "type": "assoc",
+   "label": "_integrations"
+  },
+  {
+   "from": "db",
+   "to": "user",
+   "type": "assoc",
+   "label": "DbSet<User>"
+  },
+  {
+   "from": "ir",
+   "to": "integ",
+   "type": "assoc",
+   "label": "quản lý"
+  },
+  {
+   "from": "as",
+   "to": "dtoRes",
+   "type": "dep",
+   "label": "trả về"
+  },
+  {
+   "from": "as",
+   "to": "exc",
+   "type": "dep",
+   "label": "throw"
+  }
+ ],
+ "notes": [
+  {
+   "text": "Ghi chú: (1) LockedReason đã có trên entity User nhưng chưa được set/đọc ở AdminService.  (2) KHÔNG có endpoint admin force-disconnect — disconnect chỉ self-service (ConnectionsController.Disconnect kiểm connection.UserId == CurrentUserId), admin không disconnect hộ user khác.",
+   "x": 40,
+   "w": 1610,
+   "h": 70
+  }
+ ]
+}

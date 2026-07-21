@@ -1,0 +1,429 @@
+{
+ "title": "4.6.1 Class Diagram — Important Contact & Notification",
+ "colWidth": 350,
+ "colGap": 70,
+ "rowGap": 75,
+ "startX": 40,
+ "startY": 60,
+ "classes": [
+  {
+   "id": "icc",
+   "name": "ImportantContactsController",
+   "stereotype": "controller",
+   "col": 0,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/importantcontacts",
+    "- _service: IImportantContactService",
+    "- _validator: IValidator<CreateImportantContactRequest>"
+   ],
+   "methods": [
+    "+ GET / ?type= → Get",
+    "+ POST / → Create  (201)",
+    "+ DELETE {id} → Delete  (204)"
+   ]
+  },
+  {
+   "id": "nc",
+   "name": "NotificationsController",
+   "stereotype": "controller (OData)",
+   "col": 1,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize] : ODataApiControllerBase"
+   ],
+   "methods": [
+    "+ GET /api/Notifications  [EnableQuery(MaxTop=100)]",
+    "   → IQueryable<NotificationDto>",
+    "   ($filter isRead · $orderby createdAt · $top / $skip)"
+   ]
+  },
+  {
+   "id": "ncc",
+   "name": "NotificationCommandsController",
+   "stereotype": "controller",
+   "col": 2,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/notifications"
+   ],
+   "methods": [
+    "+ PATCH {id}/read → MarkAsRead  (204)",
+    "+ POST read-all → MarkAllAsRead  (204)",
+    "+ POST dev/seed  (#if DEBUG, chỉ Development)"
+   ]
+  },
+  {
+   "id": "hub",
+   "name": "NotificationHub",
+   "stereotype": "SignalR Hub",
+   "col": 3,
+   "row": 0,
+   "color": "orange",
+   "attrs": [
+    "[Authorize]",
+    "Hub<INotificationHubClient>",
+    "endpoint /api/hubs/notifications"
+   ],
+   "methods": [
+    "(không có hub method server-side —",
+    " chỉ đẩy 1 chiều server → client)"
+   ]
+  },
+  {
+   "id": "iics",
+   "name": "IImportantContactService",
+   "stereotype": "interface",
+   "col": 0,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ GetAsync(userId, type?, ct)",
+    "+ CreateAsync(userId, request, ct)",
+    "+ DeleteAsync(userId, id, ct)"
+   ]
+  },
+  {
+   "id": "ins",
+   "name": "INotificationService",
+   "stereotype": "interface",
+   "col": 1,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ GetByUserId(userId): IQueryable<NotificationDto>",
+    "+ MarkAsReadAsync(userId, notificationId, ct)",
+    "+ MarkAllAsReadAsync(userId, ct)",
+    "+ CreateAndSendAsync(userId, type, title, body, link, ct)",
+    "+ CreateAndSendToManyAsync(userIds, …)"
+   ]
+  },
+  {
+   "id": "isin",
+   "name": "ISyncItemNotificationService",
+   "stereotype": "interface",
+   "col": 2,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ NotifyNewItemsAsync(connectionId, userId,",
+    "    beforeExternalIds, ct)"
+   ]
+  },
+  {
+   "id": "ihc",
+   "name": "INotificationHubClient",
+   "stereotype": "interface",
+   "col": 3,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ ReceiveNotification(notification: NotificationDto)"
+   ]
+  },
+  {
+   "id": "ics",
+   "name": "ImportantContactService",
+   "stereotype": "service",
+   "col": 0,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _repo: IImportantContactRepository"
+   ],
+   "methods": [
+    "+ CreateAsync: trim Identifier → ExistsAsync",
+    "   trùng → ConflictException 409",
+    "+ DeleteAsync: GetByIdAndUserAsync ?? 404",
+    "- static Map(contact): ImportantContactResponse"
+   ]
+  },
+  {
+   "id": "ns",
+   "name": "NotificationService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _notifications: INotificationRepository",
+    "- _publisher: INotificationPublisher"
+   ],
+   "methods": [
+    "+ CreateAndSendAsync: insert DB → MapToDto",
+    "   → _publisher.PublishToUserAsync(userId, dto)",
+    "+ MarkAsReadAsync: GetByIdForUserAsync ?? 404",
+    "   chỉ save khi !IsRead (không publish)",
+    "+ MarkAllAsReadAsync: bulk update (không publish)"
+   ]
+  },
+  {
+   "id": "sins",
+   "name": "SyncItemNotificationService",
+   "stereotype": "service",
+   "col": 2,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _items: IItemRepository",
+    "- _notifications: INotificationService",
+    "maxPerSync = 10"
+   ],
+   "methods": [
+    "+ NotifyNewItemsAsync: diff ExternalId sau/trước sync",
+    "   bỏ email có label TRASH / SPAM",
+    "   > 10 item → chỉ lấy IsImportant, tối đa 10",
+    "   Email + IsImportant → ImportantEmail, còn lại ItemSynced",
+    "- BuildPayload(item) → (titleKey, bodyJson)"
+   ]
+  },
+  {
+   "id": "pub",
+   "name": "SignalRNotificationPublisher",
+   "stereotype": "infrastructure",
+   "col": 3,
+   "row": 2,
+   "color": "orange",
+   "attrs": [
+    "- _hub: IHubContext<NotificationHub, INotificationHubClient>"
+   ],
+   "methods": [
+    "+ PublishToUserAsync(userId, dto, ct)",
+    "   → Clients.User(userId).ReceiveNotification(dto)",
+    "+ PublishToUsersAsync(userIds, dto, ct)",
+    "   (map theo user, KHÔNG dùng group)"
+   ]
+  },
+  {
+   "id": "icrepo",
+   "name": "IImportantContactRepository",
+   "stereotype": "repository",
+   "col": 0,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetIdentifiersAsync(userId, type, ct)",
+    "+ GetByUserAsync(userId, type?, ct)",
+    "+ ExistsAsync(userId, type, identifier, ct)",
+    "+ GetByIdAndUserAsync(id, userId, ct)"
+   ]
+  },
+  {
+   "id": "nrepo",
+   "name": "INotificationRepository",
+   "stereotype": "repository",
+   "col": 1,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByUserId(userId): IQueryable<Notification>",
+    "+ GetByIdForUserAsync(userId, id, ct)",
+    "+ MarkAllAsReadAsync(userId, ct)  (bulk)",
+    "+ AddAsync / AddRangeAsync / SaveChangesAsync"
+   ]
+  },
+  {
+   "id": "mapper",
+   "name": "GmailItemMapper",
+   "stereotype": "mapper",
+   "col": 2,
+   "row": 3,
+   "color": "green",
+   "methods": [
+    "+ ToItem(message, userId, connectionId, importantEmails)",
+    "   parse From bằng MailAddress",
+    "   importantEmails.Contains(addr) → Item.IsImportant = true",
+    "   (chỉ set lúc TẠO item; re-sync không đụng lại)"
+   ]
+  },
+  {
+   "id": "fehook",
+   "name": "FE — hooks/notificationHub",
+   "stereotype": "frontend",
+   "col": 3,
+   "row": 3,
+   "color": "grey",
+   "attrs": [
+    "notificationHubManager (@microsoft/signalr)",
+    "  withCredentials + CSRF + autoReconnect",
+    "useNotificationHub → subscribe"
+   ],
+   "methods": [
+    "on('ReceiveNotification') → applyIncomingNotification",
+    "  dedupe id → tăng unreadCount → prepend list",
+    "  invalidate items nếu type ∈ INBOX_REFRESH",
+    "  → showNotificationToast(title, subtitle, onClick)"
+   ]
+  },
+  {
+   "id": "icE",
+   "name": "ImportantContact",
+   "stereotype": "entity",
+   "col": 0,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ UserId: Guid",
+    "+ Type: ImportantContactType",
+    "+ Identifier: string   (email | accountId Jira)",
+    "+ Label: string",
+    "UNIQUE (UserId, Type, Identifier)"
+   ]
+  },
+  {
+   "id": "nE",
+   "name": "Notification",
+   "stereotype": "entity",
+   "col": 1,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ UserId: Guid",
+    "+ Type: NotificationType",
+    "+ Title / Body / LinkUrl: string",
+    "+ IsRead: bool",
+    "+ CreatedAt: DateTime"
+   ]
+  },
+  {
+   "id": "enums",
+   "name": "Enums",
+   "stereotype": "enumeration",
+   "col": 2,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "ImportantContactType { Email, JiraAccount }",
+    "NotificationType { ShareInvite, ImportantEmail,",
+    "  SyncError, ScheduleSent, ItemSynced,",
+    "  CalendarReminder, CalendarInvite,",
+    "  FriendRequest, FriendAccepted }"
+   ]
+  },
+  {
+   "id": "dto",
+   "name": "DTOs",
+   "stereotype": "record",
+   "col": 3,
+   "row": 4,
+   "color": "grey",
+   "attrs": [
+    "CreateImportantContactRequest(Type, Identifier, Label)",
+    "ImportantContactResponse(Id, Type, Identifier, Label)",
+    "NotificationDto(Id, Type, Title, Body,",
+    "  LinkUrl, IsRead, CreatedAt)"
+   ]
+  }
+ ],
+ "relations": [
+  {
+   "from": "icc",
+   "to": "iics",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "nc",
+   "to": "ins",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "ncc",
+   "to": "ins",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "ics",
+   "to": "iics",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "ns",
+   "to": "ins",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "sins",
+   "to": "isin",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "sins",
+   "to": "ins",
+   "type": "dep",
+   "label": "CreateAndSendAsync"
+  },
+  {
+   "from": "ns",
+   "to": "pub",
+   "type": "assoc",
+   "label": "INotificationPublisher"
+  },
+  {
+   "from": "pub",
+   "to": "hub",
+   "type": "dep",
+   "label": "IHubContext"
+  },
+  {
+   "from": "hub",
+   "to": "ihc",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "ics",
+   "to": "icrepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "ns",
+   "to": "nrepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "mapper",
+   "to": "icrepo",
+   "type": "dep",
+   "label": "GetIdentifiersAsync"
+  },
+  {
+   "from": "icrepo",
+   "to": "icE",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "nrepo",
+   "to": "nE",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "pub",
+   "to": "fehook",
+   "type": "dep",
+   "label": "WebSocket"
+  }
+ ],
+ "notes": [
+  {
+   "text": "Đánh dấu quan trọng ảnh hưởng lúc SYNC: GmailSyncService nạp danh sách identifier quan trọng, mapper set Item.IsImportant khi tạo item mới ⇒ notification đổi từ ItemSynced sang ImportantEmail. Đánh dấu sau đó KHÔNG hồi tố cho item đã có.  ·  SignalR chỉ đẩy 1 chiều (notification mới); mark-read không push, FE tự cập nhật cache.",
+   "x": 40,
+   "w": 1610,
+   "h": 80
+  }
+ ]
+}

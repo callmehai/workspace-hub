@@ -1,0 +1,108 @@
+{
+ "title": "UC 4.4.1 — Gửi email ngay (kèm đính kèm)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ec",
+   "label": "EmailsController"
+  },
+  {
+   "id": "ses",
+   "label": "SendEmailService"
+  },
+  {
+   "id": "gw",
+   "label": "IGmailGateway"
+  },
+  {
+   "id": "gmail",
+   "label": "Gmail API"
+  },
+  {
+   "id": "repo",
+   "label": "ConnectionRepository"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "soạn email + đính kèm file"
+  },
+  {
+   "from": "fe",
+   "to": "ec",
+   "label": "POST /api/emails/send { connectionId, to, cc, subject, bodyHtml, attachments[] }"
+  },
+  {
+   "note": "SendEmailRequestValidator + RequestSizeLimit 40 MB",
+   "over": "ec"
+  },
+  {
+   "from": "ec",
+   "to": "ses",
+   "label": "SendAsync(userId, request)"
+  },
+  {
+   "from": "ses",
+   "to": "repo",
+   "label": "GetByIdTrackedAsync(connectionId)"
+  },
+  {
+   "from": "repo",
+   "to": "ses",
+   "label": "connection",
+   "return": true
+  },
+  {
+   "note": "UserId lệch → 404 · ServiceType != Gmail / Status != Active → 400",
+   "over": "ses"
+  },
+  {
+   "from": "ses",
+   "to": "gw",
+   "label": "SendMessageAsync(conn, to, cc, bcc, subject, html, attachments)"
+  },
+  {
+   "from": "gw",
+   "to": "gmail",
+   "label": "users.messages.send (MIME RFC 2822, From = ProviderAccountId)"
+  },
+  {
+   "from": "gmail",
+   "to": "gw",
+   "label": "messageId",
+   "return": true
+  },
+  {
+   "from": "ses",
+   "to": "ec",
+   "label": "SendEmailResult(messageId, sentAt)",
+   "return": true
+  },
+  {
+   "from": "ec",
+   "to": "fe",
+   "label": "200 OK",
+   "return": true
+  },
+  {
+   "note": "Không tạo Item ngay — email vào Inbox sau lần GmailSync kế tiếp",
+   "over": "ses"
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "đã gửi",
+   "return": true
+  }
+ ]
+}

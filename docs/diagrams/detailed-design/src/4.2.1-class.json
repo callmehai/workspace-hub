@@ -1,0 +1,444 @@
+{
+ "title": "4.2.1 Class Diagram — Item & Unified Workspace",
+ "colWidth": 350,
+ "colGap": 70,
+ "rowGap": 75,
+ "startX": 40,
+ "startY": 60,
+ "classes": [
+  {
+   "id": "ic",
+   "name": "ItemsController",
+   "stereotype": "controller",
+   "col": 0,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/items",
+    "- _itemService: IItemService",
+    "- _writeBackService: IItemWriteBackService",
+    "- _ticketService: IJiraTicketService",
+    "- 8 × IValidator<...>"
+   ],
+   "methods": [
+    "+ GET / → GetItems (lazy sync)",
+    "+ GET {id} → GetItemById",
+    "+ PATCH {id}/status → UpdateStatus (Kanban)",
+    "+ PATCH {id}/important → UpdateImportant",
+    "+ POST note → CreateNote",
+    "+ PATCH {id} → PatchItem  (write-back)",
+    "+ POST event | ticket → CreateEvent / CreateTicket",
+    "+ DELETE {id} → DeleteItem"
+   ]
+  },
+  {
+   "id": "iis",
+   "name": "IItemService",
+   "stereotype": "interface",
+   "col": 1,
+   "row": 0,
+   "color": "purple",
+   "methods": [
+    "+ GetItemsAsync(userId, req, ct): PagedResult<ItemResponse>",
+    "+ GetItemByIdAsync(userId, itemId, ct)",
+    "+ UpdateStatusAsync(userId, itemId, req, ct)",
+    "+ ToggleImportantAsync(userId, itemId, flag, ct)",
+    "+ CreateNoteAsync(userId, req, ct)",
+    "+ GetCalendarEventDetailAsync(...) / RsvpEventAsync(...)"
+   ]
+  },
+  {
+   "id": "iwb",
+   "name": "IItemWriteBackService",
+   "stereotype": "interface",
+   "col": 2,
+   "row": 0,
+   "color": "purple",
+   "methods": [
+    "+ PatchItemAsync(itemId, userId, payload, ct)",
+    "+ CreateEventAsync(userId, payload, ct)",
+    "+ CreateTicketAsync(userId, payload, ct)",
+    "+ DeleteItemAsync(itemId, userId, ct)"
+   ]
+  },
+  {
+   "id": "igd",
+   "name": "IWriteBackGuard",
+   "stereotype": "interface",
+   "col": 3,
+   "row": 0,
+   "color": "yellow",
+   "methods": [
+    "+ EnsureNoConflict(storedEtag, providerEtag)"
+   ]
+  },
+  {
+   "id": "is",
+   "name": "ItemService",
+   "stereotype": "service",
+   "col": 0,
+   "row": 1,
+   "color": "green",
+   "attrs": [
+    "- _itemRepo / _folderRepo / _connections",
+    "- _healthChecker: IConnectionHealthChecker",
+    "- _calendarGateway / _sendEmail"
+   ],
+   "methods": [
+    "+ GetItemsAsync: EnsureAllSyncedAsync (try/catch)",
+    "   → GetPagedAsync(targetOwnerId, filter, page)",
+    "+ UpdateStatusAsync: item.Status = req.Status",
+    "- CanReadSharedAsync(item, userId, ct)",
+    "- ThrowNoWriteAccessAsync → 403 viewer / 404"
+   ]
+  },
+  {
+   "id": "wbs",
+   "name": "ItemWriteBackService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 1,
+   "color": "green",
+   "attrs": [
+    "- _items / _connections / _folders",
+    "- _guard: IWriteBackGuard",
+    "- _gmail / _calendar / _drive / _jira gateway"
+   ],
+   "methods": [
+    "+ PatchItemAsync: type-match ServiceType",
+    "   → lấy ETag live → _guard.EnsureNoConflict",
+    "   → gateway ghi → cập nhật ETag + metadata",
+    "- PatchTicketAsync(item, conn, payload, ct)",
+    "+ DeleteItemAsync: Email có ThreadId → xoá cả thread"
+   ]
+  },
+  {
+   "id": "wbg",
+   "name": "WriteBackGuard",
+   "stereotype": "service",
+   "col": 2,
+   "row": 1,
+   "color": "yellow",
+   "methods": [
+    "+ EnsureNoConflict(stored, provider)",
+    "   stored/provider rỗng → bỏ qua",
+    "   khác nhau (Ordinal) → ConflictException → 409",
+    "   Email: BỎ QUA guard (Gmail ETag đổi liên tục)",
+    "   Jira: version-token = fields.updated (ISO 8601)"
+   ]
+  },
+  {
+   "id": "dto",
+   "name": "DTOs",
+   "stereotype": "record",
+   "col": 3,
+   "row": 1,
+   "color": "grey",
+   "attrs": [
+    "GetItemsRequest(FolderId, Statuses, Types,",
+    "  IsImportant, Search, TagIds, ProjectKey,",
+    "  GmailLabel, ConnectionId, DriveParentId, ...)",
+    "PatchItemRequest(IsUnread, IsStarred, IsTrashed,",
+    "  AddLabels, RemoveLabels, Title, Name, Start, End, ...)",
+    "CreateEventRequest / CreateTicketRequest",
+    "ItemResponse · PagedResult<T> · SyncResult"
+   ]
+  },
+  {
+   "id": "ihc",
+   "name": "ConnectionHealthChecker",
+   "stereotype": "service",
+   "col": 0,
+   "row": 2,
+   "color": "green",
+   "methods": [
+    "+ EnsureAllSyncedAsync(userId, ct)",
+    "   debounce 30s theo LastSyncedAt",
+    "   timeout 15s / connection",
+    "   token sắp hết hạn → RefreshConnectionAsync",
+    "   lỗi 1 connection → log, KHÔNG chặn list"
+   ]
+  },
+  {
+   "id": "disp",
+   "name": "ConnectionSyncDispatcher",
+   "stereotype": "service",
+   "col": 1,
+   "row": 2,
+   "color": "green",
+   "methods": [
+    "+ SyncAsync(connectionId, userId, ct, markProviderError)",
+    "   GetExistingExternalIdsAsync (before)",
+    "   switch ServiceType → sync service",
+    "   Created > 0 → NotifyNewItemsAsync",
+    "   GoogleApiException → ProviderException (502)"
+   ]
+  },
+  {
+   "id": "sync",
+   "name": "Sync services",
+   "stereotype": "service",
+   "col": 2,
+   "row": 2,
+   "color": "green",
+   "methods": [
+    "+ GmailSyncService.SyncConnectionAsync(conn, 100, ct)",
+    "+ CalendarSyncService.SyncConnectionAsync(conn, ct)",
+    "+ DriveSyncService.SyncConnectionAsync(conn, ct)",
+    "+ JiraSyncService.SyncConnectionAsync(conn, 250, ct)",
+    "→ SyncResult(Scanned, Created, Skipped, NewCursor)"
+   ]
+  },
+  {
+   "id": "exc",
+   "name": "Exceptions → HTTP",
+   "stereotype": "cross-cutting",
+   "col": 3,
+   "row": 2,
+   "color": "red",
+   "attrs": [
+    "ConflictException → 409 (ETag lệch)",
+    "ForbiddenException → 403 (viewer / thiếu quyền)",
+    "NotFoundException → 404",
+    "BusinessRuleException → 400",
+    "ProviderException → 502 (Google/Jira lỗi)"
+   ],
+   "methods": [
+    "ExceptionMiddleware ánh xạ + TraceId"
+   ]
+  },
+  {
+   "id": "gg",
+   "name": "IGmailGateway",
+   "stereotype": "gateway",
+   "col": 0,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetMessageETagAsync(conn, messageId, ct)",
+    "+ ModifyMessageAsync(conn, id, addLabels, removeLabels)",
+    "+ TrashMessageAsync / UntrashMessageAsync",
+    "+ TrashThreadAsync / DeleteThreadAsync",
+    "+ SendMessageAsync / SendInThreadAsync"
+   ]
+  },
+  {
+   "id": "cg",
+   "name": "ICalendarGateway",
+   "stereotype": "gateway",
+   "col": 1,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetEventAsync(conn, calendarId, eventId, ct)",
+    "+ UpdateEventAsync(...) → CalendarEvent.ETag",
+    "+ InsertEventAsync(...) / DeleteEventAsync(...)",
+    "+ RsvpEventAsync(...) / SyncEventsAsync(...)"
+   ]
+  },
+  {
+   "id": "dg",
+   "name": "IDriveGateway",
+   "stereotype": "gateway",
+   "col": 2,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetFileAsync(conn, fileId, ct) → ETag",
+    "+ UpdateFileAsync(conn, fileId, newName, ct)  // rename",
+    "+ TrashFileAsync / UntrashFileAsync",
+    "+ CreateFolder / Upload / permissions"
+   ]
+  },
+  {
+   "id": "jg",
+   "name": "IJiraGateway",
+   "stereotype": "gateway",
+   "col": 3,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetIssueAsync(conn, key, ct) → Updated (version token)",
+    "+ UpdateIssueAsync / AssignIssueAsync",
+    "+ GetTransitionsAsync / TransitionIssueAsync",
+    "+ AddCommentAsync / DeleteIssueAsync"
+   ]
+  },
+  {
+   "id": "irepo",
+   "name": "IItemRepository",
+   "stereotype": "repository",
+   "col": 0,
+   "row": 4,
+   "color": "orange",
+   "methods": [
+    "+ GetPagedAsync(userId, folderId, statuses, types, ...)",
+    "    → (Items, TotalCount, ThreadCounts)",
+    "+ GetByIdAndUserAsync / GetByIdsAndUserAsync",
+    "+ GetExistingExternalIdsAsync(connectionId, ct)",
+    "+ DeleteThreadAsync(userId, threadId, ct)",
+    "+ DeleteByConnectionIdAsync(connectionId, ct)"
+   ]
+  },
+  {
+   "id": "frepo",
+   "name": "IFolderRepository",
+   "stereotype": "repository",
+   "col": 1,
+   "row": 4,
+   "color": "orange",
+   "methods": [
+    "+ IsItemSharedWithUserAsync(itemId, userId, ct)   // đọc",
+    "+ IsItemSharedWithUserAsEditorAsync(...)          // ghi",
+    "+ IsConnectionSharedWithUserAsync(connId, userId, ct)"
+   ]
+  },
+  {
+   "id": "item",
+   "name": "Item",
+   "stereotype": "entity",
+   "col": 2,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "+ Id, UserId: Guid",
+    "+ Type: ItemType  (polymorphic)",
+    "+ Title / Snippet: string",
+    "+ ExternalId: string?   (NULL cho Note)",
+    "+ ThreadId: string?     (Gmail thread)",
+    "+ ConnectionId: Guid?   (SET NULL khi disconnect)",
+    "+ ETag: string?         (version provider)",
+    "+ Status: ItemStatus    (Kanban)",
+    "+ OccurredAt / DueAt? : DateTime",
+    "+ IsImportant / IsArchived: bool",
+    "+ MetadataJson: string  (nvarchar(max))"
+   ]
+  },
+  {
+   "id": "enums",
+   "name": "Enums",
+   "stereotype": "enumeration",
+   "col": 3,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "ItemType { Email, Event, File, Note, Ticket }",
+    "ItemStatus { Inbox, Doing, Done }",
+    "ServiceType { Gmail, GCal, Drive, Jira }",
+    "ConnectionStatus { Active, Disconnected, Error }"
+   ]
+  }
+ ],
+ "relations": [
+  {
+   "from": "ic",
+   "to": "iis",
+   "type": "dep",
+   "label": "đọc / kanban"
+  },
+  {
+   "from": "ic",
+   "to": "iwb",
+   "type": "dep",
+   "label": "write-back"
+  },
+  {
+   "from": "is",
+   "to": "iis",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "wbs",
+   "to": "iwb",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "wbg",
+   "to": "igd",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "wbs",
+   "to": "igd",
+   "type": "assoc",
+   "label": "_guard"
+  },
+  {
+   "from": "is",
+   "to": "ihc",
+   "type": "assoc",
+   "label": "lazy sync"
+  },
+  {
+   "from": "ihc",
+   "to": "disp",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "disp",
+   "to": "sync",
+   "type": "dep",
+   "label": "switch ServiceType"
+  },
+  {
+   "from": "wbs",
+   "to": "gg",
+   "type": "dep",
+   "label": "Email"
+  },
+  {
+   "from": "wbs",
+   "to": "cg",
+   "type": "dep",
+   "label": "Event"
+  },
+  {
+   "from": "wbs",
+   "to": "dg",
+   "type": "dep",
+   "label": "File"
+  },
+  {
+   "from": "wbs",
+   "to": "jg",
+   "type": "dep",
+   "label": "Ticket"
+  },
+  {
+   "from": "is",
+   "to": "irepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "is",
+   "to": "frepo",
+   "type": "assoc",
+   "label": "share-check"
+  },
+  {
+   "from": "irepo",
+   "to": "item",
+   "type": "assoc",
+   "label": "quản lý"
+  },
+  {
+   "from": "wbg",
+   "to": "exc",
+   "type": "dep",
+   "label": "409"
+  }
+ ],
+ "notes": [
+  {
+   "text": "Ghi được: Email (label / read / star / trash + gửi mới — KHÔNG sửa nội dung vì Gmail immutable) · Event (CRUD đầy đủ) · File (rename / trash) · Ticket (update / assign / transition / comment / xoá).  Note là item local: không ConnectionId, không ExternalId → không write-back.  Conflict: so Items.ETag với ETag live của provider; Jira dùng fields.updated thay ETag.",
+   "x": 40,
+   "w": 1610,
+   "h": 80
+  }
+ ]
+}

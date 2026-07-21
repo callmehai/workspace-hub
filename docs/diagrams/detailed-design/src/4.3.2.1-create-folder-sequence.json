@@ -1,0 +1,95 @@
+{
+ "title": "UC 4.3.1 — Tạo Folder",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "fc",
+   "label": "FoldersController"
+  },
+  {
+   "id": "fs",
+   "label": "FolderService"
+  },
+  {
+   "id": "repo",
+   "label": "FolderRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "tạo folder dự án mới"
+  },
+  {
+   "from": "fe",
+   "to": "fc",
+   "label": "POST /api/folders { name, color, icon }"
+  },
+  {
+   "note": "CreateFolderValidator.ValidateAndThrowAsync",
+   "over": "fc"
+  },
+  {
+   "from": "fc",
+   "to": "fs",
+   "label": "CreateAsync(userId, request)"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "GetMaxSortOrderAsync(userId)"
+  },
+  {
+   "from": "repo",
+   "to": "fs",
+   "label": "maxSort",
+   "return": true
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "AddAsync(Folder{ SortOrder = maxSort + 1 }) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Folders"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "GetByIdWithOwnerAsync(folder.Id)  (nạp OwnerName)"
+  },
+  {
+   "from": "fs",
+   "to": "fc",
+   "label": "FolderResponse",
+   "return": true
+  },
+  {
+   "from": "fc",
+   "to": "fe",
+   "label": "201 Created",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "folder mới trong sidebar",
+   "return": true
+  }
+ ]
+}

@@ -1,0 +1,141 @@
+<mxfile>
+  <diagram id="autolayout" name="Page-1">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="integrations" value="&lt;b&gt;Integrations&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;    Key : nvarchar(100)&amp;#xa;    DisplayName : nvarchar(max)&amp;#xa;    IconUrl : nvarchar(max)&amp;#xa;    Description : nvarchar(max)&amp;#xa;    Provider : nvarchar(max)&amp;#xa;    AuthorizationEndpoint : nvarchar(max)&amp;#xa;    TokenEndpoint : nvarchar(max)&amp;#xa;    SupportedServices : nvarchar(max)&amp;#xa;    IsEnabled : bit" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1010" y="370" width="306" height="195" as="geometry"/>
+        </mxCell>
+        <mxCell id="users" value="&lt;b&gt;Users&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;    Email : nvarchar(256)&amp;#xa;    PasswordHash : nvarchar(max)?&amp;#xa;    FullName : nvarchar(200)&amp;#xa;    AvatarUrl : nvarchar(max)?&amp;#xa;    IsActive : bit&amp;#xa;    LockedReason : nvarchar(max)?&amp;#xa;    LastLoginAt : datetime2?&amp;#xa;    EmailVerified : bit&amp;#xa;    Role : nvarchar(20)&amp;#xa;    AuthProvider : nvarchar(10)&amp;#xa;    GoogleSub : nvarchar(256)?&amp;#xa;    CreatedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="1040" width="251" height="240" as="geometry"/>
+        </mxCell>
+        <mxCell id="connections" value="&lt;b&gt;Connections&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  UserId : uniqueidentifier&amp;#xa;FK  IntegrationId : uniqueidentifier&amp;#xa;    Provider : nvarchar(20)&amp;#xa;    ServiceType : nvarchar(20)&amp;#xa;    ProviderAccountId : nvarchar(256)&amp;#xa;    AccessTokenEncrypted : nvarchar(max)&amp;#xa;    RefreshTokenEncrypted : nvarchar(max)&amp;#xa;    ExpiresAt : datetime2&amp;#xa;    Status : nvarchar(20)&amp;#xa;    CursorType : nvarchar(20)?&amp;#xa;    CursorValue : nvarchar(max)?&amp;#xa;    LastSyncedAt : datetime2?&amp;#xa;    LastError : nvarchar(max)?&amp;#xa;    CreatedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="660" y="330" width="306" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="folders" value="&lt;b&gt;Folders&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  OwnerId : uniqueidentifier&amp;#xa;    Name : nvarchar(200)&amp;#xa;    Color : nvarchar(max)&amp;#xa;    Icon : nvarchar(max)&amp;#xa;    SortOrder : int&amp;#xa;    IsArchived : bit" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1730" width="231" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="friendinvites" value="&lt;b&gt;FriendInvites&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  InviterUserId : uniqueidentifier&amp;#xa;    Email : nvarchar(256)&amp;#xa;    Token : nvarchar(64)&amp;#xa;    CreatedAt : datetime2&amp;#xa;    ExpiresAt : datetime2&amp;#xa;    ConsumedAt : datetime2?" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="680" y="1000" width="272" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="friendships" value="&lt;b&gt;Friendships&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  RequesterId : uniqueidentifier&amp;#xa;FK  AddresseeId : uniqueidentifier&amp;#xa;    Status : nvarchar(20)&amp;#xa;    RequesterTier : nvarchar(20)&amp;#xa;    AddresseeTier : nvarchar(20)&amp;#xa;    CreatedAt : datetime2&amp;#xa;    RespondedAt : datetime2?" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="690" y="1170" width="258" height="165" as="geometry"/>
+        </mxCell>
+        <mxCell id="importantcontacts" value="&lt;b&gt;ImportantContacts&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  UserId : uniqueidentifier&amp;#xa;    Type : nvarchar(20)&amp;#xa;    Identifier : nvarchar(256)&amp;#xa;    Label : nvarchar(max)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1350" width="231" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="notifications" value="&lt;b&gt;Notifications&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  UserId : uniqueidentifier&amp;#xa;    Type : nvarchar(30)&amp;#xa;    Title : nvarchar(300)&amp;#xa;    Body : nvarchar(max)&amp;#xa;    LinkUrl : nvarchar(max)&amp;#xa;    IsRead : bit&amp;#xa;    CreatedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1490" width="224" height="165" as="geometry"/>
+        </mxCell>
+        <mxCell id="tags" value="&lt;b&gt;Tags&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  UserId : uniqueidentifier&amp;#xa;    Name : nvarchar(100)&amp;#xa;    Color : nvarchar(max)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="360" y="570" width="224" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="googlecontacts" value="&lt;b&gt;GoogleContacts&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  ConnectionId : uniqueidentifier&amp;#xa;    Email : nvarchar(320)&amp;#xa;    DisplayName : nvarchar(256)?&amp;#xa;    Source : nvarchar(20)&amp;#xa;    ExternalResourceName : nvarchar(256)?&amp;#xa;    SyncedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="320" y="110" width="306" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="items" value="&lt;b&gt;Items&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  UserId : uniqueidentifier&amp;#xa;    Type : nvarchar(20)&amp;#xa;    Title : nvarchar(max)&amp;#xa;    Snippet : nvarchar(max)&amp;#xa;    ExternalId : nvarchar(512)?&amp;#xa;    ThreadId : nvarchar(512)?&amp;#xa;FK  ConnectionId : uniqueidentifier?&amp;#xa;    ETag : nvarchar(512)?&amp;#xa;    Status : nvarchar(20)&amp;#xa;    OccurredAt : datetime2&amp;#xa;    DueAt : datetime2?&amp;#xa;    IsImportant : bit&amp;#xa;    IsArchived : bit&amp;#xa;    MetadataJson : nvarchar(max)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="340" y="690" width="272" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="scheduledemails" value="&lt;b&gt;ScheduledEmails&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  UserId : uniqueidentifier&amp;#xa;FK  ConnectionId : uniqueidentifier&amp;#xa;    ToJson : nvarchar(max)&amp;#xa;    CcJson : nvarchar(max)&amp;#xa;    BccJson : nvarchar(max)&amp;#xa;    Subject : nvarchar(500)&amp;#xa;    BodyHtml : nvarchar(max)&amp;#xa;    AttachmentsJson : nvarchar(max)&amp;#xa;    SendAt : datetime2&amp;#xa;    Status : nvarchar(20)&amp;#xa;    RetryCount : int&amp;#xa;    LastError : nvarchar(max)?&amp;#xa;    SentAt : datetime2?&amp;#xa;    CreatedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="340" y="280" width="265" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="foldershares" value="&lt;b&gt;FolderShares&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  FolderId : uniqueidentifier&amp;#xa;FK  SharedWithUserId : uniqueidentifier&amp;#xa;FK  CreatedByUserId : uniqueidentifier&amp;#xa;    Permission : nvarchar(20)&amp;#xa;    CreatedAt : datetime2&amp;#xa;    AcceptedAt : datetime2?&amp;#xa;    ExpiresAt : datetime2?" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="1610" width="293" height="165" as="geometry"/>
+        </mxCell>
+        <mxCell id="calendarinvitations" value="&lt;b&gt;CalendarInvitations&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  OrganizerItemId : uniqueidentifier&amp;#xa;FK  OrganizerUserId : uniqueidentifier&amp;#xa;FK  InviteeUserId : uniqueidentifier&amp;#xa;FK  InviteeItemId : uniqueidentifier?&amp;#xa;    InviteeEmail : nvarchar(320)&amp;#xa;    GoogleEventId : nvarchar(512)&amp;#xa;    ICalUid : nvarchar(512)?&amp;#xa;    Status : nvarchar(20)&amp;#xa;    GoogleSyncPending : bit&amp;#xa;    CreatedAt : datetime2&amp;#xa;    UpdatedAt : datetime2&amp;#xa;    RespondedAt : datetime2?" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="0" y="870" width="286" height="240" as="geometry"/>
+        </mxCell>
+        <mxCell id="eventreminders" value="&lt;b&gt;EventReminders&lt;/b&gt;&amp;#xa;PK  Id : uniqueidentifier&amp;#xa;FK  EventItemId : uniqueidentifier&amp;#xa;    ReminderType : nvarchar(20)&amp;#xa;    OffsetValue : int&amp;#xa;    OffsetUnit : nvarchar(20)&amp;#xa;    TimeOfDay : nvarchar(10)?&amp;#xa;    IsSent : bit&amp;#xa;    CreatedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="10" y="690" width="258" height="165" as="geometry"/>
+        </mxCell>
+        <mxCell id="itemfolders" value="&lt;b&gt;ItemFolders&lt;/b&gt;&amp;#xa;PK  ItemId : uniqueidentifier&amp;#xa;PK  FolderId : uniqueidentifier&amp;#xa;    Position : int&amp;#xa;    AddedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1400" width="237" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="tagassignments" value="&lt;b&gt;TagAssignments&lt;/b&gt;&amp;#xa;PK  TagId : uniqueidentifier&amp;#xa;PK  ItemId : uniqueidentifier&amp;#xa;    AssignedAt : datetime2" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=2;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="30" y="580" width="224" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="IntegrationId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="connections" target="integrations">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="970" y="470"/><mxPoint x="990" y="470"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e1" value="UserId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="connections" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="960" y="780"/><mxPoint x="960" y="1080"/><mxPoint x="960" y="1080"/><mxPoint x="960" y="1080"/><mxPoint x="1020" y="1080"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e2" value="OwnerId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="folders" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1050" y="1800"/><mxPoint x="1220" y="1800"/><mxPoint x="1220" y="1800"/><mxPoint x="1220" y="1800"/><mxPoint x="1220" y="1290"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e3" value="InviterUserId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="friendinvites" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="950" y="1110"/><mxPoint x="1020" y="1110"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e4" value="AddresseeId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="friendships" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="950" y="1240"/><mxPoint x="1020" y="1240"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e5" value="RequesterId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="friendships" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="950" y="1240"/><mxPoint x="1020" y="1240"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e6" value="UserId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="importantcontacts" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1010" y="1410"/><mxPoint x="1100" y="1410"/><mxPoint x="1100" y="1410"/><mxPoint x="1100" y="1410"/><mxPoint x="1100" y="1290"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e7" value="UserId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="notifications" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1030" y="1570"/><mxPoint x="1160" y="1570"/><mxPoint x="1160" y="1570"/><mxPoint x="1160" y="1570"/><mxPoint x="1160" y="1290"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e8" value="UserId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="tags" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="770" y="650"/><mxPoint x="1120" y="650"/><mxPoint x="1120" y="650"/><mxPoint x="1120" y="650"/><mxPoint x="1120" y="1030"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e9" value="ConnectionId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="googlecontacts" target="connections">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="620" y="320"/><mxPoint x="620" y="400"/><mxPoint x="620" y="400"/><mxPoint x="620" y="400"/><mxPoint x="650" y="400"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e10" value="ConnectionId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="items" target="connections">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="600" y="630"/><mxPoint x="600" y="580"/><mxPoint x="600" y="580"/><mxPoint x="600" y="580"/><mxPoint x="650" y="580"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e11" value="UserId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="items" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="520" y="1050"/><mxPoint x="520" y="1150"/><mxPoint x="520" y="1150"/><mxPoint x="520" y="1150"/><mxPoint x="1020" y="1150"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e12" value="ConnectionId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="scheduledemails" target="connections">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="610" y="480"/><mxPoint x="650" y="480"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e13" value="UserId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="scheduledemails" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="590" y="590"/><mxPoint x="590" y="620"/><mxPoint x="590" y="620"/><mxPoint x="590" y="620"/><mxPoint x="1200" y="620"/><mxPoint x="1200" y="620"/><mxPoint x="1200" y="620"/><mxPoint x="1200" y="1030"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e14" value="FolderId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="foldershares" target="folders">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="620" y="1750"/><mxPoint x="690" y="1750"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e15" value="CreatedByUserId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="foldershares" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="620" y="1460"/><mxPoint x="620" y="1170"/><mxPoint x="620" y="1170"/><mxPoint x="620" y="1170"/><mxPoint x="1020" y="1170"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e16" value="SharedWithUserId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="foldershares" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="620" y="1460"/><mxPoint x="620" y="1170"/><mxPoint x="620" y="1170"/><mxPoint x="620" y="1170"/><mxPoint x="1020" y="1170"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e17" value="InviteeItemId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="calendarinvitations" target="items">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="290" y="930"/><mxPoint x="330" y="930"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e18" value="OrganizerItemId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="calendarinvitations" target="items">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="290" y="930"/><mxPoint x="330" y="930"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e19" value="InviteeUserId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="calendarinvitations" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="270" y="1140"/><mxPoint x="270" y="1160"/><mxPoint x="270" y="1160"/><mxPoint x="270" y="1160"/><mxPoint x="1020" y="1160"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e20" value="OrganizerUserId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="calendarinvitations" target="users">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="270" y="1140"/><mxPoint x="270" y="1160"/><mxPoint x="270" y="1160"/><mxPoint x="270" y="1160"/><mxPoint x="1020" y="1160"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e21" value="EventItemId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="eventreminders" target="items">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="270" y="770"/><mxPoint x="330" y="770"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e22" value="FolderId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="itemfolders" target="folders">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="140" y="1610"/><mxPoint x="140" y="1830"/><mxPoint x="140" y="1830"/><mxPoint x="140" y="1830"/><mxPoint x="690" y="1830"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e23" value="ItemId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="itemfolders" target="items">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="340" y="1430"/><mxPoint x="430" y="1430"/><mxPoint x="430" y="1430"/><mxPoint x="430" y="1430"/><mxPoint x="430" y="970"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e24" value="ItemId  ⟂" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="tagassignments" target="items">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="310" y="640"/><mxPoint x="350" y="640"/><mxPoint x="350" y="640"/><mxPoint x="350" y="640"/><mxPoint x="350" y="680"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e25" value="TagId" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;startArrow=ERmany;startFill=0;endArrow=ERone;endFill=0;" edge="1" parent="1" source="tagassignments" target="tags">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="260" y="610"/><mxPoint x="350" y="610"/></Array></mxGeometry>
+        </mxCell>
+              <mxCell id="erdTitle" value="Workspace Hub — Entity Relationship Diagram (17 bảng · 26 khoá ngoại)" style="text;html=1;align=left;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#333333;" vertex="1" parent="1"><mxGeometry x="20" y="20" width="1200" height="40" as="geometry" /></mxCell>
+        <mxCell id="erdNote" value="Sinh từ schema thật (dotnet ef dbcontext script, nhánh develop). Quy ước nền tảng: PK Guid · enum lưu string · datetime2 UTC · JSON nvarchar(max) · KHÔNG soft-delete (dùng IsArchived) · junction dùng PK kép — ItemFolders(ItemId, FolderId), TagAssignments(TagId, ItemId).&#xa;Ký hiệu ⟂ sau tên khoá ngoại = quan hệ để NO ACTION ở DB (tránh multiple cascade path), service layer tự SET NULL / dọn dữ liệu trước khi xoá — gồm: CalendarInvitations.InviteeItemId · CalendarInvitations.InviteeUserId · CalendarInvitations.OrganizerUserId · Connections.IntegrationId · FolderShares.CreatedByUserId · FolderShares.SharedWithUserId · Friendships.AddresseeId · Friendships.RequesterId · ItemFolders.ItemId · Items.ConnectionId · ScheduledEmails.ConnectionId · TagAssignments.ItemId. Các khoá ngoại còn lại: ON DELETE CASCADE.&#xa;Đọc quan hệ theo crow&apos;s foot: chân quạ ở bảng chứa khoá ngoại (phía nhiều), đầu gạch ở bảng được tham chiếu (phía một)." style="rounded=0;whiteSpace=wrap;html=1;fontSize=12;align=left;spacingLeft=12;verticalAlign=middle;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="20" y="1950" width="1560" height="130" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

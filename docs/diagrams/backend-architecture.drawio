@@ -1,0 +1,253 @@
+<mxfile host="app.diagrams.net" pages="2">
+  <diagram name="Backend Architecture" id="0">
+    <mxGraphModel dx="3288" dy="814" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1750" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#333333;" value="Workspace Hub — Backend System Architecture (ASP.NET Core 8, Clean/Layered)" vertex="1">
+          <mxGeometry height="40" width="1100" x="40" as="geometry" />
+        </mxCell>
+        <mxCell id="clientsLane" parent="1" style="swimlane;startSize=34;html=1;fontSize=14;fontStyle=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;swimlaneFillColor=#ffffff;" value="Clients" vertex="1">
+          <mxGeometry height="130" width="1160" x="40" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cFe" parent="clientsLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Frontend SPA&#xa;(Vite + React + TS)" vertex="1">
+          <mxGeometry height="60" width="340" x="20" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cCron" parent="clientsLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="Cron / Scheduler&#xa;header X-Cron-Secret" vertex="1">
+          <mxGeometry height="60" width="340" x="400" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cSwagger" parent="clientsLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" value="Swagger UI / Postman&#xa;(test &amp; nghiệm thu API)" vertex="1">
+          <mxGeometry height="60" width="340" x="780" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="apiLane" parent="1" style="swimlane;startSize=34;html=1;fontSize=14;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;swimlaneFillColor=#ffffff;" value="WorkspaceHub.Api  —  Presentation (Controllers mỏng, không business logic)" vertex="1">
+          <mxGeometry height="330" width="1160" x="40" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="mwEx" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="ExceptionMiddleware" vertex="1">
+          <mxGeometry height="50" width="260" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="mwLog" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="RequestLoggingMiddleware" vertex="1">
+          <mxGeometry height="50" width="260" x="300" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="mwCsrf" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="CsrfMiddleware&#xa;(double-submit wh_csrf)" vertex="1">
+          <mxGeometry height="50" width="260" x="580" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="mwJwt" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="JWT Bearer&#xa;(access token trong HttpOnly cookie)" vertex="1">
+          <mxGeometry height="50" width="260" x="860" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="ctrl1" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Auth &amp; Account&lt;/b&gt;&#xa;AuthController&#xa;UsersController&#xa;ConnectionsController&#xa;IntegrationsController" vertex="1">
+          <mxGeometry height="120" width="260" x="20" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="ctrl2" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Workspace&lt;/b&gt;&#xa;ItemsController&#xa;FoldersController&#xa;TagsController&#xa;NotificationsController (+Commands)" vertex="1">
+          <mxGeometry height="120" width="260" x="300" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="ctrl3" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Google services&lt;/b&gt;&#xa;EmailsController&#xa;ScheduledEmailsController (+Commands)&#xa;DriveController&#xa;CalendarInvitationsController" vertex="1">
+          <mxGeometry height="120" width="260" x="580" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="ctrl4" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Khác&lt;/b&gt;&#xa;JiraController · FriendsController&#xa;ImportantContactsController&#xa;AdminController · AdminIntegrations&#xa;InternalController (cron) · HealthController" vertex="1">
+          <mxGeometry height="120" width="260" x="860" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="hub" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#ffe6cc;strokeColor=#d79b00;" value="SignalR — NotificationHub  (/api/hubs/notifications)  · realtime thông báo in-app" vertex="1">
+          <mxGeometry height="50" width="540" x="20" y="255" as="geometry" />
+        </mxCell>
+        <mxCell id="odata" parent="apiLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#f5f5f5;strokeColor=#666666;" value="ApiControllerBase / ODataApiControllerBase  ·  Swagger  ·  DI (Program.cs)" vertex="1">
+          <mxGeometry height="50" width="540" x="580" y="255" as="geometry" />
+        </mxCell>
+        <mxCell id="appLane" parent="1" style="swimlane;startSize=34;html=1;fontSize=14;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;swimlaneFillColor=#ffffff;" value="WorkspaceHub.Application  —  Business logic (Services · DTO · Validators · OAuth strategies)" vertex="1">
+          <mxGeometry height="290" width="1160" x="40" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="svcSync" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Sync services (đọc)&lt;/b&gt;&#xa;GmailSyncService&#xa;CalendarSyncService&#xa;DriveSyncService · JiraSyncService&#xa;ConnectionSyncDispatcher" vertex="1">
+          <mxGeometry height="115" width="260" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="svcItem" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Item / Folder&lt;/b&gt;&#xa;ItemService&#xa;ItemWriteBackService (ghi ngược)&#xa;FolderService (+ share Viewer)&#xa;TagService · DriveSharingService" vertex="1">
+          <mxGeometry height="115" width="260" x="300" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="svcMail" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Email / Calendar&lt;/b&gt;&#xa;SendEmailService&#xa;ScheduledEmailsService&#xa;ProcessScheduledEmailsService (cron)&#xa;CalendarInvitationService" vertex="1">
+          <mxGeometry height="115" width="260" x="580" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="svcMisc" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Auth &amp; hỗ trợ&lt;/b&gt;&#xa;AuthService · ConnectionsService&#xa;NotificationService · FriendService&#xa;UserProfileService · JiraTicketService&#xa;ConnectionHealthChecker" vertex="1">
+          <mxGeometry height="115" width="260" x="860" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="guard" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;IWriteBackGuard&lt;/b&gt;&#xa;ETag (Google) / fields.updated (Jira)&#xa;lệch phiên bản → 409 Conflict" vertex="1">
+          <mxGeometry height="90" width="260" x="20" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="oauth" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="&lt;b&gt;OAuth Strategies&lt;/b&gt;&#xa;IProviderStrategy → Google | Jira&#xa;state payload · IdTokenParser" vertex="1">
+          <mxGeometry height="90" width="260" x="300" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="dto" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;DTOs + Mapping&lt;/b&gt;&#xa;không expose Entity ra API" vertex="1">
+          <mxGeometry height="90" width="260" x="580" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="valid" parent="appLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Validators&lt;/b&gt;&#xa;FluentValidation · Abstractions&#xa;Interfaces (cho Infrastructure)" vertex="1">
+          <mxGeometry height="90" width="260" x="860" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="infraLane" parent="1" style="swimlane;startSize=34;html=1;fontSize=14;fontStyle=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;swimlaneFillColor=#ffffff;" value="WorkspaceHub.Infrastructure  —  Data access &amp; tích hợp ngoài" vertex="1">
+          <mxGeometry height="290" width="1160" x="40" y="1020" as="geometry" />
+        </mxCell>
+        <mxCell id="repos" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;b&gt;Repositories&lt;/b&gt;&#xa;GenericRepository&lt;T&gt;&#xa;Item · Folder · Connection · User&#xa;Tag · Notification · Friendship …" vertex="1">
+          <mxGeometry height="115" width="260" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="dbctx" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;b&gt;AppDbContext (EF Core 8)&lt;/b&gt;&#xa;Migrations (20+) · AutoMigrate ở prod&#xa;UtcDateTimeConverter&#xa;enum → string, JSON → nvarchar(max)" vertex="1">
+          <mxGeometry height="115" width="260" x="300" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="gateways" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;b&gt;Provider Gateways&lt;/b&gt;&#xa;GmailGateway · CalendarGateway&#xa;GoogleDriveGateway · PeopleGateway&#xa;JiraGateway · GoogleApiExceptionHandler" vertex="1">
+          <mxGeometry height="115" width="260" x="580" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="sec" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;fillColor=#e1d5e7;strokeColor=#9673a6;" value="&lt;b&gt;Security&lt;/b&gt;&#xa;DataProtectionTokenProtector&#xa;JwtTokenFactory · RefreshTokenService&#xa;OtpService · GoogleTokenVerifier" vertex="1">
+          <mxGeometry height="115" width="260" x="860" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="mailer" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#ffe6cc;strokeColor=#d79b00;" value="ResendEmailSender&#xa;LogEmailSender (dev)" vertex="1">
+          <mxGeometry height="80" width="260" x="20" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="r2svc" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#ffe6cc;strokeColor=#d79b00;" value="R2FileStorageService&#xa;(file đính kèm)" vertex="1">
+          <mxGeometry height="80" width="260" x="300" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="cronsvc" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" value="ProcessConnectionsSyncService&#xa;(cron sync định kỳ — SCRUM-72)" vertex="1">
+          <mxGeometry height="80" width="260" x="580" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="tokensvc" parent="infraLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="TokenService · AtlassianTokenService&#xa;HttpOAuthTokenClient (refresh token)" vertex="1">
+          <mxGeometry height="80" width="260" x="860" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="domLane" parent="1" style="swimlane;startSize=34;html=1;fontSize=14;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#1a1a1a;swimlaneFillColor=#ffffff;" value="WorkspaceHub.Domain  —  Entities &amp; Enums (không phụ thuộc project nào)" vertex="1">
+          <mxGeometry height="150" width="1160" x="40" y="1380" as="geometry" />
+        </mxCell>
+        <mxCell id="entities" parent="domLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="&lt;b&gt;Entities&lt;/b&gt;  User · Connection · Integration · Item · Folder · FolderShare · ItemFolder · Tag · TagAssignment&#xa;ScheduledEmail · Notification · Friendship · FriendInvite · CalendarInvitation · EventReminder · ImportantContact · GoogleContact" vertex="1">
+          <mxGeometry height="85" width="800" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="enums" parent="domLane" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fillColor=#e1d5e7;strokeColor=#9673a6;" value="&lt;b&gt;Quy ước nền tảng&lt;/b&gt;&#xa;Guid PK · enum lưu string&#xa;UTC datetime2 · IsArchived (không soft-delete)" vertex="1">
+          <mxGeometry height="85" width="280" x="840" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="extGoogle" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;Google Workspace APIs&lt;/b&gt;&#xa;Gmail · Calendar · Drive · People&#xa;OAuth 2.0 (mô hình B: 1 service = 1 Connection)" vertex="1">
+          <mxGeometry height="140" width="300" x="1400" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="extJira" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;Atlassian / Jira Cloud&lt;/b&gt;&#xa;OAuth 3LO + cloudId&#xa;REST v3 (ADF description)" vertex="1">
+          <mxGeometry height="110" width="300" x="1400" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="extResend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;Resend&lt;/b&gt;&#xa;OTP đăng ký · mail mời kết bạn" vertex="1">
+          <mxGeometry height="90" width="300" x="1400" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="extR2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;Cloudflare R2&lt;/b&gt;&#xa;object storage cho attachment" vertex="1">
+          <mxGeometry height="90" width="300" x="1400" y="750" as="geometry" />
+        </mxCell>
+        <mxCell id="sqlDb" parent="1" style="shape=cylinder3;boundedLbl=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;SQL Server&lt;/b&gt;&#xa;(Docker: wh-sqlserver / mssql prod)" vertex="1">
+          <mxGeometry height="120" width="260" x="1430" y="1140" as="geometry" />
+        </mxCell>
+        <mxCell id="redisDb" parent="1" style="shape=cylinder3;boundedLbl=1;whiteSpace=wrap;html=1;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Redis&lt;/b&gt;&#xa;refresh-token rotation · OTP · rate limit" vertex="1">
+          <mxGeometry height="120" width="260" x="1430" y="1320" as="geometry" />
+        </mxCell>
+        <mxCell id="note" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;align=left;spacingLeft=10;verticalAlign=middle;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="&lt;b&gt;Chiều phụ thuộc&lt;/b&gt;: Api → Application → Domain,  Infrastructure → Application/Domain.&#xa;Controller mỏng · DTO tách Entity · DI toàn bộ · async/await mọi data access.&#xa;&lt;b&gt;Đồng bộ&lt;/b&gt;: đọc on-demand + cron định kỳ, ghi ngược synchronous. KHÔNG webhook/push realtime (ngoài scope)." vertex="1">
+          <mxGeometry height="100" width="700" x="40" y="1570" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;verticalAlign=top;fontStyle=1;align=left;spacingLeft=8;fontSize=12;" value="Legend" vertex="1">
+          <mxGeometry height="180" width="400" x="800" y="1570" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1" parent="legend" style="rounded=0;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="" vertex="1">
+          <mxGeometry height="16" width="30" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Presentation (Api)" vertex="1">
+          <mxGeometry height="20" width="200" x="50" y="28" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2" parent="legend" style="rounded=0;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="" vertex="1">
+          <mxGeometry height="16" width="30" x="10" y="54" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Business (Application) / Datastore" vertex="1">
+          <mxGeometry height="20" width="280" x="50" y="52" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3" parent="legend" style="rounded=0;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="" vertex="1">
+          <mxGeometry height="16" width="30" x="10" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Data access &amp; tích hợp (Infrastructure)" vertex="1">
+          <mxGeometry height="20" width="300" x="50" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4" parent="legend" style="rounded=0;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="" vertex="1">
+          <mxGeometry height="16" width="30" x="10" y="102" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Domain / bảo mật &amp; OAuth" vertex="1">
+          <mxGeometry height="20" width="280" x="50" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5" parent="legend" style="rounded=0;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="" vertex="1">
+          <mxGeometry height="16" width="30" x="10" y="126" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Cron / conflict guard" vertex="1">
+          <mxGeometry height="20" width="280" x="50" y="124" as="geometry" />
+        </mxCell>
+        <mxCell id="lg6" parent="legend" style="rounded=0;html=1;fillColor=#f5f5f5;strokeColor=#666666;" value="" vertex="1">
+          <mxGeometry height="16" width="30" x="10" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="lg6t" parent="legend" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Hệ thống ngoài" vertex="1">
+          <mxGeometry height="20" width="280" x="50" y="148" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="cFe" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.16;entryY=0;entryDx=0;entryDy=0;" target="apiLane" value="REST /api  ·  HttpOnly cookie + CSRF">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="cCron" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="apiLane" value="/api/internal/process-scheduled&#xa;/api/internal/process-sync">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="cSwagger" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.86;entryY=0;entryDx=0;entryDy=0;" target="apiLane" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="apiLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;" target="appLane" value="Controller → Service (DTO in/out)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="appLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;" target="infraLane" value="qua Interface + DI (Application không biết EF)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="infraLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;" target="domLane" value="EF Core mapping">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="infraLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.12;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="extGoogle" value="OAuth + REST&#xa;(đọc &amp; ghi ngược)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1250" y="1055" />
+              <mxPoint x="1250" y="330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="infraLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.24;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="extJira" value="OAuth 3LO + REST v3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1290" y="1090" />
+              <mxPoint x="1290" y="505" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="infraLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.36;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="extResend" value="gửi OTP / invite">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1330" y="1124" />
+              <mxPoint x="1330" y="655" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="infraLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.48;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="extR2" value="upload / download">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1370" y="1159" />
+              <mxPoint x="1370" y="795" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="infraLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.62;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="sqlDb" value="EF Core (SQL)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="infraLane" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.82;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="redisDb" value="StackExchange.Redis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="hub" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11;labelBackgroundColor=#ffffff;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="cFe" value="SignalR (WebSocket)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="20" y="575" />
+              <mxPoint x="20" y="170" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="auvAnwgii0xo8mQAGMT8" name="Trang-2">
+    <mxGraphModel dx="1414" dy="773" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
