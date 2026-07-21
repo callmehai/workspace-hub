@@ -8,7 +8,8 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "Default": "Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
+    "//Default": "Mặc định trỏ tới SQL Server chạy bằng `docker compose up -d` (chạy được trên macOS/Linux/Windows). Password phải khớp MSSQL_SA_PASSWORD trong .env (mặc định Workspace#2026Dev). Windows muốn dùng LocalDB thay thế: Server=(localdb)\\MSSQLLocalDB;Database=WorkspaceHub;Trusted_Connection=True;TrustServerCertificate=True",
+    "Default": "Server=localhost,1433;Database=WorkspaceHub;User Id=sa;Password=Workspace#2026Dev;TrustServerCertificate=True",
     "Redis": "localhost:6379"
   },
   "Jwt": {
