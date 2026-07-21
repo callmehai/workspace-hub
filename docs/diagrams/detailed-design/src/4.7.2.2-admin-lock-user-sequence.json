@@ -1,0 +1,102 @@
+{
+ "title": "UC 4.7.2 — Khoá / mở khoá tài khoản user",
+ "participants": [
+  {
+   "id": "ad",
+   "label": "Admin",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend"
+  },
+  {
+   "id": "ac",
+   "label": "AdminController"
+  },
+  {
+   "id": "as",
+   "label": "AdminService"
+  },
+  {
+   "id": "repo",
+   "label": "AppDbContext"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  },
+  {
+   "id": "auth",
+   "label": "AuthService\n(lần login sau)"
+  }
+ ],
+ "messages": [
+  {
+   "from": "ad",
+   "to": "fe",
+   "label": "bấm Khoá tài khoản"
+  },
+  {
+   "from": "fe",
+   "to": "ac",
+   "label": "POST /api/admin/users/{id}/toggle-active"
+  },
+  {
+   "from": "ac",
+   "to": "as",
+   "label": "ToggleUserActiveAsync(id, CurrentUserId)  (lấy từ claim)"
+  },
+  {
+   "note": "id == currentAdminId → BusinessRuleException ('không thể tự khoá chính mình')",
+   "over": "as"
+  },
+  {
+   "from": "as",
+   "to": "repo",
+   "label": "Users.FindAsync(id)"
+  },
+  {
+   "from": "repo",
+   "to": "as",
+   "label": "user (null → NotFoundException 404)",
+   "return": true
+  },
+  {
+   "note": "user.Role == Admin && user.IsActive → BusinessRuleException ('Không thể khoá Admin')",
+   "over": "as"
+  },
+  {
+   "from": "as",
+   "to": "repo",
+   "label": "user.IsActive = !user.IsActive + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE Users"
+  },
+  {
+   "from": "as",
+   "to": "repo",
+   "label": "đếm lại ConnectionCount / ItemCount"
+  },
+  {
+   "from": "ac",
+   "to": "fe",
+   "label": "200 AdminUserDto → refetch danh sách",
+   "return": true
+  },
+  {
+   "from": "ad",
+   "to": "auth",
+   "label": "(user bị khoá) đăng nhập lại"
+  },
+  {
+   "from": "auth",
+   "to": "ad",
+   "label": "SignInAsync thấy !IsActive → UnauthorizedException ('Account is locked')",
+   "return": true
+  }
+ ]
+}

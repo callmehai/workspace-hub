@@ -1,0 +1,94 @@
+{
+ "title": "UC 4.7.3 — Bật / tắt integration",
+ "participants": [
+  {
+   "id": "ad",
+   "label": "Admin",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend"
+  },
+  {
+   "id": "aic",
+   "label": "AdminIntegrations\nController"
+  },
+  {
+   "id": "cs",
+   "label": "ConnectionsService"
+  },
+  {
+   "id": "repo",
+   "label": "IIntegrationRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "ad",
+   "to": "fe",
+   "label": "tắt integration atlassian"
+  },
+  {
+   "from": "fe",
+   "to": "aic",
+   "label": "PATCH /api/admin/integrations/atlassian/enable { isEnabled: false }"
+  },
+  {
+   "note": "[Authorize(Roles = Admin)] — role khác → 403",
+   "over": "aic"
+  },
+  {
+   "from": "aic",
+   "to": "cs",
+   "label": "ToggleIntegrationAsync(key, isEnabled)"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "GetByKeyAsync(key)"
+  },
+  {
+   "from": "repo",
+   "to": "cs",
+   "label": "integration (null → NotFoundException 404)",
+   "return": true
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "integration.IsEnabled = false → Update + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE Integrations"
+  },
+  {
+   "from": "cs",
+   "to": "aic",
+   "label": "IntegrationResponse(Id, Key, DisplayName, IsEnabled)",
+   "return": true
+  },
+  {
+   "from": "aic",
+   "to": "fe",
+   "label": "200 OK",
+   "return": true
+  },
+  {
+   "note": "InitiateConnectionAsync kiểm !IsEnabled → user thường không connect service này nữa",
+   "over": "cs"
+  },
+  {
+   "from": "fe",
+   "to": "ad",
+   "label": "integration hiển thị Disabled",
+   "return": true
+  }
+ ]
+}

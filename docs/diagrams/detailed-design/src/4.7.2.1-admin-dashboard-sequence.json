@@ -1,0 +1,120 @@
+{
+ "title": "UC 4.7.1 — Xem dashboard thống kê",
+ "participants": [
+  {
+   "id": "ad",
+   "label": "Admin",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend\nAdminDashboard"
+  },
+  {
+   "id": "jwt",
+   "label": "JWT + Authorize\n(Roles = Admin)"
+  },
+  {
+   "id": "ac",
+   "label": "AdminController"
+  },
+  {
+   "id": "as",
+   "label": "AdminService"
+  },
+  {
+   "id": "repo",
+   "label": "AppDbContext"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "ad",
+   "to": "fe",
+   "label": "mở trang Admin"
+  },
+  {
+   "from": "fe",
+   "to": "jwt",
+   "label": "GET /api/admin/stats  (cookie wh_access)"
+  },
+  {
+   "note": "role != Admin → 403 Forbidden",
+   "over": "jwt"
+  },
+  {
+   "from": "jwt",
+   "to": "ac",
+   "label": "GetStats(ct)"
+  },
+  {
+   "from": "ac",
+   "to": "as",
+   "label": "GetStatsAsync(ct)"
+  },
+  {
+   "from": "as",
+   "to": "repo",
+   "label": "CountAsync(Users) / CountAsync(IsActive) / GroupBy(Connection.Status) / CountAsync(Items)"
+  },
+  {
+   "from": "as",
+   "to": "repo",
+   "label": "đếm Connection Status=Error trong 24h (LastSyncedAt >= cutoff)"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "SELECT COUNT / GROUP BY"
+  },
+  {
+   "from": "db",
+   "to": "as",
+   "label": "số liệu",
+   "return": true
+  },
+  {
+   "from": "as",
+   "to": "ac",
+   "label": "AdminStatsDto(TotalUsers, ActiveUsers, LockedUsers, ...)",
+   "return": true
+  },
+  {
+   "from": "ac",
+   "to": "fe",
+   "label": "200 OK",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "jwt",
+   "label": "GET /api/admin/users?search&page&limit"
+  },
+  {
+   "from": "jwt",
+   "to": "as",
+   "label": "GetUsersAsync(request)  (validator: page≥1, limit 1..100)"
+  },
+  {
+   "from": "as",
+   "to": "repo",
+   "label": "projection { User, ConnCount, ItemCount } + Skip/Take"
+  },
+  {
+   "from": "as",
+   "to": "fe",
+   "label": "200 PagedResult<AdminUserDto>",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "ad",
+   "label": "hiển thị số liệu + danh sách user",
+   "return": true
+  }
+ ]
+}

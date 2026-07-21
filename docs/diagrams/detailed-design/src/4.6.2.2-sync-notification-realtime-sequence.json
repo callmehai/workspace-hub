@@ -1,0 +1,130 @@
+{
+ "title": "UC 4.6.2 — Sinh thông báo item mới & đẩy realtime",
+ "participants": [
+  {
+   "id": "disp",
+   "label": "SyncDispatcher"
+  },
+  {
+   "id": "gsync",
+   "label": "GmailSyncService\n+ Mapper"
+  },
+  {
+   "id": "sins",
+   "label": "SyncItemNotification\nService"
+  },
+  {
+   "id": "ns",
+   "label": "NotificationService"
+  },
+  {
+   "id": "pub",
+   "label": "SignalR Publisher\n+ NotificationHub"
+  },
+  {
+   "id": "repo",
+   "label": "Item / Notification Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  }
+ ],
+ "messages": [
+  {
+   "from": "disp",
+   "to": "repo",
+   "label": "GetExistingExternalIdsAsync(connectionId) → beforeExternalIds"
+  },
+  {
+   "from": "disp",
+   "to": "gsync",
+   "label": "SyncConnectionAsync(connection, batch = 100)"
+  },
+  {
+   "from": "gsync",
+   "to": "repo",
+   "label": "GetIdentifiersAsync(userId, ImportantContactType.Email)"
+  },
+  {
+   "from": "gsync",
+   "to": "gsync",
+   "label": "ToItem(message): From ∈ importantEmails → IsImportant = true"
+  },
+  {
+   "from": "gsync",
+   "to": "repo",
+   "label": "AddRangeAsync(items mới) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Items"
+  },
+  {
+   "from": "gsync",
+   "to": "disp",
+   "label": "SyncResult(Created > 0)",
+   "return": true
+  },
+  {
+   "from": "disp",
+   "to": "sins",
+   "label": "NotifyNewItemsAsync(connectionId, userId, beforeExternalIds)"
+  },
+  {
+   "from": "sins",
+   "to": "repo",
+   "label": "lấy items sau sync → lọc ExternalId mới"
+  },
+  {
+   "note": "bỏ email label TRASH / SPAM · > 10 item → chỉ giữ IsImportant, tối đa 10",
+   "over": "sins"
+  },
+  {
+   "from": "sins",
+   "to": "ns",
+   "label": "CreateAndSendAsync(userId, ImportantEmail | ItemSynced, titleKey, body, /inbox?item=...)"
+  },
+  {
+   "from": "ns",
+   "to": "repo",
+   "label": "AddAsync(Notification{ IsRead = false }) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Notifications"
+  },
+  {
+   "from": "ns",
+   "to": "pub",
+   "label": "PublishToUserAsync(userId, dto)"
+  },
+  {
+   "from": "pub",
+   "to": "fe",
+   "label": "Clients.User(userId).ReceiveNotification(dto)",
+   "async": true
+  },
+  {
+   "note": "FE: dedupe id → +1 unreadCount → prepend danh sách → showNotificationToast",
+   "over": "fe"
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "toast 'Email quan trọng từ ...' (bấm → /inbox?item=...)",
+   "return": true
+  }
+ ]
+}

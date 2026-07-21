@@ -1,0 +1,140 @@
+{
+ "title": "UC 4.5.3 — Viewer đọc item trong folder được share (kể cả file Drive con)",
+ "participants": [
+  {
+   "id": "b",
+   "label": "Viewer B",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "is",
+   "label": "ItemService /\nDriveContentService"
+  },
+  {
+   "id": "perm",
+   "label": "FolderRepository\n(share-check)"
+  },
+  {
+   "id": "conn",
+   "label": "ConnectionRepository"
+  },
+  {
+   "id": "gw",
+   "label": "IDriveGateway"
+  },
+  {
+   "id": "google",
+   "label": "Google Drive API"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "b",
+   "to": "fe",
+   "label": "mở folder được chia sẻ"
+  },
+  {
+   "from": "fe",
+   "to": "is",
+   "label": "GET /api/items?folderId={id}"
+  },
+  {
+   "from": "is",
+   "to": "perm",
+   "label": "ExistsByOwnerAsync(folderId, B) → false"
+  },
+  {
+   "from": "is",
+   "to": "perm",
+   "label": "GetShareByFolderAndUserAsync(folderId, B)"
+  },
+  {
+   "note": "share == null hoặc AcceptedAt == null ⇒ trả PagedResult RỖNG (không 403)",
+   "over": "is"
+  },
+  {
+   "from": "is",
+   "to": "db",
+   "label": "GetPagedAsync(targetOwnerId = A, folderId, ...)"
+  },
+  {
+   "from": "db",
+   "to": "is",
+   "label": "items của A",
+   "return": true
+  },
+  {
+   "from": "is",
+   "to": "fe",
+   "label": "200 PagedResult (IsOwner = false)",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "is",
+   "label": "GET /api/items/{fileId}/content  (file con trong folder Drive)"
+  },
+  {
+   "from": "is",
+   "to": "perm",
+   "label": "IsItemSharedWithUserAsync | IsConnectionSharedWithUserAsync"
+  },
+  {
+   "from": "perm",
+   "to": "is",
+   "label": "true (share đã Accepted)",
+   "return": true
+  },
+  {
+   "from": "is",
+   "to": "conn",
+   "label": "GetByIdAsync(item.ConnectionId)"
+  },
+  {
+   "from": "conn",
+   "to": "is",
+   "label": "connection của A",
+   "return": true
+  },
+  {
+   "note": "BẮT BUỘC: if (conn.UserId != item.UserId) → 404\n(so với chủ item, KHÔNG so với người gọi)",
+   "over": "is"
+  },
+  {
+   "from": "is",
+   "to": "gw",
+   "label": "DownloadFile / Thumbnail (token của OWNER A)"
+  },
+  {
+   "from": "gw",
+   "to": "google",
+   "label": "files.get"
+  },
+  {
+   "from": "google",
+   "to": "is",
+   "label": "nội dung file",
+   "return": true
+  },
+  {
+   "from": "is",
+   "to": "fe",
+   "label": "200 file content",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "b",
+   "label": "hiển thị (chỉ đọc — thao tác ghi → 403)",
+   "return": true
+  }
+ ]
+}

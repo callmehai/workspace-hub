@@ -1,0 +1,110 @@
+{
+ "title": "UC 4.4.2 — Trả lời / Chuyển tiếp trong thread",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ec",
+   "label": "EmailsController"
+  },
+  {
+   "id": "ses",
+   "label": "SendEmailService"
+  },
+  {
+   "id": "gw",
+   "label": "IGmailGateway"
+  },
+  {
+   "id": "gmail",
+   "label": "Gmail API"
+  },
+  {
+   "id": "repo",
+   "label": "Item / Connection Repo"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "mở email → bấm Reply / Forward"
+  },
+  {
+   "from": "fe",
+   "to": "ec",
+   "label": "POST /api/emails/reply | /api/emails/forward"
+  },
+  {
+   "from": "ec",
+   "to": "ses",
+   "label": "ReplyAsync / ForwardAsync(userId, request)"
+  },
+  {
+   "from": "ses",
+   "to": "repo",
+   "label": "GetAndValidateConnectionAndItemAsync(requireEditor = true)"
+  },
+  {
+   "note": "threadId + rfc822 messageId đọc từ item.MetadataJson[\"threadId\"]\nthiếu → BusinessRuleException",
+   "over": "ses"
+  },
+  {
+   "from": "ses",
+   "to": "gw",
+   "label": "[Forward] GetMessageAsync(item.ExternalId) — dựng block Forwarded + tải attachment"
+  },
+  {
+   "from": "gw",
+   "to": "gmail",
+   "label": "users.messages.get / attachments.get"
+  },
+  {
+   "from": "gmail",
+   "to": "ses",
+   "label": "nội dung gốc",
+   "return": true
+  },
+  {
+   "from": "ses",
+   "to": "gw",
+   "label": "SendInThreadAsync(conn, threadId, inReplyTo, subject 'Re:'/'Fwd:', ...)"
+  },
+  {
+   "from": "gw",
+   "to": "gmail",
+   "label": "users.messages.send (cùng thread)"
+  },
+  {
+   "from": "gmail",
+   "to": "ses",
+   "label": "messageId",
+   "return": true
+  },
+  {
+   "from": "ses",
+   "to": "ec",
+   "label": "SendInThreadResult(messageId, threadId, sentAt)",
+   "return": true
+  },
+  {
+   "from": "ec",
+   "to": "fe",
+   "label": "200 OK",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "tin nhắn nằm trong thread",
+   "return": true
+  }
+ ]
+}

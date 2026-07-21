@@ -1,0 +1,105 @@
+{
+ "title": "UC 4.5.2 — Người nhận chấp nhận / từ chối lời mời",
+ "participants": [
+  {
+   "id": "b",
+   "label": "Viewer B",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "fc",
+   "label": "FoldersController"
+  },
+  {
+   "id": "fs",
+   "label": "FolderService"
+  },
+  {
+   "id": "repo",
+   "label": "FolderRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "b",
+   "to": "fe",
+   "label": "mở trang Shared with me"
+  },
+  {
+   "from": "fe",
+   "to": "fc",
+   "label": "GET /api/folders/shared-with-me"
+  },
+  {
+   "from": "fc",
+   "to": "fs",
+   "label": "GetFoldersSharedWithMeAsync(B)"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "GetSharesForUserAsync(B)"
+  },
+  {
+   "from": "fs",
+   "to": "fc",
+   "label": "SharedFolderDto[] (Status = Pending | Accepted)",
+   "return": true
+  },
+  {
+   "from": "fc",
+   "to": "fe",
+   "label": "200 OK",
+   "return": true
+  },
+  {
+   "from": "b",
+   "to": "fe",
+   "label": "bấm Chấp nhận"
+  },
+  {
+   "from": "fe",
+   "to": "fc",
+   "label": "POST /api/folders/shares/{shareId}/accept"
+  },
+  {
+   "from": "fc",
+   "to": "fs",
+   "label": "AcceptShareAsync(shareId, B)"
+  },
+  {
+   "note": "share.SharedWithUserId != B → 403 · đã accept → 409\n(Từ chối: POST .../decline → DeclineShareAsync)",
+   "over": "fs"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "share.AcceptedAt = UtcNow + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE FolderShares"
+  },
+  {
+   "from": "fc",
+   "to": "fe",
+   "label": "200 OK",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "b",
+   "label": "folder xuất hiện trong danh sách",
+   "return": true
+  }
+ ]
+}

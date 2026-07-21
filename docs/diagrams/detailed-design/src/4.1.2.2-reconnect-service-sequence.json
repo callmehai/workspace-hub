@@ -1,0 +1,113 @@
+{
+ "title": "UC 4.1.2 — Reconnect service (cấp lại quyền)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "cc",
+   "label": "ConnectionsController"
+  },
+  {
+   "id": "cs",
+   "label": "ConnectionsService"
+  },
+  {
+   "id": "st",
+   "label": "IProviderStrategy"
+  },
+  {
+   "id": "prov",
+   "label": "Google / Atlassian"
+  },
+  {
+   "id": "repo",
+   "label": "ConnectionRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "bấm Kết nối lại (service đã từng connect)"
+  },
+  {
+   "from": "fe",
+   "to": "prov",
+   "label": "lại luồng OAuth consent → ?code & state"
+  },
+  {
+   "from": "fe",
+   "to": "cc",
+   "label": "POST /api/connections/oauth/callback { code, state }"
+  },
+  {
+   "from": "cc",
+   "to": "cs",
+   "label": "CompleteConnectionAsync(code, state, userId)"
+  },
+  {
+   "from": "cs",
+   "to": "st",
+   "label": "ExchangeCodeAsync(...)"
+  },
+  {
+   "from": "st",
+   "to": "prov",
+   "label": "đổi token"
+  },
+  {
+   "from": "prov",
+   "to": "cs",
+   "label": "TokenExchangeResult(providerAccountId, grantedServices)",
+   "return": true
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "GetByUniqueKeyAsync(userId, provider, svc, providerAccountId)"
+  },
+  {
+   "from": "repo",
+   "to": "cs",
+   "label": "connection (ĐÃ tồn tại)",
+   "return": true
+  },
+  {
+   "note": "reconnect: cập nhật AccessTokenEncrypted, RefreshTokenEncrypted (nếu provider trả mới),\nExpiresAt, Status = Active — GIỮ NGUYÊN CursorValue → không mất tiến độ sync, KHÔNG 409",
+   "over": "cs"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "Update(connection) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE Connections"
+  },
+  {
+   "from": "cc",
+   "to": "fe",
+   "label": "201 Created",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "kết nối được khôi phục",
+   "return": true
+  }
+ ]
+}

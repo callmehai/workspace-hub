@@ -1,0 +1,122 @@
+{
+ "title": "UC 4.1.3 — Resync connection (đồng bộ thủ công)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "cc",
+   "label": "ConnectionsController"
+  },
+  {
+   "id": "disp",
+   "label": "ConnectionSyncDispatcher"
+  },
+  {
+   "id": "sync",
+   "label": "Sync service\nGmail/Cal/Drive/Jira"
+  },
+  {
+   "id": "prov",
+   "label": "Google / Jira"
+  },
+  {
+   "id": "noti",
+   "label": "SyncItemNotification\nService"
+  },
+  {
+   "id": "repo",
+   "label": "ConnectionRepository /\nItemRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "bấm Đồng bộ ngay"
+  },
+  {
+   "from": "fe",
+   "to": "cc",
+   "label": "POST /api/connections/{id}/sync"
+  },
+  {
+   "from": "cc",
+   "to": "disp",
+   "label": "SyncAsync(id, CurrentUserId, markProviderError = true)"
+  },
+  {
+   "from": "disp",
+   "to": "repo",
+   "label": "GetByIdAsync(id) → check UserId"
+  },
+  {
+   "from": "disp",
+   "to": "repo",
+   "label": "GetExistingExternalIdsAsync(id) → beforeExternalIds"
+  },
+  {
+   "from": "disp",
+   "to": "sync",
+   "label": "switch ServiceType → SyncConnectionAsync(connection, batch)"
+  },
+  {
+   "from": "sync",
+   "to": "prov",
+   "label": "list messages / events / files / issues"
+  },
+  {
+   "from": "prov",
+   "to": "sync",
+   "label": "dữ liệu mới",
+   "return": true
+  },
+  {
+   "from": "sync",
+   "to": "repo",
+   "label": "AddRangeAsync(items mới) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Items"
+  },
+  {
+   "from": "sync",
+   "to": "disp",
+   "label": "SyncResult(Scanned, Created, Skipped, NewCursor)",
+   "return": true
+  },
+  {
+   "note": "lỗi provider → MarkConnectionErrorAsync (Status = Error, LastError) + ProviderException (502)",
+   "over": "disp"
+  },
+  {
+   "from": "disp",
+   "to": "noti",
+   "label": "Created > 0 → NotifyNewItemsAsync(id, userId, beforeExternalIds)"
+  },
+  {
+   "from": "cc",
+   "to": "fe",
+   "label": "200 SyncResult",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "item mới xuất hiện + toast thông báo",
+   "return": true
+  }
+ ]
+}

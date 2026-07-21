@@ -1,0 +1,84 @@
+{
+ "title": "UC 4.3.3 — Đổi trạng thái Kanban",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ic",
+   "label": "ItemsController"
+  },
+  {
+   "id": "is",
+   "label": "ItemService"
+  },
+  {
+   "id": "repo",
+   "label": "Item / Folder Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "kéo card sang cột Đang xử lý / Done"
+  },
+  {
+   "from": "fe",
+   "to": "ic",
+   "label": "PATCH /api/items/{id}/status { status: Doing }"
+  },
+  {
+   "from": "ic",
+   "to": "is",
+   "label": "UpdateStatusAsync(userId, itemId, request)"
+  },
+  {
+   "from": "is",
+   "to": "repo",
+   "label": "GetByIdAndUserAsync(itemId, userId)"
+  },
+  {
+   "note": "null → IsItemSharedWithUserAsEditorAsync(itemId, userId)\nviewer → 403 SharedViewerReadOnly · không quyền → 404",
+   "over": "is"
+  },
+  {
+   "from": "is",
+   "to": "repo",
+   "label": "item.Status = request.Status → Update + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE Items SET Status  (không đụng ItemFolder.Position)"
+  },
+  {
+   "from": "is",
+   "to": "ic",
+   "label": "ItemResponse",
+   "return": true
+  },
+  {
+   "from": "ic",
+   "to": "fe",
+   "label": "200 OK → invalidateQueries(items)",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "card ở cột mới",
+   "return": true
+  }
+ ]
+}

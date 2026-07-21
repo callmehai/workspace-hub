@@ -1,0 +1,84 @@
+{
+ "title": "UC 4.4.3 — Hẹn giờ gửi email",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "sc",
+   "label": "ScheduledEmail\nCommandsController"
+  },
+  {
+   "id": "ss",
+   "label": "ScheduledEmailsService"
+  },
+  {
+   "id": "repo",
+   "label": "Connection / ScheduledEmail Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "soạn email + chọn thời điểm gửi"
+  },
+  {
+   "from": "fe",
+   "to": "sc",
+   "label": "POST /api/scheduled-emails { connectionId, to, subject, bodyHtml, attachments, sendAt }"
+  },
+  {
+   "from": "sc",
+   "to": "ss",
+   "label": "CreateAsync(userId, request)"
+  },
+  {
+   "from": "ss",
+   "to": "repo",
+   "label": "load connection → check UserId + ServiceType == Gmail"
+  },
+  {
+   "from": "ss",
+   "to": "repo",
+   "label": "AddAsync(ScheduledEmail{ Status = Pending, AttachmentsJson = base64 }) + Save"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT ScheduledEmails  (attachment lưu base64 trong DB)"
+  },
+  {
+   "from": "ss",
+   "to": "sc",
+   "label": "ScheduledEmailDto",
+   "return": true
+  },
+  {
+   "from": "sc",
+   "to": "fe",
+   "label": "201 Created",
+   "return": true
+  },
+  {
+   "note": "Huỷ: PATCH /api/scheduled-emails/{id}/cancel — Sent/Failed → 400,\nPending → Status = Cancelled",
+   "over": "sc"
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "email nằm trong danh sách chờ gửi",
+   "return": true
+  }
+ ]
+}

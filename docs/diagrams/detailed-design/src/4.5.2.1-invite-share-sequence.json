@@ -1,0 +1,107 @@
+{
+ "title": "UC 4.5.1 — Owner mời chia sẻ Folder",
+ "participants": [
+  {
+   "id": "a",
+   "label": "Owner A",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "fc",
+   "label": "FoldersController"
+  },
+  {
+   "id": "fs",
+   "label": "FolderService"
+  },
+  {
+   "id": "ns",
+   "label": "NotificationService\n+ SignalR"
+  },
+  {
+   "id": "b",
+   "label": "Viewer B",
+   "actor": true
+  },
+  {
+   "id": "repo",
+   "label": "Folder / Friendship Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "a",
+   "to": "fe",
+   "label": "chọn bạn bè + quyền (Viewer / Editor)"
+  },
+  {
+   "from": "fe",
+   "to": "fc",
+   "label": "POST /api/folders/{id}/shares { friendUserId, permission }"
+  },
+  {
+   "from": "fc",
+   "to": "fs",
+   "label": "InviteShareAsync(folderId, requestingUserId = A, request)"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "GetByIdWithOwnerAsync(folderId)"
+  },
+  {
+   "note": "folder.OwnerId != A → 403 · friendUserId == A → 400",
+   "over": "fs"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "GetBetweenAsync(A, B) → Friendship.Status"
+  },
+  {
+   "note": "không phải bạn bè (Accepted) → BusinessRuleException · ShareExistsAsync → 409",
+   "over": "fs"
+  },
+  {
+   "from": "fs",
+   "to": "repo",
+   "label": "AddShareAsync(FolderShare{ Permission, AcceptedAt = null }) + Save"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT FolderShares"
+  },
+  {
+   "from": "fs",
+   "to": "ns",
+   "label": "CreateAndSendAsync(B, ShareInvite, ...)  (best-effort)"
+  },
+  {
+   "from": "ns",
+   "to": "b",
+   "label": "toast realtime 'A đã chia sẻ folder ...'",
+   "async": true
+  },
+  {
+   "from": "fc",
+   "to": "fe",
+   "label": "201 FolderShareDto (Status = Pending)",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "a",
+   "label": "lời mời đã gửi",
+   "return": true
+  }
+ ]
+}

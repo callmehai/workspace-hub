@@ -1,0 +1,344 @@
+{
+ "title": "4.5.1 Class Diagram — Folder Sharing",
+ "colWidth": 350,
+ "colGap": 70,
+ "rowGap": 75,
+ "startX": 40,
+ "startY": 60,
+ "classes": [
+  {
+   "id": "fc",
+   "name": "FoldersController",
+   "stereotype": "controller",
+   "col": 0,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/folders",
+    "- _folderService: IFolderService",
+    "- IValidator<InviteFolderShareRequest>",
+    "- IValidator<UpdateFolderShareRequest>"
+   ],
+   "methods": [
+    "+ POST {id}/shares → InviteShare",
+    "+ GET  {id}/shares → GetShares",
+    "+ PATCH {id}/shares/{shareId} → UpdateShareRole",
+    "+ DELETE {id}/shares/{shareId} → RevokeShare",
+    "+ GET  shared-with-me → GetSharedWithMe",
+    "+ POST shares/{shareId}/accept | decline",
+    "+ DELETE {id}/leave → LeaveFolder"
+   ]
+  },
+  {
+   "id": "ifs",
+   "name": "IFolderService",
+   "stereotype": "interface",
+   "col": 1,
+   "row": 0,
+   "color": "purple",
+   "methods": [
+    "+ InviteShareAsync(folderId, requestingUserId, req, ct)",
+    "+ GetSharesForFolderAsync(folderId, requestingUserId, ct)",
+    "+ UpdateShareRoleAsync(folderId, shareId, userId, req, ct)",
+    "+ RevokeShareAsync(folderId, shareId, userId, ct)",
+    "+ GetFoldersSharedWithMeAsync(userId, ct)",
+    "+ AcceptShareAsync(shareId, userId, ct)",
+    "+ DeclineShareAsync(shareId, userId, ct)",
+    "+ LeaveFolderAsync(folderId, userId, ct)"
+   ]
+  },
+  {
+   "id": "dto",
+   "name": "DTOs",
+   "stereotype": "record",
+   "col": 2,
+   "row": 0,
+   "color": "grey",
+   "attrs": [
+    "InviteFolderShareRequest(FriendUserId, Permission)",
+    "UpdateFolderShareRequest(Permission)",
+    "FolderShareDto(ShareId, FolderId, User, Permission,",
+    "  Status, CreatedAt, AcceptedAt)",
+    "SharedFolderDto(ShareId, FolderId, FolderName,",
+    "  OwnerUserId, OwnerName, Permission, Status, SharedAt)"
+   ]
+  },
+  {
+   "id": "exc",
+   "name": "Exceptions → HTTP",
+   "stereotype": "cross-cutting",
+   "col": 3,
+   "row": 0,
+   "color": "red",
+   "attrs": [
+    "ForbiddenException(\"Chỉ Owner mới được chia sẻ\") → 403",
+    "ForbiddenException(SharedViewerReadOnly) → 403",
+    "ConflictException(\"Folder đã được chia sẻ\") → 409",
+    "BusinessRuleException(\"chỉ share cho bạn bè\") → 400",
+    "NotFoundException → 404 (che tồn tại)"
+   ]
+  },
+  {
+   "id": "fs",
+   "name": "FolderService",
+   "stereotype": "service",
+   "col": 0,
+   "row": 1,
+   "color": "green",
+   "attrs": [
+    "- _folderRepo: IFolderRepository",
+    "- _itemRepo: IItemRepository",
+    "- _friendships: IFriendshipRepository",
+    "- _notifications: INotificationService"
+   ],
+   "methods": [
+    "+ InviteShareAsync: Owner-only → phải là bạn bè",
+    "   (FriendshipStatus.Accepted) → chống share trùng",
+    "   → FolderShare{ AcceptedAt = null } (pending)",
+    "+ AcceptShareAsync: AcceptedAt = UtcNow",
+    "- MapShareToDto(share)",
+    "- SendShareNotificationSafeAsync(...)  // best-effort"
+   ]
+  },
+  {
+   "id": "is",
+   "name": "ItemService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 1,
+   "color": "green",
+   "methods": [
+    "+ GetItemsAsync: folder không thuộc user →",
+    "   GetShareByFolderAndUserAsync → chưa Accepted",
+    "   ⇒ trả PagedResult RỖNG (không 403)",
+    "   → query theo folder.OwnerId (targetOwnerId)",
+    "- CanReadSharedAsync(item, userId, ct)",
+    "- ThrowNoWriteAccessAsync(itemId, userId, ct)"
+   ]
+  },
+  {
+   "id": "dcs",
+   "name": "DriveContentService",
+   "stereotype": "service",
+   "col": 2,
+   "row": 1,
+   "color": "green",
+   "methods": [
+    "- ResolveDriveItemAsync(itemId, userId, ct)",
+    "   item không thuộc user → share-check:",
+    "   IsItemSharedWithUserAsync  HOẶC",
+    "   IsConnectionSharedWithUserAsync (file con)",
+    "   → load Connection theo item.ConnectionId",
+    "   → conn.UserId != item.UserId ⇒ 404",
+    "   ⇒ gọi Google bằng token của OWNER"
+   ]
+  },
+  {
+   "id": "dss",
+   "name": "DriveSharingService",
+   "stereotype": "service",
+   "col": 3,
+   "row": 1,
+   "color": "grey",
+   "attrs": [
+    "(share trên chính Google Drive — KHÁC share nội bộ)"
+   ],
+   "methods": [
+    "+ ListPermissionsAsync / AddPermissionAsync",
+    "+ UpdatePermissionAsync / RemovePermissionAsync",
+    "+ SetLinkSharingAsync(...)",
+    "- ResolveDriveItemAsync: OWNER-ONLY (không share-fallback)"
+   ]
+  },
+  {
+   "id": "frepo",
+   "name": "IFolderRepository",
+   "stereotype": "repository",
+   "col": 0,
+   "row": 2,
+   "color": "orange",
+   "methods": [
+    "+ AddShareAsync / RemoveShare / GetShareByIdAsync",
+    "+ GetSharesByFolderAsync(folderId, ct)",
+    "+ GetSharesForUserAsync(userId, ct)",
+    "+ GetShareByFolderAndUserAsync(folderId, userId, ct)",
+    "+ ShareExistsAsync(folderId, userId, ct)"
+   ]
+  },
+  {
+   "id": "perm",
+   "name": "Share-check (trái tim phân quyền)",
+   "stereotype": "repository",
+   "col": 1,
+   "row": 2,
+   "color": "orange",
+   "attrs": [
+    "mọi truy vấn đều đòi fs.AcceptedAt != null"
+   ],
+   "methods": [
+    "+ IsItemSharedWithUserAsync(itemId, userId, ct)",
+    "    ĐỌC — Viewer + Editor",
+    "+ IsItemSharedWithUserAsEditorAsync(itemId, userId, ct)",
+    "    GHI provider — chỉ Editor",
+    "+ IsConnectionSharedWithUserAsync(connId, userId, ct)",
+    "    ĐỌC item Drive CON (không có ItemFolder riêng)",
+    "+ IsConnectionSharedWithUserAsEditorAsync(...)"
+   ]
+  },
+  {
+   "id": "frrepo",
+   "name": "IFriendshipRepository",
+   "stereotype": "repository",
+   "col": 2,
+   "row": 2,
+   "color": "orange",
+   "methods": [
+    "+ GetBetweenAsync(userA, userB, ct): Friendship?",
+    "   Status phải = FriendshipStatus.Accepted",
+    "   ⇒ chỉ share folder cho bạn bè trong app"
+   ]
+  },
+  {
+   "id": "ns",
+   "name": "INotificationService",
+   "stereotype": "interface",
+   "col": 3,
+   "row": 2,
+   "color": "green",
+   "methods": [
+    "+ CreateAndSendAsync(userId, ShareInvite, title, body, link, ct)",
+    "   → SignalR đẩy lời mời realtime (xem 4.6)"
+   ]
+  },
+  {
+   "id": "share",
+   "name": "FolderShare",
+   "stereotype": "entity",
+   "col": 0,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ FolderId: Guid",
+    "+ SharedWithUserId: Guid",
+    "+ CreatedByUserId: Guid",
+    "+ Permission: SharePermission = Viewer",
+    "+ CreatedAt: DateTime",
+    "+ AcceptedAt: DateTime?   (null = pending)",
+    "+ ExpiresAt: DateTime?"
+   ]
+  },
+  {
+   "id": "folder",
+   "name": "Folder",
+   "stereotype": "entity",
+   "col": 1,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ OwnerId: Guid",
+    "+ Name / Color / Icon",
+    "+ SortOrder: int · IsArchived: bool",
+    "nav: ItemFolders, FolderShares"
+   ]
+  },
+  {
+   "id": "item",
+   "name": "Item",
+   "stereotype": "entity",
+   "col": 2,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "+ UserId: Guid   ← chủ sở hữu thật",
+    "+ ConnectionId: Guid?  ← connection của OWNER",
+    "+ Type: ItemType",
+    "(người được share mượn connection của owner)"
+   ]
+  },
+  {
+   "id": "enums",
+   "name": "Enums",
+   "stereotype": "enumeration",
+   "col": 3,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "SharePermission { Viewer, Editor }",
+    "FriendshipStatus { Pending, Accepted, Blocked }",
+    "ItemType { Email, Event, File, Note, Ticket }"
+   ]
+  }
+ ],
+ "relations": [
+  {
+   "from": "fc",
+   "to": "ifs",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "fs",
+   "to": "ifs",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "fs",
+   "to": "frepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "fs",
+   "to": "frrepo",
+   "type": "assoc",
+   "label": "kiểm bạn bè"
+  },
+  {
+   "from": "fs",
+   "to": "ns",
+   "type": "dep",
+   "label": "gửi lời mời"
+  },
+  {
+   "from": "is",
+   "to": "perm",
+   "type": "assoc",
+   "label": "share-check"
+  },
+  {
+   "from": "dcs",
+   "to": "perm",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "frepo",
+   "to": "share",
+   "type": "assoc",
+   "label": "quản lý"
+  },
+  {
+   "from": "folder",
+   "to": "share",
+   "type": "compose",
+   "label": "1 — n"
+  },
+  {
+   "from": "fs",
+   "to": "exc",
+   "type": "dep",
+   "label": ""
+  }
+ ],
+ "notes": [
+  {
+   "text": "KHUÔN MẪU BẮT BUỘC (docs/FOLDER-SHARING-HANDOVER.md): sau khi share-check pass, connection dùng để gọi Google phải thuộc CHỦ SỞ HỮU ITEM — viết  if (conn.UserId != item.UserId) throw …  chứ KHÔNG phải  conn.UserId != userId  (sai này khiến người được share luôn bị 403/404).  Ma trận quyền: ĐỌC = owner + Viewer + Editor · GHI provider = owner + Editor · Tag (local, private) = Viewer cũng được.",
+   "x": 40,
+   "w": 1610,
+   "h": 90
+  }
+ ]
+}

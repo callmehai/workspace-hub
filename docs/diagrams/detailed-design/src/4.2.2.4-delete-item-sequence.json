@@ -1,0 +1,102 @@
+{
+ "title": "UC 4.2.4 — Xoá item",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ic",
+   "label": "ItemsController"
+  },
+  {
+   "id": "wb",
+   "label": "ItemWriteBackService"
+  },
+  {
+   "id": "gw",
+   "label": "Gateway\nGmail/Cal/Drive/Jira"
+  },
+  {
+   "id": "prov",
+   "label": "Google / Jira"
+  },
+  {
+   "id": "repo",
+   "label": "ItemRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "xoá item"
+  },
+  {
+   "from": "fe",
+   "to": "ic",
+   "label": "DELETE /api/items/{id}"
+  },
+  {
+   "from": "ic",
+   "to": "wb",
+   "label": "DeleteItemAsync(itemId, userId)  (không cần check ETag)"
+  },
+  {
+   "from": "wb",
+   "to": "repo",
+   "label": "GetByIdAndUserAsync(itemId, userId)"
+  },
+  {
+   "note": "Email có ThreadId → xoá cả thread:\nTrashThreadAsync / DeleteThreadAsync + _items.DeleteThreadAsync",
+   "over": "wb"
+  },
+  {
+   "from": "wb",
+   "to": "gw",
+   "label": "DeleteMessage / DeleteEvent / TrashFile / DeleteIssue"
+  },
+  {
+   "from": "gw",
+   "to": "prov",
+   "label": "xoá trên provider (Event: nuốt NotFound)"
+  },
+  {
+   "from": "prov",
+   "to": "wb",
+   "label": "OK",
+   "return": true
+  },
+  {
+   "from": "wb",
+   "to": "repo",
+   "label": "Remove(item) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "DELETE Items (+ ItemFolders, TagAssignments)"
+  },
+  {
+   "from": "ic",
+   "to": "fe",
+   "label": "204 No Content",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "item biến mất khỏi UI",
+   "return": true
+  }
+ ]
+}

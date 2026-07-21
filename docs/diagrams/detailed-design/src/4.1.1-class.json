@@ -1,0 +1,434 @@
+{
+ "title": "4.1.1 Class Diagram — Connection & OAuth",
+ "colWidth": 350,
+ "colGap": 70,
+ "rowGap": 75,
+ "startX": 40,
+ "startY": 60,
+ "classes": [
+  {
+   "id": "cc",
+   "name": "ConnectionsController",
+   "stereotype": "controller",
+   "col": 0,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/connections",
+    "- _connections: IConnectionsService",
+    "- _syncDispatcher: IConnectionSyncDispatcher",
+    "- _gmailSync: IGmailSyncService"
+   ],
+   "methods": [
+    "+ POST oauth/start → InitiateConnection",
+    "+ POST oauth/callback → CompleteConnection",
+    "+ GET  / → GetConnections",
+    "+ DELETE {id} → Disconnect",
+    "+ POST {id}/refresh → RefreshConnection",
+    "+ POST {id}/sync → SyncConnection"
+   ]
+  },
+  {
+   "id": "dto",
+   "name": "DTOs",
+   "stereotype": "record",
+   "col": 1,
+   "row": 0,
+   "color": "grey",
+   "attrs": [
+    "InitiateConnectionRequest(IntegrationKey,",
+    "  ServiceType, RedirectUri)",
+    "CompleteConnectionRequest(Code, State)",
+    "ConnectionDto / ConnectionItem(Id,",
+    "  ServiceType, Status)",
+    "CompleteConnectionResponse(IntegrationKey,",
+    "  ProviderAccountId, Connections)",
+    "RefreshConnectionResponse · SyncResult"
+   ]
+  },
+  {
+   "id": "ips",
+   "name": "IProviderStrategy",
+   "stereotype": "interface",
+   "col": 2,
+   "row": 0,
+   "color": "purple",
+   "attrs": [
+    "+ ProviderKey: string"
+   ],
+   "methods": [
+    "+ BuildAuthUrlAsync(req, ct): InitiateConnectionResult",
+    "+ ExchangeCodeAsync(req, ct): TokenExchangeResult"
+   ]
+  },
+  {
+   "id": "core",
+   "name": "OAuth Core",
+   "stereotype": "record",
+   "col": 3,
+   "row": 0,
+   "color": "grey",
+   "attrs": [
+    "BuildAuthUrlRequest(ClientId, RedirectUri,",
+    "  State, Integration, ServiceType)",
+    "ExchangeCodeRequest(Code, ClientId,",
+    "  ClientSecret, RedirectUri, ...,",
+    "  ExistingActiveProviderAccountIds)",
+    "TokenExchangeResult(AccessToken,",
+    "  RefreshToken, ExpiresIn, RawScopes,",
+    "  ProviderAccountId, GrantedServices)",
+    "OAuthStatePayload(IntegrationKey, UserId,",
+    "  RedirectUri, ServiceType)",
+    "InitiateConnectionResult(AuthorizationUrl, State)"
+   ]
+  },
+  {
+   "id": "ics",
+   "name": "IConnectionsService",
+   "stereotype": "interface",
+   "col": 0,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ InitiateConnectionAsync(key, svc, redirect, userId, ct)",
+    "+ CompleteConnectionAsync(code, state, userId, ct)",
+    "+ GetConnectionsAsync(userId, ct)",
+    "+ DisconnectAsync(connectionId, userId, ct)",
+    "+ RefreshConnectionAsync(connectionId, userId, ct)",
+    "+ TriggerManualSyncAsync(connectionId, userId, ct)",
+    "+ GetIntegrationsAsync / ToggleIntegrationAsync"
+   ]
+  },
+  {
+   "id": "cs",
+   "name": "ConnectionsService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 1,
+   "color": "green",
+   "attrs": [
+    "- _strategies: Dictionary<string, IProviderStrategy>",
+    "- _tokenProtector: ITokenProtector",
+    "- _cache: IDistributedCache  (state 10 phút)",
+    "- _tokenClient: IOAuthTokenClient",
+    "- _connections / _integrations / _items"
+   ],
+   "methods": [
+    "+ InitiateConnectionAsync(...)",
+    "+ CompleteConnectionAsync(...)  // mô hình B",
+    "+ DisconnectAsync(...)  // transaction",
+    "+ RefreshConnectionAsync(...)",
+    "- MapToConnectionDto(connection)  / MaskToken()"
+   ]
+  },
+  {
+   "id": "gs",
+   "name": "GoogleStrategy",
+   "stereotype": "strategy",
+   "col": 2,
+   "row": 1,
+   "color": "green",
+   "attrs": [
+    "+ ProviderKey = \"google\""
+   ],
+   "methods": [
+    "+ BuildAuthUrlAsync → GoogleAuthUrlBuilder",
+    "   + GoogleScopes.BuildRequestScopes(serviceType)",
+    "+ ExchangeCodeAsync → IdTokenParser",
+    "   + GoogleScopes.ValidateAndExtract(scope, svc)"
+   ]
+  },
+  {
+   "id": "js",
+   "name": "JiraStrategy",
+   "stereotype": "strategy",
+   "col": 3,
+   "row": 1,
+   "color": "green",
+   "attrs": [
+    "+ ProviderKey = \"atlassian\"",
+    "- AtlassianAudience = api.atlassian.com"
+   ],
+   "methods": [
+    "+ BuildAuthUrlAsync (audience, prompt=consent)",
+    "+ ExchangeCodeAsync: token → accessible-resources",
+    "   → chọn cloudId chưa Active (= ProviderAccountId)",
+    "   → JiraScopes.ValidateAndExtract(scope)"
+   ]
+  },
+  {
+   "id": "tp",
+   "name": "ITokenProtector",
+   "stereotype": "interface",
+   "col": 0,
+   "row": 2,
+   "color": "purple",
+   "methods": [
+    "+ Protect(plainToken): string",
+    "+ Unprotect(protectedToken): string",
+    "impl DataProtectionTokenProtector",
+    "   purpose \"WorkspaceHub.OAuthTokens.v1\""
+   ]
+  },
+  {
+   "id": "ts",
+   "name": "TokenService / AtlassianTokenService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 2,
+   "color": "green",
+   "methods": [
+    "+ GetFreshAccessTokenAsync(connection, ct): string",
+    "   buffer 5 phút trước ExpiresAt",
+    "   Atlassian: SemaphoreSlim per-connection",
+    "   (rotating refresh token)",
+    "   fail → Status = Error + LastError"
+   ]
+  },
+  {
+   "id": "otc",
+   "name": "IOAuthTokenClient",
+   "stereotype": "interface",
+   "col": 2,
+   "row": 2,
+   "color": "orange",
+   "methods": [
+    "+ PostFormAsync(tokenEndpoint, form, ct): string",
+    "impl HttpOAuthTokenClient (HttpClient \"OAuthToken\")"
+   ]
+  },
+  {
+   "id": "cache",
+   "name": "IDistributedCache (Redis)",
+   "stereotype": "infrastructure",
+   "col": 3,
+   "row": 2,
+   "color": "orange",
+   "methods": [
+    "key: oauth:state:{state}  ·  TTL 10 phút",
+    "one-time: đọc xong RemoveAsync → chống CSRF/replay"
+   ]
+  },
+  {
+   "id": "crepo",
+   "name": "IConnectionRepository",
+   "stereotype": "repository",
+   "col": 0,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByUniqueKeyAsync(userId, provider,",
+    "    serviceType, providerAccountId, ct)",
+    "+ GetByUserIdAsync / GetByIdTrackedAsync",
+    "+ GetActiveConnectionsForUserAsync(userId, ct)",
+    "+ GetActiveConnectionsToSyncAsync(ct)"
+   ]
+  },
+  {
+   "id": "irepo",
+   "name": "IIntegrationRepository",
+   "stereotype": "repository",
+   "col": 1,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByKeyAsync(key, ct): Integration?",
+    "+ ListAsync(ct) / Update / SaveChangesAsync"
+   ]
+  },
+  {
+   "id": "conn",
+   "name": "Connection",
+   "stereotype": "entity",
+   "col": 2,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "+ Id, UserId, IntegrationId: Guid",
+    "+ Provider: ProviderType",
+    "+ ServiceType: ServiceType  (1 service = 1 row)",
+    "+ ProviderAccountId: string  (Jira = cloudId)",
+    "+ AccessTokenEncrypted / RefreshTokenEncrypted",
+    "+ ExpiresAt: DateTime",
+    "+ Status: ConnectionStatus",
+    "+ CursorType? / CursorValue?",
+    "+ LastSyncedAt? / LastError? / CreatedAt"
+   ]
+  },
+  {
+   "id": "integ",
+   "name": "Integration",
+   "stereotype": "entity",
+   "col": 3,
+   "row": 3,
+   "color": "yellow",
+   "attrs": [
+    "+ Id: Guid",
+    "+ Key: string  (google | atlassian)",
+    "+ DisplayName / IconUrl / Description",
+    "+ Provider: string",
+    "+ AuthorizationEndpoint / TokenEndpoint",
+    "+ SupportedServices: string (JSON)",
+    "+ IsEnabled: bool  (admin bật/tắt)"
+   ]
+  },
+  {
+   "id": "hc",
+   "name": "ConnectionHealthChecker",
+   "stereotype": "service",
+   "col": 0,
+   "row": 4,
+   "color": "green",
+   "methods": [
+    "+ EnsureAllSyncedAsync(userId, ct)",
+    "   debounce Sync:DebounceSeconds (30s)",
+    "   timeout 15s / connection",
+    "   token sắp hết hạn → RefreshConnectionAsync"
+   ]
+  },
+  {
+   "id": "disp",
+   "name": "ConnectionSyncDispatcher",
+   "stereotype": "service",
+   "col": 1,
+   "row": 4,
+   "color": "green",
+   "methods": [
+    "+ SyncAsync(connectionId, userId, ct,",
+    "    markProviderError = false): SyncResult",
+    "   switch ServiceType → sync service tương ứng",
+    "   Created > 0 → NotifyNewItemsAsync",
+    "   GoogleApiException → ProviderException (502)"
+   ]
+  },
+  {
+   "id": "sync",
+   "name": "Sync services",
+   "stereotype": "service",
+   "col": 2,
+   "row": 4,
+   "color": "green",
+   "methods": [
+    "+ GmailSyncService.SyncConnectionAsync(conn, 100, ct)",
+    "+ CalendarSyncService.SyncConnectionAsync(conn, ct)",
+    "+ DriveSyncService.SyncConnectionAsync(conn, ct)",
+    "+ JiraSyncService.SyncConnectionAsync(conn, 250, ct)"
+   ]
+  },
+  {
+   "id": "enums",
+   "name": "Enums",
+   "stereotype": "enumeration",
+   "col": 3,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "ProviderType { Google, Atlassian }",
+    "ServiceType { Gmail, GCal, Drive, Jira }",
+    "ConnectionStatus { Active, Disconnected, Error }",
+    "CursorType { HistoryId, PageToken,",
+    "  SyncToken, JqlUpdated }"
+   ]
+  }
+ ],
+ "relations": [
+  {
+   "from": "cc",
+   "to": "ics",
+   "type": "dep",
+   "label": "gọi"
+  },
+  {
+   "from": "cs",
+   "to": "ics",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "cs",
+   "to": "ips",
+   "type": "dep",
+   "label": "chọn theo ProviderKey"
+  },
+  {
+   "from": "gs",
+   "to": "ips",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "js",
+   "to": "ips",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "cs",
+   "to": "tp",
+   "type": "assoc",
+   "label": "mã hoá token"
+  },
+  {
+   "from": "cs",
+   "to": "cache",
+   "type": "assoc",
+   "label": "state"
+  },
+  {
+   "from": "gs",
+   "to": "otc",
+   "type": "dep",
+   "label": "token endpoint"
+  },
+  {
+   "from": "js",
+   "to": "otc",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "crepo",
+   "to": "conn",
+   "type": "assoc",
+   "label": "quản lý"
+  },
+  {
+   "from": "irepo",
+   "to": "integ",
+   "type": "assoc",
+   "label": "quản lý"
+  },
+  {
+   "from": "integ",
+   "to": "conn",
+   "type": "aggregate",
+   "label": "1 — n"
+  },
+  {
+   "from": "hc",
+   "to": "disp",
+   "type": "dep",
+   "label": "on-demand sync"
+  },
+  {
+   "from": "disp",
+   "to": "sync",
+   "type": "dep",
+   "label": "switch ServiceType"
+  },
+  {
+   "from": "ts",
+   "to": "conn",
+   "type": "dep",
+   "label": "refresh token"
+  }
+ ],
+ "notes": [
+  {
+   "text": "Mô hình B: bật 1 service = 1 row Connections riêng (token riêng, cursor riêng). KHÔNG có cột Scopes/Permission — scope suy từ ServiceType trong code (GoogleScopes / JiraScopes).  ·  Reconnect = cập nhật token trên row cũ, GIỮ NGUYÊN CursorValue (không 409).  ·  Google Sign-In là luồng KHÁC: chỉ tạo/tìm User + phát cookie, KHÔNG tạo Connection.",
+   "x": 40,
+   "w": 1610,
+   "h": 80
+  }
+ ]
+}

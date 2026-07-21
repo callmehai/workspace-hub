@@ -1,0 +1,194 @@
+{
+ "title": "UC 4.1.1 — Connect service (mô hình B)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "cc",
+   "label": "ConnectionsController"
+  },
+  {
+   "id": "cs",
+   "label": "ConnectionsService"
+  },
+  {
+   "id": "cache",
+   "label": "Redis\n(state)"
+  },
+  {
+   "id": "st",
+   "label": "IProviderStrategy\nGoogle | Jira"
+  },
+  {
+   "id": "prov",
+   "label": "Google / Atlassian"
+  },
+  {
+   "id": "repo",
+   "label": "Connection /\nIntegration Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "bật service (Gmail / Calendar / Drive / Jira)"
+  },
+  {
+   "from": "fe",
+   "to": "cc",
+   "label": "POST /api/connections/oauth/start { integrationKey, serviceType, redirectUri }"
+  },
+  {
+   "from": "cc",
+   "to": "cs",
+   "label": "InitiateConnectionAsync(key, serviceType, redirectUri, userId)"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "GetByKeyAsync(integrationKey)"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "SELECT Integrations"
+  },
+  {
+   "from": "db",
+   "to": "cs",
+   "label": "integration",
+   "return": true
+  },
+  {
+   "note": "!IsEnabled → BusinessRuleException · không có strategy → NotFoundException",
+   "over": "cs"
+  },
+  {
+   "from": "cs",
+   "to": "cache",
+   "label": "SetString(oauth:state:{state}, payload, TTL 10 phút)"
+  },
+  {
+   "from": "cs",
+   "to": "st",
+   "label": "BuildAuthUrlAsync(clientId, redirectUri, state, serviceType)"
+  },
+  {
+   "from": "st",
+   "to": "cs",
+   "label": "InitiateConnectionResult(authorizationUrl, state)",
+   "return": true
+  },
+  {
+   "from": "cc",
+   "to": "fe",
+   "label": "200 { authorizationUrl, state }",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "prov",
+   "label": "redirect → consent (FULL scope của service)"
+  },
+  {
+   "from": "prov",
+   "to": "fe",
+   "label": "redirect về app: ?code & state",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "cc",
+   "label": "POST /api/connections/oauth/callback { code, state }"
+  },
+  {
+   "from": "cc",
+   "to": "cs",
+   "label": "CompleteConnectionAsync(code, state, userId)"
+  },
+  {
+   "from": "cs",
+   "to": "cache",
+   "label": "GetString + RemoveAsync (one-time)"
+  },
+  {
+   "from": "cache",
+   "to": "cs",
+   "label": "OAuthStatePayload",
+   "return": true
+  },
+  {
+   "note": "state sai / payload.UserId != userId → CsrfException (403)",
+   "over": "cs"
+  },
+  {
+   "from": "cs",
+   "to": "st",
+   "label": "ExchangeCodeAsync(code, clientId, clientSecret)"
+  },
+  {
+   "from": "st",
+   "to": "prov",
+   "label": "POST /token (+ [Jira] GET accessible-resources → cloudId)"
+  },
+  {
+   "from": "prov",
+   "to": "st",
+   "label": "access/refresh token, scope",
+   "return": true
+  },
+  {
+   "from": "st",
+   "to": "cs",
+   "label": "TokenExchangeResult(providerAccountId, grantedServices)",
+   "return": true
+  },
+  {
+   "note": "ITokenProtector.Protect(token) — ASP.NET Data Protection",
+   "over": "cs"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "GetByUniqueKeyAsync(...) → null (chưa có)"
+  },
+  {
+   "from": "cs",
+   "to": "repo",
+   "label": "AddAsync(new Connection{ Status=Active, CursorValue=null }) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Connections"
+  },
+  {
+   "from": "cc",
+   "to": "fe",
+   "label": "201 Created (CompleteConnectionResponse)",
+   "return": true
+  },
+  {
+   "note": "Sync lần đầu KHÔNG chạy ở callback — chạy on-demand (GET /api/items) hoặc bấm resync",
+   "over": "cs"
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "service hiển thị Connected",
+   "return": true
+  }
+ ]
+}

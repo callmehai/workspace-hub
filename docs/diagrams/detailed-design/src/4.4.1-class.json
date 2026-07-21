@@ -1,0 +1,449 @@
+{
+ "title": "4.4.1 Class Diagram — Email Workspace",
+ "colWidth": 350,
+ "colGap": 70,
+ "rowGap": 75,
+ "startX": 40,
+ "startY": 60,
+ "classes": [
+  {
+   "id": "ec",
+   "name": "EmailsController",
+   "stereotype": "controller",
+   "col": 0,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/emails",
+    "- _sendEmail: ISendEmailService",
+    "- IValidator<Send|Reply|Forward|SaveDraft>",
+    "AttachmentRequestSizeLimit = 40 MB"
+   ],
+   "methods": [
+    "+ POST send → Send",
+    "+ GET  {itemId}/thread → GetThread",
+    "+ POST reply | forward → Reply / Forward",
+    "+ GET  {itemId}/messages/{msgId}/attachments/{id}",
+    "+ GET  …/attachments/zip → DownloadAllAttachments",
+    "+ POST|PUT drafts → CreateDraft / UpdateDraft",
+    "+ POST drafts/{itemId}/send → SendDraft",
+    "+ DELETE drafts/{itemId} → DiscardDraft",
+    "+ GET  signature → Signature"
+   ]
+  },
+  {
+   "id": "sec",
+   "name": "ScheduledEmailCommandsController",
+   "stereotype": "controller",
+   "col": 1,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize]  /api/scheduled-emails"
+   ],
+   "methods": [
+    "+ POST / → Create",
+    "+ GET {id} → GetById",
+    "+ PATCH {id}/cancel → Cancel"
+   ]
+  },
+  {
+   "id": "seq",
+   "name": "ScheduledEmailsController",
+   "stereotype": "controller (OData)",
+   "col": 2,
+   "row": 0,
+   "color": "blue",
+   "attrs": [
+    "[Authorize] : ODataApiControllerBase"
+   ],
+   "methods": [
+    "+ GET /api/ScheduledEmails  [EnableQuery]",
+    "   → IQueryable<ScheduledEmailDto>",
+    "   ($filter / $orderby / $top / $skip / $count)"
+   ]
+  },
+  {
+   "id": "intc",
+   "name": "InternalController",
+   "stereotype": "controller",
+   "col": 3,
+   "row": 0,
+   "color": "yellow",
+   "attrs": [
+    "[AllowAnonymous]  /api/internal",
+    "bảo vệ bằng header X-Cron-Secret",
+    "so sánh FixedTimeEquals với Cron:Secret"
+   ],
+   "methods": [
+    "+ POST process-scheduled → ProcessDueEmailsAsync",
+    "+ POST process-sync → ProcessConnectionsSyncAsync"
+   ]
+  },
+  {
+   "id": "ises",
+   "name": "ISendEmailService",
+   "stereotype": "interface",
+   "col": 0,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ SendAsync(userId, req, ct): SendEmailResult",
+    "+ GetThreadAsync(userId, itemId, ct): EmailThreadResponse",
+    "+ ReplyAsync / ForwardAsync → SendInThreadResult",
+    "+ GetAttachmentAsync(...) / GetAttachmentsZipAsync(...)",
+    "+ SaveDraftAsync / SendDraftAsync / DiscardDraftAsync",
+    "+ GetSignatureAsync(userId, connectionId, ct)",
+    "+ GetContactSuggestionsAsync(userId, connectionId, ct)"
+   ]
+  },
+  {
+   "id": "iss",
+   "name": "IScheduledEmailsService",
+   "stereotype": "interface",
+   "col": 1,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ GetByUserId(userId): IQueryable<ScheduledEmailDto>",
+    "+ CreateAsync(userId, req, ct)",
+    "+ GetByIdAsync(userId, id, ct)",
+    "+ CancelAsync(userId, id, ct)"
+   ]
+  },
+  {
+   "id": "ips",
+   "name": "IProcessScheduledEmailsService",
+   "stereotype": "interface",
+   "col": 2,
+   "row": 1,
+   "color": "purple",
+   "methods": [
+    "+ ProcessDueEmailsAsync(maxBatch = 50, ct)",
+    "   → ProcessScheduledResult(Total, Sent, Failed)"
+   ]
+  },
+  {
+   "id": "dto",
+   "name": "DTOs",
+   "stereotype": "record",
+   "col": 3,
+   "row": 1,
+   "color": "grey",
+   "attrs": [
+    "SendEmailRequest(ConnectionId, To, Cc, Bcc,",
+    "  Subject, BodyHtml, Attachments)",
+    "ReplyEmailRequest / ForwardEmailRequest",
+    "SaveDraftRequest",
+    "AttachmentUpload(Filename, MimeType, ContentBase64)",
+    "CreateScheduledEmailRequest(ConnectionId, To, Cc,",
+    "  Bcc, Subject, BodyHtml, SendAt, Attachments)",
+    "SendEmailResult(MessageId, SentAt)",
+    "EmailThreadResponse · ScheduledEmailDto"
+   ]
+  },
+  {
+   "id": "ses",
+   "name": "SendEmailService",
+   "stereotype": "service",
+   "col": 0,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _connections / _items / _folders",
+    "- _gmail: IGmailGateway",
+    "- _googleContacts / _contactMapper"
+   ],
+   "methods": [
+    "+ SendAsync: kiểm connection Gmail + Active",
+    "   → DecodeAttachments(base64) → SendMessageAsync",
+    "+ ReplyAsync: threadId + rfc822 messageId từ metadata",
+    "   → prefix \"Re: \" → SendInThreadAsync",
+    "+ ForwardAsync: dựng block Forwarded + tải attachment",
+    "- GetAndValidateConnectionAndItemAsync(requireEditor)",
+    "- ExtractEmail / DecodeAttachments"
+   ]
+  },
+  {
+   "id": "ss",
+   "name": "ScheduledEmailsService",
+   "stereotype": "service",
+   "col": 1,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _scheduledEmails / _connections"
+   ],
+   "methods": [
+    "+ CreateAsync: check connection.UserId + ServiceType == Gmail",
+    "   → serialize To/Cc/Bcc/Attachments → Status = Pending",
+    "+ CancelAsync: Sent|Failed → BusinessRuleException",
+    "   Cancelled → idempotent; else Status = Cancelled"
+   ]
+  },
+  {
+   "id": "pss",
+   "name": "ProcessScheduledEmailsService",
+   "stereotype": "service (cron)",
+   "col": 2,
+   "row": 2,
+   "color": "green",
+   "attrs": [
+    "- _scheduledEmails / _connections / _gmail"
+   ],
+   "methods": [
+    "+ ProcessDueEmailsAsync(maxBatch, ct)",
+    "   GetPendingDueEmailsAsync(now, maxBatch)",
+    "   connection null / không Gmail / không Active → MarkFailed",
+    "   gửi OK → Status = Sent, SentAt, LastError = null",
+    "   exception → MarkFailed(RetryCount++, LastError)",
+    "   SaveChangesAsync MỘT lần cuối vòng lặp"
+   ]
+  },
+  {
+   "id": "bg",
+   "name": "ScheduledEmailProcessorService",
+   "stereotype": "BackgroundService",
+   "col": 3,
+   "row": 2,
+   "color": "yellow",
+   "attrs": [
+    "chỉ bật khi Cron:AutoRun = true",
+    "PeriodicTimer theo Cron:IntervalSeconds (mặc định 300s)"
+   ],
+   "methods": [
+    "ExecuteAsync → scope → ProcessDueEmailsAsync",
+    "(chạy song song với endpoint /api/internal)"
+   ]
+  },
+  {
+   "id": "gg",
+   "name": "IGmailGateway",
+   "stereotype": "gateway",
+   "col": 0,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ SendMessageAsync(conn, to, cc, bcc, subject, html, attachments)",
+    "+ SendInThreadAsync(conn, threadId, inReplyTo, …)",
+    "+ GetThreadAsync(conn, threadId, ct): GmailThread",
+    "+ GetMessageAsync / GetAttachmentAsync",
+    "+ CreateDraftAsync / UpdateDraftAsync / SendDraftAsync",
+    "+ GetSignatureAsync(conn, ct)",
+    "+ ModifyMessageAsync / TrashMessageAsync"
+   ]
+  },
+  {
+   "id": "serepo",
+   "name": "IScheduledEmailRepository",
+   "stereotype": "repository",
+   "col": 1,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByUserId(userId): IQueryable<ScheduledEmailDto>",
+    "+ GetPendingDueEmailsAsync(nowUtc, maxBatch, ct)",
+    "   (Status = Pending & SendAt <= now, sort SendAt)",
+    "+ DeleteByConnectionIdAsync(connectionId, ct)"
+   ]
+  },
+  {
+   "id": "irepo",
+   "name": "IItemRepository",
+   "stereotype": "repository",
+   "col": 2,
+   "row": 3,
+   "color": "orange",
+   "methods": [
+    "+ GetByIdAndUserAsync(itemId, userId, ct)",
+    "+ GetByThreadAndConnectionAsync(threadId, connId, ct)",
+    "+ DeleteThreadAsync(userId, threadId, ct)"
+   ]
+  },
+  {
+   "id": "gmail",
+   "name": "Gmail API",
+   "stereotype": "external",
+   "col": 3,
+   "row": 3,
+   "color": "grey",
+   "attrs": [
+    "users.messages.send / drafts",
+    "users.threads.get",
+    "users.messages.attachments.get",
+    "users.settings.sendAs (signature)"
+   ]
+  },
+  {
+   "id": "se",
+   "name": "ScheduledEmail",
+   "stereotype": "entity",
+   "col": 0,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "+ Id, UserId: Guid",
+    "+ ConnectionId: Guid   (bắt buộc ServiceType = Gmail)",
+    "+ ToJson / CcJson / BccJson: string (JSON array)",
+    "+ Subject / BodyHtml: string",
+    "+ AttachmentsJson: string  (base64 trong DB)",
+    "+ SendAt: DateTime  (UTC)",
+    "+ Status: ScheduledEmailStatus",
+    "+ RetryCount: int · LastError: string?",
+    "+ SentAt: DateTime? · CreatedAt: DateTime"
+   ]
+  },
+  {
+   "id": "item",
+   "name": "Item (Type = Email)",
+   "stereotype": "entity",
+   "col": 1,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "+ ExternalId: string   (Gmail messageId)",
+    "+ ThreadId: string?    (Gmail threadId)",
+    "   index (UserId, ThreadId) → gộp thread ở list",
+    "+ MetadataJson: { threadId, labels, isUnread,",
+    "     isStarred, from, to, cc, hasAttachment }"
+   ]
+  },
+  {
+   "id": "enums",
+   "name": "Enums",
+   "stereotype": "enumeration",
+   "col": 2,
+   "row": 4,
+   "color": "yellow",
+   "attrs": [
+    "ScheduledEmailStatus { Pending, Sent,",
+    "    Failed, Cancelled }",
+    "ServiceType { Gmail, GCal, Drive, Jira }",
+    "ConnectionStatus { Active, Disconnected, Error }"
+   ]
+  },
+  {
+   "id": "note2",
+   "name": "R2FileStorageService",
+   "stereotype": "service",
+   "col": 3,
+   "row": 4,
+   "color": "grey",
+   "attrs": [
+    "+ UploadAsync(key, content, contentType, ct)",
+    "+ DeleteAsync(key, ct)"
+   ],
+   "methods": [
+    "Hiện CHỈ dùng cho avatar (UserProfileService).",
+    "Attachment email đi thẳng Gmail API,",
+    "scheduled email lưu base64 ở AttachmentsJson."
+   ]
+  }
+ ],
+ "relations": [
+  {
+   "from": "ec",
+   "to": "ises",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "sec",
+   "to": "iss",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "seq",
+   "to": "iss",
+   "type": "dep",
+   "label": ""
+  },
+  {
+   "from": "intc",
+   "to": "ips",
+   "type": "dep",
+   "label": "X-Cron-Secret"
+  },
+  {
+   "from": "ses",
+   "to": "ises",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "ss",
+   "to": "iss",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "pss",
+   "to": "ips",
+   "type": "implement",
+   "label": ""
+  },
+  {
+   "from": "bg",
+   "to": "ips",
+   "type": "dep",
+   "label": "timer nội bộ"
+  },
+  {
+   "from": "ses",
+   "to": "gg",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "pss",
+   "to": "gg",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "ss",
+   "to": "serepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "pss",
+   "to": "serepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "ses",
+   "to": "irepo",
+   "type": "assoc",
+   "label": ""
+  },
+  {
+   "from": "gg",
+   "to": "gmail",
+   "type": "dep",
+   "label": "REST"
+  },
+  {
+   "from": "serepo",
+   "to": "se",
+   "type": "assoc",
+   "label": "quản lý"
+  },
+  {
+   "from": "irepo",
+   "to": "item",
+   "type": "assoc",
+   "label": ""
+  }
+ ],
+ "notes": [
+  {
+   "text": "Gmail immutable: KHÔNG sửa nội dung email đã gửi/nhận — chỉ đổi label / read / star / trash, gửi mới, reply, forward, draft.  ·  Retry thực tế: khi gửi lỗi Status chuyển Failed, mà cron chỉ quét Pending ⇒ không tự retry lượt sau (RetryCount tối đa 1); chạy lại cron không gửi trùng vì lọc theo Status.",
+   "x": 40,
+   "w": 1610,
+   "h": 80
+  }
+ ]
+}

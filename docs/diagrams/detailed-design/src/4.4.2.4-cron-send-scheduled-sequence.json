@@ -1,0 +1,117 @@
+{
+ "title": "UC 4.4.4 — Cron gửi email đến hạn",
+ "participants": [
+  {
+   "id": "cron",
+   "label": "Cron\n(X-Cron-Secret)",
+   "actor": true
+  },
+  {
+   "id": "intc",
+   "label": "InternalController"
+  },
+  {
+   "id": "pss",
+   "label": "ProcessScheduled\nEmailsService"
+  },
+  {
+   "id": "gw",
+   "label": "IGmailGateway"
+  },
+  {
+   "id": "gmail",
+   "label": "Gmail API"
+  },
+  {
+   "id": "repo",
+   "label": "ScheduledEmailRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "cron",
+   "to": "intc",
+   "label": "POST /api/internal/process-scheduled  (header X-Cron-Secret)"
+  },
+  {
+   "note": "ValidateCronSecret: FixedTimeEquals với Cron:Secret — sai/thiếu → 401\n(CsrfMiddleware bỏ qua path này)",
+   "over": "intc"
+  },
+  {
+   "from": "intc",
+   "to": "pss",
+   "label": "ProcessDueEmailsAsync(maxBatch = 50)"
+  },
+  {
+   "from": "pss",
+   "to": "repo",
+   "label": "GetPendingDueEmailsAsync(utcNow, 50)"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "SELECT WHERE Status=Pending AND SendAt<=now ORDER BY SendAt"
+  },
+  {
+   "from": "db",
+   "to": "pss",
+   "label": "due[]",
+   "return": true
+  },
+  {
+   "from": "pss",
+   "to": "pss",
+   "label": "loop: lấy connection (cache) + DecodeAttachments(base64)"
+  },
+  {
+   "note": "connection null / không Gmail / không Active → MarkFailed(Status=Failed, RetryCount++, LastError)",
+   "over": "pss"
+  },
+  {
+   "from": "pss",
+   "to": "gw",
+   "label": "SendMessageAsync(conn, ...)"
+  },
+  {
+   "from": "gw",
+   "to": "gmail",
+   "label": "users.messages.send"
+  },
+  {
+   "from": "gmail",
+   "to": "pss",
+   "label": "messageId → Status = Sent, SentAt = UtcNow",
+   "return": true
+  },
+  {
+   "from": "pss",
+   "to": "repo",
+   "label": "SaveChangesAsync (một lần cho cả batch)"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE ScheduledEmails"
+  },
+  {
+   "from": "pss",
+   "to": "intc",
+   "label": "ProcessScheduledResult(total, sent, failed)",
+   "return": true
+  },
+  {
+   "note": "Fail → Status = Failed; cron chỉ quét Pending ⇒ KHÔNG auto-retry lượt sau",
+   "over": "pss"
+  },
+  {
+   "from": "intc",
+   "to": "cron",
+   "label": "200 { total, sent, failed }",
+   "return": true
+  }
+ ]
+}

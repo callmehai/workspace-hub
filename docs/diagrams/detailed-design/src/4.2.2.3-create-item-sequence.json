@@ -1,0 +1,131 @@
+{
+ "title": "UC 4.2.3 — Tạo item mới (Event / Ticket / Note)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ic",
+   "label": "ItemsController"
+  },
+  {
+   "id": "wb",
+   "label": "ItemWriteBackService"
+  },
+  {
+   "id": "is",
+   "label": "ItemService"
+  },
+  {
+   "id": "gw",
+   "label": "Calendar / Jira\nGateway"
+  },
+  {
+   "id": "prov",
+   "label": "Google / Jira"
+  },
+  {
+   "id": "repo",
+   "label": "ItemRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "note": "Event / Ticket — tạo trên provider rồi lưu Item",
+   "over": "ic"
+  },
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "tạo sự kiện / ticket mới"
+  },
+  {
+   "from": "fe",
+   "to": "ic",
+   "label": "POST /api/items/event | /api/items/ticket"
+  },
+  {
+   "from": "ic",
+   "to": "wb",
+   "label": "CreateEventAsync / CreateTicketAsync(userId, payload)"
+  },
+  {
+   "from": "wb",
+   "to": "gw",
+   "label": "InsertEventAsync / CreateIssueAsync(connection, dto)"
+  },
+  {
+   "from": "gw",
+   "to": "prov",
+   "label": "POST event / issue"
+  },
+  {
+   "from": "prov",
+   "to": "wb",
+   "label": "externalId + ETag / fields.updated",
+   "return": true
+  },
+  {
+   "from": "wb",
+   "to": "repo",
+   "label": "AddAsync(new Item{ Type, ExternalId, ETag }) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Items"
+  },
+  {
+   "from": "ic",
+   "to": "fe",
+   "label": "201 ItemResponse",
+   "return": true
+  },
+  {
+   "note": "Note — item local, KHÔNG ConnectionId / ExternalId (không gọi provider)",
+   "over": "ic"
+  },
+  {
+   "from": "fe",
+   "to": "ic",
+   "label": "POST /api/items/note { title, snippet, folderId? }"
+  },
+  {
+   "from": "ic",
+   "to": "is",
+   "label": "CreateNoteAsync(userId, request)"
+  },
+  {
+   "from": "is",
+   "to": "repo",
+   "label": "AddAsync(Item{ Type=Note }) (+ ItemFolder nếu có folderId) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT Items (+ ItemFolders)"
+  },
+  {
+   "from": "ic",
+   "to": "fe",
+   "label": "201 ItemResponse",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "item hiển thị ở Inbox / Kanban",
+   "return": true
+  }
+ ]
+}

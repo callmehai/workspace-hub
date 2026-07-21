@@ -1,0 +1,86 @@
+{
+ "title": "UC 4.6.1 — Đánh dấu liên hệ quan trọng",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "icc",
+   "label": "ImportantContacts\nController"
+  },
+  {
+   "id": "ics",
+   "label": "ImportantContactService"
+  },
+  {
+   "id": "repo",
+   "label": "ImportantContactRepository"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "đánh dấu 'sếp@company.com' (email / Jira account) là quan trọng"
+  },
+  {
+   "from": "fe",
+   "to": "icc",
+   "label": "POST /api/importantcontacts { type, identifier, label }"
+  },
+  {
+   "note": "CreateImportantContactRequestValidator",
+   "over": "icc"
+  },
+  {
+   "from": "icc",
+   "to": "ics",
+   "label": "CreateAsync(userId, request)"
+  },
+  {
+   "from": "ics",
+   "to": "repo",
+   "label": "ExistsAsync(userId, type, identifier)"
+  },
+  {
+   "note": "đã tồn tại → ConflictException 409",
+   "over": "ics"
+  },
+  {
+   "from": "ics",
+   "to": "repo",
+   "label": "AddAsync(ImportantContact) + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "INSERT ImportantContacts"
+  },
+  {
+   "from": "icc",
+   "to": "fe",
+   "label": "201 ImportantContactResponse",
+   "return": true
+  },
+  {
+   "note": "Ảnh hưởng khi SYNC sau này: GmailSync set Item.IsImportant nếu người gửi ∈ danh sách này",
+   "over": "ics"
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "liên hệ nằm trong danh sách quan trọng",
+   "return": true
+  }
+ ]
+}

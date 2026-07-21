@@ -1,0 +1,137 @@
+{
+ "title": "UC 4.2.2 — Ghi ngược thao tác lên provider (write-back + conflict 409)",
+ "participants": [
+  {
+   "id": "u",
+   "label": "User",
+   "actor": true
+  },
+  {
+   "id": "fe",
+   "label": "Frontend SPA"
+  },
+  {
+   "id": "ic",
+   "label": "ItemsController"
+  },
+  {
+   "id": "wb",
+   "label": "ItemWriteBackService"
+  },
+  {
+   "id": "guard",
+   "label": "IWriteBackGuard"
+  },
+  {
+   "id": "gw",
+   "label": "Gateway\nGmail/Cal/Drive/Jira"
+  },
+  {
+   "id": "prov",
+   "label": "Google / Jira"
+  },
+  {
+   "id": "repo",
+   "label": "Item / Folder Repo"
+  },
+  {
+   "id": "db",
+   "label": "SQL Server"
+  }
+ ],
+ "messages": [
+  {
+   "from": "u",
+   "to": "fe",
+   "label": "đánh dấu đã đọc / gắn sao / đổi tên file / sửa event"
+  },
+  {
+   "from": "fe",
+   "to": "ic",
+   "label": "PATCH /api/items/{id} { isUnread, isStarred, title, ... }"
+  },
+  {
+   "from": "ic",
+   "to": "wb",
+   "label": "PatchItemAsync(itemId, userId, payload)"
+  },
+  {
+   "from": "wb",
+   "to": "repo",
+   "label": "GetByIdAndUserAsync(itemId, userId)"
+  },
+  {
+   "note": "null → IsItemSharedWithUserAsEditorAsync · viewer → 403 · không quyền → 404",
+   "over": "wb"
+  },
+  {
+   "from": "wb",
+   "to": "gw",
+   "label": "GetMessageETagAsync / GetEventAsync / GetFileAsync / GetIssueAsync"
+  },
+  {
+   "from": "gw",
+   "to": "prov",
+   "label": "GET (đọc version hiện tại)"
+  },
+  {
+   "from": "prov",
+   "to": "wb",
+   "label": "providerEtag (Jira: fields.updated)",
+   "return": true
+  },
+  {
+   "from": "wb",
+   "to": "guard",
+   "label": "EnsureNoConflict(item.ETag, providerEtag)"
+  },
+  {
+   "note": "ALT — providerEtag ≠ item.ETag:\nConflictException → KHÔNG gọi gateway ghi, KHÔNG SaveChanges → 409 (FE refetch ETag mới)\n(Email luôn bỏ qua guard — Gmail ETag đổi liên tục)",
+   "over": "guard"
+  },
+  {
+   "from": "guard",
+   "to": "wb",
+   "label": "OK (khớp / rỗng)",
+   "return": true
+  },
+  {
+   "from": "wb",
+   "to": "gw",
+   "label": "ModifyMessageAsync / UpdateEventAsync / UpdateFileAsync / UpdateIssueAsync"
+  },
+  {
+   "from": "gw",
+   "to": "prov",
+   "label": "ghi thật lên provider"
+  },
+  {
+   "from": "prov",
+   "to": "wb",
+   "label": "newETag",
+   "return": true
+  },
+  {
+   "from": "wb",
+   "to": "repo",
+   "label": "cập nhật Title / OccurredAt / MetadataJson / ETag + SaveChangesAsync"
+  },
+  {
+   "from": "repo",
+   "to": "db",
+   "label": "UPDATE Items"
+  },
+  {
+   "from": "ic",
+   "to": "fe",
+   "label": "200 ItemResponse",
+   "return": true
+  },
+  {
+   "from": "fe",
+   "to": "u",
+   "label": "UI phản ánh thay đổi",
+   "return": true
+  }
+ ]
+}
